@@ -1,0 +1,4 @@
+# Fase 2: extracción de PDF
+pdfplumber==0.11.10
+
+# Fases posteriores (watcher, sincronizador) agregan aquí watchdog y supabase-py.

@@ -94,11 +94,22 @@ data/
 ## Estado
 
 - [x] Fase 1 — Esquema SQL + políticas de RLS (`supabase/migrations/`, aplicadas vía Actions)
-- [ ] Fase 2 — `BaseParser` + extractor de ejemplo
+- [x] Fase 2 — `BaseParser` + extractor de ejemplo (`parsers/`)
 - [ ] Fase 3 — Transformador + Categorizador
 - [ ] Fase 4 — Watcher + Sincronizador
 - [ ] Fase 5 — Frontend
 - [ ] Fase 6 — Deploy (Cloudflare Pages + Access)
+
+## Desarrollo local del pipeline (fase 2+)
+
+```bash
+python -m venv .venv
+.venv/Scripts/activate   # en Windows; en macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Para agregar un banco nuevo, copia [parsers/ejemplo.py](parsers/ejemplo.py) a `parsers/<banco>.py`
+y ajústalo — está documentado paso a paso en su docstring.
 
 ## Setup de Supabase (fase 1)
 

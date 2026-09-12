@@ -93,7 +93,7 @@ phases 2-5 at the user's explicit request.
 - [x] Phase 1 — DB schema + RLS policies (as Supabase migrations, applied via Actions)
 - [x] Phase 6 (partial) — CI/CD scaffolding for DB migrations and Cloudflare Pages deploy (the
       deploy workflow won't run meaningfully until `frontend/` exists)
-- [ ] Phase 2 — `BaseParser` + one documented example extractor
+- [x] Phase 2 — `BaseParser` + one documented example extractor (`parsers/base.py`, `parsers/ejemplo.py`)
 - [ ] Phase 3 — Transformer + Categorizer (categorization rules in their own editable file)
 - [ ] Phase 4 — Watcher + Sincronizador
 - [ ] Phase 5 — Frontend
