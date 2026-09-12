@@ -86,7 +86,7 @@ no dispara ninguno de los dos.
 ## Estructura
 
 ```
-parsers/    # BaseParser + un extractor por banco (+ _inspeccionar.py, herramienta de desarrollo)
+parsers/    # BaseParser + un extractor por banco
 transform/  # normalización al esquema canónico + categorización (reglas editables desde la app)
 app/        # app de escritorio (Tkinter) — carga PDF, valida totales, categoriza, exporta
 sync/       # cliente de Supabase, upsert idempotente (próxima fase)
@@ -117,25 +117,25 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Para agregar un banco nuevo, copia [parsers/ejemplo.py](parsers/ejemplo.py) a `parsers/<banco>.py`
-y ajústalo — está documentado paso a paso en su docstring. Antes de escribir el extractor, mira
-cómo pdfplumber lee tu PDF real con:
-
-```powershell
-.venv\Scripts\python.exe -m parsers._inspeccionar "ruta\a\tu\estado_de_cuenta.pdf"
-```
-
-(Corre esto en tu propia terminal, no le pidas a Claude que lo ejecute — el texto extraído de tu
-estado de cuenta real no debe pasar por una conversación con un LLM.)
-
 ## Usar la app de escritorio
 
 ```powershell
-.venv\Scripts\python.exe -m app.main
+.\.venv\Scripts\python.exe -m app.main
 ```
 
-1. Elige el banco (el extractor correspondiente debe existir en `parsers/` y estar registrado en
-   `PARSERS` dentro de `app/main.py`) y el formato de fecha si es distinto al default.
+(Nota el `.\` al inicio — en PowerShell, una ruta relativa sin eso se interpreta como nombre de
+módulo, no como archivo a ejecutar.)
+
+Para agregar un banco nuevo, copia [parsers/ejemplo.py](parsers/ejemplo.py) a `parsers/<banco>.py`,
+ajústalo (documentado paso a paso en su docstring) y regístralo en el diccionario `PARSERS` al
+inicio de `app/main.py`. Antes de escribir el extractor, usa el botón **Inspeccionar PDF...**
+dentro de la app para ver cómo pdfplumber lee tu PDF real, línea por línea — así diseñas el
+`PATRON_RENGLON` sin adivinar. Es un botón aparte, sin relación con cargar/procesar: solo muestra
+texto, no toca nada más.
+
+Flujo completo una vez que el extractor de tu banco existe:
+
+1. Elige el banco en el dropdown y el formato de fecha si es distinto al default.
 2. **Cargar PDF...** — corre el extractor + Transformador + Categorizador y llena la tabla.
 3. Revisa los renglones. Si algunos no se pudieron interpretar, la app te avisa con el detalle.
 4. **Validación de totales**: escribe el neto del periodo tal como lo imprime el estado de cuenta

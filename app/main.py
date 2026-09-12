@@ -23,6 +23,8 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
+import pdfplumber
+
 from parsers.base import BaseParser, RenglonCrudo
 from parsers.ejemplo import EjemploParser
 from transform.categorizador import Regla, cargar_reglas, categorizar, guardar_reglas
@@ -124,6 +126,67 @@ class VentanaReglas(tk.Toplevel):
         self.destroy()
 
 
+class VentanaInspeccion(tk.Toplevel):
+    """Muestra el texto crudo que pdfplumber extrae de un PDF, página por
+    página, línea por línea — para diseñar o ajustar el PATRON_RENGLON de un
+    extractor nuevo sin pasar por la terminal. Equivalente en UI a
+    `python -m parsers._inspeccionar`."""
+
+    def __init__(self, master: tk.Misc) -> None:
+        super().__init__(master)
+        self.title("Inspeccionar PDF (para diseñar un extractor)")
+        self.geometry("760x600")
+
+        marco_superior = ttk.Frame(self)
+        marco_superior.pack(fill="x", padx=8, pady=8)
+        ttk.Button(
+            marco_superior, text="Elegir PDF...", command=self._elegir_pdf
+        ).pack(side="left")
+        self.etiqueta_archivo = ttk.Label(marco_superior, text="Ningún archivo elegido.")
+        self.etiqueta_archivo.pack(side="left", padx=8)
+
+        marco_texto = ttk.Frame(self)
+        marco_texto.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+        scrollbar_y = ttk.Scrollbar(marco_texto, orient="vertical")
+        scrollbar_y.pack(side="right", fill="y")
+        scrollbar_x = ttk.Scrollbar(self, orient="horizontal")
+        scrollbar_x.pack(fill="x", padx=8)
+
+        self.texto = tk.Text(
+            marco_texto,
+            wrap="none",
+            font=("Consolas", 9),
+            yscrollcommand=scrollbar_y.set,
+            xscrollcommand=scrollbar_x.set,
+        )
+        self.texto.pack(fill="both", expand=True, side="left")
+        scrollbar_y.config(command=self.texto.yview)
+        scrollbar_x.config(command=self.texto.xview)
+
+    def _elegir_pdf(self) -> None:
+        ruta_texto = filedialog.askopenfilename(
+            title="Selecciona el PDF a inspeccionar",
+            filetypes=[("PDF", "*.pdf")],
+        )
+        if not ruta_texto:
+            return
+
+        ruta = Path(ruta_texto)
+        self.etiqueta_archivo.config(text=ruta.name)
+        self.texto.delete("1.0", "end")
+
+        try:
+            with pdfplumber.open(ruta) as pdf:
+                for numero, pagina in enumerate(pdf.pages, start=1):
+                    self.texto.insert("end", f"--- Página {numero} ---\n")
+                    texto_pagina = pagina.extract_text() or "(sin texto extraíble)"
+                    for i, linea in enumerate(texto_pagina.splitlines()):
+                        self.texto.insert("end", f"{i:3} | {linea!r}\n")
+                    self.texto.insert("end", "\n")
+        except Exception as error:  # noqa: BLE001 — se lo mostramos tal cual
+            messagebox.showerror("Error al leer el PDF", str(error))
+
+
 class App(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
@@ -161,6 +224,11 @@ class App(tk.Tk):
         ttk.Button(
             marco_superior, text="Reglas de categorización...", command=self.abrir_reglas
         ).pack(side="left")
+        ttk.Button(
+            marco_superior,
+            text="Inspeccionar PDF...",
+            command=self.abrir_inspeccion,
+        ).pack(side="left", padx=(4, 0))
 
         self.tabla = ttk.Treeview(self, columns=COLUMNAS, show="headings")
         encabezados = {
@@ -324,6 +392,9 @@ class App(tk.Tk):
 
     def abrir_reglas(self) -> None:
         VentanaReglas(self)
+
+    def abrir_inspeccion(self) -> None:
+        VentanaInspeccion(self)
 
     def guardar_procesado(self) -> None:
         if not self.transacciones or self.ruta_pdf_actual is None:
