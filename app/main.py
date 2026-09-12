@@ -27,6 +27,7 @@ import pdfplumber
 
 from parsers.base import BaseParser, RenglonCrudo
 from parsers.ejemplo import EjemploParser
+from parsers.priority import PriorityParser
 from transform.categorizador import Regla, cargar_reglas, categorizar, guardar_reglas
 from transform.transformador import (
     TransaccionCanonica,
@@ -42,6 +43,7 @@ CARPETA_ERRORES = RAIZ / "data" / "errores"
 # real (ver su docstring), agrega la clase nueva aquí.
 PARSERS: dict[str, type[BaseParser]] = {
     "Ejemplo": EjemploParser,
+    "Priority": PriorityParser,
 }
 
 COLUMNAS = ("pagina", "fecha", "descripcion", "monto", "tipo", "categoria")
@@ -178,10 +180,21 @@ class VentanaInspeccion(tk.Toplevel):
         try:
             with pdfplumber.open(ruta) as pdf:
                 for numero, pagina in enumerate(pdf.pages, start=1):
-                    self.texto.insert("end", f"--- Página {numero} ---\n")
+                    self.texto.insert("end", f"=== Página {numero} — texto plano ===\n")
                     texto_pagina = pagina.extract_text() or "(sin texto extraíble)"
                     for i, linea in enumerate(texto_pagina.splitlines()):
                         self.texto.insert("end", f"{i:3} | {linea!r}\n")
+
+                    tablas = pagina.extract_tables()
+                    self.texto.insert(
+                        "end", f"\n=== Página {numero} — tablas detectadas: {len(tablas)} ===\n"
+                    )
+                    for indice_tabla, tabla in enumerate(tablas):
+                        self.texto.insert(
+                            "end", f"\n-- Tabla {indice_tabla} ({len(tabla)} filas) --\n"
+                        )
+                        for fila in tabla:
+                            self.texto.insert("end", f"{fila!r}\n")
                     self.texto.insert("end", "\n")
         except Exception as error:  # noqa: BLE001 — se lo mostramos tal cual
             messagebox.showerror("Error al leer el PDF", str(error))
@@ -217,6 +230,13 @@ class App(tk.Tk):
         self.entrada_formato_fecha = ttk.Entry(marco_superior, width=12)
         self.entrada_formato_fecha.insert(0, "%d/%m/%Y")
         self.entrada_formato_fecha.pack(side="left", padx=4)
+
+        ttk.Label(marco_superior, text="Año (si el PDF no lo trae):").pack(
+            side="left", padx=(12, 0)
+        )
+        self.entrada_anio = ttk.Entry(marco_superior, width=6)
+        self.entrada_anio.insert(0, str(datetime.now().year))
+        self.entrada_anio.pack(side="left", padx=4)
 
         ttk.Button(marco_superior, text="Cargar PDF...", command=self.cargar_pdf).pack(
             side="left", padx=12
@@ -289,10 +309,17 @@ class App(tk.Tk):
 
         banco = self.combo_banco.get()
         formato_fecha = self.entrada_formato_fecha.get().strip() or "%d/%m/%Y"
+        anio = self.entrada_anio.get().strip()
         parser_cls = PARSERS[banco]
 
         try:
-            renglones: list[RenglonCrudo] = parser_cls().extraer(ruta_pdf)
+            try:
+                # Algunos extractores necesitan el año (el PDF no lo trae
+                # impreso en cada renglón); otros no aceptan ese argumento.
+                parser = parser_cls(ano_estado_de_cuenta=anio)
+            except TypeError:
+                parser = parser_cls()
+            renglones: list[RenglonCrudo] = parser.extraer(ruta_pdf)
         except Exception as error:  # noqa: BLE001 — se lo mostramos tal cual al usuario
             self._mover_a_errores(ruta_pdf, str(error))
             messagebox.showerror(
