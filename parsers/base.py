@@ -15,7 +15,16 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class RenglonCrudo:
-    """Una transacción tal como aparece en el PDF, sin normalizar."""
+    """Una transacción tal como aparece en el PDF, sin normalizar.
+
+    `monto_texto` SIEMPRE debe traer signo: negativo para cargo, positivo
+    (sin signo) para abono. Esto es responsabilidad del extractor, no del
+    Transformador — cada banco decide esto distinto (algunos ya imprimen el
+    signo, otros usan columnas separadas de cargo/abono), así que es el
+    extractor concreto el que sabe cómo traducir su layout a esta convención
+    única. Ejemplo: si un banco pone $199.00 en la columna "Cargo", el
+    extractor debe emitir monto_texto="-199.00".
+    """
 
     fecha_texto: str
     descripcion_texto: str

@@ -10,7 +10,8 @@ Supabase, which a React frontend reads directly (protected by Row Level Security
 
 The full original spec — architecture, exact DB schema, folder layout, phased implementation plan —
 lives in [prompt-claude-code.md](prompt-claude-code.md). Read it before making structural changes;
-it's the source of truth for what to build next.
+it's the source of truth for what to build next, **except** for the local pipeline's entry point,
+which was deliberately redesigned away from that spec's automatic watcher — see Architecture below.
 
 ## Non-negotiable constraints
 
@@ -25,14 +26,27 @@ it's the source of truth for what to build next.
 
 ## Architecture
 
-**Local pipeline** (sequential, triggered by a folder watcher on `data/nuevos/`):
+**Local pipeline** — entry point is a **Tkinter desktop app** (`app/main.py`), not a folder
+watcher. The user explicitly redesigned this away from the original spec's automatic
+watcher-on-`data/nuevos/` design, to get a manual review/validation step before anything is
+considered final: load a PDF → see parsed transactions in a table → validate the calculated total
+against the real total from the statement → adjust categorization rules live → only then export.
 
-Watcher → Extractor (`BaseParser` interface, one concrete implementation per bank) → Transformer
-(bank-agnostic: parses dates to ISO, amounts to `Decimal`, masks accounts, builds audit fields
-`documento_hash`/`pagina`/`linea_cruda`) → Categorizer (keyword rules, configurable, not hardcoded
-in the flow) → Sincronizador (idempotent upsert to Supabase via `supabase-py`).
+Flow: user picks a bank + loads a PDF in the app → Extractor (`parsers/base.py`'s `BaseParser`,
+one concrete implementation per bank — `RenglonCrudo.monto_texto` must carry sign: negative =
+cargo) → `transform/transformador.py` (bank-agnostic: dates to ISO, amounts to signed-then-`Decimal`
+split into `(monto, tipo)`, builds `TransaccionCanonica` with audit fields `pagina`/`linea_cruda`)
+→ `transform/categorizador.py` (keyword rules loaded from `transform/reglas_categorizacion.json`,
+gitignored — editable live from the app's "Reglas de categorización..." dialog, `VentanaReglas`)
+→ user validates the sum against the statement's own declared total (`validar_contra_total`) →
+"Guardar archivo procesado" writes `data/procesados/<sha256_del_pdf>.json`.
 
-Processed PDFs move to `data/procesados/` on success or `data/errores/` on failure, with a readable log.
+That JSON is the handoff contract for the still-unbuilt Sincronizador (next phase): it must upsert
+those transactions to Supabase keyed by `documento_hash`, idempotently. Failed-to-parse PDFs move
+to `data/errores/` with a `.log` of what went wrong (see `App._mover_a_errores`).
+
+When adding a real bank, register its `BaseParser` subclass in the `PARSERS` dict at the top of
+`app/main.py` — that's what populates the "Banco" dropdown.
 
 **Cloud**: Supabase (Postgres + Auth + RLS, sole remote source of truth) + Cloudflare Pages
 (frontend hosting) + Cloudflare Access (network-level login gate in front of Pages, additive to
@@ -94,7 +108,10 @@ phases 2-5 at the user's explicit request.
 - [x] Phase 6 (partial) — CI/CD scaffolding for DB migrations and Cloudflare Pages deploy (the
       deploy workflow won't run meaningfully until `frontend/` exists)
 - [x] Phase 2 — `BaseParser` + one documented example extractor (`parsers/base.py`, `parsers/ejemplo.py`)
-- [ ] Phase 3 — Transformer + Categorizer (categorization rules in their own editable file)
-- [ ] Phase 4 — Watcher + Sincronizador
+- [x] Phase 3 (redesigned) — Transformer + Categorizer as libraries (`transform/`), driven by a
+      Tkinter desktop app (`app/main.py`) instead of the originally-planned watcher — user's
+      explicit request, see Architecture above
+- [ ] Phase 4 — Sincronizador only (upserts `data/procesados/*.json` to Supabase, idempotent on
+      `documento_hash`; no watcher to build — the app replaced that role)
 - [ ] Phase 5 — Frontend
 - [ ] Phase 6 (remainder) — Configure Cloudflare Access once the frontend is deployed

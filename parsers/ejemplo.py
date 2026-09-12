@@ -27,15 +27,19 @@ import pdfplumber
 
 from parsers.base import BaseParser, RenglonCrudo
 
-# Ejemplo de línea que este patrón reconoce:
-#   "01/09/2026 PAGO NETFLIX MX                    199.00"
+# Ejemplo de líneas que este patrón reconoce:
+#   "01/09/2026 PAGO NETFLIX MX                    -199.00"   (cargo)
+#   "03/09/2026 DEPOSITO SPEI JUAN PEREZ           1,500.00"  (abono)
 # Grupos: fecha (dd/mm/aaaa), descripción (lo de en medio), monto (##.##,
-# con separador de miles opcional). Esto es solo un ejemplo razonable —
-# el formato real de tu banco casi seguro es distinto.
+# con separador de miles opcional, signo opcional). Esto es solo un ejemplo
+# razonable — el formato real de tu banco casi seguro es distinto. Si tu
+# banco no imprime el signo (ej. columnas separadas de "Cargo"/"Abono"),
+# es este extractor el que debe anteponer el "-" al armar monto_texto —
+# ver la nota en parsers/base.py sobre la convención de signo.
 PATRON_RENGLON = re.compile(
     r"^(?P<fecha>\d{2}/\d{2}/\d{4})\s+"
     r"(?P<descripcion>.+?)\s+"
-    r"(?P<monto>[\d,]+\.\d{2})$"
+    r"(?P<monto>-?[\d,]+\.\d{2})$"
 )
 
 

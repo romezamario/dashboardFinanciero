@@ -11,6 +11,10 @@ data/errores/*
 !data/procesados/.gitkeep
 !data/errores/.gitkeep
 
+# Reglas de categorización reales (revelan patrones de gasto personales)
+transform/reglas_categorizacion.json
+!transform/reglas_categorizacion.example.json
+
 # Python
 __pycache__/
 *.pyc

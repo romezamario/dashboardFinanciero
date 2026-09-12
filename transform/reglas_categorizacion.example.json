@@ -1,0 +1,7 @@
+[
+  { "patron": "NETFLIX", "categoria": "Entretenimiento" },
+  { "patron": "SPOTIFY", "categoria": "Entretenimiento" },
+  { "patron": "OXXO", "categoria": "Convenience" },
+  { "patron": "UBER", "categoria": "Transporte" },
+  { "patron": "SPEI", "categoria": "Transferencias" }
+]

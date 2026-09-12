@@ -1,4 +1,8 @@
 # Fase 2: extracción de PDF
 pdfplumber==0.11.10
 
-# Fases posteriores (watcher, sincronizador) agregan aquí watchdog y supabase-py.
+# Fase 3 (app de escritorio): tkinter es parte de la librería estándar de
+# Python, no necesita entrada aquí. En Windows (python.org) ya viene
+# incluido; en Linux puede requerir el paquete del sistema `python3-tk`.
+
+# Fase 4 (Sincronizador) agrega aquí supabase-py.

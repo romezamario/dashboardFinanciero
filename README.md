@@ -16,26 +16,34 @@ normaliza y categoriza las transacciones, y sincroniza solo los datos ya normali
 
 ## Arquitectura
 
-**Pipeline local** (corre en tu laptop, disparado por un watcher sobre `data/nuevos/`):
+**Pipeline local** — a diferencia del plan original (un watcher 100% automático sobre
+`data/nuevos/`), el punto de entrada es una **app de escritorio (Tkinter)**: tú cargas el PDF a
+mano, la app te deja revisar y corregir antes de que nada se sincronice. Esto da control y permite
+validar montos contra el total real del estado de cuenta antes de confiar en el resultado.
 
 ```
-PDF nuevo en data/nuevos/
+Tú abres la app (python -m app.main) y cargas un PDF
       │
       ▼
-  Watcher ──detecta el archivo──▶ Extractor (uno por banco, implementa BaseParser)
-                                        │  renglones crudos: fecha/desc/monto en texto,
-                                        │  número de página, texto completo de la línea
-                                        ▼
-                                  Transformador (agnóstico de banco)
-                                        │  fechas → ISO, montos → Decimal, tipo cargo/abono,
-                                        │  cuentas enmascaradas, campos de auditoría
-                                        ▼
-                                  Categorizador (reglas de palabra clave, configurables)
-                                        ▼
-                                  Sincronizador (upsert idempotente vía supabase-py)
-                                        │
-                                        ▼
-                              data/procesados/ (éxito) o data/errores/ (falló algún extractor)
+Extractor (uno por banco, implementa BaseParser)
+      │  renglones crudos: fecha/desc/monto en texto (monto con signo:
+      │  negativo = cargo), número de página, texto completo de la línea
+      ▼
+Transformador (transform/transformador.py, agnóstico de banco)
+      │  fechas → ISO, montos → Decimal, tipo cargo/abono por el signo,
+      │  campos de auditoría (página, línea cruda)
+      ▼
+Categorizador (transform/categorizador.py, reglas de palabra clave editables
+      │        desde la propia app — "Reglas de categorización...")
+      ▼
+Validación de totales EN LA APP: suma calculada vs. el total que tú
+      │   escribes desde el resumen impreso en el PDF — detecta renglones
+      │   faltantes o mal interpretados antes de guardar nada
+      ▼
+"Guardar archivo procesado" → data/procesados/<hash>.json
+      │   (transacciones normalizadas + categorizadas, listas para subir)
+      ▼
+Sincronizador (próxima fase) — upsert idempotente a Supabase vía supabase-py
 ```
 
 Solo las transacciones ya normalizadas cruzan a la nube — el PDF y su texto crudo nunca salen
@@ -78,25 +86,26 @@ no dispara ninguno de los dos.
 ## Estructura
 
 ```
-parsers/    # BaseParser + un extractor por banco
-transform/  # normalización al esquema canónico + categorización
-sync/       # cliente de Supabase, upsert idempotente
-watcher/    # vigila data/nuevos/ y orquesta el pipeline
+parsers/    # BaseParser + un extractor por banco (+ _inspeccionar.py, herramienta de desarrollo)
+transform/  # normalización al esquema canónico + categorización (reglas editables desde la app)
+app/        # app de escritorio (Tkinter) — carga PDF, valida totales, categoriza, exporta
+sync/       # cliente de Supabase, upsert idempotente (próxima fase)
 supabase/
   migrations/  # schema + políticas de RLS, aplicadas vía GitHub Actions
 frontend/   # React + Vite + Tailwind + Recharts
 data/
-  nuevos/       # PDFs pendientes de procesar
-  procesados/   # PDFs procesados con éxito
-  errores/      # PDFs que fallaron algún extractor
+  nuevos/       # (ya no lo usa un watcher — puedes cargar PDFs desde cualquier ruta en la app)
+  procesados/   # salida de la app: <hash>.json por cada PDF revisado y guardado
+  errores/      # PDFs que la app no pudo leer con el extractor elegido
 ```
 
 ## Estado
 
 - [x] Fase 1 — Esquema SQL + políticas de RLS (`supabase/migrations/`, aplicadas vía Actions)
 - [x] Fase 2 — `BaseParser` + extractor de ejemplo (`parsers/`)
-- [ ] Fase 3 — Transformador + Categorizador
-- [ ] Fase 4 — Watcher + Sincronizador
+- [x] Fase 3 (rediseñada) — Transformador + Categorizador + app de escritorio Tkinter
+      (`transform/`, `app/`) — reemplaza al watcher automático que estaba planeado
+- [ ] Fase 4 — Sincronizador (sube `data/procesados/*.json` a Supabase, upsert idempotente)
 - [ ] Fase 5 — Frontend
 - [ ] Fase 6 — Deploy (Cloudflare Pages + Access)
 
@@ -109,7 +118,33 @@ pip install -r requirements.txt
 ```
 
 Para agregar un banco nuevo, copia [parsers/ejemplo.py](parsers/ejemplo.py) a `parsers/<banco>.py`
-y ajústalo — está documentado paso a paso en su docstring.
+y ajústalo — está documentado paso a paso en su docstring. Antes de escribir el extractor, mira
+cómo pdfplumber lee tu PDF real con:
+
+```powershell
+.venv\Scripts\python.exe -m parsers._inspeccionar "ruta\a\tu\estado_de_cuenta.pdf"
+```
+
+(Corre esto en tu propia terminal, no le pidas a Claude que lo ejecute — el texto extraído de tu
+estado de cuenta real no debe pasar por una conversación con un LLM.)
+
+## Usar la app de escritorio
+
+```powershell
+.venv\Scripts\python.exe -m app.main
+```
+
+1. Elige el banco (el extractor correspondiente debe existir en `parsers/` y estar registrado en
+   `PARSERS` dentro de `app/main.py`) y el formato de fecha si es distinto al default.
+2. **Cargar PDF...** — corre el extractor + Transformador + Categorizador y llena la tabla.
+3. Revisa los renglones. Si algunos no se pudieron interpretar, la app te avisa con el detalle.
+4. **Validación de totales**: escribe el neto del periodo tal como lo imprime el estado de cuenta
+   (saldo actual − saldo anterior) y da **Validar** — si no cuadra, hay algo mal parseado o un
+   renglón faltante antes de confiar en el resultado.
+5. **Reglas de categorización...** para agregar/editar/borrar reglas — se aplican de inmediato a
+   la tabla ya cargada y se guardan en `transform/reglas_categorizacion.json` (no se sube a git).
+6. **Guardar archivo procesado** — escribe `data/procesados/<hash>.json`, listo para que el
+   Sincronizador (próxima fase) lo suba a Supabase.
 
 ## Setup de Supabase (fase 1)
 
