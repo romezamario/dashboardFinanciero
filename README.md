@@ -14,6 +14,67 @@ normaliza y categoriza las transacciones, y sincroniza solo los datos ya normali
 - Sin credenciales hardcodeadas: todo vía variables de entorno (`.env`, ignorado por git).
 - Auth vía Supabase Auth (sin autenticación propia).
 
+## Arquitectura
+
+**Pipeline local** (corre en tu laptop, disparado por un watcher sobre `data/nuevos/`):
+
+```
+PDF nuevo en data/nuevos/
+      │
+      ▼
+  Watcher ──detecta el archivo──▶ Extractor (uno por banco, implementa BaseParser)
+                                        │  renglones crudos: fecha/desc/monto en texto,
+                                        │  número de página, texto completo de la línea
+                                        ▼
+                                  Transformador (agnóstico de banco)
+                                        │  fechas → ISO, montos → Decimal, tipo cargo/abono,
+                                        │  cuentas enmascaradas, campos de auditoría
+                                        ▼
+                                  Categorizador (reglas de palabra clave, configurables)
+                                        ▼
+                                  Sincronizador (upsert idempotente vía supabase-py)
+                                        │
+                                        ▼
+                              data/procesados/ (éxito) o data/errores/ (falló algún extractor)
+```
+
+Solo las transacciones ya normalizadas cruzan a la nube — el PDF y su texto crudo nunca salen
+de la laptop (la única excepción es la línea de auditoría ya enmascarada, `linea_cruda`, que sí
+se sincroniza porque es lo que permite rastrear cada transacción hasta su origen).
+
+**Nube**: Supabase (Postgres + Auth + RLS) es la única fuente de verdad remota. El frontend
+(React + Vite, fase 5) le habla directo vía `supabase-js` — no hay backend intermedio. Cloudflare
+Pages lo hostea; Cloudflare Access agrega un login a nivel de red *delante* de Cloudflare Pages,
+como capa extra antes de siquiera llegar a la pantalla de login de Supabase Auth.
+
+## Modelo de datos
+
+Cinco tablas en Supabase (definidas en `supabase/migrations/`):
+
+- **`bancos`** — catálogo compartido (ej. "BBVA", "Santander"), sin `user_id`, sin RLS: es
+  información pública, no datos personales.
+- **`cuentas`** — tus cuentas bancarias, identificadas solo por alias + últimos 4 dígitos.
+- **`categorias`** — categorías de gasto/ingreso, definidas por ti (reglas en el Categorizador).
+- **`documentos`** — un registro por PDF procesado (hash para detectar duplicados, periodo, ruta local).
+- **`transacciones`** — cada movimiento, con su categoría, monto (`numeric`, nunca float),
+  y los campos de auditoría (`pagina`, `linea_cruda`) que lo atan a su línea exacta de origen.
+
+Las últimas cuatro tienen Row Level Security: cada política restringe select/insert/update/delete
+a `user_id = auth.uid()`, así que aunque el frontend hable directo con Postgres, cada usuario solo
+puede ver y tocar sus propios datos.
+
+## CI/CD
+
+Dos pipelines de GitHub Actions, cada uno disparado solo por los archivos que le corresponden:
+
+- **`db-migrate.yml`** — cuando cambia algo en `supabase/migrations/`, aplica esas migraciones
+  al proyecto remoto. El esquema de la base de datos se versiona como código: todo cambio es un
+  archivo de migración nuevo, nunca un `ALTER TABLE` manual en el dashboard de Supabase.
+- **`deploy.yml`** — cuando cambia algo en `frontend/`, compila y publica el sitio a Cloudflare Pages.
+
+Cada uno solo corre cuando le toca, así que trabajar en el pipeline local (parsers/transform/sync)
+no dispara ninguno de los dos.
+
 ## Estructura
 
 ```
