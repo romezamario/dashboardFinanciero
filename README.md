@@ -21,7 +21,8 @@ parsers/    # BaseParser + un extractor por banco
 transform/  # normalización al esquema canónico + categorización
 sync/       # cliente de Supabase, upsert idempotente
 watcher/    # vigila data/nuevos/ y orquesta el pipeline
-db/         # schema.sql y policies.sql (Supabase)
+supabase/
+  migrations/  # schema + políticas de RLS, aplicadas vía GitHub Actions
 frontend/   # React + Vite + Tailwind + Recharts
 data/
   nuevos/       # PDFs pendientes de procesar
@@ -31,7 +32,7 @@ data/
 
 ## Estado
 
-- [x] Fase 1 — Esquema SQL (`db/schema.sql`) + políticas de RLS (`db/policies.sql`)
+- [x] Fase 1 — Esquema SQL + políticas de RLS (`supabase/migrations/`, aplicadas vía Actions)
 - [ ] Fase 2 — `BaseParser` + extractor de ejemplo
 - [ ] Fase 3 — Transformador + Categorizador
 - [ ] Fase 4 — Watcher + Sincronizador
@@ -40,9 +41,28 @@ data/
 
 ## Setup de Supabase (fase 1)
 
-1. Crea un proyecto en Supabase (tier free).
-2. En el SQL Editor, corre `db/schema.sql` y luego `db/policies.sql`.
-3. Copia `.env.example` a `.env` y completa `SUPABASE_URL` y `SUPABASE_KEY`.
+Las migraciones (`supabase/migrations/`) se aplican automáticamente desde
+[`.github/workflows/db-migrate.yml`](.github/workflows/db-migrate.yml) en cada push a `main`
+que las toque — no se corren a mano en el SQL Editor. Pasos de cuenta, una sola vez:
+
+1. Crea un proyecto en Supabase (tier free). Guarda la contraseña de la base de datos que
+   definas al crearlo — la vas a necesitar para el secret `SUPABASE_DB_PASSWORD`.
+2. **Project ref**: en **Settings → General**, copia el "Reference ID".
+3. **Access token**: en tu cuenta de Supabase → **Account → Access Tokens → Generate new token**
+   (token personal, no es el `anon key` ni el `service_role`).
+4. En GitHub → **Settings → Secrets and variables → Actions**, agrega:
+
+   | Secret | Valor |
+   |---|---|
+   | `SUPABASE_ACCESS_TOKEN` | El access token del paso 3 |
+   | `SUPABASE_PROJECT_ID` | El Reference ID del paso 2 |
+   | `SUPABASE_DB_PASSWORD` | La contraseña de la base de datos del paso 1 |
+
+5. Con eso configurado, el primer push a `main` que toque `supabase/migrations/` corre el
+   workflow y aplica `schema` + `policies` contra tu proyecto remoto.
+6. Para desarrollo local del pipeline (parsers/transform/sync), copia `.env.example` a `.env`
+   y completa `SUPABASE_URL` (Settings → API → Project URL) y `SUPABASE_KEY` (la `anon key`
+   de esa misma página).
 
 ## Setup de Cloudflare (fase 6 — pasos manuales, una sola vez)
 
@@ -70,6 +90,9 @@ En el repo → **Settings → Secrets and variables → Actions → New reposito
 | `CLOUDFLARE_ACCOUNT_ID` | El Account ID de Cloudflare |
 | `VITE_SUPABASE_URL` | URL de tu proyecto Supabase (misma que en `.env`) |
 | `VITE_SUPABASE_ANON_KEY` | La `anon key` pública de Supabase (protegida por RLS, no el `service_role`) |
+
+Estos dos últimos son los mismos valores que `SUPABASE_URL`/`SUPABASE_KEY` de tu `.env` local
+(fase 1) — la `anon key`, nunca el `service_role`.
 
 ### 3. Cloudflare Access (gate de red, capa adicional a Supabase Auth)
 
