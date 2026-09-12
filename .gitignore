@@ -1,0 +1,26 @@
+# Secretos
+.env
+.env.*
+!.env.example
+
+# PDFs y datos locales (nunca deben salir de la laptop)
+data/nuevos/*
+data/procesados/*
+data/errores/*
+!data/nuevos/.gitkeep
+!data/procesados/.gitkeep
+!data/errores/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node / frontend
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Editor / OS
+.DS_Store
