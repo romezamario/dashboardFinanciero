@@ -28,7 +28,7 @@ import pdfplumber
 from parsers._anonimizador import anonimizar
 from parsers.base import BaseParser, RenglonCrudo
 from parsers.ejemplo import EjemploParser
-from parsers.priority import PriorityParser
+from parsers.banamex import BanamexParser
 from transform.categorizador import Regla, cargar_reglas, categorizar, guardar_reglas
 from transform.transformador import (
     TransaccionCanonica,
@@ -44,7 +44,7 @@ CARPETA_ERRORES = RAIZ / "data" / "errores"
 # real (ver su docstring), agrega la clase nueva aquí.
 PARSERS: dict[str, type[BaseParser]] = {
     "Ejemplo": EjemploParser,
-    "Priority": PriorityParser,
+    "Banamex": BanamexParser,
 }
 
 COLUMNAS = ("pagina", "fecha", "descripcion", "monto", "tipo", "categoria")

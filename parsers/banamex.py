@@ -1,0 +1,170 @@
+"""Extractor para estados de cuenta Banamex (ej. Cuenta Priority).
+
+A diferencia de lo que la vista del PDF sugiere, `pagina.extract_tables()`
+no detecta nada en este layout (confirmado con el inspector de la app: 0
+tablas en casi todas las páginas) — no hay líneas de cuadrícula reales que
+pdfplumber pueda usar, aunque visualmente se vea como una tabla con
+columnas FECHA | CONCEPTO | RETIROS | DEPOSITOS | SALDO. Este extractor
+trabaja sobre `extract_text()` (texto plano) en su lugar.
+
+Estructura real (confirmada con datos anonimizados de un estado de cuenta
+real): cada transacción empieza con una línea "DD MES" (ej. "02 JUN"),
+seguida de N líneas de concepto sin fecha, y termina en una línea que
+trae DOS montos al final — "<lo que sea> <monto> <saldo>". El primer
+monto es el que aparece en la columna RETIROS o DEPÓSITOS (ambigua sin
+posición de columna); el segundo es siempre el saldo corriente.
+
+Una transacción puede partirse entre el final de una página y el
+principio de la siguiente (el PDF no repite la fecha en la continuación)
+— por eso este extractor procesa TODO el documento como un solo flujo de
+líneas, sin reiniciar nada en los saltos de página.
+
+CLAVE DE DISEÑO — por qué el signo (cargo/abono) se calcula por DELTA DE
+SALDO y no por el monto impreso ni por palabras del concepto: en estados
+reales se ve, por ejemplo, "CREDITO NOMINA BANAMEX ... A SU TC" con el
+saldo BAJANDO (es un cargo automático a tarjeta de crédito, no un
+depósito, pese al nombre "CREDITO"). El texto del concepto no es
+confiable. En cambio saldo_nuevo - saldo_anterior siempre da el monto y
+signo correctos, porque el estado de cuenta lo reporta explícitamente en
+cada línea. Este extractor ancla saldo_anterior en la línea "SALDO
+ANTERIOR" y de ahí en adelante deriva cada monto del delta, ignorando el
+monto impreso salvo para quitarlo del texto del concepto.
+
+IMPORTANTE — el año: el PDF no imprime el año en cada renglón, solo
+"DD MES". Ajusta `ano_estado_de_cuenta` al año real (la app tiene un
+campo "Año" que se lo pasa).
+"""
+
+from __future__ import annotations
+
+import re
+from decimal import Decimal, InvalidOperation
+from pathlib import Path
+
+import pdfplumber
+
+from parsers.base import BaseParser, RenglonCrudo
+
+MESES = {
+    "ENE": "01", "FEB": "02", "MAR": "03", "ABR": "04",
+    "MAY": "05", "JUN": "06", "JUL": "07", "AGO": "08",
+    "SEP": "09", "OCT": "10", "NOV": "11", "DIC": "12",
+}
+
+# Fecha al INICIO de la línea, seguida del resto del contenido de esa
+# misma línea (a diferencia de una celda de tabla, aquí todo va en una
+# sola línea de texto plano).
+PATRON_FECHA_PREFIJO = re.compile(r"^(\d{2})\s+([A-ZÁÉÍÓÚ]{3})\s+(.*)$")
+
+# Una línea "cierra" un bloque si termina en dos montos: "<resto> <monto> <saldo>".
+PATRON_DOS_MONTOS = re.compile(
+    r"^(?P<resto>.*?)\s*(?P<monto>-?[\d,]+\.\d{2})\s+(?P<saldo>-?[\d,]+\.\d{2})\s*$"
+)
+
+
+def _a_decimal(texto: str) -> Decimal:
+    return Decimal(texto.replace(",", ""))
+
+
+class BanamexParser(BaseParser):
+    nombre_banco = "Banamex"
+
+    def __init__(self, ano_estado_de_cuenta: str = "2025") -> None:
+        # El PDF no trae el año en cada renglón — ver docstring del módulo.
+        self.ano_estado_de_cuenta = ano_estado_de_cuenta
+
+    def extraer(self, ruta_pdf: Path) -> list[RenglonCrudo]:
+        lineas_documento: list[tuple[int, str]] = []
+        with pdfplumber.open(ruta_pdf) as pdf:
+            for numero_pagina, pagina in enumerate(pdf.pages, start=1):
+                texto = pagina.extract_text() or ""
+                for linea in texto.splitlines():
+                    linea = linea.strip()
+                    if linea:
+                        lineas_documento.append((numero_pagina, linea))
+
+        return self._procesar_documento(lineas_documento)
+
+    def _procesar_documento(
+        self, lineas_documento: list[tuple[int, str]]
+    ) -> list[RenglonCrudo]:
+        renglones: list[RenglonCrudo] = []
+
+        saldo_actual: Decimal | None = None
+        bloque_fecha: str | None = None
+        bloque_pagina: int | None = None
+        bloque_concepto: list[str] = []
+        bloque_lineas_crudas: list[str] = []
+
+        def abrir_bloque(dia: str, mes_abrev: str, pagina: int) -> None:
+            nonlocal bloque_fecha, bloque_pagina, bloque_concepto, bloque_lineas_crudas
+            # Si el bloque anterior nunca cerró (línea rota / formato
+            # inesperado), lo descartamos sin emitir en vez de arrastrar
+            # texto de una transacción a la siguiente.
+            mes = MESES.get(mes_abrev, "01")
+            bloque_fecha = f"{dia}/{mes}/{self.ano_estado_de_cuenta}"
+            bloque_pagina = pagina
+            bloque_concepto = []
+            bloque_lineas_crudas = []
+
+        def cerrar_bloque_con_saldo(saldo_nuevo: Decimal) -> None:
+            nonlocal saldo_actual, bloque_fecha, bloque_pagina
+            nonlocal bloque_concepto, bloque_lineas_crudas
+
+            if bloque_fecha is not None and saldo_actual is not None:
+                delta = saldo_nuevo - saldo_actual
+                if delta != 0:
+                    renglones.append(
+                        RenglonCrudo(
+                            fecha_texto=bloque_fecha,
+                            descripcion_texto=" ".join(bloque_concepto).strip(),
+                            monto_texto=str(delta),
+                            pagina=bloque_pagina or 1,
+                            linea_cruda=" | ".join(bloque_lineas_crudas),
+                        )
+                    )
+
+            saldo_actual = saldo_nuevo
+            bloque_fecha = None
+            bloque_pagina = None
+            bloque_concepto = []
+            bloque_lineas_crudas = []
+
+        for numero_pagina, linea in lineas_documento:
+            resto = linea
+            match_fecha = PATRON_FECHA_PREFIJO.match(linea)
+            if match_fecha:
+                dia, mes_abrev, resto = match_fecha.groups()
+                abrir_bloque(dia, mes_abrev, numero_pagina)
+
+            bloque_lineas_crudas.append(linea)
+
+            if resto.strip().upper().startswith("SALDO ANTERIOR"):
+                # Ancla del saldo inicial — no es una transacción real.
+                try:
+                    saldo_texto = resto.strip().split()[-1]
+                    saldo_actual = _a_decimal(saldo_texto)
+                except (InvalidOperation, IndexError):
+                    pass
+                bloque_fecha = None
+                bloque_pagina = None
+                bloque_concepto = []
+                bloque_lineas_crudas = []
+                continue
+
+            match_montos = PATRON_DOS_MONTOS.match(resto)
+            if match_montos:
+                texto_resto = match_montos.group("resto").strip()
+                if texto_resto:
+                    bloque_concepto.append(texto_resto)
+                try:
+                    saldo_nuevo = _a_decimal(match_montos.group("saldo"))
+                except InvalidOperation:
+                    continue
+                cerrar_bloque_con_saldo(saldo_nuevo)
+                continue
+
+            if resto.strip():
+                bloque_concepto.append(resto.strip())
+
+        return renglones
