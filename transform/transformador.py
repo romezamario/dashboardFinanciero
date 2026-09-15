@@ -29,6 +29,11 @@ class TransaccionCanonica:
     `categoria_id`, un fk resuelto contra la tabla `categorias` en Supabase)
     — aquí es solo el nombre de texto que la app le asignó en la sesión de
     revisión, para mostrar/exportar antes de sincronizar.
+
+    `origen` tampoco es columna de `transacciones` (ese vínculo vive en
+    `documento_id`, fk a `documentos`) — es el nombre del archivo PDF del
+    que salió esta transacción, para distinguir renglones cuando la tabla
+    de la app tiene más de un estado de cuenta cargado.
     """
 
     fecha: date
@@ -40,6 +45,7 @@ class TransaccionCanonica:
     moneda: str = "MXN"
     saldo: Decimal | None = None
     categoria: str | None = None
+    origen: str | None = None
 
 
 def transformar_monto(monto_texto: str) -> tuple[Decimal, Tipo]:

@@ -47,7 +47,7 @@ PARSERS: dict[str, type[BaseParser]] = {
     "Banamex": BanamexParser,
 }
 
-COLUMNAS = ("pagina", "fecha", "descripcion", "monto", "tipo", "categoria")
+COLUMNAS = ("pagina", "fecha", "descripcion", "monto", "tipo", "categoria", "origen")
 
 # Debe coincidir exactamente con la categoría de esa regla en
 # transform/reglas_categorizacion.json — así el panel de totales puede
@@ -293,14 +293,16 @@ class App(tk.Tk):
             "monto": "Monto",
             "tipo": "Tipo",
             "categoria": "Categoría",
+            "origen": "Estado de cuenta",
         }
         anchos = {
             "pagina": 40,
             "fecha": 90,
-            "descripcion": 320,
+            "descripcion": 280,
             "monto": 90,
             "tipo": 70,
             "categoria": 130,
+            "origen": 160,
         }
         for col in COLUMNAS:
             self.tabla.heading(col, text=encabezados[col])
@@ -384,7 +386,11 @@ class App(tk.Tk):
 
         transacciones, fallidas = transformar_renglones(renglones, formato_fecha)
         transacciones = [
-            replace(t, categoria=categorizar(t.descripcion, self.reglas))
+            replace(
+                t,
+                categoria=categorizar(t.descripcion, self.reglas),
+                origen=ruta_pdf.name,
+            )
             for t in transacciones
         ]
 
@@ -432,6 +438,7 @@ class App(tk.Tk):
                     f"{t.monto:.2f}",
                     t.tipo,
                     categoria,
+                    t.origen or "",
                 ),
             )
 
@@ -515,6 +522,7 @@ class App(tk.Tk):
                     "pagina": t.pagina,
                     "linea_cruda": t.linea_cruda,
                     "categoria": t.categoria,
+                    "origen": t.origen,
                 }
                 for t in self.transacciones
             ],
