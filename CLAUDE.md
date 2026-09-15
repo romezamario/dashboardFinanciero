@@ -98,6 +98,35 @@ the GitHub Actions UI. It runs `supabase link` + `supabase db push` using three 
 Tables: `bancos` (shared catalog, no `user_id`, no RLS) and `cuentas`/`categorias`/`documentos`/
 `transacciones` (all RLS-scoped to `user_id = auth.uid()`, four policies each — select/insert/update/delete).
 
+## Sincronizador (`sync/sincronizador.py`)
+
+Uploads `data/procesados/*.json` to Supabase. Key design decisions, explicitly chosen by the
+user over the simpler alternative — don't silently change these:
+
+- **Auth**: signs in as a real Supabase Auth user (`SUPABASE_EMAIL`/`SUPABASE_PASSWORD` in
+  `.env`) rather than using the `service_role` key. This means RLS applies to the sync path the
+  same way it will to the frontend — the sync script has no more privilege than the user
+  themselves would have. Requires a Supabase Auth user to already exist (created once via the
+  Supabase dashboard, since there's no signup UI yet — phase 5).
+- **Idempotency**: `bancos`/`cuentas`/`documentos`/`categorias` use a manual find-or-create
+  (`_buscar_o_crear`: select by unique key, insert only if missing) rather than relying on
+  `.upsert()`'s return-row semantics, which vary across supabase-py/PostgREST versions.
+  `transacciones` uses real `.upsert(..., on_conflict="documento_id,pagina,linea_cruda")` since
+  that's a bulk operation where per-row select-then-insert would be wasteful — the `on_conflict`
+  columns match the table's actual unique constraint exactly.
+- **Testability**: `sincronizar_documento`/`sincronizar_todos` take an already-authenticated
+  client as a parameter rather than constructing one internally, so the find-or-create/upsert
+  logic can be verified against an in-memory fake client (mimicking `.table().select().eq()
+  .execute()` / `.insert()` / `.upsert(on_conflict=)`) without needing real Supabase credentials.
+  There is no live-Supabase integration test in this repo — that verification is the user's to do
+  against their real project via the app's "Sincronizar a Supabase..." button.
+- **Account info gap**: the schema requires `cuentas.alias`/`ultimos_4_digitos`, which nothing in
+  the PDF extraction pipeline captures — the app asks for them directly ("Alias de cuenta" /
+  "Últimos 4 dígitos" fields, validated to be exactly 4 digits) before `guardar_procesado()` will
+  write the JSON, and they're carried through as `cuenta_alias`/`cuenta_ultimos_4_digitos`.
+- `monto`/`saldo` travel through the exported JSON and into the Supabase payload as decimal
+  strings ("199.00"), never Python floats — Postgres casts them to `numeric` server-side.
+
 ## CI/CD
 
 Two independent GitHub Actions workflows, each gated by path filters so they don't fire on
@@ -135,7 +164,8 @@ phases 2-5 at the user's explicit request.
 - [x] Phase 3 (redesigned) — Transformer + Categorizer as libraries (`transform/`), driven by a
       Tkinter desktop app (`app/main.py`) instead of the originally-planned watcher — user's
       explicit request, see Architecture above
-- [ ] Phase 4 — Sincronizador only (upserts `data/procesados/*.json` to Supabase, idempotent on
-      `documento_hash`; no watcher to build — the app replaced that role)
+- [x] Phase 4 — Sincronizador (`sync/sincronizador.py`), find-or-create for
+      bancos/cuentas/documentos/categorias, upsert on `(documento_id, pagina, linea_cruda)` for
+      transacciones. Triggered from the app's "Sincronizar a Supabase..." button
 - [ ] Phase 5 — Frontend
 - [ ] Phase 6 (remainder) — Configure Cloudflare Access once the frontend is deployed

@@ -5,4 +5,6 @@ pdfplumber==0.11.10
 # Python, no necesita entrada aquí. En Windows (python.org) ya viene
 # incluido; en Linux puede requerir el paquete del sistema `python3-tk`.
 
-# Fase 4 (Sincronizador) agrega aquí supabase-py.
+# Fase 4: subir data/procesados/*.json a Supabase
+supabase==2.31.0
+python-dotenv==1.2.3

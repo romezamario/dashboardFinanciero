@@ -108,7 +108,7 @@ data/
 - [x] Fase 2 — `BaseParser` + extractor de ejemplo (`parsers/`)
 - [x] Fase 3 (rediseñada) — Transformador + Categorizador + app de escritorio Tkinter
       (`transform/`, `app/`) — reemplaza al watcher automático que estaba planeado
-- [ ] Fase 4 — Sincronizador (sube `data/procesados/*.json` a Supabase, upsert idempotente)
+- [x] Fase 4 — Sincronizador (`sync/`) — sube `data/procesados/*.json` a Supabase, upsert idempotente
 - [ ] Fase 5 — Frontend
 - [ ] Fase 6 — Deploy (Cloudflare Pages + Access)
 
@@ -195,6 +195,22 @@ que las toque — no se corren a mano en el SQL Editor. Pasos de cuenta, una sol
 6. Para desarrollo local del pipeline (parsers/transform/sync), copia `.env.example` a `.env`
    y completa `SUPABASE_URL` (Settings → API → Project URL) y `SUPABASE_KEY` (la `anon key`
    de esa misma página).
+
+## Setup del Sincronizador (fase 4)
+
+El Sincronizador sube tus transacciones a Supabase **como tú** (no con una clave que se salte
+RLS) — necesita que exista un usuario real de Supabase Auth. Como todavía no hay pantalla de
+login (eso es la fase 5), créalo a mano una sola vez:
+
+1. En tu proyecto Supabase → **Authentication → Users → Add user → Create new user**. Usa el
+   email/password que quieras usar también después para entrar al frontend.
+2. Completa en tu `.env` (el mismo de arriba): `SUPABASE_EMAIL` y `SUPABASE_PASSWORD` con esas
+   credenciales.
+3. Instala las dependencias si no lo has hecho: `pip install -r requirements.txt`.
+4. En la app, botón **"Sincronizar a Supabase..."** — sube todo lo que haya en
+   `data/procesados/`. Es seguro correrlo varias veces: cada entidad se busca antes de
+   insertarse, y las transacciones usan upsert sobre el mismo constraint único de la tabla
+   (`documento_id, pagina, linea_cruda`), así que reintentar o repetir un archivo no duplica nada.
 
 ## Setup de Cloudflare (fase 6 — pasos manuales, una sola vez)
 

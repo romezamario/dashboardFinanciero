@@ -285,6 +285,24 @@ class App(tk.Tk):
             command=self.abrir_inspeccion,
         ).pack(side="left", padx=(4, 0))
 
+        marco_cuenta = ttk.Frame(self)
+        marco_cuenta.pack(fill="x", padx=8, pady=(0, 8))
+
+        ttk.Label(marco_cuenta, text="Alias de cuenta:").pack(side="left")
+        self.entrada_alias_cuenta = ttk.Entry(marco_cuenta, width=24)
+        self.entrada_alias_cuenta.pack(side="left", padx=4)
+
+        ttk.Label(marco_cuenta, text="Últimos 4 dígitos:").pack(
+            side="left", padx=(12, 0)
+        )
+        self.entrada_ultimos_4 = ttk.Entry(marco_cuenta, width=6)
+        self.entrada_ultimos_4.pack(side="left", padx=4)
+        ttk.Label(
+            marco_cuenta,
+            text="(nunca escribas el número completo de cuenta aquí — solo los últimos 4 dígitos)",
+            foreground="#a00",
+        ).pack(side="left", padx=8)
+
         self.tabla = ttk.Treeview(self, columns=COLUMNAS, show="headings")
         encabezados = {
             "pagina": "Pág.",
@@ -336,13 +354,23 @@ class App(tk.Tk):
         self.etiqueta_validacion = ttk.Label(marco_validacion, text="")
         self.etiqueta_validacion.pack(side="left", padx=8)
 
+        marco_acciones_finales = ttk.Frame(self)
+        marco_acciones_finales.pack(fill="x", padx=8, pady=8)
+
+        self.boton_sincronizar = ttk.Button(
+            marco_acciones_finales,
+            text="Sincronizar a Supabase...",
+            command=self.sincronizar,
+        )
+        self.boton_sincronizar.pack(side="right", padx=(8, 0))
+
         self.boton_guardar = ttk.Button(
-            self,
+            marco_acciones_finales,
             text="Guardar archivo procesado",
             command=self.guardar_procesado,
             state="disabled",
         )
-        self.boton_guardar.pack(padx=8, pady=8, anchor="e")
+        self.boton_guardar.pack(side="right")
 
     def cargar_pdf(self) -> None:
         ruta_texto = filedialog.askopenfilename(
@@ -505,9 +533,29 @@ class App(tk.Tk):
         if not self.transacciones or self.ruta_pdf_actual is None:
             return
 
+        alias = self.entrada_alias_cuenta.get().strip()
+        ultimos_4 = self.entrada_ultimos_4.get().strip()
+        if not alias:
+            messagebox.showwarning(
+                "Falta el alias de cuenta",
+                "Escribe un alias de cuenta (ej. \"Priority\") antes de guardar — "
+                "el esquema de Supabase lo necesita para saber a qué cuenta "
+                "pertenece este estado de cuenta.",
+            )
+            return
+        if not (ultimos_4.isdigit() and len(ultimos_4) == 4):
+            messagebox.showwarning(
+                "Últimos 4 dígitos inválidos",
+                "Escribe exactamente los últimos 4 dígitos de la cuenta (solo "
+                "números) — nunca el número completo.",
+            )
+            return
+
         documento_hash = _hash_pdf(self.ruta_pdf_actual)
         salida = {
             "banco": self.banco_actual,
+            "cuenta_alias": alias,
+            "cuenta_ultimos_4_digitos": ultimos_4,
             "documento_hash": documento_hash,
             "ruta_pdf_original": str(self.ruta_pdf_actual),
             "procesado_en": datetime.now(timezone.utc).isoformat(),
@@ -537,7 +585,8 @@ class App(tk.Tk):
         messagebox.showinfo(
             "Guardado",
             f"Archivo procesado guardado en:\n{ruta_salida}\n\n"
-            "Listo para que el Sincronizador (próxima fase) lo suba a Supabase.",
+            "Usa \"Sincronizar a Supabase...\" para subirlo (y cualquier otro "
+            "archivo pendiente en data/procesados/).",
         )
 
     def _mover_a_errores(self, ruta_pdf: Path, motivo: str) -> None:
@@ -550,6 +599,67 @@ class App(tk.Tk):
             )
         except OSError:
             pass  # el PDF puede estar fuera de data/nuevos/; no es fatal
+
+    def sincronizar(self) -> None:
+        if not messagebox.askyesno(
+            "Sincronizar a Supabase",
+            "Esto sube todos los archivos pendientes en data/procesados/ a tu "
+            "proyecto de Supabase (autenticado como tú, vía .env). ¿Continuar?",
+        ):
+            return
+
+        try:
+            from dotenv import load_dotenv
+
+            from sync.sincronizador import crear_cliente_autenticado, sincronizar_todos
+        except ImportError as error:
+            messagebox.showerror(
+                "Faltan dependencias",
+                f"No se pudo importar el Sincronizador: {error}\n\n"
+                "Instala las dependencias de sincronización:\n"
+                "pip install -r requirements.txt",
+            )
+            return
+
+        load_dotenv()
+        try:
+            client = crear_cliente_autenticado()
+        except KeyError as error:
+            messagebox.showerror(
+                "Falta configuración en .env",
+                f"Falta la variable {error} en tu archivo .env. Revisa "
+                "SUPABASE_URL, SUPABASE_KEY, SUPABASE_EMAIL y SUPABASE_PASSWORD.",
+            )
+            return
+        except Exception as error:  # noqa: BLE001 — típicamente login inválido
+            messagebox.showerror(
+                "No se pudo iniciar sesión en Supabase",
+                f"{error}\n\nRevisa SUPABASE_EMAIL/SUPABASE_PASSWORD en tu .env.",
+            )
+            return
+
+        resultados = sincronizar_todos(client)
+        if not resultados:
+            messagebox.showinfo(
+                "Sincronizar a Supabase", "No hay archivos en data/procesados/."
+            )
+            return
+
+        exitosos = [r for r in resultados if r.ok]
+        fallidos = [r for r in resultados if not r.ok]
+        total_transacciones = sum(r.transacciones_sincronizadas for r in exitosos)
+
+        resumen = (
+            f"{len(exitosos)}/{len(resultados)} archivo(s) sincronizados "
+            f"({total_transacciones} transacciones).\n"
+        )
+        if fallidos:
+            detalle = "\n".join(f"- {r.archivo}: {r.error}" for r in fallidos)
+            messagebox.showwarning(
+                "Sincronización con errores", resumen + "\nFallaron:\n" + detalle
+            )
+        else:
+            messagebox.showinfo("Sincronización completa", resumen)
 
 
 def main() -> None:
