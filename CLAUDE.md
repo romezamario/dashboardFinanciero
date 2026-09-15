@@ -47,9 +47,24 @@ to `data/errores/` with a `.log` of what went wrong (see `App._mover_a_errores`)
 
 When adding a real bank, register its `BaseParser` subclass in the `PARSERS` dict at the top of
 `app/main.py` — that's what populates the "Banco" dropdown. Some parsers need extra context the
-PDF doesn't print (e.g. `PriorityParser` needs a year, since the statement only prints "DD MES"
+PDF doesn't print (e.g. `BanamexParser` needs a year, since the statement only prints "DD MES"
 per row) — `App.cargar_pdf` tries `parser_cls(ano_estado_de_cuenta=anio)` and falls back to
 `parser_cls()` on `TypeError`, so a parser only needs that constructor param if it actually uses it.
+
+**Lessons from writing `parsers/banamex.py`, worth checking before writing any new bank parser:**
+- `pagina.extract_tables()` is not reliable — some banks' PDFs look like ruled tables visually but
+  have no real vector gridlines pdfplumber can detect (confirmed via the app's anonymized
+  "Inspeccionar PDF..." output: 0 tables found). Try it, but be ready to fall back to
+  `extract_text()` + block-grouping by a leading date pattern.
+- Don't infer cargo/abono from the description text or from which "column" a printed amount
+  looked like it was in — real statements lie (e.g. Banamex prints "CREDITO NOMINA ... A SU TC"
+  for what is actually an automatic charge to a credit card, saldo going *down*). Derive the
+  signed amount from the delta between consecutive running-balance ("saldo") values instead —
+  the statement always prints saldo correctly, even when the description is misleading.
+- A transaction can be split across a page boundary (concept lines end on one page, the
+  closing amount+saldo line starts the next, no repeated date). Process the whole document as
+  one flat stream of `(pagina, linea)` tuples, not per-page, or you'll silently drop or fork
+  transactions at page breaks.
 
 The app can be packaged as a standalone `.exe` via `DashboardFinanciero.spec` (PyInstaller,
 `--windowed`, icon from `app/icono.ico` — see README's "Empaquetar como ejecutable"). Build deps
