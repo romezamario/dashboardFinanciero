@@ -46,7 +46,16 @@ those transactions to Supabase keyed by `documento_hash`, idempotently. Failed-t
 to `data/errores/` with a `.log` of what went wrong (see `App._mover_a_errores`).
 
 When adding a real bank, register its `BaseParser` subclass in the `PARSERS` dict at the top of
-`app/main.py` — that's what populates the "Banco" dropdown.
+`app/main.py` — that's what populates the "Banco" dropdown. Some parsers need extra context the
+PDF doesn't print (e.g. `PriorityParser` needs a year, since the statement only prints "DD MES"
+per row) — `App.cargar_pdf` tries `parser_cls(ano_estado_de_cuenta=anio)` and falls back to
+`parser_cls()` on `TypeError`, so a parser only needs that constructor param if it actually uses it.
+
+The app can be packaged as a standalone `.exe` via `DashboardFinanciero.spec` (PyInstaller,
+`--windowed`, icon from `app/icono.ico` — see README's "Empaquetar como ejecutable"). Build deps
+(pyinstaller, pillow) live in `requirements-dev.txt`, not `requirements.txt` — they're not needed
+to just run `python -m app.main`. `build/` and `dist/` are gitignored; the `.spec` file is
+versioned since it's the build's source of truth.
 
 **Cloud**: Supabase (Postgres + Auth + RLS, sole remote source of truth) + Cloudflare Pages
 (frontend hosting) + Cloudflare Access (network-level login gate in front of Pages, additive to

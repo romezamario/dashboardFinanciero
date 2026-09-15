@@ -21,6 +21,10 @@ __pycache__/
 .venv/
 venv/
 
+# Artefactos de PyInstaller (se regeneran con DashboardFinanciero.spec)
+build/
+dist/
+
 # Node / frontend
 node_modules/
 frontend/dist/

@@ -89,6 +89,9 @@ no dispara ninguno de los dos.
 parsers/    # BaseParser + un extractor por banco
 transform/  # normalización al esquema canónico + categorización (reglas editables desde la app)
 app/        # app de escritorio (Tkinter) — carga PDF, valida totales, categoriza, exporta
+  icono.ico          # ícono del .exe (generado por generar_icono.py, versionado)
+  generar_icono.py   # utilidad para regenerar/cambiar app/icono.ico
+DashboardFinanciero.spec  # config del build de PyInstaller (dist/*.exe, no versionado)
 sync/       # cliente de Supabase, upsert idempotente (próxima fase)
 supabase/
   migrations/  # schema + políticas de RLS, aplicadas vía GitHub Actions
@@ -145,6 +148,28 @@ Flujo completo una vez que el extractor de tu banco existe:
    la tabla ya cargada y se guardan en `transform/reglas_categorizacion.json` (no se sube a git).
 6. **Guardar archivo procesado** — escribe `data/procesados/<hash>.json`, listo para que el
    Sincronizador (próxima fase) lo suba a Supabase.
+
+## Empaquetar como ejecutable (.exe con ícono)
+
+Para tener un ícono de escritorio que abra la app directamente, sin terminal ni activar ningún
+venv a mano:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m app.generar_icono   # solo si app/icono.ico no existe o lo quieres cambiar
+.\.venv\Scripts\python.exe -m PyInstaller DashboardFinanciero.spec
+```
+
+El ejecutable queda en `dist\DashboardFinanciero.exe` (no se sube a git — son ~40 MB y se
+regeneran con el comando de arriba). Para un ícono de escritorio real: clic derecho sobre
+`dist\DashboardFinanciero.exe` → **Enviar a → Escritorio (crear acceso directo)**.
+
+`DashboardFinanciero.spec` sí está versionado — ahí vive la configuración del build (nombre,
+ícono, modo ventana sin consola). Si agregas una dependencia nueva al proyecto y el `.exe`
+deja de arrancar (un `ModuleNotFoundError` que solo aparece empaquetado, no con `python -m app.main`),
+casi siempre es un import dinámico que PyInstaller no detectó — se resuelve agregándolo a
+`hiddenimports` en el `.spec`.
 
 ## Setup de Supabase (fase 1)
 

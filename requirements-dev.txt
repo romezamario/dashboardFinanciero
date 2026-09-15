@@ -1,0 +1,5 @@
+# Solo para empaquetar app/main.py como ejecutable (DashboardFinanciero.spec)
+# o regenerar el ícono — no hace falta para correr la app con `python -m app.main`.
+-r requirements.txt
+pyinstaller==6.22.3
+pillow==12.3.0
