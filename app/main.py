@@ -49,6 +49,11 @@ PARSERS: dict[str, type[BaseParser]] = {
 
 COLUMNAS = ("pagina", "fecha", "descripcion", "monto", "tipo", "categoria")
 
+# Debe coincidir exactamente con la categoría de esa regla en
+# transform/reglas_categorizacion.json — así el panel de totales puede
+# separarla del resto de los cargos.
+CATEGORIA_DISPOSICION_EFECTIVO = "Disposición de efectivo"
+
 
 def _hash_pdf(ruta: Path) -> str:
     return hashlib.sha256(ruta.read_bytes()).hexdigest()
@@ -309,7 +314,7 @@ class App(tk.Tk):
         marco_totales.pack(fill="x", padx=8, pady=(0, 8))
         self.etiqueta_totales = ttk.Label(
             marco_totales,
-            text="Cargos: — · Abonos: — · Neto: —",
+            text="Cargos: — · Disposición de efectivo: — · Abonos: —",
             font=("Consolas", 10),
         )
         self.etiqueta_totales.pack(fill="x", padx=8, pady=6)
@@ -411,6 +416,7 @@ class App(tk.Tk):
             for t in self.transacciones
         ]
         self._refrescar_tabla()
+        self._actualizar_totales()
 
     def _refrescar_tabla(self) -> None:
         self.tabla.delete(*self.tabla.get_children())
@@ -430,17 +436,27 @@ class App(tk.Tk):
             )
 
     def _actualizar_totales(self) -> None:
-        cargos = [t for t in self.transacciones if t.tipo == "cargo"]
+        cargos_efectivo = [
+            t
+            for t in self.transacciones
+            if t.tipo == "cargo" and t.categoria == CATEGORIA_DISPOSICION_EFECTIVO
+        ]
+        otros_cargos = [
+            t
+            for t in self.transacciones
+            if t.tipo == "cargo" and t.categoria != CATEGORIA_DISPOSICION_EFECTIVO
+        ]
         abonos = [t for t in self.transacciones if t.tipo == "abono"]
-        total_cargos = sum((t.monto for t in cargos), start=Decimal("0"))
+
+        total_efectivo = sum((t.monto for t in cargos_efectivo), start=Decimal("0"))
+        total_otros_cargos = sum((t.monto for t in otros_cargos), start=Decimal("0"))
         total_abonos = sum((t.monto for t in abonos), start=Decimal("0"))
-        neto = total_abonos - total_cargos
 
         self.etiqueta_totales.config(
             text=(
-                f"Cargos: {total_cargos:,.2f} ({len(cargos)})   ·   "
-                f"Abonos: {total_abonos:,.2f} ({len(abonos)})   ·   "
-                f"Neto: {neto:,.2f}"
+                f"Cargos: {total_otros_cargos:,.2f} ({len(otros_cargos)})   ·   "
+                f"Disposición de efectivo: {total_efectivo:,.2f} ({len(cargos_efectivo)})   ·   "
+                f"Abonos: {total_abonos:,.2f} ({len(abonos)})"
             )
         )
 
