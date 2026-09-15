@@ -25,6 +25,7 @@ from tkinter import filedialog, messagebox, ttk
 
 import pdfplumber
 
+from parsers._anonimizador import anonimizar
 from parsers.base import BaseParser, RenglonCrudo
 from parsers.ejemplo import EjemploParser
 from parsers.priority import PriorityParser
@@ -139,6 +140,8 @@ class VentanaInspeccion(tk.Toplevel):
         self.title("Inspeccionar PDF (para diseñar un extractor)")
         self.geometry("760x600")
 
+        self._contenido_crudo: str = ""
+
         marco_superior = ttk.Frame(self)
         marco_superior.pack(fill="x", padx=8, pady=8)
         ttk.Button(
@@ -146,6 +149,20 @@ class VentanaInspeccion(tk.Toplevel):
         ).pack(side="left")
         self.etiqueta_archivo = ttk.Label(marco_superior, text="Ningún archivo elegido.")
         self.etiqueta_archivo.pack(side="left", padx=8)
+
+        # Anonimizado por defecto: así lo primero que ves ya es seguro de
+        # compartir. Desmárcalo solo para tu propia referencia, nunca para
+        # copiar y pegar en otro lado.
+        self.var_anonimizar = tk.BooleanVar(value=True)
+        ttk.Checkbutton(
+            marco_superior,
+            text="Anonimizar (oculta nombres/montos/cuentas reales)",
+            variable=self.var_anonimizar,
+            command=self._refrescar_vista,
+        ).pack(side="left", padx=12)
+        ttk.Button(
+            marco_superior, text="Copiar todo", command=self._copiar_todo
+        ).pack(side="left")
 
         marco_texto = ttk.Frame(self)
         marco_texto.pack(fill="both", expand=True, padx=8, pady=(0, 8))
@@ -175,29 +192,42 @@ class VentanaInspeccion(tk.Toplevel):
 
         ruta = Path(ruta_texto)
         self.etiqueta_archivo.config(text=ruta.name)
-        self.texto.delete("1.0", "end")
 
+        lineas_salida: list[str] = []
         try:
             with pdfplumber.open(ruta) as pdf:
                 for numero, pagina in enumerate(pdf.pages, start=1):
-                    self.texto.insert("end", f"=== Página {numero} — texto plano ===\n")
+                    lineas_salida.append(f"=== Página {numero} — texto plano ===")
                     texto_pagina = pagina.extract_text() or "(sin texto extraíble)"
                     for i, linea in enumerate(texto_pagina.splitlines()):
-                        self.texto.insert("end", f"{i:3} | {linea!r}\n")
+                        lineas_salida.append(f"{i:3} | {linea!r}")
 
                     tablas = pagina.extract_tables()
-                    self.texto.insert(
-                        "end", f"\n=== Página {numero} — tablas detectadas: {len(tablas)} ===\n"
+                    lineas_salida.append(
+                        f"\n=== Página {numero} — tablas detectadas: {len(tablas)} ==="
                     )
                     for indice_tabla, tabla in enumerate(tablas):
-                        self.texto.insert(
-                            "end", f"\n-- Tabla {indice_tabla} ({len(tabla)} filas) --\n"
-                        )
+                        lineas_salida.append(f"\n-- Tabla {indice_tabla} ({len(tabla)} filas) --")
                         for fila in tabla:
-                            self.texto.insert("end", f"{fila!r}\n")
-                    self.texto.insert("end", "\n")
+                            lineas_salida.append(repr(fila))
+                    lineas_salida.append("")
         except Exception as error:  # noqa: BLE001 — se lo mostramos tal cual
             messagebox.showerror("Error al leer el PDF", str(error))
+            return
+
+        self._contenido_crudo = "\n".join(lineas_salida)
+        self._refrescar_vista()
+
+    def _refrescar_vista(self) -> None:
+        contenido = self._contenido_crudo
+        if self.var_anonimizar.get():
+            contenido = anonimizar(contenido)
+        self.texto.delete("1.0", "end")
+        self.texto.insert("1.0", contenido)
+
+    def _copiar_todo(self) -> None:
+        self.clipboard_clear()
+        self.clipboard_append(self.texto.get("1.0", "end-1c"))
 
 
 class App(tk.Tk):
