@@ -305,6 +305,15 @@ class App(tk.Tk):
         self.etiqueta_resumen = ttk.Label(self, text="Sin datos cargados.")
         self.etiqueta_resumen.pack(fill="x", padx=8)
 
+        marco_totales = ttk.LabelFrame(self, text="Totales de la tabla cargada")
+        marco_totales.pack(fill="x", padx=8, pady=(0, 8))
+        self.etiqueta_totales = ttk.Label(
+            marco_totales,
+            text="Cargos: — · Abonos: — · Neto: —",
+            font=("Consolas", 10),
+        )
+        self.etiqueta_totales.pack(fill="x", padx=8, pady=6)
+
         marco_validacion = ttk.LabelFrame(self, text="Validación de totales")
         marco_validacion.pack(fill="x", padx=8, pady=8)
 
@@ -378,6 +387,7 @@ class App(tk.Tk):
         self.ruta_pdf_actual = ruta_pdf
         self.banco_actual = banco
         self._refrescar_tabla()
+        self._actualizar_totales()
 
         resumen = f"{len(transacciones)} transacciones cargadas"
         if fallidas:
@@ -418,6 +428,21 @@ class App(tk.Tk):
                     categoria,
                 ),
             )
+
+    def _actualizar_totales(self) -> None:
+        cargos = [t for t in self.transacciones if t.tipo == "cargo"]
+        abonos = [t for t in self.transacciones if t.tipo == "abono"]
+        total_cargos = sum((t.monto for t in cargos), start=Decimal("0"))
+        total_abonos = sum((t.monto for t in abonos), start=Decimal("0"))
+        neto = total_abonos - total_cargos
+
+        self.etiqueta_totales.config(
+            text=(
+                f"Cargos: {total_cargos:,.2f} ({len(cargos)})   ·   "
+                f"Abonos: {total_abonos:,.2f} ({len(abonos)})   ·   "
+                f"Neto: {neto:,.2f}"
+            )
+        )
 
     def validar(self) -> None:
         if not self.transacciones:
