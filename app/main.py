@@ -268,7 +268,7 @@ class App(tk.Tk):
         self.entrada_formato_fecha.insert(0, "%d/%m/%Y")
         self.entrada_formato_fecha.pack(side="left", padx=4)
 
-        ttk.Label(marco_superior, text="Año (si el PDF no lo trae):").pack(
+        ttk.Label(marco_superior, text="Año (respaldo — se detecta solo si es posible):").pack(
             side="left", padx=(12, 0)
         )
         self.entrada_anio = ttk.Entry(marco_superior, width=6)
@@ -431,6 +431,15 @@ class App(tk.Tk):
             )
             return
 
+        # Algunos extractores detectan el año solo desde el PDF y pisan lo
+        # que traía el campo manual (ver BanamexParser._detectar_anio) —
+        # refleja eso en la UI para que no quede desincronizado.
+        anio_usado = getattr(parser, "ano_estado_de_cuenta", None)
+        anio_detectado_automaticamente = bool(anio_usado) and anio_usado != anio
+        if anio_detectado_automaticamente:
+            self.entrada_anio.delete(0, "end")
+            self.entrada_anio.insert(0, anio_usado)
+
         try:
             alias_detectado, ultimos_4_detectados = parser.extraer_info_cuenta(ruta_pdf)
         except Exception:  # noqa: BLE001 — nunca debe tumbar la carga de transacciones
@@ -475,6 +484,8 @@ class App(tk.Tk):
             resumen += " · cuenta detectada automáticamente, verifícala antes de guardar"
         else:
             resumen += " · no se detectó la cuenta automáticamente, complétala a mano"
+        if anio_detectado_automaticamente:
+            resumen += f" · año detectado del PDF: {anio_usado}"
         self.etiqueta_resumen.config(text=resumen)
         self.etiqueta_validacion.config(text="")
         self.boton_guardar.config(state="normal")

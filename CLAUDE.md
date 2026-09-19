@@ -50,7 +50,18 @@ When adding a real bank, register its `BaseParser` subclass in the `PARSERS` dic
 parsers need extra context the PDF doesn't print (e.g. `BanamexParser` needs a year, since the
 statement only prints "DD MES" per row) — `App.cargar_pdf` tries
 `parser_cls(ano_estado_de_cuenta=anio)` and falls back to `parser_cls()` on `TypeError`, so a
-parser only needs that constructor param if it actually uses it.
+parser only needs that constructor param if it actually uses it. `BanamexParser.extraer()` then
+tries to **self-correct** that year from the PDF's own cover page ("Fecha de corte" / "Periodo"
+both print the full year in plain text) before processing any transaction lines — the
+constructor value is only the fallback if detection fails, and `App.cargar_pdf` reads
+`parser.ano_estado_de_cuenta` back afterward to fix up the "Año" field in the UI if the extractor
+overrode it. This was a real bug: the user was reusing the app across statements from different
+months without remembering to update the manual "Año" field, silently mis-dating transactions.
+Known gap: if a statement's period crosses a calendar year boundary (e.g. Dec 15 – Jan 14), every
+transaction gets the single detected year (the cutoff date's year) — December rows would be
+wrong. Not yet seen in practice; if it comes up, detection needs to move from
+once-per-document to per-transaction (using the month within the block to decide which side of
+the boundary it's on).
 
 **Auto-detection, so the user doesn't have to pick the bank manually**: `BaseParser` has two
 optional hooks, both defaulting to "unsupported" so old/simple parsers (`EjemploParser`) don't

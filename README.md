@@ -155,9 +155,11 @@ Flujo completo una vez que el extractor de tu banco existe:
    PDF (`puede_procesar`) y usa el que matchee; si ninguno o más de uno matchean, cae de vuelta a
    lo que tengas seleccionado en el dropdown. El resumen te dice si el banco quedó "detectado" o
    "manual". Luego corre el extractor + Transformador + Categorizador y llena la tabla. Si el
-   extractor lo soporta (Banamex sí), también autocompleta **Alias de cuenta** y **Últimos 4
-   dígitos** leyéndolos de la portada del PDF — revísalos antes de guardar, el resumen avisa si
-   se detectaron o si hay que llenarlos a mano.
+   extractor lo soporta (Banamex sí), también autocompleta **Alias de cuenta**, **Últimos 4
+   dígitos** y **Año** leyéndolos de la portada del PDF (el campo "Año" es solo el respaldo
+   manual si la detección falla — si el extractor sí lo encuentra, pisa lo que tenga escrito el
+   campo, incluso si quedó desactualizado de una carga anterior). Revisa estos datos antes de
+   guardar, el resumen avisa qué se detectó y qué hay que llenar a mano.
 3. Revisa los renglones. Si algunos no se pudieron interpretar, la app te avisa con el detalle.
 4. **Validación de totales**: escribe el neto del periodo tal como lo imprime el estado de cuenta
    (saldo actual − saldo anterior) y da **Validar** — si no cuadra, hay algo mal parseado o un

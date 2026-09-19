@@ -31,8 +31,16 @@ ANTERIOR" y de ahí en adelante deriva cada monto del delta, ignorando el
 monto impreso salvo para quitarlo del texto del concepto.
 
 IMPORTANTE — el año: el PDF no imprime el año en cada renglón, solo
-"DD MES". Ajusta `ano_estado_de_cuenta` al año real (la app tiene un
-campo "Año" que se lo pasa).
+"DD MES". `extraer()` lo detecta solo desde la portada ("Fecha de corte"
+o "Periodo" traen el año completo) y sobreescribe `ano_estado_de_cuenta`
+antes de procesar las transacciones — el valor que llega por parámetro
+(desde el campo "Año" de la app) es solo el respaldo si la detección
+falla. Límite conocido: si el periodo del estado de cuenta cruza un
+cambio de año (ej. del 15 de diciembre al 14 de enero), todas las
+transacciones se etiquetan con el mismo año detectado (el de la fecha
+de corte) — las de diciembre quedarían con el año equivocado. No se ha
+visto este caso en la práctica; si aparece, hay que separar la
+detección por transacción en vez de una sola vez por documento.
 """
 
 from __future__ import annotations
@@ -71,6 +79,11 @@ PATRON_ALIAS = re.compile(r"^Cuenta\s+[A-Za-zÁÉÍÓÚáéíóú]+(?:\s+[A-Za-z
 # que sobreviva esta función.
 PATRON_CUENTA_CHEQUES = re.compile(r"cuenta de cheques\s+(\d+)", re.IGNORECASE)
 
+# "Fecha de corte ... 30 de junio de 2025" / "Periodo Del 1 al 30 de junio
+# del 2025" — cualquiera de las dos trae el año en texto plano en la misma
+# línea.
+PATRON_LINEA_CON_ANIO = re.compile(r"FECHA DE CORTE|PERIODO|PER[ÍI]ODO", re.IGNORECASE)
+
 
 def _a_decimal(texto: str) -> Decimal:
     return Decimal(texto.replace(",", ""))
@@ -88,12 +101,28 @@ class BanamexParser(BaseParser):
         with pdfplumber.open(ruta_pdf) as pdf:
             for numero_pagina, pagina in enumerate(pdf.pages, start=1):
                 texto = pagina.extract_text() or ""
+
+                if numero_pagina == 1:
+                    anio_detectado = self._detectar_anio(texto)
+                    if anio_detectado:
+                        # Pisa lo que haya llegado por parámetro/campo "Año"
+                        # de la app -- el PDF es la fuente de verdad.
+                        self.ano_estado_de_cuenta = anio_detectado
+
                 for linea in texto.splitlines():
                     linea = linea.strip()
                     if linea:
                         lineas_documento.append((numero_pagina, linea))
 
         return self._procesar_documento(lineas_documento)
+
+    def _detectar_anio(self, texto_portada: str) -> str | None:
+        for linea in texto_portada.splitlines():
+            if PATRON_LINEA_CON_ANIO.search(linea):
+                coincidencia = re.search(r"\d{4}", linea)
+                if coincidencia:
+                    return coincidencia.group(0)
+        return None
 
     def extraer_info_cuenta(self, ruta_pdf: Path) -> tuple[str | None, str | None]:
         alias: str | None = None
