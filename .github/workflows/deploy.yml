@@ -11,7 +11,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -37,14 +37,16 @@ jobs:
       - name: Crear el proyecto de Cloudflare Pages si no existe
         # `wrangler pages deploy` ya no lo crea solo en el primer deploy
         # (comportamiento viejo que documentamos mal) -- hay que crearlo
-        # aparte. continue-on-error porque en corridas futuras el proyecto
-        # ya existe y este paso "falla" (no es un error real).
-        uses: cloudflare/wrangler-action@v4
-        continue-on-error: true
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages project create dashboard-financiero --production-branch=main
+        # aparte. Revisa primero si ya existe (wrangler-action no soporta
+        # lógica condicional en su `command`, por eso wrangler se corre
+        # directo aquí en vez de vía la action).
+        working-directory: frontend
+        run: |
+          npx wrangler pages project list --json | grep -q '"name": *"dashboard-financiero"' \
+            || npx wrangler pages project create dashboard-financiero --production-branch=main
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Deploy a Cloudflare Pages
         uses: cloudflare/wrangler-action@v4
