@@ -607,6 +607,8 @@ class App(tk.Tk):
             return
 
         documento_hash = _hash_pdf(self.ruta_pdf_actual)
+        self.ruta_pdf_actual = self._mover_a_procesados_junto_al_pdf(self.ruta_pdf_actual)
+
         salida = {
             "banco": self.banco_actual,
             "cuenta_alias": alias,
@@ -640,9 +642,40 @@ class App(tk.Tk):
         messagebox.showinfo(
             "Guardado",
             f"Archivo procesado guardado en:\n{ruta_salida}\n\n"
+            f"El PDF original se movió a:\n{self.ruta_pdf_actual}\n\n"
             "Usa \"Sincronizar a Supabase...\" para subirlo (y cualquier otro "
             "archivo pendiente en data/procesados/).",
         )
+
+    def _mover_a_procesados_junto_al_pdf(self, ruta_pdf: Path) -> Path:
+        """Mueve el PDF ya guardado a una subcarpeta "procesados" dentro de
+        la misma carpeta donde estaba (no la carpeta data/procesados/ del
+        proyecto, esa es para los JSON exportados) — para llevar registro
+        de qué estados de cuenta ya se cargaron sin tener que abrir cada
+        JSON. Reutiliza la carpeta si ya existe; no la vuelve a crear."""
+        if ruta_pdf.parent.name == "procesados":
+            # Ya está adentro de una carpeta "procesados" (ej. lo volviste
+            # a cargar desde ahí para corregir algo) -- no lo anides de nuevo.
+            return ruta_pdf
+
+        carpeta_destino = ruta_pdf.parent / "procesados"
+        try:
+            carpeta_destino.mkdir(exist_ok=True)
+        except OSError:
+            return ruta_pdf  # sin permisos u otra falla -- se queda donde estaba
+
+        destino = carpeta_destino / ruta_pdf.name
+        if destino.exists() and destino != ruta_pdf:
+            # No pisar un archivo distinto que ya tenga ese nombre ahí.
+            contador = 1
+            while destino.exists():
+                destino = carpeta_destino / f"{ruta_pdf.stem} ({contador}){ruta_pdf.suffix}"
+                contador += 1
+
+        try:
+            return ruta_pdf.replace(destino)
+        except OSError:
+            return ruta_pdf
 
     def _mover_a_errores(self, ruta_pdf: Path, motivo: str) -> None:
         CARPETA_ERRORES.mkdir(parents=True, exist_ok=True)

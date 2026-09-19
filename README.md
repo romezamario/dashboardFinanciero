@@ -42,8 +42,9 @@ Validación de totales EN LA APP: suma calculada vs. el total que tú
       ▼
 "Guardar archivo procesado" → data/procesados/<hash>.json
       │   (transacciones normalizadas + categorizadas, listas para subir)
+      │   y el PDF original se mueve a <carpeta-donde-estaba>/procesados/
       ▼
-Sincronizador (próxima fase) — upsert idempotente a Supabase vía supabase-py
+Sincronizador — upsert idempotente a Supabase vía supabase-py
 ```
 
 Solo las transacciones ya normalizadas cruzan a la nube — el PDF y su texto crudo nunca salen
@@ -166,7 +167,11 @@ Flujo completo una vez que el extractor de tu banco existe:
    renglón faltante antes de confiar en el resultado.
 5. **Reglas de categorización...** para agregar/editar/borrar reglas — se aplican de inmediato a
    la tabla ya cargada y se guardan en `transform/reglas_categorizacion.json` (no se sube a git).
-6. **Guardar archivo procesado** — escribe `data/procesados/<hash>.json`.
+6. **Guardar archivo procesado** — escribe `data/procesados/<hash>.json` y mueve el PDF original a
+   una subcarpeta `procesados/` dentro de la misma carpeta donde estaba (no la `data/procesados/`
+   del proyecto, esa es para los JSON) — reutiliza esa carpeta si ya existe, y si el PDF ya está
+   adentro de una carpeta `procesados/` no lo mueve de nuevo. Así vas viendo de un vistazo, en tu
+   propia carpeta de descargas, cuáles estados de cuenta ya cargaste.
 7. **Sincronizar a Supabase...** — sube todo lo pendiente en `data/procesados/`.
 
 ## Empaquetar como ejecutable (.exe con ícono)

@@ -39,11 +39,19 @@ split into `(monto, tipo)`, builds `TransaccionCanonica` with audit fields `pagi
 → `transform/categorizador.py` (keyword rules loaded from `transform/reglas_categorizacion.json`,
 gitignored — editable live from the app's "Reglas de categorización..." dialog, `VentanaReglas`)
 → user validates the sum against the statement's own declared total (`validar_contra_total`) →
-"Guardar archivo procesado" writes `data/procesados/<sha256_del_pdf>.json`.
+"Guardar archivo procesado" writes `data/procesados/<sha256_del_pdf>.json` **and** moves the
+source PDF itself into a `procesados/` subfolder of whatever folder it was loaded from (e.g.
+`C:\...\00Estadosdecuenta\procesados\`, not the project's `data/procesados/` — that's only for
+the JSON) via `App._mover_a_procesados_junto_al_pdf`: reuses that subfolder if it already exists,
+no-ops if the PDF is already inside a folder named `procesados` (avoids nesting
+`procesados/procesados` on a reload-to-fix-something), and appends `" (1)"`, `" (2)"`, ... on a
+same-name collision with an unrelated file rather than overwriting it silently.
 
 That JSON is the handoff contract for `sync/sincronizador.py` (see its own section below): it
 upserts those transactions to Supabase keyed by `documento_hash`, idempotently. Failed-to-parse
-PDFs move to `data/errores/` with a `.log` of what went wrong (see `App._mover_a_errores`).
+PDFs move to `data/errores/` with a `.log` of what went wrong (see `App._mover_a_errores` — a
+different, project-local destination, for the "couldn't even extract" case rather than the
+"successfully processed" case above).
 
 When adding a real bank, register its `BaseParser` subclass in the `PARSERS` dict at the top of
 `app/main.py` — that's what populates the "Banco" dropdown, used as a manual fallback. Some
