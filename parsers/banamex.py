@@ -124,6 +124,22 @@ class BanamexParser(BaseParser):
 
         return alias, ultimos_4
 
+    def puede_procesar(self, ruta_pdf: Path) -> bool:
+        # "BANAMEX" aparece de forma confiable en los conceptos de
+        # transacción reales (CREDITO NOMINA BANAMEX, ABONO/NOMINA...
+        # BANAMEX NOMINA, etc.) desde la página 2 en adelante — el logo de
+        # la portada (página 1) es una imagen, no texto seleccionable, así
+        # que no basta con mirar solo la primera página.
+        try:
+            with pdfplumber.open(ruta_pdf) as pdf:
+                for pagina in pdf.pages[:3]:
+                    texto = pagina.extract_text() or ""
+                    if "BANAMEX" in texto.upper():
+                        return True
+        except Exception:  # noqa: BLE001 — un PDF ilegible simplemente no matchea
+            return False
+        return False
+
     def _procesar_documento(
         self, lineas_documento: list[tuple[int, str]]
     ) -> list[RenglonCrudo]:

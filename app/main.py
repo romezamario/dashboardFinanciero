@@ -252,7 +252,9 @@ class App(tk.Tk):
         marco_superior = ttk.Frame(self)
         marco_superior.pack(fill="x", padx=8, pady=8)
 
-        ttk.Label(marco_superior, text="Banco:").pack(side="left")
+        ttk.Label(marco_superior, text="Banco (se detecta solo si es posible):").pack(
+            side="left"
+        )
         self.combo_banco = ttk.Combobox(
             marco_superior, values=list(PARSERS), state="readonly", width=20
         )
@@ -375,6 +377,23 @@ class App(tk.Tk):
         )
         self.boton_guardar.pack(side="right")
 
+    def _detectar_banco(self, ruta_pdf: Path) -> str | None:
+        """Prueba cada extractor registrado contra el PDF. Si exactamente
+        uno dice que puede procesarlo, ese es el banco — evita que el
+        usuario tenga que elegirlo a mano. Ambigüedad (0 o 2+ matches) cae
+        de vuelta a lo que esté seleccionado en el dropdown."""
+        coincidencias = []
+        for nombre, parser_cls in PARSERS.items():
+            try:
+                if parser_cls().puede_procesar(ruta_pdf):
+                    coincidencias.append(nombre)
+            except Exception:  # noqa: BLE001 — un extractor roto no debe tumbar la detección
+                continue
+
+        if len(coincidencias) == 1:
+            return coincidencias[0]
+        return None
+
     def cargar_pdf(self) -> None:
         ruta_texto = filedialog.askopenfilename(
             title="Selecciona el estado de cuenta",
@@ -384,7 +403,13 @@ class App(tk.Tk):
             return
         ruta_pdf = Path(ruta_texto)
 
-        banco = self.combo_banco.get()
+        banco_detectado = self._detectar_banco(ruta_pdf)
+        if banco_detectado:
+            banco = banco_detectado
+            self.combo_banco.set(banco)
+        else:
+            banco = self.combo_banco.get()
+
         formato_fecha = self.entrada_formato_fecha.get().strip() or "%d/%m/%Y"
         anio = self.entrada_anio.get().strip()
         parser_cls = PARSERS[banco]
@@ -443,7 +468,7 @@ class App(tk.Tk):
         self._refrescar_tabla()
         self._actualizar_totales()
 
-        resumen = f"{len(transacciones)} transacciones cargadas"
+        resumen = f"Banco {'detectado' if banco_detectado else 'manual'}: {banco} · {len(transacciones)} transacciones cargadas"
         if fallidas:
             resumen += f" — {len(fallidas)} renglones no se pudieron interpretar (revisa el formato de fecha o el patrón del extractor)"
         if alias_detectado or ultimos_4_detectados:

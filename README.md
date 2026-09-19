@@ -136,13 +136,22 @@ dentro de la app para ver cómo pdfplumber lee tu PDF real, línea por línea �
 `PATRON_RENGLON` sin adivinar. Es un botón aparte, sin relación con cargar/procesar: solo muestra
 texto, no toca nada más.
 
+Para que ese banco se detecte solo (en vez de tener que elegirlo del dropdown), sobreescribe
+también `puede_procesar(ruta_pdf) -> bool` — una heurística barata y conservadora (ej. buscar el
+nombre del banco en las primeras páginas, como hace `BanamexParser`). Opcional: sin ella, ese
+banco solo se puede seleccionar a mano.
+
 Flujo completo una vez que el extractor de tu banco existe:
 
-1. Elige el banco en el dropdown y el formato de fecha si es distinto al default.
-2. **Cargar PDF...** — corre el extractor + Transformador + Categorizador y llena la tabla. Si el
-   extractor del banco lo soporta (Banamex sí), también autocompleta **Alias de cuenta** y
-   **Últimos 4 dígitos** leyéndolos de la portada del PDF — revísalos antes de guardar, el
-   resumen te avisa si se detectaron o si hay que llenarlos a mano.
+1. Ajusta el formato de fecha si el banco lo necesita distinto al default (el dropdown de
+   "Banco" es solo un respaldo manual — el siguiente paso intenta detectarlo solo).
+2. **Cargar PDF...** — antes de correr nada, la app prueba cada extractor registrado contra el
+   PDF (`puede_procesar`) y usa el que matchee; si ninguno o más de uno matchean, cae de vuelta a
+   lo que tengas seleccionado en el dropdown. El resumen te dice si el banco quedó "detectado" o
+   "manual". Luego corre el extractor + Transformador + Categorizador y llena la tabla. Si el
+   extractor lo soporta (Banamex sí), también autocompleta **Alias de cuenta** y **Últimos 4
+   dígitos** leyéndolos de la portada del PDF — revísalos antes de guardar, el resumen avisa si
+   se detectaron o si hay que llenarlos a mano.
 3. Revisa los renglones. Si algunos no se pudieron interpretar, la app te avisa con el detalle.
 4. **Validación de totales**: escribe el neto del periodo tal como lo imprime el estado de cuenta
    (saldo actual − saldo anterior) y da **Validar** — si no cuadra, hay algo mal parseado o un

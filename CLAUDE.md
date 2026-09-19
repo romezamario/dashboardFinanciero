@@ -41,15 +41,35 @@ gitignored — editable live from the app's "Reglas de categorización..." dialo
 → user validates the sum against the statement's own declared total (`validar_contra_total`) →
 "Guardar archivo procesado" writes `data/procesados/<sha256_del_pdf>.json`.
 
-That JSON is the handoff contract for the still-unbuilt Sincronizador (next phase): it must upsert
-those transactions to Supabase keyed by `documento_hash`, idempotently. Failed-to-parse PDFs move
-to `data/errores/` with a `.log` of what went wrong (see `App._mover_a_errores`).
+That JSON is the handoff contract for `sync/sincronizador.py` (see its own section below): it
+upserts those transactions to Supabase keyed by `documento_hash`, idempotently. Failed-to-parse
+PDFs move to `data/errores/` with a `.log` of what went wrong (see `App._mover_a_errores`).
 
 When adding a real bank, register its `BaseParser` subclass in the `PARSERS` dict at the top of
-`app/main.py` — that's what populates the "Banco" dropdown. Some parsers need extra context the
-PDF doesn't print (e.g. `BanamexParser` needs a year, since the statement only prints "DD MES"
-per row) — `App.cargar_pdf` tries `parser_cls(ano_estado_de_cuenta=anio)` and falls back to
-`parser_cls()` on `TypeError`, so a parser only needs that constructor param if it actually uses it.
+`app/main.py` — that's what populates the "Banco" dropdown, used as a manual fallback. Some
+parsers need extra context the PDF doesn't print (e.g. `BanamexParser` needs a year, since the
+statement only prints "DD MES" per row) — `App.cargar_pdf` tries
+`parser_cls(ano_estado_de_cuenta=anio)` and falls back to `parser_cls()` on `TypeError`, so a
+parser only needs that constructor param if it actually uses it.
+
+**Auto-detection, so the user doesn't have to pick the bank manually**: `BaseParser` has two
+optional hooks, both defaulting to "unsupported" so old/simple parsers (`EjemploParser`) don't
+need to implement them:
+- `puede_procesar(ruta_pdf) -> bool` — a cheap, conservative check (e.g. `BanamexParser` searches
+  the first 3 pages' `extract_text()` for "BANAMEX", case-insensitive — the logo on page 1 is an
+  image, not selectable text, so page 1 alone isn't enough; the bank name shows up reliably in
+  transaction concepts like "CREDITO NOMINA BANAMEX" from page 2 on). `App._detectar_banco` tries
+  every registered parser's `puede_procesar` against the loaded PDF; if exactly one matches, that
+  bank is used and the dropdown is updated to show it. Zero or multiple matches fall back to
+  whatever the dropdown is currently set to (ambiguity always degrades to manual, never guesses).
+- `extraer_info_cuenta(ruta_pdf) -> (alias, ultimos_4) | (None, None)` — reads the account alias
+  and last-4-digits off the cover page so the user doesn't retype them per statement (see the
+  "Account info" bullet under Sincronizador below for the hard rule on never keeping the full
+  account number in memory past the `[-4:]` slice).
+
+Both hooks are best-effort: on no match/exception they return the "unsupported" sentinel and the
+app silently falls back to whatever the user already has in the manual fields — never a hard
+failure, never a silently wrong guess presented as certain.
 
 **Lessons from writing `parsers/banamex.py`, worth checking before writing any new bank parser:**
 - `pagina.extract_tables()` is not reliable — some banks' PDFs look like ruled tables visually but

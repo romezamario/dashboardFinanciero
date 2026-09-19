@@ -68,3 +68,14 @@ class BaseParser(ABC):
         loggearse, ni quedar en el valor de retorno.
         """
         return None, None
+
+    def puede_procesar(self, ruta_pdf: Path) -> bool:
+        """Heurística para saber si este extractor sabe leer `ruta_pdf`,
+        usada para detectar el banco automáticamente en vez de que el
+        usuario lo elija a mano cada vez.
+
+        Debe ser barata y conservadora — un falso positivo hace que se use
+        el extractor equivocado. Implementación por defecto: no soportado
+        (la app cae en la selección manual del dropdown para este banco).
+        """
+        return False
