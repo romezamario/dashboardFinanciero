@@ -111,7 +111,8 @@ data/
 - [x] Fase 4 — Sincronizador (`sync/`) — sube `data/procesados/*.json` a Supabase, upsert idempotente
 - [x] Fase 5 — Frontend (`frontend/`) — login + dashboard (KPIs, ingresos vs. gastos,
       gasto por categoría, tendencia de saldo, tabla de transacciones)
-- [ ] Fase 6 — Deploy (Cloudflare Pages + Access)
+- [x] Fase 6 (parcial) — Deploy a Cloudflare Pages verificado en producción
+- [ ] Fase 6 (falta) — Configurar Cloudflare Access (gate de red frente al sitio)
 
 ## Desarrollo local del pipeline (fase 2+)
 

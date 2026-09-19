@@ -212,8 +212,8 @@ the user directs otherwise — as happened with phase 6 (CI/CD), which was pulle
 phases 2-5 at the user's explicit request.
 
 - [x] Phase 1 — DB schema + RLS policies (as Supabase migrations, applied via Actions)
-- [x] Phase 6 (partial) — CI/CD scaffolding for DB migrations and Cloudflare Pages deploy (the
-      deploy workflow now runs for real — `frontend/` exists as of phase 5)
+- [x] Phase 6 (partial) — CI/CD for DB migrations and Cloudflare Pages deploy. User confirmed a
+      real deploy run succeeded (after the `pages project create` fix) — the live site is up.
 - [x] Phase 2 — `BaseParser` + one documented example extractor (`parsers/base.py`, `parsers/ejemplo.py`)
 - [x] Phase 3 (redesigned) — Transformer + Categorizer as libraries (`transform/`), driven by a
       Tkinter desktop app (`app/main.py`) instead of the originally-planned watcher — user's
