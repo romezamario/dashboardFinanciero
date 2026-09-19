@@ -211,19 +211,22 @@ next one (see "Fases sugeridas de implementación" in `prompt-claude-code.md`). 
 the user directs otherwise — as happened with phase 6 (CI/CD), which was pulled forward ahead of
 phases 2-5 at the user's explicit request.
 
+All six phases are complete and verified end-to-end in production (PDF → desktop app → Supabase →
+frontend, behind Cloudflare Access + Supabase Auth) — this project is functionally done; further
+work is enhancement, not completion.
+
 - [x] Phase 1 — DB schema + RLS policies (as Supabase migrations, applied via Actions)
-- [x] Phase 6 (partial) — CI/CD for DB migrations and Cloudflare Pages deploy. User confirmed the
-      live site (with `VITE_SUPABASE_*` GitHub secrets set) loads and shows the real dashboard —
-      the full pipeline (PDF → desktop app → Supabase → frontend) is verified end-to-end in
-      production. Only Cloudflare Access (the network-level gate) remains for phase 6.
 - [x] Phase 2 — `BaseParser` + one documented example extractor (`parsers/base.py`, `parsers/ejemplo.py`)
 - [x] Phase 3 (redesigned) — Transformer + Categorizer as libraries (`transform/`), driven by a
       Tkinter desktop app (`app/main.py`) instead of the originally-planned watcher — user's
       explicit request, see Architecture above
 - [x] Phase 4 — Sincronizador (`sync/sincronizador.py`), find-or-create for
       bancos/cuentas/documentos/categorias, upsert on `(documento_id, pagina, linea_cruda)` for
-      transacciones. Triggered from the app's "Sincronizar a Supabase..." button
+      transacciones. Triggered from the app's "Sincronizar a Supabase..." button. User confirmed
+      a real sync populated all 5 tables correctly (verified in the Supabase Table Editor).
 - [x] Phase 5 — Frontend (`frontend/`) — React + Vite + Tailwind + Recharts, login + dashboard,
       RLS-only access control (no `user_id` filters in query code), charts built per this repo's
       `dataviz` skill and validated with its palette script
-- [ ] Phase 6 (remainder) — Configure Cloudflare Access once the frontend is deployed
+- [x] Phase 6 — CI/CD (DB migrations + Cloudflare Pages deploy) and Cloudflare Access. User
+      confirmed the live site now shows two logins in sequence — Cloudflare Access (email + PIN)
+      first, then Supabase Auth — and the dashboard renders real synced data correctly.

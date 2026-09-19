@@ -111,9 +111,12 @@ data/
 - [x] Fase 4 — Sincronizador (`sync/`) — sube `data/procesados/*.json` a Supabase, upsert idempotente
 - [x] Fase 5 — Frontend (`frontend/`) — login + dashboard (KPIs, ingresos vs. gastos,
       gasto por categoría, tendencia de saldo, tabla de transacciones)
-- [x] Fase 6 (parcial) — Deploy a Cloudflare Pages verificado en producción: pipeline completo
-      (PDF → app de escritorio → Supabase → dashboard) confirmado funcionando de punta a punta
-- [ ] Fase 6 (falta) — Configurar Cloudflare Access (gate de red frente al sitio)
+- [x] Fase 6 — Deploy a Cloudflare Pages + Cloudflare Access, verificado en producción: al entrar
+      al sitio pide primero login de Cloudflare Access (correo + PIN) y luego el de Supabase Auth
+
+**Proyecto completo — las 6 fases funcionando de punta a punta en producción:**
+PDF → app de escritorio (extraer/validar/categorizar) → Supabase (RLS) → dashboard en vivo,
+detrás de dos capas de login (Cloudflare Access + Supabase Auth).
 
 ## Desarrollo local del pipeline (fase 2+)
 
