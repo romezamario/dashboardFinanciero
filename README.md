@@ -139,15 +139,18 @@ texto, no toca nada más.
 Flujo completo una vez que el extractor de tu banco existe:
 
 1. Elige el banco en el dropdown y el formato de fecha si es distinto al default.
-2. **Cargar PDF...** — corre el extractor + Transformador + Categorizador y llena la tabla.
+2. **Cargar PDF...** — corre el extractor + Transformador + Categorizador y llena la tabla. Si el
+   extractor del banco lo soporta (Banamex sí), también autocompleta **Alias de cuenta** y
+   **Últimos 4 dígitos** leyéndolos de la portada del PDF — revísalos antes de guardar, el
+   resumen te avisa si se detectaron o si hay que llenarlos a mano.
 3. Revisa los renglones. Si algunos no se pudieron interpretar, la app te avisa con el detalle.
 4. **Validación de totales**: escribe el neto del periodo tal como lo imprime el estado de cuenta
    (saldo actual − saldo anterior) y da **Validar** — si no cuadra, hay algo mal parseado o un
    renglón faltante antes de confiar en el resultado.
 5. **Reglas de categorización...** para agregar/editar/borrar reglas — se aplican de inmediato a
    la tabla ya cargada y se guardan en `transform/reglas_categorizacion.json` (no se sube a git).
-6. **Guardar archivo procesado** — escribe `data/procesados/<hash>.json`, listo para que el
-   Sincronizador (próxima fase) lo suba a Supabase.
+6. **Guardar archivo procesado** — escribe `data/procesados/<hash>.json`.
+7. **Sincronizar a Supabase...** — sube todo lo pendiente en `data/procesados/`.
 
 ## Empaquetar como ejecutable (.exe con ícono)
 

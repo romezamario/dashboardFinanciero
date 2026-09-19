@@ -299,7 +299,10 @@ class App(tk.Tk):
         self.entrada_ultimos_4.pack(side="left", padx=4)
         ttk.Label(
             marco_cuenta,
-            text="(nunca escribas el número completo de cuenta aquí — solo los últimos 4 dígitos)",
+            text=(
+                "(se autocompleta al cargar el PDF si el extractor lo soporta — "
+                "verifica antes de guardar; nunca escribas el número completo)"
+            ),
             foreground="#a00",
         ).pack(side="left", padx=8)
 
@@ -403,6 +406,18 @@ class App(tk.Tk):
             )
             return
 
+        try:
+            alias_detectado, ultimos_4_detectados = parser.extraer_info_cuenta(ruta_pdf)
+        except Exception:  # noqa: BLE001 — nunca debe tumbar la carga de transacciones
+            alias_detectado, ultimos_4_detectados = None, None
+
+        if alias_detectado:
+            self.entrada_alias_cuenta.delete(0, "end")
+            self.entrada_alias_cuenta.insert(0, alias_detectado)
+        if ultimos_4_detectados:
+            self.entrada_ultimos_4.delete(0, "end")
+            self.entrada_ultimos_4.insert(0, ultimos_4_detectados)
+
         if not renglones:
             messagebox.showwarning(
                 "Sin transacciones",
@@ -431,6 +446,10 @@ class App(tk.Tk):
         resumen = f"{len(transacciones)} transacciones cargadas"
         if fallidas:
             resumen += f" — {len(fallidas)} renglones no se pudieron interpretar (revisa el formato de fecha o el patrón del extractor)"
+        if alias_detectado or ultimos_4_detectados:
+            resumen += " · cuenta detectada automáticamente, verifícala antes de guardar"
+        else:
+            resumen += " · no se detectó la cuenta automáticamente, complétala a mano"
         self.etiqueta_resumen.config(text=resumen)
         self.etiqueta_validacion.config(text="")
         self.boton_guardar.config(state="normal")

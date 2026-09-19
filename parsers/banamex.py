@@ -61,6 +61,16 @@ PATRON_DOS_MONTOS = re.compile(
     r"^(?P<resto>.*?)\s*(?P<monto>-?[\d,]+\.\d{2})\s+(?P<saldo>-?[\d,]+\.\d{2})\s*$"
 )
 
+# Portada (página 1): línea "Cuenta <Tipo>" sola (ej. "Cuenta Priority") —
+# distinta de "Número de cuenta de cheques...", que siempre trae más texto
+# alrededor. Usamos esto como alias automático de la cuenta.
+PATRON_ALIAS = re.compile(r"^Cuenta\s+[A-Za-zÁÉÍÓÚáéíóú]+(?:\s+[A-Za-zÁÉÍÓÚáéíóú]+)?$")
+
+# "Número de cuenta de cheques <11 dígitos>" — de ahí solo nos quedamos con
+# los últimos 4; el resto del número nunca se guarda en ninguna variable
+# que sobreviva esta función.
+PATRON_CUENTA_CHEQUES = re.compile(r"cuenta de cheques\s+(\d+)", re.IGNORECASE)
+
 
 def _a_decimal(texto: str) -> Decimal:
     return Decimal(texto.replace(",", ""))
@@ -84,6 +94,35 @@ class BanamexParser(BaseParser):
                         lineas_documento.append((numero_pagina, linea))
 
         return self._procesar_documento(lineas_documento)
+
+    def extraer_info_cuenta(self, ruta_pdf: Path) -> tuple[str | None, str | None]:
+        alias: str | None = None
+        ultimos_4: str | None = None
+
+        with pdfplumber.open(ruta_pdf) as pdf:
+            if not pdf.pages:
+                return None, None
+            texto_portada = pdf.pages[0].extract_text() or ""
+
+        for linea in texto_portada.splitlines():
+            linea = linea.strip()
+
+            if alias is None and PATRON_ALIAS.match(linea):
+                alias = linea
+
+            if ultimos_4 is None:
+                coincidencia = PATRON_CUENTA_CHEQUES.search(linea)
+                if coincidencia:
+                    numero_completo = coincidencia.group(1)
+                    if len(numero_completo) >= 4:
+                        ultimos_4 = numero_completo[-4:]
+                    # numero_completo no se guarda en ningún otro lado ni
+                    # se propaga fuera de este bloque.
+
+            if alias is not None and ultimos_4 is not None:
+                break
+
+        return alias, ultimos_4
 
     def _procesar_documento(
         self, lineas_documento: list[tuple[int, str]]

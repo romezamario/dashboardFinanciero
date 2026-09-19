@@ -53,3 +53,18 @@ class BaseParser(ABC):
         — no es un error del extractor, es contenido que no nos interesa.
         """
         raise NotImplementedError
+
+    def extraer_info_cuenta(self, ruta_pdf: Path) -> tuple[str | None, str | None]:
+        """Intenta leer (alias, ultimos_4_digitos) de la portada del PDF,
+        para no tener que escribirlos a mano en la app cada vez.
+
+        Devuelve (None, None) si el extractor no lo soporta o no los
+        encuentra — la app deja los campos para llenar manualmente en ese
+        caso. Implementación por defecto: no soportado.
+
+        Regla dura para cualquier subclase que lo implemente: el número de
+        cuenta completo NUNCA debe guardarse en ninguna variable que
+        sobreviva más allá del cálculo de los últimos 4 dígitos — ni
+        loggearse, ni quedar en el valor de retorno.
+        """
+        return None, None

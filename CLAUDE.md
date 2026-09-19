@@ -120,10 +120,16 @@ user over the simpler alternative — don't silently change these:
   .execute()` / `.insert()` / `.upsert(on_conflict=)`) without needing real Supabase credentials.
   There is no live-Supabase integration test in this repo — that verification is the user's to do
   against their real project via the app's "Sincronizar a Supabase..." button.
-- **Account info gap**: the schema requires `cuentas.alias`/`ultimos_4_digitos`, which nothing in
-  the PDF extraction pipeline captures — the app asks for them directly ("Alias de cuenta" /
-  "Últimos 4 dígitos" fields, validated to be exactly 4 digits) before `guardar_procesado()` will
-  write the JSON, and they're carried through as `cuenta_alias`/`cuenta_ultimos_4_digitos`.
+- **Account info**: the schema requires `cuentas.alias`/`ultimos_4_digitos`. The app has manual
+  entry fields for both ("Alias de cuenta" / "Últimos 4 dígitos", validated to be exactly 4
+  digits) — `guardar_procesado()` refuses to write the JSON without them. `BaseParser` also has
+  an optional `extraer_info_cuenta(ruta_pdf) -> (alias, ultimos_4) | (None, None)` hook (default:
+  unsupported) that `App.cargar_pdf` calls to pre-fill those fields automatically when a parser
+  implements it — `BanamexParser` does, reading "Cuenta <Tipo>" and "Número de cuenta de
+  cheques <N>" off the cover page (page 1). **Hard rule for any implementation**: the full
+  account number must never be stored in any variable, log, or return value beyond the `[-4:]`
+  slice — take the last 4 digits and let the rest go out of scope immediately. Auto-fill always
+  stays user-editable; the app labels it as "verify before saving," never silently trusted.
 - `monto`/`saldo` travel through the exported JSON and into the Supabase payload as decimal
   strings ("199.00"), never Python floats — Postgres casts them to `numeric` server-side.
 
