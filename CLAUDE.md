@@ -138,8 +138,10 @@ user over the simpler alternative — don't silently change these:
   client as a parameter rather than constructing one internally, so the find-or-create/upsert
   logic can be verified against an in-memory fake client (mimicking `.table().select().eq()
   .execute()` / `.insert()` / `.upsert(on_conflict=)`) without needing real Supabase credentials.
-  There is no live-Supabase integration test in this repo — that verification is the user's to do
-  against their real project via the app's "Sincronizar a Supabase..." button.
+  There is no live-Supabase integration test in this repo (and can't be, without embedding real
+  credentials) — but the user has confirmed a real sync against their own Supabase project
+  worked end-to-end via the app's "Sincronizar a Supabase..." button (bancos/categorias/cuentas/
+  documentos/transacciones all populated correctly, verified in the Supabase Table Editor).
 - **Account info**: the schema requires `cuentas.alias`/`ultimos_4_digitos`. The app has manual
   entry fields for both ("Alias de cuenta" / "Últimos 4 dígitos", validated to be exactly 4
   digits) — `guardar_procesado()` refuses to write the JSON without them. `BaseParser` also has
