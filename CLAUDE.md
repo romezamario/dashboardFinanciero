@@ -185,7 +185,11 @@ unrelated commits:
 - `.github/workflows/db-migrate.yml` — triggers on `supabase/migrations/**`. Applies pending Supabase migrations.
 - `.github/workflows/deploy.yml` — triggers on `frontend/**`. Builds the frontend and deploys to
   Cloudflare Pages via `wrangler pages deploy`, using secrets `CLOUDFLARE_API_TOKEN`,
-  `CLOUDFLARE_ACCOUNT_ID`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
+  `CLOUDFLARE_ACCOUNT_ID`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`. A `pages project create`
+  step runs first with `continue-on-error: true` — current Wrangler no longer auto-creates the
+  Pages project on first deploy (it used to; that's now a hard error: "The Pages project ...
+  does not exist"), so this step creates it once and then harmlessly "fails" (already exists)
+  on every subsequent run.
 
 Both workflows pin action versions that run natively on Node 24 (`actions/checkout@v5`,
 `actions/setup-node@v5`, `supabase/setup-cli@v3`, `cloudflare/wrangler-action@v4`) — when bumping

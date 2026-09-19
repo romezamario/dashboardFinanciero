@@ -274,8 +274,10 @@ pero los pasos de cuenta hay que dejarlos listos antes:
 2. En el dashboard → **Workers & Pages**, copia tu **Account ID** (aparece en la barra lateral derecha).
 3. Ve a **My Profile → API Tokens → Create Token** → "Create Custom Token" con el permiso
    `Account · Cloudflare Pages · Edit`. Copia el token (solo se muestra una vez).
-4. No hace falta crear el proyecto Pages a mano: `wrangler pages deploy` lo crea en el primer
-   deploy si no existe (nombre `dashboard-financiero`, definido en el workflow).
+4. El proyecto Pages (`dashboard-financiero`) se crea solo la primera vez que corre el workflow —
+   hay un paso previo (`pages project create`) antes del deploy, así que no hace falta crearlo a
+   mano en el dashboard. (Corrección: versiones viejas de Wrangler sí lo creaban implícitamente
+   al desplegar; las actuales ya no — de ahí el paso aparte.)
 
 ### 2. GitHub Secrets
 
