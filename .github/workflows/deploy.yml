@@ -1,8 +1,7 @@
 name: Deploy frontend a Cloudflare Pages
 
-# Solo corre cuando cambia el frontend, para no fallar en cada commit
-# del pipeline local (parsers/transform/sync/watcher) antes de que
-# frontend/ exista (fase 5).
+# Solo corre cuando cambia el frontend, para no acoplarse a commits
+# del pipeline local (parsers/transform/sync/app).
 on:
   push:
     branches: [main]

@@ -92,10 +92,10 @@ app/        # app de escritorio (Tkinter) — carga PDF, valida totales, categor
   icono.ico          # ícono del .exe (generado por generar_icono.py, versionado)
   generar_icono.py   # utilidad para regenerar/cambiar app/icono.ico
 DashboardFinanciero.spec  # config del build de PyInstaller (dist/*.exe, no versionado)
-sync/       # cliente de Supabase, upsert idempotente (próxima fase)
+sync/       # cliente de Supabase, upsert idempotente
 supabase/
   migrations/  # schema + políticas de RLS, aplicadas vía GitHub Actions
-frontend/   # React + Vite + Tailwind + Recharts
+frontend/   # React + Vite + TS + Tailwind + Recharts — login + dashboard, habla directo con Supabase
 data/
   nuevos/       # (ya no lo usa un watcher — puedes cargar PDFs desde cualquier ruta en la app)
   procesados/   # salida de la app: <hash>.json por cada PDF revisado y guardado
@@ -109,7 +109,8 @@ data/
 - [x] Fase 3 (rediseñada) — Transformador + Categorizador + app de escritorio Tkinter
       (`transform/`, `app/`) — reemplaza al watcher automático que estaba planeado
 - [x] Fase 4 — Sincronizador (`sync/`) — sube `data/procesados/*.json` a Supabase, upsert idempotente
-- [ ] Fase 5 — Frontend
+- [x] Fase 5 — Frontend (`frontend/`) — login + dashboard (KPIs, ingresos vs. gastos,
+      gasto por categoría, tendencia de saldo, tabla de transacciones)
 - [ ] Fase 6 — Deploy (Cloudflare Pages + Access)
 
 ## Desarrollo local del pipeline (fase 2+)
@@ -211,8 +212,8 @@ que las toque — no se corren a mano en el SQL Editor. Pasos de cuenta, una sol
 ## Setup del Sincronizador (fase 4)
 
 El Sincronizador sube tus transacciones a Supabase **como tú** (no con una clave que se salte
-RLS) — necesita que exista un usuario real de Supabase Auth. Como todavía no hay pantalla de
-login (eso es la fase 5), créalo a mano una sola vez:
+RLS) — necesita que exista un usuario real de Supabase Auth. Créalo a mano una sola vez (es el
+mismo usuario con el que después entras al frontend):
 
 1. En tu proyecto Supabase → **Authentication → Users → Add user → Create new user**. Usa el
    email/password que quieras usar también después para entrar al frontend.
@@ -223,6 +224,42 @@ login (eso es la fase 5), créalo a mano una sola vez:
    `data/procesados/`. Es seguro correrlo varias veces: cada entidad se busca antes de
    insertarse, y las transacciones usan upsert sobre el mismo constraint único de la tabla
    (`documento_id, pagina, linea_cruda`), así que reintentar o repetir un archivo no duplica nada.
+
+## Frontend (fase 5)
+
+Dashboard de solo lectura: login con Supabase Auth (el mismo usuario del Sincronizador) y luego
+todo lo que RLS deje ver a ese usuario — sin backend intermedio, `supabase-js` habla directo con
+Postgres.
+
+**Desarrollo local:**
+
+```bash
+cd frontend
+npm install
+cp .env.example .env   # completa VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY (la anon key, no la service_role)
+npm run dev
+```
+
+Abre `http://localhost:5173`, inicia sesión con el usuario que creaste para el Sincronizador.
+
+**Qué muestra:**
+- KPIs: saldo actual, ingresos del mes, gastos del mes
+- Ingresos vs. gastos por mes (barras agrupadas)
+- Gasto por categoría (barras horizontales, top 8 + "Otros")
+- Tendencia de saldo (una línea por cuenta si tienes más de una)
+- Tabla de transacciones completa
+
+Todas las consultas van sin filtrar por `user_id` explícitamente — las políticas de RLS ya
+garantizan que cada usuario solo ve sus propias filas, así que el filtro nunca depende de que el
+frontend "se porte bien".
+
+Los colores, specs de las gráficas (barras redondeadas, líneas de 2px, gridlines discretas) y la
+paleta categórica (azul/naranja/aqua) siguen el skill de dataviz de este proyecto — validada con
+su script contra ceguera al color en modo claro y oscuro antes de usarla.
+
+**Deploy:** automático vía [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) en cada
+push a `main` que toque `frontend/` — ver "Setup de Cloudflare" abajo para los secrets que
+necesita (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, ya cubiertos ahí).
 
 ## Setup de Cloudflare (fase 6 — pasos manuales, una sola vez)
 

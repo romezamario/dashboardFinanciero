@@ -96,8 +96,30 @@ versioned since it's the build's source of truth.
 (frontend hosting) + Cloudflare Access (network-level login gate in front of Pages, additive to
 Supabase Auth, not a replacement for it).
 
-**Frontend** (not yet built — phase 5): React + Vite + Tailwind + Recharts, talks to Supabase
-directly via `supabase-js` — no backend server in between. Access control is entirely RLS-enforced.
+**Frontend** (`frontend/`): React + Vite (TS) + Tailwind v4 + Recharts, talks to Supabase directly
+via `supabase-js` — no backend server in between. `src/App.tsx` gates on `supabase.auth`
+session state (`onAuthStateChange`) and renders `Login` or `Dashboard` — no routing library, just
+that one conditional. Every query in `src/lib/queries.ts` reads `transacciones` with nested
+selects (`categorias(nombre)`, `documentos(cuentas(alias, bancos(nombre)))`) and is deliberately
+**not** filtered by `user_id` in code — RLS is the only access boundary, by design, so a bug in
+the frontend query can't leak another user's rows. Aggregation (by-month, by-category, running
+balance per account) happens client-side in plain functions in `queries.ts`, kept separate from
+the React components so they're unit-testable without rendering anything.
+
+Chart colors/specs follow this repo's `dataviz` skill: the categorical palette (blue/orange/aqua
+for series identity — ingresos vs. gastos, one line per cuenta) is validated with the skill's
+`validate_palette.js` script against CVD and contrast in both light and dark mode before use;
+category-magnitude comparisons (gasto por categoría) deliberately use a single hue, not
+categorical colors, since the axis labels already carry identity. CSS custom properties for the
+palette live in `src/index.css`, keyed by role (`--series-1`, `--text-secondary`, etc.) and
+redefined for dark via both `prefers-color-scheme` and a `[data-theme]` override — same pattern
+artifacts use. If you add a chart, re-run the dataviz skill's procedure (form → color → validate)
+rather than picking colors by eye.
+
+`monto`/`saldo` come back from PostgREST as JSON numbers (not the decimal-strings the Python
+pipeline uses) — intentional: this is display-only aggregation in the browser, not writing back
+to the ledger, and IEEE-754 doubles are exact at personal-finance magnitudes. The "never float"
+rule is about the ingestion/storage pipeline (parsers/transform/sync), not every downstream read.
 
 ## Database schema & migrations
 
@@ -187,7 +209,7 @@ phases 2-5 at the user's explicit request.
 
 - [x] Phase 1 — DB schema + RLS policies (as Supabase migrations, applied via Actions)
 - [x] Phase 6 (partial) — CI/CD scaffolding for DB migrations and Cloudflare Pages deploy (the
-      deploy workflow won't run meaningfully until `frontend/` exists)
+      deploy workflow now runs for real — `frontend/` exists as of phase 5)
 - [x] Phase 2 — `BaseParser` + one documented example extractor (`parsers/base.py`, `parsers/ejemplo.py`)
 - [x] Phase 3 (redesigned) — Transformer + Categorizer as libraries (`transform/`), driven by a
       Tkinter desktop app (`app/main.py`) instead of the originally-planned watcher — user's
@@ -195,5 +217,7 @@ phases 2-5 at the user's explicit request.
 - [x] Phase 4 — Sincronizador (`sync/sincronizador.py`), find-or-create for
       bancos/cuentas/documentos/categorias, upsert on `(documento_id, pagina, linea_cruda)` for
       transacciones. Triggered from the app's "Sincronizar a Supabase..." button
-- [ ] Phase 5 — Frontend
+- [x] Phase 5 — Frontend (`frontend/`) — React + Vite + Tailwind + Recharts, login + dashboard,
+      RLS-only access control (no `user_id` filters in query code), charts built per this repo's
+      `dataviz` skill and validated with its palette script
 - [ ] Phase 6 (remainder) — Configure Cloudflare Access once the frontend is deployed
