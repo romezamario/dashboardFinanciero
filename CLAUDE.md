@@ -187,6 +187,17 @@ statement from a bank you already support will look anything like the first one:
   vanishing — `App.cargar_pdf` shows it in the resumen and a messagebox so the user knows to
   capture that row by hand before trusting `validar_contra_total`. This is the general escape
   hatch for "PDF renders this row as an image" cases in any future parser, not just this one.
+- **Normalize known variant spellings instead of capturing verbatim, when the output feeds a
+  stable identifier**: `extraer_info_cuenta`'s alias used to capture whatever word followed
+  "Estado de Cuenta" on its own line (`PATRON_ALIAS`) and build `f"TDC {esa_palabra}"` verbatim —
+  fragile (only matches if that exact line stands alone) and inconsistent (a PDF that happened to
+  say "Platinum" in English would produce a different alias than one saying "Platino", splitting
+  what should be the same account across two `cuentas` rows since `alias` is part of the
+  find-or-create key). User's explicit request (2026-09-20): PDFs mentioning "platino" or
+  "platinum" anywhere (case-insensitive substring search over the whole page text, not a
+  line-anchored regex) always alias to the fixed string `"TDC Platino"`. `PATRON_ALIAS` stays as a
+  fallback for a hypothetical future non-Platino TDC product, but is only consulted if the
+  platino/platinum check doesn't match first.
 
 **Manual row entry** (`VentanaRenglonManual` in `app/main.py`) is the other half of the
 "transaction row rendered as an image" gap above — `advertencias()` only *flags* the unreadable

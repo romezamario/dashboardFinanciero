@@ -63,7 +63,16 @@ PATRON_PREFIJO_FECHAS = re.compile(
     r"^\d{2}-[a-zA-Z]{3}-\d{4}\s+\d{2}-[a-zA-Z]{3}-\d{4}"
 )
 
-# Portada: "Estado de Cuenta Platino" — el tipo de tarjeta como alias.
+# La portada dice "Estado de Cuenta Platino" (o a veces, según la fuente
+# del PDF, "Platinum" en inglés) -- en vez de depender de que esa línea
+# aparezca exacta y sola (frágil ante variaciones de espaciado/salto de
+# línea), buscamos "platino"/"platinum" en cualquier parte del texto de
+# la página y normalizamos siempre al mismo alias en español, sin importar
+# cuál de las dos grafías traiga el PDF real.
+PATRON_TARJETA_PLATINO = re.compile(r"platino|platinum", re.IGNORECASE)
+
+# Respaldo si el PDF trae un tipo de tarjeta que no sea Platino/Platinum:
+# portada "Estado de Cuenta <Tipo>" sola en su línea.
 PATRON_ALIAS = re.compile(r"^Estado de Cuenta\s+([A-Za-zÁÉÍÓÚáéíóú]+)\s*$")
 
 # "Número de tarjeta: 0 0 0000000000000000" (u otra separación) — nos
@@ -154,6 +163,10 @@ class BanamexTdcParser(BaseParser):
         with pdfplumber.open(ruta_pdf) as pdf:
             for pagina in pdf.pages[:3]:
                 texto = pagina.extract_text() or ""
+
+                if alias is None and PATRON_TARJETA_PLATINO.search(texto):
+                    alias = "TDC Platino"
+
                 for linea in texto.splitlines():
                     linea = linea.strip()
 
