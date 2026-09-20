@@ -28,9 +28,19 @@ const formateadorTooltip = new Intl.NumberFormat("es-MX", {
 interface TendenciaSaldoChartProps {
   puntos: PuntoSaldo[];
   cuentas: string[];
+  cuentaSeleccionada?: string;
+  onClickCuenta?: (cuenta: string) => void;
 }
 
-export function TendenciaSaldoChart({ puntos, cuentas }: TendenciaSaldoChartProps) {
+export function TendenciaSaldoChart({
+  puntos,
+  cuentas,
+  cuentaSeleccionada,
+  onClickCuenta,
+}: TendenciaSaldoChartProps) {
+  const opacidad = (cuenta: string) =>
+    !cuentaSeleccionada || cuentaSeleccionada === cuenta ? 1 : 0.25;
+
   return (
     <div
       className="rounded-lg p-4"
@@ -38,6 +48,11 @@ export function TendenciaSaldoChart({ puntos, cuentas }: TendenciaSaldoChartProp
     >
       <h3 className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
         Tendencia de saldo
+        {onClickCuenta && cuentas.length > 1 && (
+          <span className="ml-2 font-normal" style={{ color: "var(--text-muted)" }}>
+            (clic en una línea para filtrar por cuenta)
+          </span>
+        )}
       </h3>
       <div className="mt-3 h-72">
         <ResponsiveContainer width="100%" height="100%">
@@ -79,8 +94,17 @@ export function TendenciaSaldoChart({ puntos, cuentas }: TendenciaSaldoChartProp
                 name={cuenta}
                 stroke={COLORES_SERIE[Math.min(i, COLORES_SERIE.length - 1)]}
                 strokeWidth={2}
-                dot={{ r: 4 }}
+                strokeOpacity={cuentas.length > 1 ? opacidad(cuenta) : 1}
+                dot={{ r: 4, fillOpacity: cuentas.length > 1 ? opacidad(cuenta) : 1 }}
                 connectNulls
+                onClick={
+                  onClickCuenta && cuentas.length > 1
+                    ? () => onClickCuenta(cuenta)
+                    : undefined
+                }
+                style={
+                  onClickCuenta && cuentas.length > 1 ? { cursor: "pointer" } : undefined
+                }
               />
             ))}
           </LineChart>

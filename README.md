@@ -255,11 +255,22 @@ npm run dev
 Abre `http://localhost:5173`, inicia sesión con el usuario que creaste para el Sincronizador.
 
 **Qué muestra:**
-- KPIs: saldo actual, ingresos del mes, gastos del mes
+- KPIs: saldo actual (siempre sin filtrar — es un hecho de la cuenta, no una suma que deba
+  encogerse), ingresos del mes, gastos del mes
 - Ingresos vs. gastos por mes (barras agrupadas)
 - Gasto por categoría (barras horizontales, top 8 + "Otros")
 - Tendencia de saldo (una línea por cuenta si tienes más de una)
 - Tabla de transacciones completa
+
+**Cross-filter estilo Power BI**: da clic en una barra de mes, una categoría, o una línea de
+cuenta, y el resto del dashboard (KPIs, las otras gráficas, la tabla) se filtra a eso —
+seleccionado en color completo, lo demás atenuado. Clic otra vez sobre lo mismo lo quita; los
+chips arriba muestran qué filtros están activos, con botón para quitar cada uno o todos. Cada
+gráfica se sigue mostrando completa (para poder cambiar la selección) excepto por los filtros de
+las *otras* dimensiones — es decir, filtrar por mes no oculta meses en su propia gráfica, pero sí
+reduce qué categorías/cuentas aparecen en las demás. La categoría "Otros" (la cola de gasto por
+categoría plegada) no es clicable — agrupa varias categorías reales, no hay un solo nombre que
+filtrar.
 
 Todas las consultas van sin filtrar por `user_id` explícitamente — las políticas de RLS ya
 garantizan que cada usuario solo ve sus propias filas, así que el filtro nunca depende de que el

@@ -125,6 +125,23 @@ the frontend query can't leak another user's rows. Aggregation (by-month, by-cat
 balance per account) happens client-side in plain functions in `queries.ts`, kept separate from
 the React components so they're unit-testable without rendering anything.
 
+**Cross-filter (Power BI style)**: `Dashboard` holds one `filtros: Filtros` state
+(`{mes?, categoria?, cuenta?}`) and `queries.ts`'s `aplicarFiltros(transacciones, filtros, excluir?)`
+does the filtering — the `excluir` param is the whole trick: each chart is computed from
+transacciones filtered by every *other* active dimension but not its own, so clicking a bar still
+shows every other bar/category/cuenta to click next (self-filtering would collapse a chart down to
+one visible option after the first click, which isn't how Power BI cross-filter reads). KPIs and
+the table use the fully-filtered set — except `saldoActual`, which is deliberately taken from the
+*unfiltered* `transacciones` (it's a fact about the account's current balance, not an aggregate
+that should shrink when you filter by category/month). Click handlers live in the chart
+components (`onClickMes`/`onClickCategoria`/`onClickCuenta` props) and call a shared
+`alternarFiltro` in `Dashboard` that toggles: clicking the already-selected value clears it, same
+as clicking a chip in the filter-chips row above the KPIs. Non-selected marks dim to ~0.3 opacity
+via per-bar `<Cell fillOpacity>` (bars) or `strokeOpacity`/dot opacity (lines) rather than being
+hidden, so the full shape of the data stays visible while showing what's filtered. The "Otros"
+fold in `GastoPorCategoriaChart` (categories past the top 8) is explicitly not clickable — it has
+no single real category name to filter by.
+
 Chart colors/specs follow this repo's `dataviz` skill: the categorical palette (blue/orange/aqua
 for series identity — ingresos vs. gastos, one line per cuenta) is validated with the skill's
 `validate_palette.js` script against CVD and contrast in both light and dark mode before use;

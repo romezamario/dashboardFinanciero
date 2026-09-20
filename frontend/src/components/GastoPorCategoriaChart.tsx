@@ -2,6 +2,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   LabelList,
   ResponsiveContainer,
   Tooltip,
@@ -16,7 +17,19 @@ const formateadorMoneda = new Intl.NumberFormat("es-MX", {
   maximumFractionDigits: 0,
 });
 
-export function GastoPorCategoriaChart({ datos }: { datos: PuntoCategoria[] }) {
+const OTROS = "Otros";
+
+interface GastoPorCategoriaChartProps {
+  datos: PuntoCategoria[];
+  categoriaSeleccionada?: string;
+  onClickCategoria?: (categoria: string) => void;
+}
+
+export function GastoPorCategoriaChart({
+  datos,
+  categoriaSeleccionada,
+  onClickCategoria,
+}: GastoPorCategoriaChartProps) {
   // Ordenado descendente, más de ~8 categorías se pliegan en "Otros" para no
   // saturar el eje vertical.
   const TOPE = 8;
@@ -24,9 +37,12 @@ export function GastoPorCategoriaChart({ datos }: { datos: PuntoCategoria[] }) {
   const resto = datos.slice(TOPE);
   const otros = resto.reduce((suma, d) => suma + d.total, 0);
   const datosFinales =
-    otros > 0 ? [...visibles, { categoria: "Otros", total: otros }] : visibles;
+    otros > 0 ? [...visibles, { categoria: OTROS, total: otros }] : visibles;
 
   const alturaFila = 32;
+
+  const opacidad = (categoria: string) =>
+    !categoriaSeleccionada || categoriaSeleccionada === categoria ? 1 : 0.3;
 
   return (
     <div
@@ -35,6 +51,11 @@ export function GastoPorCategoriaChart({ datos }: { datos: PuntoCategoria[] }) {
     >
       <h3 className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
         Gasto por categoría
+        {onClickCategoria && (
+          <span className="ml-2 font-normal" style={{ color: "var(--text-muted)" }}>
+            (clic en una categoría para filtrar)
+          </span>
+        )}
       </h3>
       <div style={{ height: Math.max(200, datosFinales.length * alturaFila + 40) }}>
         <ResponsiveContainer width="100%" height="100%">
@@ -62,11 +83,34 @@ export function GastoPorCategoriaChart({ datos }: { datos: PuntoCategoria[] }) {
                 color: "var(--text-primary)",
               }}
             />
-            <Bar dataKey="total" fill="var(--series-1)" radius={[0, 4, 4, 0]} maxBarSize={20}>
+            <Bar
+              dataKey="total"
+              fill="var(--series-1)"
+              radius={[0, 4, 4, 0]}
+              maxBarSize={20}
+              onClick={
+                onClickCategoria
+                  ? (d) => {
+                      // "Otros" agrupa varias categorías reales -- no hay
+                      // un solo nombre que filtrar, así que no es clicable.
+                      if (d.payload.categoria !== OTROS) {
+                        onClickCategoria(d.payload.categoria);
+                      }
+                    }
+                  : undefined
+              }
+              cursor={onClickCategoria ? "pointer" : undefined}
+            >
+              {datosFinales.map((d) => (
+                <Cell
+                  key={d.categoria}
+                  fillOpacity={d.categoria === OTROS ? 0.6 : opacidad(d.categoria)}
+                />
+              ))}
               <LabelList
                 dataKey="total"
                 position="right"
-                formatter={(v) => formateadorMoneda.format(Number(v))}
+                formatter={(v: unknown) => formateadorMoneda.format(Number(v))}
                 style={{ fill: "var(--text-secondary)", fontSize: 12 }}
               />
             </Bar>

@@ -3,8 +3,10 @@ import {
   agruparGastoPorCategoria,
   agruparIngresosGastosPorMes,
   agruparTendenciaSaldo,
+  aplicarFiltros,
   calcularTotales,
   obtenerTransacciones,
+  type Filtros,
 } from "../lib/queries";
 import type { Transaccion } from "../lib/types";
 import { supabase } from "../lib/supabase";
@@ -14,10 +16,17 @@ import { GastoPorCategoriaChart } from "./GastoPorCategoriaChart";
 import { TendenciaSaldoChart } from "./TendenciaSaldoChart";
 import { TransaccionesTabla } from "./TransaccionesTabla";
 
+const ETIQUETAS_FILTRO: Record<keyof Filtros, string> = {
+  mes: "Mes",
+  categoria: "Categoría",
+  cuenta: "Cuenta",
+};
+
 export function Dashboard() {
   const [transacciones, setTransacciones] = useState<Transaccion[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filtros, setFiltros] = useState<Filtros>({});
 
   useEffect(() => {
     obtenerTransacciones()
@@ -44,10 +53,35 @@ export function Dashboard() {
     );
   }
 
-  const totales = calcularTotales(transacciones);
-  const ingresosGastos = agruparIngresosGastosPorMes(transacciones);
-  const gastoPorCategoria = agruparGastoPorCategoria(transacciones);
-  const { puntos: puntosSaldo, cuentas } = agruparTendenciaSaldo(transacciones);
+  // Cross-filter estilo Power BI: cada gráfica se calcula excluyendo su
+  // propia dimensión (para poder seguir viendo/cambiando su selección) pero
+  // respetando las demás -- así un clic en una gráfica filtra a las otras.
+  const transaccionesFiltradas = aplicarFiltros(transacciones, filtros);
+  const ingresosGastos = agruparIngresosGastosPorMes(
+    aplicarFiltros(transacciones, filtros, "mes")
+  );
+  const gastoPorCategoria = agruparGastoPorCategoria(
+    aplicarFiltros(transacciones, filtros, "categoria")
+  );
+  const { puntos: puntosSaldo, cuentas } = agruparTendenciaSaldo(
+    aplicarFiltros(transacciones, filtros, "cuenta")
+  );
+
+  // El saldo actual es un hecho de la cuenta, no una suma que deba
+  // encogerse al filtrar por mes/categoría -- siempre viene del set
+  // completo. Ingresos/gastos del mes sí responden a los filtros.
+  const { saldoActual } = calcularTotales(transacciones);
+  const { ingresosMes, gastosMes } = calcularTotales(transaccionesFiltradas);
+
+  function alternarFiltro<K extends keyof Filtros>(campo: K, valor: string) {
+    setFiltros((anterior) =>
+      anterior[campo] === valor
+        ? { ...anterior, [campo]: undefined }
+        : { ...anterior, [campo]: valor }
+    );
+  }
+
+  const hayFiltrosActivos = Object.values(filtros).some(Boolean);
 
   return (
     <div style={{ background: "var(--page-plane)", minHeight: "100vh" }}>
@@ -78,28 +112,61 @@ export function Dashboard() {
           </p>
         ) : (
           <>
+            {hayFiltrosActivos && (
+              <div className="flex flex-wrap items-center gap-2">
+                {(Object.keys(filtros) as (keyof Filtros)[])
+                  .filter((campo) => filtros[campo])
+                  .map((campo) => (
+                    <button
+                      key={campo}
+                      onClick={() => setFiltros((a) => ({ ...a, [campo]: undefined }))}
+                      className="rounded-full px-3 py-1 text-xs font-medium"
+                      style={{
+                        background: "var(--series-1)",
+                        color: "#ffffff",
+                      }}
+                      title="Quitar este filtro"
+                    >
+                      {ETIQUETAS_FILTRO[campo]}: {filtros[campo]} ×
+                    </button>
+                  ))}
+                <button
+                  onClick={() => setFiltros({})}
+                  className="text-xs underline"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Limpiar todos los filtros
+                </button>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <StatTile label="Saldo actual" value={totales.saldoActual} />
-              <StatTile
-                label="Ingresos del mes"
-                value={totales.ingresosMes}
-                tone="good"
-              />
-              <StatTile
-                label="Gastos del mes"
-                value={totales.gastosMes}
-                tone="critical"
-              />
+              <StatTile label="Saldo actual" value={saldoActual} />
+              <StatTile label="Ingresos del mes" value={ingresosMes} tone="good" />
+              <StatTile label="Gastos del mes" value={gastosMes} tone="critical" />
             </div>
 
-            <IngresosGastosChart datos={ingresosGastos} />
+            <IngresosGastosChart
+              datos={ingresosGastos}
+              mesSeleccionado={filtros.mes}
+              onClickMes={(mes) => alternarFiltro("mes", mes)}
+            />
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <GastoPorCategoriaChart datos={gastoPorCategoria} />
-              <TendenciaSaldoChart puntos={puntosSaldo} cuentas={cuentas} />
+              <GastoPorCategoriaChart
+                datos={gastoPorCategoria}
+                categoriaSeleccionada={filtros.categoria}
+                onClickCategoria={(categoria) => alternarFiltro("categoria", categoria)}
+              />
+              <TendenciaSaldoChart
+                puntos={puntosSaldo}
+                cuentas={cuentas}
+                cuentaSeleccionada={filtros.cuenta}
+                onClickCuenta={(cuenta) => alternarFiltro("cuenta", cuenta)}
+              />
             </div>
 
-            <TransaccionesTabla transacciones={transacciones} />
+            <TransaccionesTabla transacciones={transaccionesFiltradas} />
           </>
         )}
       </main>

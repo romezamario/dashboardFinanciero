@@ -15,6 +15,53 @@ export async function obtenerTransacciones(): Promise<Transaccion[]> {
   return (data ?? []) as unknown as Transaccion[];
 }
 
+export interface Filtros {
+  mes?: string;
+  categoria?: string;
+  cuenta?: string;
+}
+
+/** Nombre de categoría que usa el resto del código para "sin categoría". */
+export const SIN_CATEGORIA = "Sin categoría";
+
+function categoriaDe(t: Transaccion): string {
+  return t.categorias?.nombre ?? SIN_CATEGORIA;
+}
+
+/**
+ * Filtra transacciones por cross-filter estilo Power BI: cada dimensión
+ * activa en `filtros` se aplica, EXCEPTO la que esté en `excluir` — así una
+ * gráfica puede seguir mostrando todas sus propias opciones (para poder
+ * cambiar la selección) mientras respeta los filtros que vienen de las
+ * demás gráficas.
+ */
+export function aplicarFiltros(
+  transacciones: Transaccion[],
+  filtros: Filtros,
+  excluir?: keyof Filtros
+): Transaccion[] {
+  return transacciones.filter((t) => {
+    if (filtros.mes && excluir !== "mes" && t.fecha.slice(0, 7) !== filtros.mes) {
+      return false;
+    }
+    if (
+      filtros.categoria &&
+      excluir !== "categoria" &&
+      categoriaDe(t) !== filtros.categoria
+    ) {
+      return false;
+    }
+    if (
+      filtros.cuenta &&
+      excluir !== "cuenta" &&
+      t.documentos.cuentas.alias !== filtros.cuenta
+    ) {
+      return false;
+    }
+    return true;
+  });
+}
+
 export interface PuntoIngresoGasto {
   mes: string; // "2026-06"
   ingresos: number;
@@ -54,7 +101,7 @@ export function agruparGastoPorCategoria(
 
   for (const t of transacciones) {
     if (t.tipo !== "cargo") continue;
-    const nombre = t.categorias?.nombre ?? "Sin categoría";
+    const nombre = categoriaDe(t);
     porCategoria.set(nombre, (porCategoria.get(nombre) ?? 0) + t.monto);
   }
 
