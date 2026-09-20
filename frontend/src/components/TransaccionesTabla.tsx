@@ -59,6 +59,12 @@ export function TransaccionesTabla({
                 className="py-2 text-left font-medium"
                 style={{ color: "var(--text-muted)" }}
               >
+                Tarjeta
+              </th>
+              <th
+                className="py-2 text-left font-medium"
+                style={{ color: "var(--text-muted)" }}
+              >
                 Cuenta
               </th>
               <th
@@ -83,6 +89,9 @@ export function TransaccionesTabla({
                 </td>
                 <td className="py-2" style={{ color: "var(--text-secondary)" }}>
                   {t.comercio ?? "—"}
+                </td>
+                <td className="py-2" style={{ color: "var(--text-secondary)" }}>
+                  {t.tarjeta ?? "—"}
                 </td>
                 <td className="py-2" style={{ color: "var(--text-secondary)" }}>
                   {t.documentos.cuentas.alias}

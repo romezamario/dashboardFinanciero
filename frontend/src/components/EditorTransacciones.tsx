@@ -197,6 +197,9 @@ export function EditorTransacciones({
                     <td className="py-2 pr-2" style={{ color: "var(--text-secondary)" }}>
                       {t.comercio ?? "—"}
                     </td>
+                    <td className="py-2 pr-2" style={{ color: "var(--text-secondary)" }}>
+                      {t.tarjeta ?? "—"}
+                    </td>
                     <td
                       className="py-2 pr-2 text-right"
                       style={{ color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums" }}
@@ -208,7 +211,7 @@ export function EditorTransacciones({
                 {visibles.length === 0 && (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="py-4 text-center text-sm"
                       style={{ color: "var(--text-muted)" }}
                     >

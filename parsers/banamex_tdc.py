@@ -93,6 +93,17 @@ PATRON_LINEA_TARJETA = re.compile(r"n[uú]mero de tarjeta", re.IGNORECASE)
 # bien el carácter según la fuente del PDF.
 PATRON_PAGO_MINIMO = re.compile(r"pago\s+m[ií]nimo", re.IGNORECASE)
 
+# Un estado de cuenta con tarjetas adicionales agrupa las transacciones bajo
+# encabezados "Tarjeta Titular: ...", "Tarjeta Adicional: ...", "Tarjeta
+# Digital: ..." (confirmado contra un estado de cuenta real, 2026-09-20) --
+# cada uno abre una sección nueva que sigue aplicando a los renglones
+# siguientes hasta el próximo encabezado de este tipo. No nos importa qué
+# viene después del tipo (número de tarjeta, nombre del titular) -- solo
+# necesitamos saber en qué sección estamos.
+PATRON_SECCION_TARJETA = re.compile(
+    r"^Tarjeta\s+(Titular|Adicional|Digital)\b", re.IGNORECASE
+)
+
 
 def _a_decimal(texto: str) -> Decimal:
     return Decimal(texto.replace(",", ""))
@@ -107,6 +118,10 @@ class BanamexTdcParser(BaseParser):
     def extraer(self, ruta_pdf: Path) -> list[RenglonCrudo]:
         renglones: list[RenglonCrudo] = []
         self._advertencias = []
+        # Estado del documento completo, no por página -- una sección de
+        # tarjeta puede seguir vigente a través de un salto de página, igual
+        # que cualquier otro bloque en este extractor.
+        tarjeta_actual: str | None = None
 
         with pdfplumber.open(ruta_pdf) as pdf:
             for numero_pagina, pagina in enumerate(pdf.pages, start=1):
@@ -114,6 +129,11 @@ class BanamexTdcParser(BaseParser):
                 for linea in texto.splitlines():
                     linea = linea.strip()
                     if not linea:
+                        continue
+
+                    coincidencia_seccion = PATRON_SECCION_TARJETA.match(linea)
+                    if coincidencia_seccion:
+                        tarjeta_actual = coincidencia_seccion.group(1).capitalize()
                         continue
 
                     coincidencia = PATRON_TRANSACCION.match(linea)
@@ -147,6 +167,7 @@ class BanamexTdcParser(BaseParser):
                             monto_texto=monto_texto,
                             pagina=numero_pagina,
                             linea_cruda=linea,
+                            tarjeta=tarjeta_actual,
                         )
                     )
 

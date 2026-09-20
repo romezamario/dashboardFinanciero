@@ -15,6 +15,7 @@ export interface Transaccion {
   tipo: "cargo" | "abono";
   saldo: number | null;
   comercio: string | null;
+  tarjeta: string | null;
   categorias: { nombre: string } | null;
   documentos: {
     cuentas: {

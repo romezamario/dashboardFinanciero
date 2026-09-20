@@ -49,7 +49,7 @@ PARSERS: dict[str, type[BaseParser]] = {
     "Banamex TDC": BanamexTdcParser,
 }
 
-COLUMNAS = ("pagina", "fecha", "descripcion", "monto", "tipo", "categoria", "comercio", "origen")
+COLUMNAS = ("pagina", "fecha", "descripcion", "monto", "tipo", "categoria", "comercio", "tarjeta", "origen")
 
 # Debe coincidir exactamente con la categoría de esa regla en
 # transform/reglas_categorizacion.json — así el panel de totales puede
@@ -263,7 +263,7 @@ class VentanaRenglonManual(tk.Toplevel):
     def __init__(self, master: "App") -> None:
         super().__init__(master)
         self.title("Agregar renglón manual")
-        self.geometry("380x260")
+        self.geometry("380x290")
         self.master_app = master
 
         marco = ttk.Frame(self)
@@ -295,6 +295,12 @@ class VentanaRenglonManual(tk.Toplevel):
         self.entrada_pagina = ttk.Entry(marco)
         self.entrada_pagina.grid(row=4, column=1, sticky="ew", padx=4)
 
+        ttk.Label(marco, text="Tarjeta (opcional, ej. Titular):").grid(
+            row=5, column=0, sticky="w", pady=2
+        )
+        self.entrada_tarjeta = ttk.Entry(marco)
+        self.entrada_tarjeta.grid(row=5, column=1, sticky="ew", padx=4)
+
         marco.columnconfigure(1, weight=1)
 
         ttk.Label(
@@ -305,7 +311,7 @@ class VentanaRenglonManual(tk.Toplevel):
             ),
             foreground="#666",
             wraplength=340,
-        ).grid(row=5, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        ).grid(row=6, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
         marco_botones = ttk.Frame(self)
         marco_botones.pack(fill="x", padx=8, pady=8)
@@ -322,6 +328,7 @@ class VentanaRenglonManual(tk.Toplevel):
         monto_texto = self.entrada_monto.get().strip().replace(",", "")
         tipo = self.combo_tipo.get()
         pagina_texto = self.entrada_pagina.get().strip()
+        tarjeta = self.entrada_tarjeta.get().strip() or None
 
         try:
             fecha = date.fromisoformat(fecha_texto)
@@ -374,6 +381,7 @@ class VentanaRenglonManual(tk.Toplevel):
             linea_cruda=linea_cruda,
             categoria=categoria,
             comercio=comercio,
+            tarjeta=tarjeta,
             origen=origen,
         )
 
@@ -385,6 +393,7 @@ class VentanaRenglonManual(tk.Toplevel):
         self.entrada_descripcion.delete(0, "end")
         self.entrada_monto.delete(0, "end")
         self.entrada_pagina.delete(0, "end")
+        self.entrada_tarjeta.delete(0, "end")
         messagebox.showinfo(
             "Renglón agregado",
             f"Se agregó: {fecha.isoformat()} · {descripcion} · {tipo} {monto} "
@@ -465,6 +474,7 @@ class App(tk.Tk):
             "tipo": "Tipo",
             "categoria": "Categoría",
             "comercio": "Comercio",
+            "tarjeta": "Tarjeta",
             "origen": "Estado de cuenta",
         }
         anchos = {
@@ -475,6 +485,7 @@ class App(tk.Tk):
             "tipo": 70,
             "categoria": 130,
             "comercio": 110,
+            "tarjeta": 80,
             "origen": 160,
         }
         for col in COLUMNAS:
@@ -690,6 +701,7 @@ class App(tk.Tk):
                     t.tipo,
                     categoria,
                     t.comercio or "",
+                    t.tarjeta or "",
                     t.origen or "",
                 ),
             )
@@ -808,6 +820,7 @@ class App(tk.Tk):
                     "linea_cruda": t.linea_cruda,
                     "categoria": t.categoria,
                     "comercio": t.comercio,
+                    "tarjeta": t.tarjeta,
                     "origen": t.origen,
                 }
                 for t in self.transacciones

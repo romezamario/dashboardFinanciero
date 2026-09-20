@@ -210,6 +210,25 @@ statement from a bank you already support will look anything like the first one:
   statement has) so it needed no change at all. Lesson for a future tier: verify structural
   identity against the real anonymized dump before assuming a new class is needed — a new card
   product from the same issuer is not automatically a new document *format*.
+- **`tarjeta` (Titular/Adicional/Digital): a TDC with supplementary cards groups its transaction
+  table into sections**, each opened by a line matching `PATRON_SECCION_TARJETA` —
+  `^Tarjeta\s+(Titular|Adicional|Digital)\b` (case-insensitive; confirmed 2026-09-20 against a
+  real statement's exact section-header text, e.g. `"Tarjeta digital: 43912001xxx"`). `extraer()`
+  tracks the current section in a single loop-scoped variable (`tarjeta_actual`) that updates
+  whenever that pattern matches and is stamped onto every `RenglonCrudo` built afterward — state
+  spans the *whole document*, not per-page, since a section stays open across a page break just
+  like everything else this parser tracks (see the page-boundary lesson under `banamex.py`
+  above). This is a new bank-agnostic field on `RenglonCrudo`/`TransaccionCanonica` (`tarjeta:
+  str | None = None`, default `None` for any parser without this concept — the checking account
+  never sets it) and a real `transacciones.tarjeta` column (plain nullable text, no catalog/FK —
+  same reasoning as `comercio`: a small fixed set of values scoped to one document, not something
+  needing its own management UI). Flows through the whole pipeline the same way `comercio` does:
+  app table column, JSON export, `sincronizador.py`'s upsert payload, frontend `Transaccion` type
+  + select + both `TransaccionesTabla` and `EditorTransacciones` display columns. `Editar
+  categoría/comercio en lote` deliberately does *not* gain a `tarjeta` field — only display, not
+  bulk-editable, since nothing asked for that and a wrong bulk edit here couldn't be traced back
+  to a rule the way categoría/comercio mistakes can. `VentanaRenglonManual` also grew an optional
+  "Tarjeta" text entry, for consistency with every other field a manual row can carry.
 
 **Manual row entry** (`VentanaRenglonManual` in `app/main.py`) is the other half of the
 "transaction row rendered as an image" gap above — `advertencias()` only *flags* the unreadable
@@ -373,9 +392,11 @@ the GitHub Actions UI. It runs `supabase link` + `supabase db push` using three 
 
 Tables: `bancos` (shared catalog, no `user_id`, no RLS) and `cuentas`/`categorias`/`documentos`/
 `transacciones` (all RLS-scoped to `user_id = auth.uid()`, four policies each — select/insert/update/delete).
-`transacciones.comercio` (added in `20260920145914_add_comercio.sql`) is a plain nullable text
-column, not a catalog table with its own FK like `categoria_id` — see the `comercio` bullet in
-Architecture above for why that's the deliberate choice here.
+`transacciones.comercio` (added in `20260920145914_add_comercio.sql`) and `transacciones.tarjeta`
+(added in `20260920180242_add_tarjeta.sql`) are both plain nullable text columns, not catalog
+tables with their own FK like `categoria_id` — see the `comercio` bullet in Architecture above
+and the `tarjeta` bullet under `parsers/banamex_tdc.py`'s lessons for why that's the deliberate
+choice for each.
 
 ## Sincronizador (`sync/sincronizador.py`)
 

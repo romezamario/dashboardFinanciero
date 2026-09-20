@@ -109,6 +109,7 @@ def sincronizar_documento(client: ClienteSupabase, datos: dict[str, Any]) -> Res
             "fecha": t["fecha"],
             "descripcion": t["descripcion"],
             "comercio": t.get("comercio"),
+            "tarjeta": t.get("tarjeta"),
             # monto/saldo viajan como texto ("199.00"), nunca como float de
             # Python — Postgres los castea a numeric en el servidor.
             "monto": t["monto"],

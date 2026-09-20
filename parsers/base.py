@@ -31,6 +31,12 @@ class RenglonCrudo:
     monto_texto: str
     pagina: int
     linea_cruda: str
+    # Opcional (default None) -- solo lo llenan extractores cuyo documento
+    # distingue explícitamente entre tarjetas dentro del mismo estado de
+    # cuenta (ej. Titular/Adicional/Digital en una TDC con tarjetas
+    # adicionales, ver parsers/banamex_tdc.py). Un banco sin ese concepto
+    # (la cuenta de cheques, por ejemplo) simplemente no lo usa.
+    tarjeta: str | None = None
 
 
 class BaseParser(ABC):

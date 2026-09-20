@@ -39,6 +39,12 @@ class TransaccionCanonica:
     sin catálogo/FK propio — a diferencia de `categoria`), asignada por la
     misma regla de categorización que asigna `categoria` (ver
     `transform/categorizador.py`).
+
+    `tarjeta` también es una columna real de `transacciones` (texto simple,
+    mismo patrón que `comercio`) — viene directo de `RenglonCrudo.tarjeta`
+    sin que el Transformador le agregue lógica propia; `None` para
+    documentos cuyo extractor no distingue entre tarjetas (ver ese campo
+    en parsers/base.py).
     """
 
     fecha: date
@@ -51,6 +57,7 @@ class TransaccionCanonica:
     saldo: Decimal | None = None
     categoria: str | None = None
     comercio: str | None = None
+    tarjeta: str | None = None
     origen: str | None = None
 
 
@@ -98,6 +105,7 @@ def transformar_renglon(
         tipo=tipo,
         pagina=renglon.pagina,
         linea_cruda=renglon.linea_cruda,
+        tarjeta=renglon.tarjeta,
     )
 
 

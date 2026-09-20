@@ -275,7 +275,9 @@ Abre `http://localhost:5173`, inicia sesión con el usuario que creaste para el 
 - Gasto por categoría (barras horizontales, top 8 + "Otros")
 - Gasto por comercio (barras horizontales, top 8 — solo transacciones con comercio asignado,
   ver "Reglas de categorización..." en la app de escritorio)
-- Tabla de transacciones completa
+- Tabla de transacciones completa, con columna **Tarjeta** (Titular/Adicional/Digital) para
+  estados de cuenta que agrupan sus movimientos por tarjeta dentro del mismo documento — vacía
+  para bancos/documentos sin ese concepto
 - **Editar categoría/comercio en lote**: busca transacciones por un texto en la descripción
   (ej. "TELEVIA"), selecciona una o varias (o "Seleccionar todas las coincidencias" para
   seleccionar de golpe todo lo que matchee, no solo lo que se ve en pantalla), y asígnales una
