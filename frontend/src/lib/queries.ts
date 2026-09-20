@@ -18,7 +18,7 @@ export async function obtenerTransacciones(): Promise<Transaccion[]> {
 export interface Filtros {
   mes?: string;
   categoria?: string;
-  cuenta?: string;
+  comercio?: string;
 }
 
 /** Nombre de categoría que usa el resto del código para "sin categoría". */
@@ -52,9 +52,9 @@ export function aplicarFiltros(
       return false;
     }
     if (
-      filtros.cuenta &&
-      excluir !== "cuenta" &&
-      t.documentos.cuentas.alias !== filtros.cuenta
+      filtros.comercio &&
+      excluir !== "comercio" &&
+      t.comercio !== filtros.comercio
     ) {
       return false;
     }
@@ -110,31 +110,28 @@ export function agruparGastoPorCategoria(
     .sort((a, b) => b.total - a.total);
 }
 
-export interface PuntoSaldo {
-  fecha: string;
-  [cuenta: string]: string | number; // una clave por alias de cuenta
+export interface PuntoComercio {
+  comercio: string;
+  total: number;
 }
 
-export function agruparTendenciaSaldo(transacciones: Transaccion[]): {
-  puntos: PuntoSaldo[];
-  cuentas: string[];
-} {
-  const cuentas = Array.from(
-    new Set(
-      transacciones
-        .filter((t) => t.saldo !== null)
-        .map((t) => t.documentos.cuentas.alias)
-    )
-  );
+export function agruparGastoPorComercio(
+  transacciones: Transaccion[]
+): PuntoComercio[] {
+  // A diferencia de categoría, comercio no tiene un fallback "Sin comercio"
+  // -- es opcional por diseño (solo lo asignan las reglas que lo definen
+  // explícitamente), así que una transacción sin comercio simplemente no
+  // participa en este agrupado en vez de inflar un bucket poco informativo.
+  const porComercio = new Map<string, number>();
 
-  const puntos = transacciones
-    .filter((t) => t.saldo !== null)
-    .map((t) => ({
-      fecha: t.fecha,
-      [t.documentos.cuentas.alias]: t.saldo as number,
-    }));
+  for (const t of transacciones) {
+    if (t.tipo !== "cargo" || !t.comercio) continue;
+    porComercio.set(t.comercio, (porComercio.get(t.comercio) ?? 0) + t.monto);
+  }
 
-  return { puntos, cuentas };
+  return Array.from(porComercio.entries())
+    .map(([comercio, total]) => ({ comercio, total }))
+    .sort((a, b) => b.total - a.total);
 }
 
 export interface Totales {

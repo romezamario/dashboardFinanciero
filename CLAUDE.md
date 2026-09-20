@@ -11,7 +11,10 @@ Supabase, which a React frontend reads directly (protected by Row Level Security
 The full original spec — architecture, exact DB schema, folder layout, phased implementation plan —
 lives in [prompt-claude-code.md](prompt-claude-code.md). Read it before making structural changes;
 it's the source of truth for what to build next, **except** for the local pipeline's entry point,
-which was deliberately redesigned away from that spec's automatic watcher — see Architecture below.
+which was deliberately redesigned away from that spec's automatic watcher — see Architecture below
+— and except for the frontend's dashboard chart set, where "tendencia de saldo" (mentioned in the
+spec) was later replaced by "gasto por comercio" at the user's explicit request — see the
+"Removed: `TendenciaSaldoChart`" bullet under Frontend below.
 
 ## Non-negotiable constraints
 
@@ -222,32 +225,54 @@ the frontend query can't leak another user's rows. Aggregation (by-month, by-cat
 balance per account) happens client-side in plain functions in `queries.ts`, kept separate from
 the React components so they're unit-testable without rendering anything.
 
+**Charts**: `IngresosGastosChart` (ingresos vs. gastos por mes), `GastoPorCategoriaChart`, and
+`GastoPorComercioChart` (added 2026-09-20, replacing an earlier `TendenciaSaldoChart` — see
+below). `GastoPorComercioChart` mirrors `GastoPorCategoriaChart`'s exact shape (top-8 horizontal
+bars, single hue, cross-filter) but deliberately has **no** "Sin comercio" fallback bucket and no
+"Otros" fold: `comercio` is optional by design (only rules that explicitly set it populate it —
+see the `comercio` bullet earlier in this doc), so `agruparGastoPorComercio` in `queries.ts` just
+skips transactions with `comercio === null` rather than lumping them into a noisy catch-all the
+way `categoriaDe()`'s `SIN_CATEGORIA` fallback does for categories (categorization is expected to
+eventually cover everything; comercio tagging isn't and that's fine).
+
 **Cross-filter (Power BI style)**: `Dashboard` holds one `filtros: Filtros` state
-(`{mes?, categoria?, cuenta?}`) and `queries.ts`'s `aplicarFiltros(transacciones, filtros, excluir?)`
+(`{mes?, categoria?, comercio?}`) and `queries.ts`'s `aplicarFiltros(transacciones, filtros, excluir?)`
 does the filtering — the `excluir` param is the whole trick: each chart is computed from
 transacciones filtered by every *other* active dimension but not its own, so clicking a bar still
-shows every other bar/category/cuenta to click next (self-filtering would collapse a chart down to
-one visible option after the first click, which isn't how Power BI cross-filter reads). KPIs and
+shows every other bar/category/comercio to click next (self-filtering would collapse a chart down
+to one visible option after the first click, which isn't how Power BI cross-filter reads). KPIs and
 the table use the fully-filtered set — except `saldoActual`, which is deliberately taken from the
 *unfiltered* `transacciones` (it's a fact about the account's current balance, not an aggregate
 that should shrink when you filter by category/month). Click handlers live in the chart
-components (`onClickMes`/`onClickCategoria`/`onClickCuenta` props) and call a shared
+components (`onClickMes`/`onClickCategoria`/`onClickComercio` props) and call a shared
 `alternarFiltro` in `Dashboard` that toggles: clicking the already-selected value clears it, same
 as clicking a chip in the filter-chips row above the KPIs. Non-selected marks dim to ~0.3 opacity
-via per-bar `<Cell fillOpacity>` (bars) or `strokeOpacity`/dot opacity (lines) rather than being
-hidden, so the full shape of the data stays visible while showing what's filtered. The "Otros"
-fold in `GastoPorCategoriaChart` (categories past the top 8) is explicitly not clickable — it has
-no single real category name to filter by.
+via per-bar `<Cell fillOpacity>` rather than being hidden, so the full shape of the data stays
+visible while showing what's filtered. The "Otros" fold in `GastoPorCategoriaChart` (categories
+past the top 8) is explicitly not clickable — it has no single real category name to filter by.
 
-Chart colors/specs follow this repo's `dataviz` skill: the categorical palette (blue/orange/aqua
-for series identity — ingresos vs. gastos, one line per cuenta) is validated with the skill's
-`validate_palette.js` script against CVD and contrast in both light and dark mode before use;
-category-magnitude comparisons (gasto por categoría) deliberately use a single hue, not
-categorical colors, since the axis labels already carry identity. CSS custom properties for the
-palette live in `src/index.css`, keyed by role (`--series-1`, `--text-secondary`, etc.) and
-redefined for dark via both `prefers-color-scheme` and a `[data-theme]` override — same pattern
-artifacts use. If you add a chart, re-run the dataviz skill's procedure (form → color → validate)
-rather than picking colors by eye.
+**Removed: `TendenciaSaldoChart` / filtering by `cuenta`** (2026-09-20, user's explicit request,
+no risk flagged — it was a straightforward swap, not a correction of a bug). It plotted one line
+per account's running `saldo` over time and was the *only* UI source of the `cuenta` filter
+dimension, so removing it made that whole dimension unreachable — `Filtros.cuenta` and its
+`aplicarFiltros` branch were removed too rather than left as dead code with no way to trigger it.
+`saldoActual` (the KPI tile) is unaffected — it was always computed independently via
+`calcularTotales`, never from this chart's data. If per-account balance trend is wanted again
+later, it needs a new UI entry point (chart, toggle, whatever), not just restoring the deleted
+files — the underlying `saldo` data was never removed from the query/select.
+
+Chart colors/specs follow this repo's `dataviz` skill: the categorical palette (blue for ingresos
+and magnitude comparisons, orange for gastos) is validated with the skill's `validate_palette.js`
+script against CVD and contrast in both light and dark mode before use; category-magnitude
+comparisons (gasto por categoría, gasto por comercio) deliberately use a single hue, not
+categorical colors, since the axis labels already carry identity. A third categorical color
+(`--series-3`, only ever used for a 3rd+ account line in the now-removed `TendenciaSaldoChart`)
+was removed from `src/index.css` along with it — don't reintroduce an unused palette entry
+speculatively; add it back (and re-validate) only alongside whatever chart actually needs it.
+CSS custom properties for the palette live in `src/index.css`, keyed by role (`--series-1`,
+`--text-secondary`, etc.) and redefined for dark via both `prefers-color-scheme` and a
+`[data-theme]` override — same pattern artifacts use. If you add a chart, re-run the dataviz
+skill's procedure (form → color → validate) rather than picking colors by eye.
 
 `monto`/`saldo` come back from PostgREST as JSON numbers (not the decimal-strings the Python
 pipeline uses) — intentional: this is display-only aggregation in the browser, not writing back

@@ -111,7 +111,7 @@ data/
       (`transform/`, `app/`) — reemplaza al watcher automático que estaba planeado
 - [x] Fase 4 — Sincronizador (`sync/`) — sube `data/procesados/*.json` a Supabase, upsert idempotente
 - [x] Fase 5 — Frontend (`frontend/`) — login + dashboard (KPIs, ingresos vs. gastos,
-      gasto por categoría, tendencia de saldo, tabla de transacciones)
+      gasto por categoría, gasto por comercio, tabla de transacciones)
 - [x] Fase 6 — Deploy a Cloudflare Pages + Cloudflare Access, verificado en producción: al entrar
       al sitio pide primero login de Cloudflare Access (correo + PIN) y luego el de Supabase Auth
 
@@ -273,16 +273,17 @@ Abre `http://localhost:5173`, inicia sesión con el usuario que creaste para el 
   encogerse), ingresos del mes, gastos del mes
 - Ingresos vs. gastos por mes (barras agrupadas)
 - Gasto por categoría (barras horizontales, top 8 + "Otros")
-- Tendencia de saldo (una línea por cuenta si tienes más de una)
+- Gasto por comercio (barras horizontales, top 8 — solo transacciones con comercio asignado,
+  ver "Reglas de categorización..." en la app de escritorio)
 - Tabla de transacciones completa
 
-**Cross-filter estilo Power BI**: da clic en una barra de mes, una categoría, o una línea de
-cuenta, y el resto del dashboard (KPIs, las otras gráficas, la tabla) se filtra a eso —
+**Cross-filter estilo Power BI**: da clic en una barra de mes, una categoría, o un comercio,
+y el resto del dashboard (KPIs, las otras gráficas, la tabla) se filtra a eso —
 seleccionado en color completo, lo demás atenuado. Clic otra vez sobre lo mismo lo quita; los
 chips arriba muestran qué filtros están activos, con botón para quitar cada uno o todos. Cada
 gráfica se sigue mostrando completa (para poder cambiar la selección) excepto por los filtros de
 las *otras* dimensiones — es decir, filtrar por mes no oculta meses en su propia gráfica, pero sí
-reduce qué categorías/cuentas aparecen en las demás. La categoría "Otros" (la cola de gasto por
+reduce qué categorías/comercios aparecen en las demás. La categoría "Otros" (la cola de gasto por
 categoría plegada) no es clicable — agrupa varias categorías reales, no hay un solo nombre que
 filtrar.
 

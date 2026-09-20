@@ -11,9 +11,8 @@
   --baseline: #c3c2b7;
   --border: rgba(11, 11, 11, 0.1);
 
-  --series-1: #2a78d6; /* ingresos / cuenta 1 */
-  --series-2: #eb6834; /* gastos / cuenta 2 */
-  --series-3: #1baf7a; /* cuenta 3 (tendencia de saldo con varias cuentas) */
+  --series-1: #2a78d6; /* ingresos / comparaciones de magnitud (gasto por categoría, por comercio) */
+  --series-2: #eb6834; /* gastos */
 
   --status-good: #0ca30c;
   --status-critical: #d03b3b;
@@ -33,7 +32,6 @@
 
     --series-1: #3987e5;
     --series-2: #d95926;
-    --series-3: #199e70;
 
     --status-good: #0ca30c;
     --status-critical: #e66767;
@@ -53,7 +51,6 @@
 
   --series-1: #3987e5;
   --series-2: #d95926;
-  --series-3: #199e70;
 
   --status-good: #0ca30c;
   --status-critical: #e66767;

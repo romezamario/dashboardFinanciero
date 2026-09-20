@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import {
   agruparGastoPorCategoria,
+  agruparGastoPorComercio,
   agruparIngresosGastosPorMes,
-  agruparTendenciaSaldo,
   aplicarFiltros,
   calcularTotales,
   obtenerTransacciones,
@@ -13,13 +13,13 @@ import { supabase } from "../lib/supabase";
 import { StatTile } from "./StatTile";
 import { IngresosGastosChart } from "./IngresosGastosChart";
 import { GastoPorCategoriaChart } from "./GastoPorCategoriaChart";
-import { TendenciaSaldoChart } from "./TendenciaSaldoChart";
+import { GastoPorComercioChart } from "./GastoPorComercioChart";
 import { TransaccionesTabla } from "./TransaccionesTabla";
 
 const ETIQUETAS_FILTRO: Record<keyof Filtros, string> = {
   mes: "Mes",
   categoria: "Categoría",
-  cuenta: "Cuenta",
+  comercio: "Comercio",
 };
 
 export function Dashboard() {
@@ -63,8 +63,8 @@ export function Dashboard() {
   const gastoPorCategoria = agruparGastoPorCategoria(
     aplicarFiltros(transacciones, filtros, "categoria")
   );
-  const { puntos: puntosSaldo, cuentas } = agruparTendenciaSaldo(
-    aplicarFiltros(transacciones, filtros, "cuenta")
+  const gastoPorComercio = agruparGastoPorComercio(
+    aplicarFiltros(transacciones, filtros, "comercio")
   );
 
   // El saldo actual es un hecho de la cuenta, no una suma que deba
@@ -158,11 +158,10 @@ export function Dashboard() {
                 categoriaSeleccionada={filtros.categoria}
                 onClickCategoria={(categoria) => alternarFiltro("categoria", categoria)}
               />
-              <TendenciaSaldoChart
-                puntos={puntosSaldo}
-                cuentas={cuentas}
-                cuentaSeleccionada={filtros.cuenta}
-                onClickCuenta={(cuenta) => alternarFiltro("cuenta", cuenta)}
+              <GastoPorComercioChart
+                datos={gastoPorComercio}
+                comercioSeleccionado={filtros.comercio}
+                onClickComercio={(comercio) => alternarFiltro("comercio", comercio)}
               />
             </div>
 
