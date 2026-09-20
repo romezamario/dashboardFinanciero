@@ -7,7 +7,7 @@ fecha_texto en un formato consistente por extractor.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Literal
@@ -101,6 +101,46 @@ def transformar_renglon(
     )
 
 
+def _desambiguar_renglones_duplicados(
+    renglones: list[RenglonCrudo],
+) -> list[RenglonCrudo]:
+    """Si dos renglones comparten (pagina, linea_cruda), les agrega un sufijo
+    " (n)" a `linea_cruda` a partir del segundo -- caso real confirmado en
+    producción: dos cargos de Televia el mismo día, mismo monto, y el estado
+    de cuenta imprime la línea exactamente igual para ambos (sin ningún
+    número de referencia que los distinga). No es un bug del extractor —
+    son dos transacciones reales distintas que el banco simplemente no
+    diferencia en texto.
+
+    Hace falta desambiguarlas aquí porque `(documento_id, pagina,
+    linea_cruda)` es la clave natural que usa el upsert de Supabase
+    (`sync/sincronizador.py`) para no duplicar al resincronizar el mismo
+    documento — sin esto, Postgres rechaza el batch *completo* con "ON
+    CONFLICT DO UPDATE command cannot affect row a second time" en vez de
+    solo esas dos filas, así que ni siquiera las transacciones sin problema
+    lograban sincronizarse.
+
+    El orden es determinista (orden de aparición en `renglones`, que viene
+    del orden en que el extractor recorrió el PDF) — así que reprocesar el
+    MISMO PDF una segunda vez le asigna los mismos sufijos a las mismas
+    transacciones, y el upsert sigue siendo idempotente en vez de crear
+    filas nuevas en cada resync.
+    """
+    vistos: dict[tuple[int, str], int] = {}
+    resultado: list[RenglonCrudo] = []
+    for renglon in renglones:
+        clave = (renglon.pagina, renglon.linea_cruda)
+        vistos[clave] = vistos.get(clave, 0) + 1
+        ocurrencia = vistos[clave]
+        if ocurrencia == 1:
+            resultado.append(renglon)
+        else:
+            resultado.append(
+                replace(renglon, linea_cruda=f"{renglon.linea_cruda} ({ocurrencia})")
+            )
+    return resultado
+
+
 def transformar_renglones(
     renglones: list[RenglonCrudo], formato_fecha: str = "%d/%m/%Y"
 ) -> tuple[list[TransaccionCanonica], list[tuple[RenglonCrudo, ErrorTransformacion]]]:
@@ -112,7 +152,7 @@ def transformar_renglones(
     ok: list[TransaccionCanonica] = []
     fallidas: list[tuple[RenglonCrudo, ErrorTransformacion]] = []
 
-    for renglon in renglones:
+    for renglon in _desambiguar_renglones_duplicados(renglones):
         try:
             ok.append(transformar_renglon(renglon, formato_fecha))
         except ErrorTransformacion as error:

@@ -350,7 +350,22 @@ user over the simpler alternative — don't silently change these:
   `.upsert()`'s return-row semantics, which vary across supabase-py/PostgREST versions.
   `transacciones` uses real `.upsert(..., on_conflict="documento_id,pagina,linea_cruda")` since
   that's a bulk operation where per-row select-then-insert would be wasteful — the `on_conflict`
-  columns match the table's actual unique constraint exactly.
+  columns match the table's actual unique constraint exactly. **This assumes `(pagina,
+  linea_cruda)` is unique per real transaction within one document — confirmed false in
+  production** (2026-09-20): a real statement printed two separate Televia toll charges, same
+  day, same amount, with byte-identical line text (no reference number distinguishing them). A
+  batch containing two rows with the same `on_conflict` key makes Postgres reject the *entire*
+  upsert with `ON CONFLICT DO UPDATE command cannot affect row a second time` (error 21000) —
+  not just those two rows, so even the unrelated transactions in that batch failed to sync ("1/2
+  archivo(s) sincronizados" in the app's error dialog is what this looks like). Fixed upstream in
+  `transform/transformador.py`'s `_desambiguar_renglones_duplicados` (called from
+  `transformar_renglones` before anything else runs): any renglón sharing `(pagina, linea_cruda)`
+  with an earlier one gets `" (2)"`, `" (3)"`, etc. appended to its `linea_cruda`, deterministically
+  by order of appearance — so reprocessing the same PDF again assigns the same suffixes to the
+  same transactions and the upsert stays idempotent. A JSON already exported *before* this fix
+  (still has the raw colliding `linea_cruda`) needs to be regenerated — reload that PDF in the app
+  (it's already sitting in its `procesados/` subfolder next to the original PDF location) and
+  re-save; that produces a fresh JSON with the disambiguated lines, safe to resync.
 - **Testability**: `sincronizar_documento`/`sincronizar_todos` take an already-authenticated
   client as a parameter rather than constructing one internally, so the find-or-create/upsert
   logic can be verified against an in-memory fake client (mimicking `.table().select().eq()
