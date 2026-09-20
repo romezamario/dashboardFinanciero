@@ -234,6 +234,8 @@ unrelated commits:
   `npx wrangler pages project create dashboard-financiero --production-branch=main` locally by
   hand (with `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` in the environment) before pushing —
   don't put creation logic back in the workflow without a way to verify it against a real account.
+  User confirmed the workflow now runs clean end to end (straight from Build to the real Deploy
+  step, no failing step in between) after this was removed.
 
 Both workflows pin action versions that run natively on Node 24 (`actions/checkout@v5`,
 `actions/setup-node@v5`, `supabase/setup-cli@v3`, `cloudflare/wrangler-action@v4`) — when bumping
