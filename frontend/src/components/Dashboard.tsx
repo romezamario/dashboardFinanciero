@@ -15,6 +15,7 @@ import { IngresosGastosChart } from "./IngresosGastosChart";
 import { GastoPorCategoriaChart } from "./GastoPorCategoriaChart";
 import { GastoPorComercioChart } from "./GastoPorComercioChart";
 import { TransaccionesTabla } from "./TransaccionesTabla";
+import { EditorTransacciones } from "./EditorTransacciones";
 
 const ETIQUETAS_FILTRO: Record<keyof Filtros, string> = {
   mes: "Mes",
@@ -28,11 +29,17 @@ export function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [filtros, setFiltros] = useState<Filtros>({});
 
+  async function recargarTransacciones() {
+    try {
+      const datos = await obtenerTransacciones();
+      setTransacciones(datos);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   useEffect(() => {
-    obtenerTransacciones()
-      .then(setTransacciones)
-      .catch((e) => setError(e.message))
-      .finally(() => setCargando(false));
+    recargarTransacciones().finally(() => setCargando(false));
   }, []);
 
   if (cargando) {
@@ -166,6 +173,11 @@ export function Dashboard() {
             </div>
 
             <TransaccionesTabla transacciones={transaccionesFiltradas} />
+
+            <EditorTransacciones
+              transacciones={transacciones}
+              onActualizado={recargarTransacciones}
+            />
           </>
         )}
       </main>

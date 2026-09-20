@@ -140,6 +140,71 @@ export interface Totales {
   gastosMes: number;
 }
 
+/**
+ * Coincidencia por substring, insensible a mayúsculas, sobre la descripción
+ * cruda -- es la búsqueda que alimenta el editor masivo de categoría/comercio
+ * (ver `EditorTransacciones.tsx`). Texto vacío no matchea nada a propósito,
+ * para no listar todas las transacciones del usuario por accidente.
+ */
+export function buscarPorDescripcion(
+  transacciones: Transaccion[],
+  texto: string
+): Transaccion[] {
+  const normalizado = texto.trim().toUpperCase();
+  if (!normalizado) return [];
+  return transacciones.filter((t) => t.descripcion.toUpperCase().includes(normalizado));
+}
+
+/** Busca una categoría por nombre (RLS ya la acota al usuario); si no
+ * existe la crea. Mismo find-or-create que usa sync/sincronizador.py del
+ * lado de Python -- aquí hace falta porque `categoria_id` es un FK, no
+ * texto libre, así que escribir una categoría nueva desde el frontend
+ * requiere resolver (o crear) su fila en `categorias` primero. */
+async function buscarOCrearCategoriaId(nombre: string): Promise<string> {
+  const { data: existente, error: errorSelect } = await supabase
+    .from("categorias")
+    .select("id")
+    .eq("nombre", nombre)
+    .maybeSingle();
+  if (errorSelect) throw errorSelect;
+  if (existente) return existente.id as string;
+
+  const { data: creada, error: errorInsert } = await supabase
+    .from("categorias")
+    .insert({ nombre })
+    .select("id")
+    .single();
+  if (errorInsert) throw errorInsert;
+  return creada.id as string;
+}
+
+/**
+ * Edición masiva: aplica una nueva categoría y/o comercio a los `id` dados.
+ * Un campo ausente en `cambios` significa "no tocar ese campo" -- no hay
+ * forma de "vaciar" categoría/comercio desde aquí, solo de reasignarlos (no
+ * se pidió esa función; si hace falta, agrega un `null` explícito aparte).
+ * RLS ya garantiza que el update solo puede tocar filas del propio usuario,
+ * así que no hace falta re-validar ownership aquí.
+ */
+export async function actualizarCategoriaYComercio(
+  ids: string[],
+  cambios: { categoria?: string; comercio?: string }
+): Promise<void> {
+  if (ids.length === 0) return;
+
+  const payload: Record<string, unknown> = {};
+  if (cambios.categoria) {
+    payload.categoria_id = await buscarOCrearCategoriaId(cambios.categoria);
+  }
+  if (cambios.comercio) {
+    payload.comercio = cambios.comercio;
+  }
+  if (Object.keys(payload).length === 0) return;
+
+  const { error } = await supabase.from("transacciones").update(payload).in("id", ids);
+  if (error) throw error;
+}
+
 export function calcularTotales(transacciones: Transaccion[]): Totales {
   const conSaldo = transacciones.filter((t) => t.saldo !== null);
   const saldoActual =

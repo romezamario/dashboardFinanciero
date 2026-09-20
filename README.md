@@ -276,6 +276,18 @@ Abre `http://localhost:5173`, inicia sesión con el usuario que creaste para el 
 - Gasto por comercio (barras horizontales, top 8 — solo transacciones con comercio asignado,
   ver "Reglas de categorización..." en la app de escritorio)
 - Tabla de transacciones completa
+- **Editar categoría/comercio en lote**: busca transacciones por un texto en la descripción
+  (ej. "TELEVIA"), selecciona una o varias (o "Seleccionar todas las coincidencias" para
+  seleccionar de golpe todo lo que matchee, no solo lo que se ve en pantalla), y asígnales una
+  categoría y/o comercio nuevos — ambos campos quedan como sugerencia autocompletada con lo que
+  ya existe, pero aceptan texto libre (una categoría nueva se crea al vuelo). Deja un campo en
+  blanco para no tocarlo. Es la única escritura que hace el frontend directo a Supabase (todo lo
+  demás es solo lectura) — usa las mismas políticas de RLS que ya protegen las lecturas, sin
+  credenciales nuevas. Ojo: si vuelves a cargar y sincronizar el mismo PDF desde la app de
+  escritorio más adelante, el upsert por `(documento_id, pagina, linea_cruda)` va a
+  sobreescribir categoría/comercio con lo que digan las reglas en ese momento — una edición aquí
+  no sobrevive un resync del mismo documento. Para una corrección que sí debe persistir, agrega o
+  ajusta una regla en "Reglas de categorización..." en vez de (o además de) editar aquí.
 
 **Cross-filter estilo Power BI**: da clic en una barra de mes, una categoría, o un comercio,
 y el resto del dashboard (KPIs, las otras gráficas, la tabla) se filtra a eso —
@@ -292,7 +304,7 @@ garantizan que cada usuario solo ve sus propias filas, así que el filtro nunca 
 frontend "se porte bien".
 
 Los colores, specs de las gráficas (barras redondeadas, líneas de 2px, gridlines discretas) y la
-paleta categórica (azul/naranja/aqua) siguen el skill de dataviz de este proyecto — validada con
+paleta categórica (azul/naranja) siguen el skill de dataviz de este proyecto — validada con
 su script contra ceguera al color en modo claro y oscuro antes de usarla.
 
 **Deploy:** automático vía [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) en cada

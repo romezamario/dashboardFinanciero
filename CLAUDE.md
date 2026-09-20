@@ -279,6 +279,40 @@ pipeline uses) — intentional: this is display-only aggregation in the browser,
 to the ledger, and IEEE-754 doubles are exact at personal-finance magnitudes. The "never float"
 rule is about the ingestion/storage pipeline (parsers/transform/sync), not every downstream read.
 
+**Bulk editor (`EditorTransacciones.tsx`, added 2026-09-20)** is the frontend's first *write* path
+— every other query in `queries.ts` only reads. User searches by a substring of `descripcion`
+(`buscarPorDescripcion` — empty search intentionally matches nothing, so the whole table never
+lists by accident), checks one or more rows (or "Seleccionar todas las coincidencias", which
+selects every match, not just the ones rendered under the `TOPE_RESULTADOS = 100` display cap),
+types a new categoría and/or comercio (either blank = "don't touch that field" — there's no UI
+for clearing a field to null, only reassigning it), and `actualizarCategoriaYComercio` in
+`queries.ts` applies it via `supabase.from("transacciones").update(...).in("id", ids)`. This
+relies entirely on the existing RLS `update` policy — same authenticated session as every read,
+no new credentials, no service_role, no new migration needed. `categoria` is a special case
+because `transacciones.categoria_id` is a FK, not free text: `buscarOCrearCategoriaId` mirrors
+`sync/sincronizador.py`'s Python find-or-create (select by `nombre`, insert if missing) so typing
+a brand-new category name from the browser creates it in `categorias` on the fly, same as the
+desktop app does locally. Category/comercio autocomplete suggestions come from
+`Array.from(new Set(transacciones.map(...)))` over the already-loaded transacciones — no extra
+Supabase query for that. After a successful edit, `Dashboard` calls `obtenerTransacciones()` again
+(`recargarTransacciones`, extracted from the initial `useEffect` so both paths share it) rather
+than patching local state, trading a bit of latency for certainty that what's on screen matches
+what Supabase actually has.
+
+**Known interaction, not a bug**: this write does *not* touch `documento_id`/`pagina`/`linea_cruda`
+— the audit trail back to the source PDF line stays intact, per the non-negotiable constraint. But
+it also means an edit made here is **not durable against reprocessing the same PDF**: if the user
+later reloads that statement in the desktop app and hits "Sincronizar a Supabase..." again, the
+upsert on `(documento_id, pagina, linea_cruda)` will overwrite `categoria_id`/`comercio` back to
+whatever `transform/categorizador.py`'s current rules produce for that description, silently
+discarding the manual edit. This wasn't flagged to the user as a decision to make (unlike the
+"Año" field removal) since it's an inherent property of the existing idempotent-upsert design
+documented under Sincronizador below, not a new risk introduced by adding this editor — but it's
+worth knowing: the more durable fix for a systematic mis-categorization is still to add/edit a
+rule in `reglas_categorizacion.json`, not to hand-edit every occurrence in the dashboard. This
+editor is best used for merchant/category names the rules don't (or can't cleanly) capture, or
+for one-off corrections on transactions that won't be resynced again.
+
 ## Database schema & migrations
 
 `supabase/migrations/*.sql` is the only source of truth for the schema — **never edit the remote
