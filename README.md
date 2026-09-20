@@ -167,7 +167,12 @@ Flujo completo una vez que el extractor de tu banco existe:
    de una carga anterior; `BanamexTdcParser` no necesita este respaldo porque el año ya viene
    impreso en cada renglón de la TDC). Revisa estos datos antes de guardar, el resumen avisa qué
    se detectó y qué hay que llenar a mano.
-3. Revisa los renglones. Si algunos no se pudieron interpretar, la app te avisa con el detalle.
+3. Revisa los renglones. Si algunos no se pudieron interpretar, la app te avisa con el detalle. A
+   veces el PDF renderiza una fila (ej. una confirmación de abono destacada) como imagen en vez
+   de texto seleccionable — ahí el extractor no puede leer nada y la app te avisa con el número
+   de página. Usa **Agregar renglón manual...** para capturarla a mano (fecha, descripción, monto
+   sin signo, tipo, y la página si la conoces) — se agrega a la tabla igual que cualquier otro
+   renglón, con categoría/comercio asignados por las mismas reglas.
 4. **Validación de totales**: escribe el neto del periodo tal como lo imprime el estado de cuenta
    (saldo actual − saldo anterior) y da **Validar** — si no cuadra, hay algo mal parseado o un
    renglón faltante antes de confiar en el resultado.

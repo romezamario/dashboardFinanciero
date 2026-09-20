@@ -18,7 +18,7 @@ import hashlib
 import json
 import tkinter as tk
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -246,6 +246,152 @@ class VentanaInspeccion(tk.Toplevel):
         self.clipboard_append(self.texto.get("1.0", "end-1c"))
 
 
+class VentanaRenglonManual(tk.Toplevel):
+    """Para capturar a mano una transacción que el extractor no pudo leer
+    del PDF -- el caso real que motivó esto: una fila de "abono" que el PDF
+    renderiza como imagen en vez de texto seleccionable (ver
+    `BaseParser.advertencias()`), así que no hay nada que un regex pueda
+    extraer ahí. Se agrega a `self.transacciones` exactamente como una fila
+    extraída -- entra en la tabla, en los totales, en la validación contra
+    el total del estado de cuenta, y se exporta/sincroniza igual.
+
+    Requiere un PDF ya cargado (`master.ruta_pdf_actual`): un renglón
+    manual todavía pertenece a un documento concreto para efectos de
+    auditoría (`origen`) y de a qué se sincroniza en Supabase.
+    """
+
+    def __init__(self, master: "App") -> None:
+        super().__init__(master)
+        self.title("Agregar renglón manual")
+        self.geometry("380x260")
+        self.master_app = master
+
+        marco = ttk.Frame(self)
+        marco.pack(fill="both", expand=True, padx=8, pady=8)
+
+        ttk.Label(marco, text="Fecha (AAAA-MM-DD):").grid(row=0, column=0, sticky="w", pady=2)
+        self.entrada_fecha = ttk.Entry(marco)
+        self.entrada_fecha.insert(0, date.today().isoformat())
+        self.entrada_fecha.grid(row=0, column=1, sticky="ew", padx=4)
+
+        ttk.Label(marco, text="Descripción:").grid(row=1, column=0, sticky="w", pady=2)
+        self.entrada_descripcion = ttk.Entry(marco)
+        self.entrada_descripcion.grid(row=1, column=1, sticky="ew", padx=4)
+
+        ttk.Label(marco, text="Monto (sin signo):").grid(row=2, column=0, sticky="w", pady=2)
+        self.entrada_monto = ttk.Entry(marco)
+        self.entrada_monto.grid(row=2, column=1, sticky="ew", padx=4)
+
+        ttk.Label(marco, text="Tipo:").grid(row=3, column=0, sticky="w", pady=2)
+        self.combo_tipo = ttk.Combobox(
+            marco, values=["cargo", "abono"], state="readonly"
+        )
+        self.combo_tipo.current(0)
+        self.combo_tipo.grid(row=3, column=1, sticky="ew", padx=4)
+
+        ttk.Label(marco, text="Página (si la conoces, opcional):").grid(
+            row=4, column=0, sticky="w", pady=2
+        )
+        self.entrada_pagina = ttk.Entry(marco)
+        self.entrada_pagina.grid(row=4, column=1, sticky="ew", padx=4)
+
+        marco.columnconfigure(1, weight=1)
+
+        ttk.Label(
+            marco,
+            text=(
+                "Categoría/comercio se asignan solo con las reglas actuales, "
+                "igual que una fila extraída del PDF."
+            ),
+            foreground="#666",
+            wraplength=340,
+        ).grid(row=5, column=0, columnspan=2, sticky="w", pady=(8, 0))
+
+        marco_botones = ttk.Frame(self)
+        marco_botones.pack(fill="x", padx=8, pady=8)
+        ttk.Button(marco_botones, text="Agregar", command=self._agregar).pack(
+            side="left"
+        )
+        ttk.Button(marco_botones, text="Cerrar", command=self.destroy).pack(
+            side="right"
+        )
+
+    def _agregar(self) -> None:
+        fecha_texto = self.entrada_fecha.get().strip()
+        descripcion = self.entrada_descripcion.get().strip()
+        monto_texto = self.entrada_monto.get().strip().replace(",", "")
+        tipo = self.combo_tipo.get()
+        pagina_texto = self.entrada_pagina.get().strip()
+
+        try:
+            fecha = date.fromisoformat(fecha_texto)
+        except ValueError:
+            messagebox.showwarning(
+                "Fecha inválida", "Escribe la fecha como AAAA-MM-DD, ej. 2025-06-13."
+            )
+            return
+
+        if not descripcion:
+            messagebox.showwarning("Falta descripción", "Escribe una descripción.")
+            return
+
+        try:
+            monto = Decimal(monto_texto)
+            if monto <= 0:
+                raise InvalidOperation
+        except InvalidOperation:
+            messagebox.showwarning(
+                "Monto inválido",
+                "Escribe el monto como un número positivo, sin signo, ej. 199.00.",
+            )
+            return
+
+        pagina = 0
+        if pagina_texto:
+            try:
+                pagina = int(pagina_texto)
+            except ValueError:
+                messagebox.showwarning(
+                    "Página inválida", "La página debe ser un número entero."
+                )
+                return
+
+        # linea_cruda deja explícito que este renglón no vino del PDF -- y
+        # lo hace único por (fecha, descripción, monto, tipo) para no
+        # chocar con el constraint (documento_id, pagina, linea_cruda) del
+        # upsert si se agrega más de un renglón manual al mismo documento.
+        linea_cruda = f"(manual) {fecha.isoformat()} | {descripcion} | {monto} | {tipo}"
+
+        categoria, comercio = categorizar(descripcion, self.master_app.reglas)
+        origen = self.master_app.ruta_pdf_actual.name if self.master_app.ruta_pdf_actual else None
+
+        nueva = TransaccionCanonica(
+            fecha=fecha,
+            descripcion=descripcion,
+            monto=monto,
+            tipo=tipo,  # type: ignore[arg-type]
+            pagina=pagina,
+            linea_cruda=linea_cruda,
+            categoria=categoria,
+            comercio=comercio,
+            origen=origen,
+        )
+
+        self.master_app.transacciones = [*self.master_app.transacciones, nueva]
+        self.master_app._refrescar_tabla()
+        self.master_app._actualizar_totales()
+        self.master_app.boton_guardar.config(state="normal")
+
+        self.entrada_descripcion.delete(0, "end")
+        self.entrada_monto.delete(0, "end")
+        self.entrada_pagina.delete(0, "end")
+        messagebox.showinfo(
+            "Renglón agregado",
+            f"Se agregó: {fecha.isoformat()} · {descripcion} · {tipo} {monto} "
+            f"(categoría: {categoria or '(sin categoría)'})",
+        )
+
+
 class App(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
@@ -296,6 +442,11 @@ class App(tk.Tk):
             marco_superior,
             text="Inspeccionar PDF...",
             command=self.abrir_inspeccion,
+        ).pack(side="left", padx=(4, 0))
+        ttk.Button(
+            marco_superior,
+            text="Agregar renglón manual...",
+            command=self.abrir_renglon_manual,
         ).pack(side="left", padx=(4, 0))
 
         marco_cuenta = ttk.Frame(self)
@@ -617,6 +768,17 @@ class App(tk.Tk):
 
     def abrir_inspeccion(self) -> None:
         VentanaInspeccion(self)
+
+    def abrir_renglon_manual(self) -> None:
+        if self.ruta_pdf_actual is None:
+            messagebox.showwarning(
+                "Carga un PDF primero",
+                "Un renglón manual se agrega a la tabla de un estado de cuenta ya "
+                "cargado (necesita saber a qué documento pertenece) — carga un PDF "
+                "primero.",
+            )
+            return
+        VentanaRenglonManual(self)
 
     def guardar_procesado(self) -> None:
         if not self.transacciones or self.ruta_pdf_actual is None:

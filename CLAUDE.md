@@ -169,6 +169,23 @@ statement from a bank you already support will look anything like the first one:
   capture that row by hand before trusting `validar_contra_total`. This is the general escape
   hatch for "PDF renders this row as an image" cases in any future parser, not just this one.
 
+**Manual row entry** (`VentanaRenglonManual` in `app/main.py`) is the other half of the
+"transaction row rendered as an image" gap above — `advertencias()` only *flags* the unreadable
+row, it can't recover it, so the "Agregar renglón manual..." button (next to "Inspeccionar
+PDF...") lets the user type one in by hand: fecha, descripción, monto sin signo, tipo, and an
+optional página (fill it in from the `advertencias()` message if you know which page it was on;
+defaults to `0` otherwise). Requires a PDF already loaded — `App.ruta_pdf_actual` — because a
+manual row still needs to belong to a document for `origen`/sync purposes; it does *not* require
+that the extractor found any real transactions first. Categoría/comercio are auto-assigned by
+the same `categorizar()` call as any extracted row (no separate manual-override field — if you
+need different categorization, add/edit a rule instead, same as for extracted rows). `pagina`
+defaults to `0` and `linea_cruda` is built as `f"(manual) {fecha} | {descripcion} | {monto} |
+{tipo}"` — distinct per entry so it can't collide with a real extracted line, and unique enough
+across manual entries in the same document to not collide with each other on the sync upsert's
+`(documento_id, pagina, linea_cruda)` constraint. The row is a plain `TransaccionCanonica`
+appended to `self.transacciones`, so it flows through totals/validation/export/sync identically
+to an extracted one — no special-casing anywhere downstream.
+
 The app can be packaged as a standalone `.exe` via `DashboardFinanciero.spec` (PyInstaller,
 `--windowed`, icon from `app/icono.ico` — see README's "Empaquetar como ejecutable"). Build deps
 (pyinstaller, pillow) live in `requirements-dev.txt`, not `requirements.txt` — they're not needed
