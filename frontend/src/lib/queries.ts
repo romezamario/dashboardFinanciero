@@ -24,8 +24,27 @@ export interface Filtros {
 /** Nombre de categoría que usa el resto del código para "sin categoría". */
 export const SIN_CATEGORIA = "Sin categoría";
 
-function categoriaDe(t: Transaccion): string {
+export function categoriaDe(t: Transaccion): string {
   return t.categorias?.nombre ?? SIN_CATEGORIA;
+}
+
+/**
+ * Quita del set por completo cualquier transacción cuya categoría esté en
+ * `categoriasOcultas` -- a diferencia de `aplicarFiltros` (que AISLA una
+ * sola categoría, estilo Power BI "clic para filtrar"), esto es lo inverso:
+ * varias categorías a la vez, escondidas de TODO (KPIs, gráficas, tabla),
+ * incluyendo su propia gráfica de origen (Gasto por categoría no debe
+ * seguir mostrando una barra que el usuario pidió ocultar). Se aplica antes
+ * que `aplicarFiltros` en `Dashboard`, como un filtro previo sobre qué
+ * datos existen para el resto del dashboard, no como una dimensión más del
+ * cross-filter.
+ */
+export function ocultarCategorias(
+  transacciones: Transaccion[],
+  categoriasOcultas: Set<string>
+): Transaccion[] {
+  if (categoriasOcultas.size === 0) return transacciones;
+  return transacciones.filter((t) => !categoriasOcultas.has(categoriaDe(t)));
 }
 
 /**

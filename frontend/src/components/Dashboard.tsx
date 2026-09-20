@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   agruparGastoPorCategoria,
   agruparGastoPorComercio,
   agruparIngresosGastosPorMes,
   aplicarFiltros,
   calcularTotales,
+  categoriaDe,
   obtenerTransacciones,
+  ocultarCategorias,
   type Filtros,
 } from "../lib/queries";
 import type { Transaccion } from "../lib/types";
@@ -28,6 +30,7 @@ export function Dashboard() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filtros, setFiltros] = useState<Filtros>({});
+  const [categoriasOcultas, setCategoriasOcultas] = useState<Set<string>>(new Set());
 
   async function recargarTransacciones() {
     try {
@@ -41,6 +44,16 @@ export function Dashboard() {
   useEffect(() => {
     recargarTransacciones().finally(() => setCargando(false));
   }, []);
+
+  // Todas las categorías que existen, sin importar si están ocultas -- así
+  // el control de "Ocultar categorías" no pierde de vista una categoría una
+  // vez que el usuario la esconde (si derivara de la lista ya filtrada,
+  // ocultar la última categoría visible la haría desaparecer del propio
+  // control para volver a mostrarla).
+  const categoriasConocidas = useMemo(
+    () => Array.from(new Set(transacciones.map(categoriaDe))).sort(),
+    [transacciones]
+  );
 
   if (cargando) {
     return (
@@ -60,23 +73,29 @@ export function Dashboard() {
     );
   }
 
+  // Categorías ocultas se quitan de raíz antes de todo lo demás -- a
+  // diferencia del cross-filter (que aísla UNA categoría a la vez sin
+  // tocar las demás gráficas), esto elimina varias categorías del dashboard
+  // entero, incluida su propia gráfica de origen.
+  const transaccionesVisibles = ocultarCategorias(transacciones, categoriasOcultas);
+
   // Cross-filter estilo Power BI: cada gráfica se calcula excluyendo su
   // propia dimensión (para poder seguir viendo/cambiando su selección) pero
   // respetando las demás -- así un clic en una gráfica filtra a las otras.
-  const transaccionesFiltradas = aplicarFiltros(transacciones, filtros);
+  const transaccionesFiltradas = aplicarFiltros(transaccionesVisibles, filtros);
   const ingresosGastos = agruparIngresosGastosPorMes(
-    aplicarFiltros(transacciones, filtros, "mes")
+    aplicarFiltros(transaccionesVisibles, filtros, "mes")
   );
   const gastoPorCategoria = agruparGastoPorCategoria(
-    aplicarFiltros(transacciones, filtros, "categoria")
+    aplicarFiltros(transaccionesVisibles, filtros, "categoria")
   );
   const gastoPorComercio = agruparGastoPorComercio(
-    aplicarFiltros(transacciones, filtros, "comercio")
+    aplicarFiltros(transaccionesVisibles, filtros, "comercio")
   );
 
   // El saldo actual es un hecho de la cuenta, no una suma que deba
-  // encogerse al filtrar por mes/categoría -- siempre viene del set
-  // completo. Ingresos/gastos del mes sí responden a los filtros.
+  // encogerse al filtrar/ocultar -- siempre viene del set completo.
+  // Ingresos/gastos del mes sí responden a los filtros y a lo oculto.
   const { saldoActual } = calcularTotales(transacciones);
   const { ingresosMes, gastosMes } = calcularTotales(transaccionesFiltradas);
 
@@ -86,6 +105,31 @@ export function Dashboard() {
         ? { ...anterior, [campo]: undefined }
         : { ...anterior, [campo]: valor }
     );
+  }
+
+  function alternarCategoriaOculta(categoria: string) {
+    setCategoriasOcultas((anterior) => {
+      const siguiente = new Set(anterior);
+      if (siguiente.has(categoria)) siguiente.delete(categoria);
+      else siguiente.add(categoria);
+      return siguiente;
+    });
+    // Evita el estado contradictorio de aislar por clic una categoría que
+    // al mismo tiempo se acaba de ocultar (o viceversa).
+    if (filtros.categoria === categoria) {
+      setFiltros((anterior) => ({ ...anterior, categoria: undefined }));
+    }
+  }
+
+  function seleccionarCategoria(categoria: string) {
+    if (categoriasOcultas.has(categoria)) {
+      setCategoriasOcultas((anterior) => {
+        const siguiente = new Set(anterior);
+        siguiente.delete(categoria);
+        return siguiente;
+      });
+    }
+    alternarFiltro("categoria", categoria);
   }
 
   const hayFiltrosActivos = Object.values(filtros).some(Boolean);
@@ -147,6 +191,42 @@ export function Dashboard() {
               </div>
             )}
 
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                Ocultar categorías:
+              </span>
+              {categoriasConocidas.map((categoria) => {
+                const oculta = categoriasOcultas.has(categoria);
+                return (
+                  <button
+                    key={categoria}
+                    onClick={() => alternarCategoriaOculta(categoria)}
+                    className="rounded-full px-3 py-1 text-xs font-medium"
+                    style={{
+                      background: "var(--surface-1)",
+                      border: `1px solid ${
+                        oculta ? "var(--status-critical)" : "var(--border)"
+                      }`,
+                      color: oculta ? "var(--status-critical)" : "var(--text-secondary)",
+                      textDecoration: oculta ? "line-through" : "none",
+                    }}
+                    title={oculta ? "Mostrar de nuevo" : "Ocultar esta categoría"}
+                  >
+                    {categoria}
+                  </button>
+                );
+              })}
+              {categoriasOcultas.size > 0 && (
+                <button
+                  onClick={() => setCategoriasOcultas(new Set())}
+                  className="text-xs underline"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Mostrar todas
+                </button>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <StatTile label="Saldo actual" value={saldoActual} />
               <StatTile label="Ingresos del mes" value={ingresosMes} tone="good" />
@@ -163,7 +243,7 @@ export function Dashboard() {
               <GastoPorCategoriaChart
                 datos={gastoPorCategoria}
                 categoriaSeleccionada={filtros.categoria}
-                onClickCategoria={(categoria) => alternarFiltro("categoria", categoria)}
+                onClickCategoria={seleccionarCategoria}
               />
               <GastoPorComercioChart
                 datos={gastoPorComercio}

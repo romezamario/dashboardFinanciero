@@ -251,6 +251,25 @@ via per-bar `<Cell fillOpacity>` rather than being hidden, so the full shape of 
 visible while showing what's filtered. The "Otros" fold in `GastoPorCategoriaChart` (categories
 past the top 8) is explicitly not clickable — it has no single real category name to filter by.
 
+**Hide categories (the inverse of cross-filter, added 2026-09-20)**: the "Ocultar categorías" pill
+row (right under the active-filter chips, above the KPIs) is deliberately a *separate* mechanism
+from `filtros.categoria`, not another value it can hold — cross-filter *isolates* exactly one
+category everywhere except its own chart (so you can still see and switch to another); hiding
+*removes* however many categories you pick from the whole dashboard, including their own chart
+(`Gasto por categoría` shouldn't keep showing a bar for something you just asked to hide). Backed
+by `categoriasOcultas: Set<string>` state in `Dashboard` and `queries.ts`'s
+`ocultarCategorias(transacciones, categoriasOcultas)`, applied *before* `aplicarFiltros` in the
+pipeline — everything downstream (KPIs except `saldoActual`, every chart, the table) computes off
+that already-narrowed set, not off the raw `transacciones`. The pill list itself is derived from
+the *raw* `transacciones` (`categoriasConocidas`, unaffected by hiding) so a category doesn't
+disappear from its own toggle once you hide it — otherwise there'd be no way to click it again to
+bring it back. The two mechanisms can contradict each other (isolate category X while also hiding
+X), so `alternarCategoriaOculta`/`seleccionarCategoria` cross-clear: hiding a category that's
+currently isolated clears the isolation, and clicking a chart bar for a category that's currently
+hidden un-hides it first. `EditorTransacciones`'s search is deliberately exempt from hiding (still
+receives raw `transacciones`) — hiding is a *view* preference, not a restriction on what you can
+find and bulk-edit.
+
 **Removed: `TendenciaSaldoChart` / filtering by `cuenta`** (2026-09-20, user's explicit request,
 no risk flagged — it was a straightforward swap, not a correction of a bug). It plotted one line
 per account's running `saldo` over time and was the *only* UI source of the `cuenta` filter

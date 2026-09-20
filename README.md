@@ -299,6 +299,16 @@ reduce qué categorías/comercios aparecen en las demás. La categoría "Otros" 
 categoría plegada) no es clicable — agrupa varias categorías reales, no hay un solo nombre que
 filtrar.
 
+**Ocultar categorías (lo inverso del cross-filter)**: la fila de chips "Ocultar categorías:"
+arriba de los KPIs deja quitar una o varias categorías de *todo* el dashboard a la vez —
+distinto de dar clic en una barra, que aísla una sola categoría sin tocar las demás. Clic en una
+categoría la tacha y la quita de todos lados (incluida su propia gráfica de Gasto por categoría);
+clic otra vez la regresa. "Mostrar todas" limpia todo lo oculto de un golpe. Si tenías una
+categoría aislada por clic y la ocultas (o viceversa), el otro filtro se quita solo para no
+quedar en un estado contradictorio. El editor de categoría/comercio en lote no respeta lo
+oculto — sigue buscando sobre todas las transacciones, porque ocultar es una preferencia de
+vista, no una restricción de qué puedes editar.
+
 Todas las consultas van sin filtrar por `user_id` explícitamente — las políticas de RLS ya
 garantizan que cada usuario solo ve sus propias filas, así que el filtro nunca depende de que el
 frontend "se porte bien".
