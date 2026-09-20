@@ -79,3 +79,16 @@ class BaseParser(ABC):
         (la app cae en la selección manual del dropdown para este banco).
         """
         return False
+
+    def advertencias(self) -> list[str]:
+        """Avisos no fatales sobre la última llamada a `extraer()` — por
+        ejemplo, una línea que por su posición/formato parece ser una
+        transacción pero cuyo contenido no se pudo leer completo (un caso
+        real: una fila de "abono" renderizada como imagen en vez de texto
+        seleccionable, así que no hay nada que este extractor pueda parsear
+        ahí). No es un error — `extraer()` sigue devolviendo todo lo que sí
+        pudo leer — es una pista para que el usuario la revise a mano contra
+        el PDF antes de confiar en la validación de totales. Implementación
+        por defecto: ninguna advertencia.
+        """
+        return []

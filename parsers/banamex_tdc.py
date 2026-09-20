@@ -52,6 +52,17 @@ PATRON_TRANSACCION = re.compile(
     r"(?P<signo>[+-])\s*\$\s*(?P<monto>[\d,]+\.\d{2})\s*$"
 )
 
+# Mismo prefijo que PATRON_TRANSACCION pero sin exigir el resto de la línea
+# -- para detectar filas que SÍ son una transacción (traen las dos fechas)
+# pero cuyo concepto/monto no se pudo leer como texto. Visto en un estado de
+# cuenta real: una fila de "abono" (pago recibido) se imprime destacada y
+# pdfplumber solo extrae las dos fechas, nada más -- el resto de esa fila
+# es una imagen, no texto seleccionable. No hay forma de recuperar el monto
+# desde extract_text() en ese caso; ver `advertencias()`.
+PATRON_PREFIJO_FECHAS = re.compile(
+    r"^\d{2}-[a-zA-Z]{3}-\d{4}\s+\d{2}-[a-zA-Z]{3}-\d{4}"
+)
+
 # Portada: "Estado de Cuenta Platino" — el tipo de tarjeta como alias.
 PATRON_ALIAS = re.compile(r"^Estado de Cuenta\s+([A-Za-zÁÉÍÓÚáéíóú]+)\s*$")
 
@@ -72,8 +83,12 @@ def _a_decimal(texto: str) -> Decimal:
 class BanamexTdcParser(BaseParser):
     nombre_banco = "Banamex TDC"
 
+    def __init__(self) -> None:
+        self._advertencias: list[str] = []
+
     def extraer(self, ruta_pdf: Path) -> list[RenglonCrudo]:
         renglones: list[RenglonCrudo] = []
+        self._advertencias = []
 
         with pdfplumber.open(ruta_pdf) as pdf:
             for numero_pagina, pagina in enumerate(pdf.pages, start=1):
@@ -85,6 +100,13 @@ class BanamexTdcParser(BaseParser):
 
                     coincidencia = PATRON_TRANSACCION.match(linea)
                     if not coincidencia:
+                        if PATRON_PREFIJO_FECHAS.match(linea):
+                            self._advertencias.append(
+                                f"Página {numero_pagina}: fila con fecha de "
+                                f"transacción pero sin concepto/monto legible "
+                                f"(probablemente texto renderizado como imagen "
+                                f"en el PDF) — revísala a mano: {linea!r}"
+                            )
                         continue
 
                     try:
@@ -111,6 +133,9 @@ class BanamexTdcParser(BaseParser):
                     )
 
         return renglones
+
+    def advertencias(self) -> list[str]:
+        return list(self._advertencias)
 
     def _normalizar_fecha(self, fecha_dd_mon_aaaa: str) -> str | None:
         partes = fecha_dd_mon_aaaa.split("-")
@@ -154,13 +179,20 @@ class BanamexTdcParser(BaseParser):
     def puede_procesar(self, ruta_pdf: Path) -> bool:
         # OJO: "Número de tarjeta" NO sirve como marcador -- la cuenta de
         # cheques también trae uno ("Número de Tarjeta de Débito", ver
-        # banamex.py) y ambos documentos dicen "BANAMEX". "Pago mínimo" sí
-        # es exclusivo de un estado de cuenta de tarjeta de crédito.
+        # banamex.py). Tampoco condicionamos a que además diga "BANAMEX" en
+        # texto plano: el logo de portada es una imagen, y en un estado de
+        # cuenta real de TDC "BANAMEX" no aparece como texto seleccionable
+        # en ninguna de las primeras páginas (a diferencia de la cuenta de
+        # cheques, que sí lo trae en conceptos como "CREDITO NOMINA
+        # BANAMEX") -- exigirlo aquí causaba que la detección automática
+        # nunca disparara. "Pago mínimo" por sí solo ya es exclusivo de un
+        # estado de cuenta de tarjeta de crédito (la cuenta de cheques no lo
+        # trae), así que basta como único marcador.
         try:
             with pdfplumber.open(ruta_pdf) as pdf:
                 for pagina in pdf.pages[:2]:
                     texto = pagina.extract_text() or ""
-                    if "BANAMEX" in texto.upper() and PATRON_PAGO_MINIMO.search(texto):
+                    if PATRON_PAGO_MINIMO.search(texto):
                         return True
         except Exception:  # noqa: BLE001 — un PDF ilegible simplemente no matchea
             return False

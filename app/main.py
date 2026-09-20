@@ -447,6 +447,11 @@ class App(tk.Tk):
         except Exception:  # noqa: BLE001 — nunca debe tumbar la carga de transacciones
             alias_detectado, ultimos_4_detectados = None, None
 
+        try:
+            advertencias_extraccion = parser.advertencias()
+        except Exception:  # noqa: BLE001 — nunca debe tumbar la carga de transacciones
+            advertencias_extraccion = []
+
         if alias_detectado:
             self.entrada_alias_cuenta.delete(0, "end")
             self.entrada_alias_cuenta.insert(0, alias_detectado)
@@ -488,6 +493,8 @@ class App(tk.Tk):
             resumen += " · no se detectó la cuenta automáticamente, complétala a mano"
         if anio_detectado_automaticamente:
             resumen += f" · año detectado del PDF: {anio_usado}"
+        if advertencias_extraccion:
+            resumen += f" — {len(advertencias_extraccion)} posible(s) transacción(es) no capturada(s), revisa el PDF"
         self.etiqueta_resumen.config(text=resumen)
         self.etiqueta_validacion.config(text="")
         self.boton_guardar.config(state="normal")
@@ -499,6 +506,19 @@ class App(tk.Tk):
             messagebox.showwarning(
                 "Renglones no interpretados",
                 f"{len(fallidas)} renglón(es) no se pudieron normalizar:\n\n{detalle}",
+            )
+
+        if advertencias_extraccion:
+            detalle_advertencias = "\n".join(f"- {a}" for a in advertencias_extraccion[:10])
+            messagebox.showwarning(
+                "Posibles transacciones no capturadas",
+                f"{len(advertencias_extraccion)} línea(s) del PDF parecen ser una "
+                "transacción pero no se pudo leer su contenido completo (a veces el "
+                "banco imprime una fila destacada, como un pago recibido, usando una "
+                "imagen en vez de texto seleccionable). No se pueden agregar "
+                "automáticamente: revísalas contra el PDF impreso y, si corresponde, "
+                "captúralas a mano antes de validar el total.\n\n"
+                f"{detalle_advertencias}",
             )
 
     def recategorizar(self) -> None:

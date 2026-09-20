@@ -92,10 +92,16 @@ need to implement them:
   and last-4-digits off the cover page so the user doesn't retype them per statement (see the
   "Account info" bullet under Sincronizador below for the hard rule on never keeping the full
   account number in memory past the `[-4:]` slice).
+- `advertencias() -> list[str]` — non-fatal warnings about the *last* `extraer()` call, e.g. a
+  line that structurally looks like a transaction (right position, right prefix) but whose
+  content couldn't be read as text (see the "row rendered as an image" lesson under
+  `parsers/banamex_tdc.py` below). `App.cargar_pdf` surfaces these in the load summary and a
+  messagebox so the user knows to check that row by hand — it's a hint, not a recovery mechanism;
+  nothing gets reconstructed automatically.
 
-Both hooks are best-effort: on no match/exception they return the "unsupported" sentinel and the
-app silently falls back to whatever the user already has in the manual fields — never a hard
-failure, never a silently wrong guess presented as certain.
+All three hooks are best-effort: on no match/exception they return the "unsupported"/empty
+sentinel and the app silently falls back to whatever the user already has in the manual fields —
+never a hard failure, never a silently wrong guess presented as certain.
 
 **Lessons from writing `parsers/banamex.py`, worth checking before writing any new bank parser:**
 - `pagina.extract_tables()` is not reliable — some banks' PDFs look like ruled tables visually but
@@ -126,6 +132,28 @@ statement from a bank you already support will look anything like the first one:
   no cover-page year detection needed here, unlike the checking account. Converted to `DD/MM/AAAA`
   via a small `MESES` lookup (`strptime`'s `%b` is locale-dependent and would need the system
   locale set to Spanish to parse "jun" — don't rely on it).
+- **`puede_procesar` must not require "BANAMEX" as plain text**: the first version gated on
+  "BANAMEX" **and** "PAGO MÍNIMO" both appearing in the first 2 pages (mirroring the checking
+  parser's pattern) — but confirmed against a real TDC statement, "BANAMEX" never appears as
+  selectable text on those pages at all (the cover-page logo is an image; unlike the checking
+  account, this statement doesn't repeat the bank name in any transaction concept either), so
+  auto-detection silently never fired and the user had to pick the bank manually every time.
+  Fixed by dropping the "BANAMEX" requirement — "PAGO MÍNIMO" alone is already exclusive to a
+  credit-card statement (the checking account has no minimum-payment concept), so it's a
+  sufficient marker on its own. Lesson: don't assume a marker that worked for one Banamex
+  document type transfers to another — verify against the real anonymized dump, not just what
+  seems structurally similar.
+- **A transaction row can be visually present but textually unrecoverable**: confirmed on a real
+  statement — an "abono" (payment received) row prints in bold as a highlighted confirmation line
+  ("SU ABONO...GRACIAS"), and `extract_text()` only picks up the row's two leading dates; the
+  concept and amount are rendered as an image, not selectable text, so there is nothing for a
+  regex to match — the amount genuinely cannot be recovered from `extract_text()`. Added
+  `PATRON_PREFIJO_FECHAS` + `BaseParser.advertencias()` (new optional hook, default `[]`, same
+  best-effort pattern as `puede_procesar`/`extraer_info_cuenta`) so a line matching the two-date
+  prefix but not the full transaction pattern gets surfaced as a warning instead of silently
+  vanishing — `App.cargar_pdf` shows it in the resumen and a messagebox so the user knows to
+  capture that row by hand before trusting `validar_contra_total`. This is the general escape
+  hatch for "PDF renders this row as an image" cases in any future parser, not just this one.
 
 The app can be packaged as a standalone `.exe` via `DashboardFinanciero.spec` (PyInstaller,
 `--windowed`, icon from `app/icono.ico` — see README's "Empaquetar como ejecutable"). Build deps
