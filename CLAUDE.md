@@ -221,11 +221,19 @@ unrelated commits:
 - `.github/workflows/db-migrate.yml` — triggers on `supabase/migrations/**`. Applies pending Supabase migrations.
 - `.github/workflows/deploy.yml` — triggers on `frontend/**`. Builds the frontend and deploys to
   Cloudflare Pages via `wrangler pages deploy`, using secrets `CLOUDFLARE_API_TOKEN`,
-  `CLOUDFLARE_ACCOUNT_ID`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`. A `pages project create`
-  step runs first with `continue-on-error: true` — current Wrangler no longer auto-creates the
-  Pages project on first deploy (it used to; that's now a hard error: "The Pages project ...
-  does not exist"), so this step creates it once and then harmlessly "fails" (already exists)
-  on every subsequent run.
+  `CLOUDFLARE_ACCOUNT_ID`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`. Assumes the
+  `dashboard-financiero` Pages project already exists (it does, in production) — current Wrangler
+  doesn't auto-create it on first deploy the way older versions did (a hard error: "The Pages
+  project ... does not exist"). Two things were tried and reverted here, worth knowing before
+  re-attempting either: a bare `pages project create` step failed outright once the project
+  existed (no `continue-on-error`, so it blocked the real deploy step every run); a variant that
+  first grep'd `wrangler pages project list --json` to skip creation when already present also
+  failed in CI — the grep didn't reliably match the real API response shape, and by the time
+  that surfaces the project already exists in production, so it's not worth re-diagnosing without
+  live credentials to test against. If the project is ever deleted and needs recreating, run
+  `npx wrangler pages project create dashboard-financiero --production-branch=main` locally by
+  hand (with `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` in the environment) before pushing —
+  don't put creation logic back in the workflow without a way to verify it against a real account.
 
 Both workflows pin action versions that run natively on Node 24 (`actions/checkout@v5`,
 `actions/setup-node@v5`, `supabase/setup-cli@v3`, `cloudflare/wrangler-action@v4`) — when bumping

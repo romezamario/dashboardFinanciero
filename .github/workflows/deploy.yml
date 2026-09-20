@@ -34,20 +34,6 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
-      - name: Crear el proyecto de Cloudflare Pages si no existe
-        # `wrangler pages deploy` ya no lo crea solo en el primer deploy
-        # (comportamiento viejo que documentamos mal) -- hay que crearlo
-        # aparte. Revisa primero si ya existe (wrangler-action no soporta
-        # lógica condicional en su `command`, por eso wrangler se corre
-        # directo aquí en vez de vía la action).
-        working-directory: frontend
-        run: |
-          npx wrangler pages project list --json | grep -q '"name": *"dashboard-financiero"' \
-            || npx wrangler pages project create dashboard-financiero --production-branch=main
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
       - name: Deploy a Cloudflare Pages
         uses: cloudflare/wrangler-action@v4
         with:
