@@ -154,16 +154,20 @@ class BanamexParser(BaseParser):
         return alias, ultimos_4
 
     def puede_procesar(self, ruta_pdf: Path) -> bool:
-        # "BANAMEX" aparece de forma confiable en los conceptos de
-        # transacción reales (CREDITO NOMINA BANAMEX, ABONO/NOMINA...
-        # BANAMEX NOMINA, etc.) desde la página 2 en adelante — el logo de
-        # la portada (página 1) es una imagen, no texto seleccionable, así
-        # que no basta con mirar solo la primera página.
+        # "BANAMEX" solo no alcanza: Banamex también emite estados de
+        # cuenta de tarjeta de crédito (ver parsers/banamex_tdc.py), que
+        # también dicen "BANAMEX" en algún lado, así que ese solo causaría
+        # ambigüedad entre los dos extractores. "FECHA CONCEPTO RETIROS"
+        # es el encabezado de la tabla de movimientos de la cuenta de
+        # cheques -- la TDC no lo trae (su detalle de operaciones no tiene
+        # esas columnas). El logo de la portada (página 1) es una imagen,
+        # no texto seleccionable, así que no basta con mirar solo esa página.
         try:
             with pdfplumber.open(ruta_pdf) as pdf:
                 for pagina in pdf.pages[:3]:
                     texto = pagina.extract_text() or ""
-                    if "BANAMEX" in texto.upper():
+                    texto_mayus = texto.upper()
+                    if "BANAMEX" in texto_mayus and "FECHA CONCEPTO RETIROS" in texto_mayus:
                         return True
         except Exception:  # noqa: BLE001 — un PDF ilegible simplemente no matchea
             return False

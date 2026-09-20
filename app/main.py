@@ -29,6 +29,7 @@ from parsers._anonimizador import anonimizar
 from parsers.base import BaseParser, RenglonCrudo
 from parsers.ejemplo import EjemploParser
 from parsers.banamex import BanamexParser
+from parsers.banamex_tdc import BanamexTdcParser
 from transform.categorizador import Regla, cargar_reglas, categorizar, guardar_reglas
 from transform.transformador import (
     TransaccionCanonica,
@@ -45,6 +46,7 @@ CARPETA_ERRORES = RAIZ / "data" / "errores"
 PARSERS: dict[str, type[BaseParser]] = {
     "Ejemplo": EjemploParser,
     "Banamex": BanamexParser,
+    "Banamex TDC": BanamexTdcParser,
 }
 
 COLUMNAS = ("pagina", "fecha", "descripcion", "monto", "tipo", "categoria", "origen")

@@ -1,0 +1,167 @@
+"""Extractor para estados de cuenta de Tarjeta de Crédito Banamex (ej. TDC
+Platino) — un documento estructuralmente distinto al de la cuenta de
+cheques (`parsers/banamex.py`), aunque sea el mismo banco.
+
+Diferencias clave frente a la cuenta de cheques:
+
+  - NO hay columna de saldo corriente por transacción, así que el truco de
+    "delta de saldo" para inferir cargo/abono (ver banamex.py) no aplica
+    aquí — hay que confiar en el signo que imprime el estado de cuenta.
+  - Cada transacción es UNA sola línea (fecha compra, fecha aplicación,
+    concepto, referencia, signo, monto) — no hay bloques multi-línea que
+    agrupar ni transacciones partidas entre páginas.
+  - El año SÍ viene impreso en cada renglón (formato "DD-mon-AAAA", mes
+    abreviado en minúsculas) — a diferencia de la cuenta de cheques, aquí
+    no hace falta detectarlo aparte ni pedirlo por parámetro.
+
+Estructura real (confirmada con datos anonimizados de un estado de cuenta
+real): "DD-mon-AAAA DD-mon-AAAA CONCEPTO...REFERENCIA +$MONTO" — la primera
+fecha es la fecha de compra, la segunda la fecha de aplicación al estado de
+cuenta; usamos la de compra como fecha de la transacción.
+
+CONVENCIÓN DE SIGNO (mejor esfuerzo, sin un renglón "-" real para
+verificar — pídele al usuario que confirme la primera vez que use esto):
+"+" en el PDF = cargo (una compra, aumenta lo que debes) → monto_texto
+negativo. "-" en el PDF = abono (un pago, reduce lo que debes) →
+monto_texto positivo. Es la interpretación estándar de un estado de cuenta
+de tarjeta de crédito, pero si algún pago real sale clasificado al revés,
+hay que invertir `_signo_a_tipo`.
+"""
+
+from __future__ import annotations
+
+import re
+from decimal import Decimal, InvalidOperation
+from pathlib import Path
+
+import pdfplumber
+
+from parsers.base import BaseParser, RenglonCrudo
+
+MESES = {
+    "ene": "01", "feb": "02", "mar": "03", "abr": "04",
+    "may": "05", "jun": "06", "jul": "07", "ago": "08",
+    "sep": "09", "oct": "10", "nov": "11", "dic": "12",
+}
+
+# "DD-mon-AAAA DD-mon-AAAA CONCEPTO...REFERENCIA +$1,234.56"
+PATRON_TRANSACCION = re.compile(
+    r"^(?P<fecha_compra>\d{2}-[a-zA-Z]{3}-\d{4})\s+"
+    r"(?P<fecha_aplicacion>\d{2}-[a-zA-Z]{3}-\d{4})\s+"
+    r"(?P<concepto>.+?)\s+"
+    r"(?P<signo>[+-])\s*\$\s*(?P<monto>[\d,]+\.\d{2})\s*$"
+)
+
+# Portada: "Estado de Cuenta Platino" — el tipo de tarjeta como alias.
+PATRON_ALIAS = re.compile(r"^Estado de Cuenta\s+([A-Za-zÁÉÍÓÚáéíóú]+)\s*$")
+
+# "Número de tarjeta: 0 0 0000000000000000" (u otra separación) — nos
+# quedamos solo con los últimos 4 del run de dígitos más largo de la línea.
+PATRON_LINEA_TARJETA = re.compile(r"n[uú]mero de tarjeta", re.IGNORECASE)
+
+# "Pago mínimo" es específico de un estado de cuenta de TDC -- la cuenta de
+# cheques no lo trae. Acepta con y sin acento por si pdfplumber no extrae
+# bien el carácter según la fuente del PDF.
+PATRON_PAGO_MINIMO = re.compile(r"pago\s+m[ií]nimo", re.IGNORECASE)
+
+
+def _a_decimal(texto: str) -> Decimal:
+    return Decimal(texto.replace(",", ""))
+
+
+class BanamexTdcParser(BaseParser):
+    nombre_banco = "Banamex TDC"
+
+    def extraer(self, ruta_pdf: Path) -> list[RenglonCrudo]:
+        renglones: list[RenglonCrudo] = []
+
+        with pdfplumber.open(ruta_pdf) as pdf:
+            for numero_pagina, pagina in enumerate(pdf.pages, start=1):
+                texto = pagina.extract_text() or ""
+                for linea in texto.splitlines():
+                    linea = linea.strip()
+                    if not linea:
+                        continue
+
+                    coincidencia = PATRON_TRANSACCION.match(linea)
+                    if not coincidencia:
+                        continue
+
+                    try:
+                        monto = _a_decimal(coincidencia.group("monto"))
+                    except InvalidOperation:
+                        continue
+
+                    signo_pdf = coincidencia.group("signo")
+                    # Ver convención de signo en el docstring del módulo.
+                    monto_texto = f"-{monto}" if signo_pdf == "+" else str(monto)
+
+                    fecha_texto = self._normalizar_fecha(coincidencia.group("fecha_compra"))
+                    if fecha_texto is None:
+                        continue
+
+                    renglones.append(
+                        RenglonCrudo(
+                            fecha_texto=fecha_texto,
+                            descripcion_texto=coincidencia.group("concepto").strip(),
+                            monto_texto=monto_texto,
+                            pagina=numero_pagina,
+                            linea_cruda=linea,
+                        )
+                    )
+
+        return renglones
+
+    def _normalizar_fecha(self, fecha_dd_mon_aaaa: str) -> str | None:
+        partes = fecha_dd_mon_aaaa.split("-")
+        if len(partes) != 3:
+            return None
+        dia, mes_abrev, anio = partes
+        mes = MESES.get(mes_abrev.lower())
+        if mes is None:
+            return None
+        return f"{dia}/{mes}/{anio}"
+
+    def extraer_info_cuenta(self, ruta_pdf: Path) -> tuple[str | None, str | None]:
+        alias: str | None = None
+        ultimos_4: str | None = None
+
+        with pdfplumber.open(ruta_pdf) as pdf:
+            for pagina in pdf.pages[:3]:
+                texto = pagina.extract_text() or ""
+                for linea in texto.splitlines():
+                    linea = linea.strip()
+
+                    if alias is None:
+                        coincidencia = PATRON_ALIAS.match(linea)
+                        if coincidencia:
+                            alias = f"TDC {coincidencia.group(1)}"
+
+                    if ultimos_4 is None and PATRON_LINEA_TARJETA.search(linea):
+                        digitos = re.findall(r"\d+", linea)
+                        if digitos:
+                            numero_completo = max(digitos, key=len)
+                            if len(numero_completo) >= 4:
+                                ultimos_4 = numero_completo[-4:]
+                            # numero_completo no se guarda en ningún otro
+                            # lado ni se propaga fuera de este bloque.
+
+                if alias is not None and ultimos_4 is not None:
+                    return alias, ultimos_4
+
+        return alias, ultimos_4
+
+    def puede_procesar(self, ruta_pdf: Path) -> bool:
+        # OJO: "Número de tarjeta" NO sirve como marcador -- la cuenta de
+        # cheques también trae uno ("Número de Tarjeta de Débito", ver
+        # banamex.py) y ambos documentos dicen "BANAMEX". "Pago mínimo" sí
+        # es exclusivo de un estado de cuenta de tarjeta de crédito.
+        try:
+            with pdfplumber.open(ruta_pdf) as pdf:
+                for pagina in pdf.pages[:2]:
+                    texto = pagina.extract_text() or ""
+                    if "BANAMEX" in texto.upper() and PATRON_PAGO_MINIMO.search(texto):
+                        return True
+        except Exception:  # noqa: BLE001 — un PDF ilegible simplemente no matchea
+            return False
+        return False

@@ -144,9 +144,13 @@ dentro de la app para ver cómo pdfplumber lee tu PDF real, línea por línea �
 texto, no toca nada más.
 
 Para que ese banco se detecte solo (en vez de tener que elegirlo del dropdown), sobreescribe
-también `puede_procesar(ruta_pdf) -> bool` — una heurística barata y conservadora (ej. buscar el
-nombre del banco en las primeras páginas, como hace `BanamexParser`). Opcional: sin ella, ese
-banco solo se puede seleccionar a mano.
+también `puede_procesar(ruta_pdf) -> bool` — una heurística barata y conservadora. Ojo: el nombre
+del banco solo no basta si ese banco tiene más de un tipo de documento (ver `BanamexParser` y
+`BanamexTdcParser`, que distinguen cuenta de cheques vs. tarjeta de crédito por un encabezado/
+término exclusivo de cada tipo de estado de cuenta, no solo por "BANAMEX"). Si agregas un segundo
+producto de un banco que ya tenías, revisa que el `puede_procesar` del extractor existente siga
+siendo suficientemente selectivo. Opcional: sin esta función, ese banco solo se puede seleccionar
+a mano.
 
 Flujo completo una vez que el extractor de tu banco existe:
 
@@ -156,11 +160,13 @@ Flujo completo una vez que el extractor de tu banco existe:
    PDF (`puede_procesar`) y usa el que matchee; si ninguno o más de uno matchean, cae de vuelta a
    lo que tengas seleccionado en el dropdown. El resumen te dice si el banco quedó "detectado" o
    "manual". Luego corre el extractor + Transformador + Categorizador y llena la tabla. Si el
-   extractor lo soporta (Banamex sí), también autocompleta **Alias de cuenta**, **Últimos 4
-   dígitos** y **Año** leyéndolos de la portada del PDF (el campo "Año" es solo el respaldo
-   manual si la detección falla — si el extractor sí lo encuentra, pisa lo que tenga escrito el
-   campo, incluso si quedó desactualizado de una carga anterior). Revisa estos datos antes de
-   guardar, el resumen avisa qué se detectó y qué hay que llenar a mano.
+   extractor lo soporta (Banamex cuenta de cheques y Banamex TDC, tarjeta de crédito, ambos sí),
+   también autocompleta **Alias de cuenta**, **Últimos 4 dígitos** y **Año** leyéndolos de la
+   portada del PDF (el campo "Año" es solo el respaldo manual si la detección falla — si el
+   extractor sí lo encuentra, pisa lo que tenga escrito el campo, incluso si quedó desactualizado
+   de una carga anterior; `BanamexTdcParser` no necesita este respaldo porque el año ya viene
+   impreso en cada renglón de la TDC). Revisa estos datos antes de guardar, el resumen avisa qué
+   se detectó y qué hay que llenar a mano.
 3. Revisa los renglones. Si algunos no se pudieron interpretar, la app te avisa con el detalle.
 4. **Validación de totales**: escribe el neto del periodo tal como lo imprime el estado de cuenta
    (saldo actual − saldo anterior) y da **Validar** — si no cuadra, hay algo mal parseado o un

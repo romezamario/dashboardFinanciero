@@ -74,13 +74,20 @@ the boundary it's on).
 **Auto-detection, so the user doesn't have to pick the bank manually**: `BaseParser` has two
 optional hooks, both defaulting to "unsupported" so old/simple parsers (`EjemploParser`) don't
 need to implement them:
-- `puede_procesar(ruta_pdf) -> bool` — a cheap, conservative check (e.g. `BanamexParser` searches
-  the first 3 pages' `extract_text()` for "BANAMEX", case-insensitive — the logo on page 1 is an
-  image, not selectable text, so page 1 alone isn't enough; the bank name shows up reliably in
-  transaction concepts like "CREDITO NOMINA BANAMEX" from page 2 on). `App._detectar_banco` tries
+- `puede_procesar(ruta_pdf) -> bool` — a cheap, conservative check. `App._detectar_banco` tries
   every registered parser's `puede_procesar` against the loaded PDF; if exactly one matches, that
   bank is used and the dropdown is updated to show it. Zero or multiple matches fall back to
   whatever the dropdown is currently set to (ambiguity always degrades to manual, never guesses).
+  **The bank name alone is not enough once an issuer has more than one document type**:
+  `BanamexParser` (checking) originally matched on bare "BANAMEX" in the first 3 pages, which
+  worked until `BanamexTdcParser` (credit card) was added — both documents say "BANAMEX"
+  somewhere, so that check alone made every Banamex PDF match both parsers (ambiguous, silently
+  losing auto-detection for both). Fixed by requiring a structural marker unique to each document
+  *type*, not just the issuer: checking requires "BANAMEX" **and** the transaction table header
+  "FECHA CONCEPTO RETIROS" (the TDC statement has no such column); TDC requires "BANAMEX" **and**
+  "PAGO MÍNIMO" (checking has no minimum-payment concept). When adding a second product for a
+  bank you've already written a parser for, go back and tighten that parser's `puede_procesar`
+  the same way — don't assume the existing check is still selective enough.
 - `extraer_info_cuenta(ruta_pdf) -> (alias, ultimos_4) | (None, None)` — reads the account alias
   and last-4-digits off the cover page so the user doesn't retype them per statement (see the
   "Account info" bullet under Sincronizador below for the hard rule on never keeping the full
@@ -104,6 +111,21 @@ failure, never a silently wrong guess presented as certain.
   closing amount+saldo line starts the next, no repeated date). Process the whole document as
   one flat stream of `(pagina, linea)` tuples, not per-page, or you'll silently drop or fork
   transactions at page breaks.
+
+**`parsers/banamex_tdc.py`** (Banamex credit card, e.g. TDC Platino) is a structurally different
+document from the checking account above, despite being the same bank — don't assume a second
+statement from a bank you already support will look anything like the first one:
+- No running-balance column per transaction at all, so the delta-of-saldo trick doesn't apply
+  here — this parser trusts the printed `+`/`-` sign directly. **Best-effort, not yet verified
+  against a real "-" (payment) row**: assumed `+` = cargo (compra, increases balance owed) and
+  `-` = abono (pago, decreases it) — the standard reading, but flag it to the user the first time
+  a real payment row appears in case it needs inverting in `extraer()`.
+- Each transaction is exactly one line (`fecha_compra fecha_aplicacion concepto +$monto`) — no
+  multi-line concept blocks to group, unlike the checking account's SPEI-transfer paragraphs.
+- The year rides along in every row's own date (`"DD-mon-AAAA"`, lowercase abbreviated month) —
+  no cover-page year detection needed here, unlike the checking account. Converted to `DD/MM/AAAA`
+  via a small `MESES` lookup (`strptime`'s `%b` is locale-dependent and would need the system
+  locale set to Spanish to parse "jun" — don't rely on it).
 
 The app can be packaged as a standalone `.exe` via `DashboardFinanciero.spec` (PyInstaller,
 `--windowed`, icon from `app/icono.ico` — see README's "Empaquetar como ejecutable"). Build deps
