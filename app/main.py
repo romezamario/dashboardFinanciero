@@ -49,7 +49,7 @@ PARSERS: dict[str, type[BaseParser]] = {
     "Banamex TDC": BanamexTdcParser,
 }
 
-COLUMNAS = ("pagina", "fecha", "descripcion", "monto", "tipo", "categoria", "origen")
+COLUMNAS = ("pagina", "fecha", "descripcion", "monto", "tipo", "categoria", "comercio", "origen")
 
 # Debe coincidir exactamente con la categoría de esa regla en
 # transform/reglas_categorizacion.json — así el panel de totales puede
@@ -72,10 +72,11 @@ class VentanaReglas(tk.Toplevel):
         self.reglas = list(master.reglas)
 
         self.tabla = ttk.Treeview(
-            self, columns=("patron", "categoria"), show="headings", height=12
+            self, columns=("patron", "categoria", "comercio"), show="headings", height=12
         )
         self.tabla.heading("patron", text="Patrón (en la descripción)")
         self.tabla.heading("categoria", text="Categoría")
+        self.tabla.heading("comercio", text="Comercio")
         self.tabla.pack(fill="both", expand=True, padx=8, pady=8)
         self._refrescar_tabla()
 
@@ -89,6 +90,10 @@ class VentanaReglas(tk.Toplevel):
         ttk.Label(marco_form, text="Categoría:").grid(row=1, column=0, sticky="w")
         self.entrada_categoria = ttk.Entry(marco_form)
         self.entrada_categoria.grid(row=1, column=1, sticky="ew", padx=4)
+
+        ttk.Label(marco_form, text="Comercio (opcional):").grid(row=2, column=0, sticky="w")
+        self.entrada_comercio = ttk.Entry(marco_form)
+        self.entrada_comercio.grid(row=2, column=1, sticky="ew", padx=4)
         marco_form.columnconfigure(1, weight=1)
 
         marco_botones = ttk.Frame(self)
@@ -106,19 +111,23 @@ class VentanaReglas(tk.Toplevel):
     def _refrescar_tabla(self) -> None:
         self.tabla.delete(*self.tabla.get_children())
         for regla in self.reglas:
-            self.tabla.insert("", "end", values=(regla.patron, regla.categoria))
+            self.tabla.insert(
+                "", "end", values=(regla.patron, regla.categoria, regla.comercio or "")
+            )
 
     def _agregar(self) -> None:
         patron = self.entrada_patron.get().strip()
         categoria = self.entrada_categoria.get().strip()
+        comercio = self.entrada_comercio.get().strip() or None
         if not patron or not categoria:
             messagebox.showwarning(
                 "Falta información", "Escribe un patrón y una categoría."
             )
             return
-        self.reglas.append(Regla(patron, categoria))
+        self.reglas.append(Regla(patron, categoria, comercio))
         self.entrada_patron.delete(0, "end")
         self.entrada_categoria.delete(0, "end")
+        self.entrada_comercio.delete(0, "end")
         self._refrescar_tabla()
 
     def _eliminar(self) -> None:
@@ -318,6 +327,7 @@ class App(tk.Tk):
             "monto": "Monto",
             "tipo": "Tipo",
             "categoria": "Categoría",
+            "comercio": "Comercio",
             "origen": "Estado de cuenta",
         }
         anchos = {
@@ -327,6 +337,7 @@ class App(tk.Tk):
             "monto": 90,
             "tipo": 70,
             "categoria": 130,
+            "comercio": 110,
             "origen": 160,
         }
         for col in COLUMNAS:
@@ -469,14 +480,13 @@ class App(tk.Tk):
             return
 
         transacciones, fallidas = transformar_renglones(renglones, formato_fecha)
-        transacciones = [
-            replace(
-                t,
-                categoria=categorizar(t.descripcion, self.reglas),
-                origen=ruta_pdf.name,
+        nuevas_transacciones = []
+        for t in transacciones:
+            categoria, comercio = categorizar(t.descripcion, self.reglas)
+            nuevas_transacciones.append(
+                replace(t, categoria=categoria, comercio=comercio, origen=ruta_pdf.name)
             )
-            for t in transacciones
-        ]
+        transacciones = nuevas_transacciones
 
         self.transacciones = transacciones
         self.ruta_pdf_actual = ruta_pdf
@@ -522,10 +532,11 @@ class App(tk.Tk):
             )
 
     def recategorizar(self) -> None:
-        self.transacciones = [
-            replace(t, categoria=categorizar(t.descripcion, self.reglas))
-            for t in self.transacciones
-        ]
+        nuevas_transacciones = []
+        for t in self.transacciones:
+            categoria, comercio = categorizar(t.descripcion, self.reglas)
+            nuevas_transacciones.append(replace(t, categoria=categoria, comercio=comercio))
+        self.transacciones = nuevas_transacciones
         self._refrescar_tabla()
         self._actualizar_totales()
 
@@ -543,6 +554,7 @@ class App(tk.Tk):
                     f"{t.monto:.2f}",
                     t.tipo,
                     categoria,
+                    t.comercio or "",
                     t.origen or "",
                 ),
             )
@@ -649,6 +661,7 @@ class App(tk.Tk):
                     "pagina": t.pagina,
                     "linea_cruda": t.linea_cruda,
                     "categoria": t.categoria,
+                    "comercio": t.comercio,
                     "origen": t.origen,
                 }
                 for t in self.transacciones

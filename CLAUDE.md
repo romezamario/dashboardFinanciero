@@ -39,6 +39,20 @@ split into `(monto, tipo)`, builds `TransaccionCanonica` with audit fields `pagi
 → `transform/categorizador.py` (keyword rules loaded from `transform/reglas_categorizacion.json`,
 gitignored — editable live from the app's "Reglas de categorización..." dialog, `VentanaReglas`)
 → user validates the sum against the statement's own declared total (`validar_contra_total`) →
+
+Each `Regla` maps a `patron` to both a `categoria` (required) and an optional `comercio` (e.g.
+pattern `"TELEVIA"` → categoria `"Transporte"`, comercio `"Televia"`) — `comercio` was added after
+`categoria` existed, so it defaults to `None` and older rules in `reglas_categorizacion.json`
+that predate it keep working unchanged. `categorizar()` returns `(categoria, comercio)` together
+since one keyword match should set both at once; `TransaccionCanonica.comercio` and the
+`transacciones.comercio` column follow the same "plain nullable text, no catalog/FK" pattern
+(deliberately simpler than `categoria`, which resolves through the `categorias` table) — chosen
+because merchant names don't need cross-account uniqueness or their own management UI the way
+categories do. Requested specifically for credit-card statements, where the raw description
+mixes merchant + reference number and a category alone ("Transporte") loses which specific
+merchant it was.
+
+
 "Guardar archivo procesado" writes `data/procesados/<sha256_del_pdf>.json` **and** moves the
 source PDF itself into a `procesados/` subfolder of whatever folder it was loaded from (e.g.
 `C:\...\00Estadosdecuenta\procesados\`, not the project's `data/procesados/` — that's only for
@@ -225,6 +239,9 @@ the GitHub Actions UI. It runs `supabase link` + `supabase db push` using three 
 
 Tables: `bancos` (shared catalog, no `user_id`, no RLS) and `cuentas`/`categorias`/`documentos`/
 `transacciones` (all RLS-scoped to `user_id = auth.uid()`, four policies each — select/insert/update/delete).
+`transacciones.comercio` (added in `20260920145914_add_comercio.sql`) is a plain nullable text
+column, not a catalog table with its own FK like `categoria_id` — see the `comercio` bullet in
+Architecture above for why that's the deliberate choice here.
 
 ## Sincronizador (`sync/sincronizador.py`)
 

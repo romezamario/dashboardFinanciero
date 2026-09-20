@@ -34,6 +34,11 @@ class TransaccionCanonica:
     `documento_id`, fk a `documentos`) — es el nombre del archivo PDF del
     que salió esta transacción, para distinguir renglones cuando la tabla
     de la app tiene más de un estado de cuenta cargado.
+
+    `comercio` sí es una columna real de `transacciones` (texto simple,
+    sin catálogo/FK propio — a diferencia de `categoria`), asignada por la
+    misma regla de categorización que asigna `categoria` (ver
+    `transform/categorizador.py`).
     """
 
     fecha: date
@@ -45,6 +50,7 @@ class TransaccionCanonica:
     moneda: str = "MXN"
     saldo: Decimal | None = None
     categoria: str | None = None
+    comercio: str | None = None
     origen: str | None = None
 
 

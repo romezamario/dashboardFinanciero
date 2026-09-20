@@ -173,6 +173,9 @@ Flujo completo una vez que el extractor de tu banco existe:
    renglón faltante antes de confiar en el resultado.
 5. **Reglas de categorización...** para agregar/editar/borrar reglas — se aplican de inmediato a
    la tabla ya cargada y se guardan en `transform/reglas_categorizacion.json` (no se sube a git).
+   Cada regla asigna una **Categoría** (obligatoria) y opcionalmente un **Comercio** (ej. patrón
+   "TELEVIA" → categoría "Transporte", comercio "Televia") — útil sobre todo en tarjeta de
+   crédito, donde la descripción cruda mezcla comercio y número de referencia.
 6. **Guardar archivo procesado** — escribe `data/procesados/<hash>.json` y mueve el PDF original a
    una subcarpeta `procesados/` dentro de la misma carpeta donde estaba (no la `data/procesados/`
    del proyecto, esa es para los JSON) — reutiliza esa carpeta si ya existe, y si el PDF ya está

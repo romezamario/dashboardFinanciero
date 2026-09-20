@@ -14,6 +14,7 @@ export interface Transaccion {
   monto: number;
   tipo: "cargo" | "abono";
   saldo: number | null;
+  comercio: string | null;
   categorias: { nombre: string } | null;
   documentos: {
     cuentas: {

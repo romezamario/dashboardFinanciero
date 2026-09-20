@@ -19,10 +19,17 @@ RUTA_REGLAS_POR_DEFECTO = Path(__file__).parent / "reglas_categorizacion.json"
 @dataclass(frozen=True)
 class Regla:
     """Si `patron` aparece en la descripción (sin importar mayúsculas), se
-    asigna `categoria`. Primera regla que matchea gana — el orden importa."""
+    asigna `categoria` y, si se definió, `comercio`. Primera regla que
+    matchea gana — el orden importa.
+
+    `comercio` es opcional (default None) a propósito: las reglas ya
+    existentes en `reglas_categorizacion.json` (creadas antes de que este
+    campo existiera) no lo traen, y deben seguir cargando sin error — solo
+    dejan `comercio` en None hasta que se edite la regla para agregarlo."""
 
     patron: str
     categoria: str
+    comercio: str | None = None
 
 
 def cargar_reglas(ruta: Path = RUTA_REGLAS_POR_DEFECTO) -> list[Regla]:
@@ -39,11 +46,13 @@ def guardar_reglas(reglas: list[Regla], ruta: Path = RUTA_REGLAS_POR_DEFECTO) ->
     ruta.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def categorizar(descripcion: str, reglas: list[Regla]) -> str | None:
-    """Devuelve la categoría de la primera regla cuyo patrón aparece en la
-    descripción (comparación insensible a mayúsculas), o None si ninguna aplica."""
+def categorizar(descripcion: str, reglas: list[Regla]) -> tuple[str | None, str | None]:
+    """Devuelve (categoria, comercio) de la primera regla cuyo patrón aparece
+    en la descripción (comparación insensible a mayúsculas), o (None, None)
+    si ninguna aplica. `comercio` puede venir en None aun si `categoria` no
+    lo está — no todas las reglas necesitan asignar un comercio."""
     descripcion_normalizada = descripcion.upper()
     for regla in reglas:
         if regla.patron.upper() in descripcion_normalizada:
-            return regla.categoria
-    return None
+            return regla.categoria, regla.comercio
+    return None, None

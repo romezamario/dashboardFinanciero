@@ -5,7 +5,7 @@ export async function obtenerTransacciones(): Promise<Transaccion[]> {
   const { data, error } = await supabase
     .from("transacciones")
     .select(
-      `id, fecha, descripcion, monto, tipo, saldo,
+      `id, fecha, descripcion, monto, tipo, saldo, comercio,
        categorias ( nombre ),
        documentos ( cuentas ( alias, bancos ( nombre ) ) )`
     )
