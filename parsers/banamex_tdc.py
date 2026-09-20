@@ -1,6 +1,8 @@
-"""Extractor para estados de cuenta de Tarjeta de Crédito Banamex (ej. TDC
-Platino) — un documento estructuralmente distinto al de la cuenta de
-cheques (`parsers/banamex.py`), aunque sea el mismo banco.
+"""Extractor para estados de cuenta de Tarjeta de Crédito Banamex (Platino,
+Beyond, y presumiblemente cualquier otro tier -- ver `TIPOS_TARJETA_CONOCIDOS`,
+confirmado que comparten el mismo formato de documento) — estructuralmente
+distinto al de la cuenta de cheques (`parsers/banamex.py`), aunque sea el
+mismo banco.
 
 Diferencias clave frente a la cuenta de cheques:
 
@@ -19,13 +21,12 @@ real): "DD-mon-AAAA DD-mon-AAAA CONCEPTO...REFERENCIA +$MONTO" — la primera
 fecha es la fecha de compra, la segunda la fecha de aplicación al estado de
 cuenta; usamos la de compra como fecha de la transacción.
 
-CONVENCIÓN DE SIGNO (mejor esfuerzo, sin un renglón "-" real para
-verificar — pídele al usuario que confirme la primera vez que use esto):
-"+" en el PDF = cargo (una compra, aumenta lo que debes) → monto_texto
-negativo. "-" en el PDF = abono (un pago, reduce lo que debes) →
-monto_texto positivo. Es la interpretación estándar de un estado de cuenta
-de tarjeta de crédito, pero si algún pago real sale clasificado al revés,
-hay que invertir `_signo_a_tipo`.
+CONVENCIÓN DE SIGNO: "+" en el PDF = cargo (una compra, aumenta lo que
+debes) → monto_texto negativo. "-" en el PDF = abono (un pago, reduce lo
+que debes) → monto_texto positivo. Confirmado contra un renglón "-" real
+(2026-09-20, estado de cuenta TDC Beyond): una fila "SU ABONO...<texto> -
+$X,XXX.XX" -- el signo "-" junto con la palabra "ABONO" en el concepto
+corrobora la convención tal como está implementada.
 """
 
 from __future__ import annotations
@@ -63,16 +64,24 @@ PATRON_PREFIJO_FECHAS = re.compile(
     r"^\d{2}-[a-zA-Z]{3}-\d{4}\s+\d{2}-[a-zA-Z]{3}-\d{4}"
 )
 
-# La portada dice "Estado de Cuenta Platino" (o a veces, según la fuente
-# del PDF, "Platinum" en inglés) -- en vez de depender de que esa línea
-# aparezca exacta y sola (frágil ante variaciones de espaciado/salto de
-# línea), buscamos "platino"/"platinum" en cualquier parte del texto de
-# la página y normalizamos siempre al mismo alias en español, sin importar
-# cuál de las dos grafías traiga el PDF real.
-PATRON_TARJETA_PLATINO = re.compile(r"platino|platinum", re.IGNORECASE)
+# La portada dice "Estado de Cuenta <Tipo>" (Platino, o a veces "Platinum"
+# en inglés según la fuente del PDF; también existe Beyond, confirmado con
+# un estado de cuenta real) -- en vez de depender de que esa línea aparezca
+# exacta y sola (frágil ante variaciones de espaciado/salto de línea),
+# buscamos cada palabra clave conocida en cualquier parte del texto de la
+# página y normalizamos siempre al mismo alias, sin importar la grafía
+# exacta que traiga el PDF real. Es una lista (orden = prioridad) para que
+# agregar un tipo de tarjeta nuevo en el futuro sea una línea, no reescribir
+# la lógica -- el mismo documento estructural (formato de transacción,
+# convención de signo, etc.) sirve para cualquier tier de TDC Banamex, así
+# que no hace falta una clase de parser separada por cada uno.
+TIPOS_TARJETA_CONOCIDOS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"platino|platinum", re.IGNORECASE), "TDC Platino"),
+    (re.compile(r"beyond", re.IGNORECASE), "TDC Beyond"),
+]
 
-# Respaldo si el PDF trae un tipo de tarjeta que no sea Platino/Platinum:
-# portada "Estado de Cuenta <Tipo>" sola en su línea.
+# Respaldo si el PDF trae un tipo de tarjeta que no está en
+# TIPOS_TARJETA_CONOCIDOS: portada "Estado de Cuenta <Tipo>" sola en su línea.
 PATRON_ALIAS = re.compile(r"^Estado de Cuenta\s+([A-Za-zÁÉÍÓÚáéíóú]+)\s*$")
 
 # "Número de tarjeta: 0 0 0000000000000000" (u otra separación) — nos
@@ -164,8 +173,11 @@ class BanamexTdcParser(BaseParser):
             for pagina in pdf.pages[:3]:
                 texto = pagina.extract_text() or ""
 
-                if alias is None and PATRON_TARJETA_PLATINO.search(texto):
-                    alias = "TDC Platino"
+                if alias is None:
+                    for patron_tipo, alias_normalizado in TIPOS_TARJETA_CONOCIDOS:
+                        if patron_tipo.search(texto):
+                            alias = alias_normalizado
+                            break
 
                 for linea in texto.splitlines():
                     linea = linea.strip()

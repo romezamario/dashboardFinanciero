@@ -155,10 +155,11 @@ never a hard failure, never a silently wrong guess presented as certain.
 document from the checking account above, despite being the same bank — don't assume a second
 statement from a bank you already support will look anything like the first one:
 - No running-balance column per transaction at all, so the delta-of-saldo trick doesn't apply
-  here — this parser trusts the printed `+`/`-` sign directly. **Best-effort, not yet verified
-  against a real "-" (payment) row**: assumed `+` = cargo (compra, increases balance owed) and
-  `-` = abono (pago, decreases it) — the standard reading, but flag it to the user the first time
-  a real payment row appears in case it needs inverting in `extraer()`.
+  here — this parser trusts the printed `+`/`-` sign directly: `+` = cargo (compra, increases
+  balance owed), `-` = abono (pago, decreases it). **Confirmed against a real "-" row**
+  (2026-09-20, a TDC Beyond statement): a line reading `"...SU ABONO...<texto> - $X,XXX.XX"` — the
+  `-` sign next to the word "ABONO" in the concept corroborates the mapping as implemented; no
+  longer a best-effort assumption.
 - Each transaction is exactly one line (`fecha_compra fecha_aplicacion concepto +$monto`) — no
   multi-line concept blocks to group, unlike the checking account's SPEI-transfer paragraphs.
 - The year rides along in every row's own date (`"DD-mon-AAAA"`, lowercase abbreviated month) —
@@ -193,11 +194,22 @@ statement from a bank you already support will look anything like the first one:
   fragile (only matches if that exact line stands alone) and inconsistent (a PDF that happened to
   say "Platinum" in English would produce a different alias than one saying "Platino", splitting
   what should be the same account across two `cuentas` rows since `alias` is part of the
-  find-or-create key). User's explicit request (2026-09-20): PDFs mentioning "platino" or
-  "platinum" anywhere (case-insensitive substring search over the whole page text, not a
-  line-anchored regex) always alias to the fixed string `"TDC Platino"`. `PATRON_ALIAS` stays as a
-  fallback for a hypothetical future non-Platino TDC product, but is only consulted if the
-  platino/platinum check doesn't match first.
+  find-or-create key). Fixed (2026-09-20) by searching the whole page text (not a line-anchored
+  regex) for each known card-tier keyword and normalizing to a fixed alias:
+  `TIPOS_TARJETA_CONOCIDOS`, a `[(patrón, alias_normalizado), ...]` list — `platino`/`platinum` →
+  `"TDC Platino"`, `beyond` → `"TDC Beyond"` (added the same day a real Beyond statement showed
+  up, confirming the list needed to be extensible rather than a single hardcoded pattern).
+  `PATRON_ALIAS` (the old line-anchored capture) stays as a last-resort fallback for a future
+  tier not yet in the list.
+- **One parser class covers every TDC tier, not one class per tier**: when the Beyond statement
+  arrived, the transaction line format, sign convention, date format, and card-number extraction
+  all turned out identical to Platino's — the *only* difference was which keyword identifies the
+  tier on the cover page. Rather than forking a near-duplicate `BanamexTdcBeyondParser`,
+  `BanamexTdcParser` stayed one class and just grew `TIPOS_TARJETA_CONOCIDOS` by one entry.
+  `puede_procesar` already didn't gate on a specific tier (just "Pago mínimo", which every TDC
+  statement has) so it needed no change at all. Lesson for a future tier: verify structural
+  identity against the real anonymized dump before assuming a new class is needed — a new card
+  product from the same issuer is not automatically a new document *format*.
 
 **Manual row entry** (`VentanaRenglonManual` in `app/main.py`) is the other half of the
 "transaction row rendered as an image" gap above — `advertencias()` only *flags* the unreadable
