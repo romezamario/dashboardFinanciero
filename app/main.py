@@ -418,20 +418,6 @@ class App(tk.Tk):
         self.combo_banco.current(0)
         self.combo_banco.pack(side="left", padx=4)
 
-        ttk.Label(marco_superior, text="Formato de fecha:").pack(
-            side="left", padx=(12, 0)
-        )
-        self.entrada_formato_fecha = ttk.Entry(marco_superior, width=12)
-        self.entrada_formato_fecha.insert(0, "%d/%m/%Y")
-        self.entrada_formato_fecha.pack(side="left", padx=4)
-
-        ttk.Label(marco_superior, text="Año (respaldo — se detecta solo si es posible):").pack(
-            side="left", padx=(12, 0)
-        )
-        self.entrada_anio = ttk.Entry(marco_superior, width=6)
-        self.entrada_anio.insert(0, str(datetime.now().year))
-        self.entrada_anio.pack(side="left", padx=4)
-
         ttk.Button(marco_superior, text="Cargar PDF...", command=self.cargar_pdf).pack(
             side="left", padx=12
         )
@@ -574,15 +560,18 @@ class App(tk.Tk):
         else:
             banco = self.combo_banco.get()
 
-        formato_fecha = self.entrada_formato_fecha.get().strip() or "%d/%m/%Y"
-        anio = self.entrada_anio.get().strip()
+        # Respaldo si un extractor necesita año y no lo puede detectar solo
+        # del PDF -- no hay campo manual en la UI para esto (ver
+        # BanamexParser._detectar_anio: el PDF es la fuente de verdad y la
+        # sobreescribe de todos modos cuando la detección funciona).
+        anio_respaldo = str(datetime.now().year)
         parser_cls = PARSERS[banco]
 
         try:
             try:
                 # Algunos extractores necesitan el año (el PDF no lo trae
                 # impreso en cada renglón); otros no aceptan ese argumento.
-                parser = parser_cls(ano_estado_de_cuenta=anio)
+                parser = parser_cls(ano_estado_de_cuenta=anio_respaldo)
             except TypeError:
                 parser = parser_cls()
             renglones: list[RenglonCrudo] = parser.extraer(ruta_pdf)
@@ -595,14 +584,9 @@ class App(tk.Tk):
             )
             return
 
-        # Algunos extractores detectan el año solo desde el PDF y pisan lo
-        # que traía el campo manual (ver BanamexParser._detectar_anio) —
-        # refleja eso en la UI para que no quede desincronizado.
         anio_usado = getattr(parser, "ano_estado_de_cuenta", None)
-        anio_detectado_automaticamente = bool(anio_usado) and anio_usado != anio
-        if anio_detectado_automaticamente:
-            self.entrada_anio.delete(0, "end")
-            self.entrada_anio.insert(0, anio_usado)
+        anio_detectado_automaticamente = bool(anio_usado) and anio_usado != anio_respaldo
+        formato_fecha = getattr(parser, "formato_fecha", "%d/%m/%Y")
 
         try:
             alias_detectado, ultimos_4_detectados = parser.extraer_info_cuenta(ruta_pdf)

@@ -44,6 +44,17 @@ class BaseParser(ABC):
 
     nombre_banco: str
 
+    # Formato de `strptime` para el `fecha_texto` que este extractor emite en
+    # `RenglonCrudo` (ver ese docstring) -- lo usa `transform.transformador`
+    # para convertirlo a `date`. No hay campo manual en la UI para esto: cada
+    # extractor ya conoce su propio formato al escribirlo (lo necesitó para
+    # construir su propio patrón de fecha), así que lo declara aquí en vez de
+    # depender de que el usuario lo escriba bien a mano en cada carga.
+    # Default "%d/%m/%Y" porque los extractores existentes ya normalizan su
+    # `fecha_texto` a ese formato internamente -- sobreescribe esto en una
+    # subclase solo si tu extractor emite algo distinto.
+    formato_fecha: str = "%d/%m/%Y"
+
     @abstractmethod
     def extraer(self, ruta_pdf: Path) -> list[RenglonCrudo]:
         """Lee `ruta_pdf` y devuelve un renglón crudo por cada transacción.

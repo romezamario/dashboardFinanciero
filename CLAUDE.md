@@ -71,19 +71,35 @@ When adding a real bank, register its `BaseParser` subclass in the `PARSERS` dic
 `app/main.py` — that's what populates the "Banco" dropdown, used as a manual fallback. Some
 parsers need extra context the PDF doesn't print (e.g. `BanamexParser` needs a year, since the
 statement only prints "DD MES" per row) — `App.cargar_pdf` tries
-`parser_cls(ano_estado_de_cuenta=anio)` and falls back to `parser_cls()` on `TypeError`, so a
-parser only needs that constructor param if it actually uses it. `BanamexParser.extraer()` then
-tries to **self-correct** that year from the PDF's own cover page ("Fecha de corte" / "Periodo"
-both print the full year in plain text) before processing any transaction lines — the
-constructor value is only the fallback if detection fails, and `App.cargar_pdf` reads
-`parser.ano_estado_de_cuenta` back afterward to fix up the "Año" field in the UI if the extractor
-overrode it. This was a real bug: the user was reusing the app across statements from different
-months without remembering to update the manual "Año" field, silently mis-dating transactions.
-Known gap: if a statement's period crosses a calendar year boundary (e.g. Dec 15 – Jan 14), every
-transaction gets the single detected year (the cutoff date's year) — December rows would be
-wrong. Not yet seen in practice; if it comes up, detection needs to move from
-once-per-document to per-transaction (using the month within the block to decide which side of
-the boundary it's on).
+`parser_cls(ano_estado_de_cuenta=anio_respaldo)` and falls back to `parser_cls()` on `TypeError`,
+so a parser only needs that constructor param if it actually uses it. `BanamexParser.extraer()`
+then tries to **self-correct** that year from the PDF's own cover page ("Fecha de corte" /
+"Periodo" both print the full year in plain text) before processing any transaction lines — the
+constructor value (`anio_respaldo`, the current year, computed with `datetime.now()`) is only the
+fallback if detection fails.
+
+There used to be a manual "Año" field in the UI for this fallback (added after a real bug: the
+user was reusing the app across statements from different months without updating it, silently
+mis-dating transactions — fixed at the time by adding the auto-detection above). Once
+auto-detection made the field redundant in the common case, the user explicitly asked to remove
+it from the UI (2026-09-20) **after being told the trade-off**: if `BanamexParser`'s cover-page
+detection ever fails on a future PDF (unexpected formatting, unreadable page 1, or a bank whose
+parser doesn't implement year auto-detection at all), there is no UI way to correct the year
+anymore — it silently falls back to the current year, and the only fix is code-level (pass a
+different `ano_estado_de_cuenta` explicitly, or debug why detection failed), not something the
+user can type into the app. Known gap the field wouldn't have fixed anyway even when it existed:
+if a statement's period crosses a calendar year boundary (e.g. Dec 15 – Jan 14), every transaction
+gets the single detected year (the cutoff date's year) — December rows would be wrong. Not yet
+seen in practice; if it comes up, detection needs to move from once-per-document to
+per-transaction (using the month within the block to decide which side of the boundary it's on).
+
+Similarly, the "Formato de fecha" UI field was removed in the same pass — `BaseParser` now
+declares `formato_fecha: str = "%d/%m/%Y"` as a class attribute (overridable per subclass)
+instead, since every extractor already needs to know its own bank's date format to write its
+regex in the first place, so hardcoding it there is strictly more reliable than depending on the
+user re-typing the right `strptime` format string per load. No known real bank needs to override
+the default yet — both `BanamexParser` and `BanamexTdcParser` already normalize `fecha_texto` to
+`DD/MM/AAAA` internally.
 
 **Auto-detection, so the user doesn't have to pick the bank manually**: `BaseParser` has two
 optional hooks, both defaulting to "unsupported" so old/simple parsers (`EjemploParser`) don't

@@ -141,7 +141,10 @@ ajústalo (documentado paso a paso en su docstring) y regístralo en el dicciona
 inicio de `app/main.py`. Antes de escribir el extractor, usa el botón **Inspeccionar PDF...**
 dentro de la app para ver cómo pdfplumber lee tu PDF real, línea por línea — así diseñas el
 `PATRON_RENGLON` sin adivinar. Es un botón aparte, sin relación con cargar/procesar: solo muestra
-texto, no toca nada más.
+texto, no toca nada más. Si tu banco imprime la fecha en un formato distinto a `DD/MM/AAAA`
+(el default), sobreescribe `formato_fecha` (atributo de clase, formato `strptime`) en tu subclase
+— no hay campo en la UI para esto, cada extractor ya sabe su propio formato porque lo necesitó
+para escribir su patrón de fecha.
 
 Para que ese banco se detecte solo (en vez de tener que elegirlo del dropdown), sobreescribe
 también `puede_procesar(ruta_pdf) -> bool` — una heurística barata y conservadora. Ojo: el nombre
@@ -154,39 +157,36 @@ a mano.
 
 Flujo completo una vez que el extractor de tu banco existe:
 
-1. Ajusta el formato de fecha si el banco lo necesita distinto al default (el dropdown de
-   "Banco" es solo un respaldo manual — el siguiente paso intenta detectarlo solo).
-2. **Cargar PDF...** — antes de correr nada, la app prueba cada extractor registrado contra el
+1. **Cargar PDF...** — antes de correr nada, la app prueba cada extractor registrado contra el
    PDF (`puede_procesar`) y usa el que matchee; si ninguno o más de uno matchean, cae de vuelta a
-   lo que tengas seleccionado en el dropdown. El resumen te dice si el banco quedó "detectado" o
-   "manual". Luego corre el extractor + Transformador + Categorizador y llena la tabla. Si el
-   extractor lo soporta (Banamex cuenta de cheques y Banamex TDC, tarjeta de crédito, ambos sí),
-   también autocompleta **Alias de cuenta**, **Últimos 4 dígitos** y **Año** leyéndolos de la
-   portada del PDF (el campo "Año" es solo el respaldo manual si la detección falla — si el
-   extractor sí lo encuentra, pisa lo que tenga escrito el campo, incluso si quedó desactualizado
-   de una carga anterior; `BanamexTdcParser` no necesita este respaldo porque el año ya viene
-   impreso en cada renglón de la TDC). Revisa estos datos antes de guardar, el resumen avisa qué
-   se detectó y qué hay que llenar a mano.
-3. Revisa los renglones. Si algunos no se pudieron interpretar, la app te avisa con el detalle. A
+   lo que tengas seleccionado en el dropdown "Banco". El resumen te dice si el banco quedó
+   "detectado" o "manual". Luego corre el extractor + Transformador + Categorizador y llena la
+   tabla. Si el extractor lo soporta (Banamex cuenta de cheques y Banamex TDC, tarjeta de
+   crédito, ambos sí), también autocompleta **Alias de cuenta** y **Últimos 4 dígitos** leyéndolos
+   de la portada del PDF, y para `BanamexParser` (cuenta de cheques, el único que necesita año
+   porque el PDF no lo imprime por renglón) el resumen te avisa qué año detectó — no hay campo
+   manual para corregirlo si la detección llegara a fallar, así que revisa ese aviso antes de
+   guardar.
+2. Revisa los renglones. Si algunos no se pudieron interpretar, la app te avisa con el detalle. A
    veces el PDF renderiza una fila (ej. una confirmación de abono destacada) como imagen en vez
    de texto seleccionable — ahí el extractor no puede leer nada y la app te avisa con el número
    de página. Usa **Agregar renglón manual...** para capturarla a mano (fecha, descripción, monto
    sin signo, tipo, y la página si la conoces) — se agrega a la tabla igual que cualquier otro
    renglón, con categoría/comercio asignados por las mismas reglas.
-4. **Validación de totales**: escribe el neto del periodo tal como lo imprime el estado de cuenta
+3. **Validación de totales**: escribe el neto del periodo tal como lo imprime el estado de cuenta
    (saldo actual − saldo anterior) y da **Validar** — si no cuadra, hay algo mal parseado o un
    renglón faltante antes de confiar en el resultado.
-5. **Reglas de categorización...** para agregar/editar/borrar reglas — se aplican de inmediato a
+4. **Reglas de categorización...** para agregar/editar/borrar reglas — se aplican de inmediato a
    la tabla ya cargada y se guardan en `transform/reglas_categorizacion.json` (no se sube a git).
    Cada regla asigna una **Categoría** (obligatoria) y opcionalmente un **Comercio** (ej. patrón
    "TELEVIA" → categoría "Transporte", comercio "Televia") — útil sobre todo en tarjeta de
    crédito, donde la descripción cruda mezcla comercio y número de referencia.
-6. **Guardar archivo procesado** — escribe `data/procesados/<hash>.json` y mueve el PDF original a
+5. **Guardar archivo procesado** — escribe `data/procesados/<hash>.json` y mueve el PDF original a
    una subcarpeta `procesados/` dentro de la misma carpeta donde estaba (no la `data/procesados/`
    del proyecto, esa es para los JSON) — reutiliza esa carpeta si ya existe, y si el PDF ya está
    adentro de una carpeta `procesados/` no lo mueve de nuevo. Así vas viendo de un vistazo, en tu
    propia carpeta de descargas, cuáles estados de cuenta ya cargaste.
-7. **Sincronizar a Supabase...** — sube todo lo pendiente en `data/procesados/`.
+6. **Sincronizar a Supabase...** — sube todo lo pendiente en `data/procesados/`.
 
 ## Empaquetar como ejecutable (.exe con ícono)
 
