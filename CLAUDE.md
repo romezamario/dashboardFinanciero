@@ -229,6 +229,31 @@ statement from a bank you already support will look anything like the first one:
   bulk-editable, since nothing asked for that and a wrong bulk edit here couldn't be traced back
   to a rule the way categoría/comercio mistakes can. `VentanaRenglonManual` also grew an optional
   "Tarjeta" text entry, for consistency with every other field a manual row can carry.
+- **"Casi todas las transacciones son una línea" had an exception: `PAGO INTERBANCARIO`** (a SPEI
+  received directly to the card) — confirmed on a real Beyond statement (2026-09-20) that this
+  breaks the one-line-per-transaction assumption the whole parser was built on. It opens with
+  `"DD-mon-AAAA DD-mon-AAAA PAGO INTERBANCARIO"` — two dates and nothing else, no sign/monto at
+  the end — followed by detail lines (`PAGO RECIBIDO DE:`, `POR ORDEN DE:`, `CLAVE DE RASTREO:`,
+  `CONCEPTO:`) and closes with `"...REFERENCIA: <ref> <signo> $<monto>"`, where the actual
+  amount lives. Before this fix, the opening line matched `PATRON_PREFIJO_FECHAS` but not
+  `PATRON_TRANSACCION`, so every one silently became an `advertencias()` false-positive ("posible
+  transacción no capturada") even though the data was fully present in the following lines — just
+  not on one line. `PATRON_PAGO_INTERBANCARIO_INICIO`/`_CIERRE` bracket the block; a
+  loop-scoped `bloque_interbancario` dict buffers the lines in between (captured into
+  `linea_cruda` joined with `" | "`, same convention as the checking parser's multi-line SPEI
+  blocks) and extracts the `CONCEPTO:` value to build `descripcion_texto =
+  f"PAGO RECIBIDO {concepto}"` — deliberately *not* including the literal "PAGO INTERBANCARIO"
+  header text, because this repo already has a `"PAGO INTERBANCARIO"` rule mapped to categoria
+  `"Transferencia enviada"` (listed before `"PAGO RECIBIDO"` → `"Transferencia recibida"` in
+  `reglas_categorizacion.json`) — since every such block seen so far on a *credit card* statement
+  is money coming *in* (an abono, sign `"-"`), including that header text would have let the
+  wrong, earlier-listed rule win and mislabel a received payment as a sent one. If an outgoing
+  variant of this block is ever confirmed, that assumption needs revisiting — verify against the
+  real dump before generalizing description-building further. `abandonar_bloque_interbancario`
+  handles the defensive cases (a new tarjeta-section header, a new transaction, or end-of-document
+  arriving before the block's closing line): it surfaces the whole accumulated block as an
+  `advertencias()` entry instead of silently swallowing whatever real transaction line triggered
+  the abandonment — mirrors this repo's standing rule of never guessing on malformed structure.
 
 **Manual row entry** (`VentanaRenglonManual` in `app/main.py`) is the other half of the
 "transaction row rendered as an image" gap above — `advertencias()` only *flags* the unreadable

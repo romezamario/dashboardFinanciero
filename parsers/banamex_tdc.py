@@ -9,9 +9,11 @@ Diferencias clave frente a la cuenta de cheques:
   - NO hay columna de saldo corriente por transacción, así que el truco de
     "delta de saldo" para inferir cargo/abono (ver banamex.py) no aplica
     aquí — hay que confiar en el signo que imprime el estado de cuenta.
-  - Cada transacción es UNA sola línea (fecha compra, fecha aplicación,
-    concepto, referencia, signo, monto) — no hay bloques multi-línea que
-    agrupar ni transacciones partidas entre páginas.
+  - Casi toda transacción es UNA sola línea (fecha compra, fecha aplicación,
+    concepto, referencia, signo, monto) — **excepto** "PAGO INTERBANCARIO"
+    (un pago SPEI recibido directo a la tarjeta), que sí es multi-línea:
+    ver `PATRON_PAGO_INTERBANCARIO_INICIO`/`_CIERRE` más abajo, confirmado
+    contra un estado de cuenta real (2026-09-20).
   - El año SÍ viene impreso en cada renglón (formato "DD-mon-AAAA", mes
     abreviado en minúsculas) — a diferencia de la cuenta de cheques, aquí
     no hace falta detectarlo aparte ni pedirlo por parámetro.
@@ -104,6 +106,28 @@ PATRON_SECCION_TARJETA = re.compile(
     r"^Tarjeta\s+(Titular|Adicional|Digital)\b", re.IGNORECASE
 )
 
+# "PAGO INTERBANCARIO" (un SPEI recibido directo a la tarjeta) rompe el
+# patrón de una-transacción-una-línea de todo el resto de este documento:
+# imprime la fecha+concepto en su propia línea, SIN monto ni signo al final,
+# seguido de varias líneas de detalle ("PAGO RECIBIDO DE:", "POR ORDEN DE:",
+# "CLAVE DE RASTREO:", "CONCEPTO:") y cierra con una línea de "FECHA Y HORA
+# DE LIQUIDACIÓN: ... REFERENCIA: <ref> <signo> $<monto>" que es donde SÍ
+# vive el monto real. Confirmado contra un estado de cuenta real
+# (2026-09-20) -- antes de esto, estas líneas generaban una advertencia de
+# "posible transacción no capturada" porque el inicio del bloque matchea
+# PATRON_PREFIJO_FECHAS pero no PATRON_TRANSACCION.
+PATRON_PAGO_INTERBANCARIO_INICIO = re.compile(
+    r"^(?P<fecha_compra>\d{2}-[a-zA-Z]{3}-\d{4})\s+"
+    r"\d{2}-[a-zA-Z]{3}-\d{4}\s+"
+    r"PAGO INTERBANCARIO\s*$",
+    re.IGNORECASE,
+)
+PATRON_PAGO_INTERBANCARIO_CIERRE = re.compile(
+    r"REFERENCIA:\s*\S+\s+(?P<signo>[+-])\s*\$\s*(?P<monto>[\d,]+\.\d{2})\s*$",
+    re.IGNORECASE,
+)
+PATRON_CONCEPTO = re.compile(r"^CONCEPTO:\s*(.+)$", re.IGNORECASE)
+
 
 def _a_decimal(texto: str) -> Decimal:
     return Decimal(texto.replace(",", ""))
@@ -119,9 +143,21 @@ class BanamexTdcParser(BaseParser):
         renglones: list[RenglonCrudo] = []
         self._advertencias = []
         # Estado del documento completo, no por página -- una sección de
-        # tarjeta puede seguir vigente a través de un salto de página, igual
-        # que cualquier otro bloque en este extractor.
+        # tarjeta (o un bloque de PAGO INTERBANCARIO sin cerrar) puede
+        # seguir vigente a través de un salto de página, igual que
+        # cualquier otro bloque en este extractor.
         tarjeta_actual: str | None = None
+        bloque_interbancario: dict | None = None
+
+        def abandonar_bloque_interbancario(motivo: str) -> None:
+            nonlocal bloque_interbancario
+            assert bloque_interbancario is not None
+            self._advertencias.append(
+                f"Página {bloque_interbancario['pagina']}: bloque de PAGO "
+                f"INTERBANCARIO sin cerrar ({motivo}) -- revísalo a mano: "
+                f"{' | '.join(bloque_interbancario['lineas_crudas'])!r}"
+            )
+            bloque_interbancario = None
 
         with pdfplumber.open(ruta_pdf) as pdf:
             for numero_pagina, pagina in enumerate(pdf.pages, start=1):
@@ -133,7 +169,78 @@ class BanamexTdcParser(BaseParser):
 
                     coincidencia_seccion = PATRON_SECCION_TARJETA.match(linea)
                     if coincidencia_seccion:
+                        if bloque_interbancario is not None:
+                            abandonar_bloque_interbancario("nueva sección de tarjeta")
                         tarjeta_actual = coincidencia_seccion.group(1).capitalize()
+                        continue
+
+                    if bloque_interbancario is not None:
+                        coincidencia_cierre = PATRON_PAGO_INTERBANCARIO_CIERRE.search(linea)
+                        if coincidencia_cierre:
+                            try:
+                                monto = _a_decimal(coincidencia_cierre.group("monto"))
+                            except InvalidOperation:
+                                abandonar_bloque_interbancario("monto ilegible")
+                                continue
+                            signo_pdf = coincidencia_cierre.group("signo")
+                            # Ver convención de signo en el docstring del módulo.
+                            monto_texto = f"-{monto}" if signo_pdf == "+" else str(monto)
+                            concepto = bloque_interbancario["concepto"]
+                            descripcion_texto = (
+                                f"PAGO RECIBIDO {concepto}".strip()
+                                if concepto
+                                else "PAGO RECIBIDO"
+                            )
+                            bloque_interbancario["lineas_crudas"].append(linea)
+                            renglones.append(
+                                RenglonCrudo(
+                                    fecha_texto=bloque_interbancario["fecha_texto"],
+                                    descripcion_texto=descripcion_texto,
+                                    monto_texto=monto_texto,
+                                    pagina=bloque_interbancario["pagina"],
+                                    linea_cruda=" | ".join(
+                                        bloque_interbancario["lineas_crudas"]
+                                    ),
+                                    tarjeta=tarjeta_actual,
+                                )
+                            )
+                            bloque_interbancario = None
+                            continue
+
+                        # ¿Esta línea es en realidad el inicio de OTRA
+                        # transacción? Entonces el bloque anterior nunca
+                        # cerró (formato inesperado) -- lo abandonamos con
+                        # aviso y dejamos que el flujo normal de abajo
+                        # procese esta línea, en vez de tragársela como
+                        # detalle del bloque viejo.
+                        if PATRON_PAGO_INTERBANCARIO_INICIO.match(
+                            linea
+                        ) or PATRON_TRANSACCION.match(linea):
+                            abandonar_bloque_interbancario("formato inesperado")
+                        else:
+                            bloque_interbancario["lineas_crudas"].append(linea)
+                            if bloque_interbancario["concepto"] is None:
+                                coincidencia_concepto = PATRON_CONCEPTO.match(linea)
+                                if coincidencia_concepto:
+                                    bloque_interbancario["concepto"] = (
+                                        coincidencia_concepto.group(1).strip()
+                                    )
+                            continue
+
+                    coincidencia_inicio_interbancario = (
+                        PATRON_PAGO_INTERBANCARIO_INICIO.match(linea)
+                    )
+                    if coincidencia_inicio_interbancario:
+                        fecha_texto = self._normalizar_fecha(
+                            coincidencia_inicio_interbancario.group("fecha_compra")
+                        )
+                        if fecha_texto is not None:
+                            bloque_interbancario = {
+                                "pagina": numero_pagina,
+                                "fecha_texto": fecha_texto,
+                                "concepto": None,
+                                "lineas_crudas": [linea],
+                            }
                         continue
 
                     coincidencia = PATRON_TRANSACCION.match(linea)
@@ -170,6 +277,9 @@ class BanamexTdcParser(BaseParser):
                             tarjeta=tarjeta_actual,
                         )
                     )
+
+        if bloque_interbancario is not None:
+            abandonar_bloque_interbancario("fin del documento")
 
         return renglones
 
