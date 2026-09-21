@@ -153,10 +153,46 @@ export function agruparGastoPorComercio(
     .sort((a, b) => b.total - a.total);
 }
 
-export interface Totales {
-  saldoActual: number | null;
-  ingresosMes: number;
-  gastosMes: number;
+export interface Promedios {
+  ingresosPromedio3m: number;
+  gastosPromedio3m: number;
+  ingresosPromedio12m: number;
+  gastosPromedio12m: number;
+}
+
+function anoMes(anio: number, mes: number): string {
+  // `mes` es 0-indexado como Date.getMonth(); normaliza el acarreo de año
+  // antes de formatear, para no depender de Date/toISOString (que convierte
+  // a UTC y puede correr el día -- y con día 1, el mes -- para zonas con
+  // offset positivo).
+  let a = anio;
+  let m = mes;
+  while (m < 0) {
+    m += 12;
+    a -= 1;
+  }
+  return `${a}-${String(m + 1).padStart(2, "0")}`;
+}
+
+/**
+ * Suma ingresos/gastos de una ventana de calendario fija: el mes en curso y
+ * los `cantidadMeses - 1` anteriores.
+ */
+function sumaPorTipoUltimosMeses(
+  transacciones: Transaccion[],
+  cantidadMeses: number
+): { ingresos: number; gastos: number } {
+  const ahora = new Date();
+  const mesInicio = anoMes(ahora.getFullYear(), ahora.getMonth() - (cantidadMeses - 1));
+
+  let ingresos = 0;
+  let gastos = 0;
+  for (const t of transacciones) {
+    if (t.fecha.slice(0, 7) < mesInicio) continue;
+    if (t.tipo === "abono") ingresos += t.monto;
+    else gastos += t.monto;
+  }
+  return { ingresos, gastos };
 }
 
 /**
@@ -224,19 +260,20 @@ export async function actualizarCategoriaYComercio(
   if (error) throw error;
 }
 
-export function calcularTotales(transacciones: Transaccion[]): Totales {
-  const conSaldo = transacciones.filter((t) => t.saldo !== null);
-  const saldoActual =
-    conSaldo.length > 0 ? (conSaldo[conSaldo.length - 1].saldo as number) : null;
-
-  const mesActual = new Date().toISOString().slice(0, 7);
-  let ingresosMes = 0;
-  let gastosMes = 0;
-  for (const t of transacciones) {
-    if (t.fecha.slice(0, 7) !== mesActual) continue;
-    if (t.tipo === "abono") ingresosMes += t.monto;
-    else gastosMes += t.monto;
-  }
-
-  return { saldoActual, ingresosMes, gastosMes };
+/**
+ * Promedio mensual de ingresos/gastos sobre los últimos 3 y últimos 12
+ * meses de calendario (contando el mes en curso). Se divide siempre entre
+ * `cantidadMeses` fija, no entre los meses que realmente tienen
+ * transacciones -- un mes sin movimientos es un mes real con $0, no un dato
+ * faltante que deba excluirse del promedio.
+ */
+export function calcularPromedios(transacciones: Transaccion[]): Promedios {
+  const ultimos3 = sumaPorTipoUltimosMeses(transacciones, 3);
+  const ultimos12 = sumaPorTipoUltimosMeses(transacciones, 12);
+  return {
+    ingresosPromedio3m: ultimos3.ingresos / 3,
+    gastosPromedio3m: ultimos3.gastos / 3,
+    ingresosPromedio12m: ultimos12.ingresos / 12,
+    gastosPromedio12m: ultimos12.gastos / 12,
+  };
 }
