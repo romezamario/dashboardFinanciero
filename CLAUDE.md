@@ -260,18 +260,24 @@ statement from a bank you already support will look anything like the first one:
   also tracks the document's tier (`tipo_tarjeta_documento`, detected once from whichever early
   page mentions it, same lazy pattern as `tarjeta_actual`/section tracking) so it can apply
   **tier-conditional description rewriting**: the generic bank courtesy line after a payment
-  (`"SU ABONO...GRACIAS"`, `PATRON_ABONO_CORTESIA`) gets its `descripcion_texto` replaced with the
-  literal `"PAGO TDC BEYOND"` — but *only* when `tipo_tarjeta_documento == "TDC Beyond"`; on
-  Platino (or any undetected tier) the line is left exactly as the PDF prints it, uncategorized,
-  same as before. User's explicit request (2026-09-20): this line should categorize as
-  `"PAGO TDC"` / comercio `"PAGO TDC BEYOND"`, but *only* for Beyond statements — since
+  (`"SU ABONO...GRACIAS"`, `PATRON_ABONO_CORTESIA`) gets its `descripcion_texto` replaced with
+  `f"PAGO TDC {tier}"` (`tier` = `tipo_tarjeta_documento` with the `"TDC "` prefix stripped and
+  upper-cased, e.g. `"BEYOND"`, `"PLATINO"`) whenever `tipo_tarjeta_documento is not None` — on an
+  undetected tier the line is left exactly as the PDF prints it, uncategorized, same as before.
+  User's explicit request (2026-09-20, first for Beyond only, generalized the same day once they
+  confirmed a Platino statement needed the identical treatment — `"Pago TDC"` / `"Pago TDC
+  Platino"`): each detected tier categorizes as `"Pago TDC"` / comercio `"Pago TDC <Tier>"`. Since
   `categorizar()` in `transform/categorizador.py` only ever sees `descripcion` text and has zero
   awareness of which bank/tier produced it, the only way to make a rule conditional on tier is for
   the *parser* (which does know the tier) to bake that distinction into the description text
   itself before it ever reaches the categorizador — same technique already used for the
   `PAGO INTERBANCARIO` block's reconstructed description above. `linea_cruda` is untouched (still
   the PDF's real "SU ABONO...GRACIAS ..." text) so the audit trail doesn't lose anything even
-  though `descripcion` no longer matches it verbatim for this one case.
+  though `descripcion` no longer matches it verbatim for this one case. **Adding a tier to
+  `TIPOS_TARJETA_CONOCIDOS` does not automatically categorize its courtesy line** — each tier
+  needs its own `"PAGO TDC <TIER>"` rule added to `reglas_categorizacion.json` by hand (two exist
+  so far: `"PAGO TDC BEYOND"` and `"PAGO TDC PLATINO"`); the parser only builds the description
+  text, it doesn't touch the rules file.
 - **A fully-legible transaction line can still fail to match if a stray page-footer artifact
   lands on the same physical line, with no newline in between** — confirmed on a real Beyond
   statement (2026-09-20): the last transaction row on a page's movements table came through

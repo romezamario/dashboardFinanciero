@@ -153,14 +153,20 @@ PATRON_CONCEPTO = re.compile(r"^CONCEPTO:\s*(.+)$", re.IGNORECASE)
 
 # Mensaje de cortesía genérico que imprime el banco tras un abono
 # destacado ("SU ABONO...GRACIAS") -- no es un comercio real, es tu propio
-# pago a la tarjeta. Pedido explícito del usuario (2026-09-20): en un
-# documento detectado como TDC Beyond, esta línea se reclasifica a
-# categoria "PAGO TDC" / comercio "PAGO TDC BEYOND" en vez de quedar sin
-# categorizar -- por eso `extraer()` le sustituye `descripcion_texto` por
-# el literal "PAGO TDC BEYOND" (solo cuando el tier detectado es Beyond;
-# en cualquier otro tier, o si no se detectó ninguno, la línea se deja tal
-# cual el PDF la imprime, sin categorizar por defecto como antes). El texto
-# real sigue intacto en `linea_cruda` para auditoría.
+# pago a la tarjeta. Pedido explícito del usuario (2026-09-20, extendido a
+# cualquier tier el mismo día tras confirmarlo también en un estado Platino):
+# en cualquier documento donde SÍ se detectó el tier (`tipo_tarjeta_documento`
+# no es None), esta línea se reclasifica a categoria "PAGO TDC" / comercio
+# "PAGO TDC <TIER>" (ej. "PAGO TDC BEYOND", "PAGO TDC PLATINO") en vez de
+# quedar sin categorizar -- por eso `extraer()` le sustituye
+# `descripcion_texto` por ese literal, derivado de `tipo_tarjeta_documento`
+# (`TIPOS_TARJETA_CONOCIDOS` ya lo normaliza a "TDC <Tier>"). Si el tier no
+# se pudo detectar en absoluto, la línea se deja tal cual el PDF la imprime,
+# sin categorizar. El texto real sigue intacto en `linea_cruda` para
+# auditoría. Cada tier necesita su propia regla en
+# `reglas_categorizacion.json` (`"PAGO TDC BEYOND"`, `"PAGO TDC PLATINO"`,
+# etc.) ya que `categorizar()` solo matchea texto exacto -- agregar un tier
+# nuevo a `TIPOS_TARJETA_CONOCIDOS` no crea su regla de categorización sola.
 PATRON_ABONO_CORTESIA = re.compile(r"^SU ABONO\.\.\.", re.IGNORECASE)
 
 
@@ -312,10 +318,12 @@ class BanamexTdcParser(BaseParser):
 
                     descripcion_texto = coincidencia.group("concepto").strip()
                     if (
-                        tipo_tarjeta_documento == "TDC Beyond"
+                        tipo_tarjeta_documento is not None
                         and PATRON_ABONO_CORTESIA.match(descripcion_texto)
                     ):
-                        descripcion_texto = "PAGO TDC BEYOND"
+                        # "TDC Beyond" -> "BEYOND", "TDC Platino" -> "PLATINO", etc.
+                        tier = tipo_tarjeta_documento.removeprefix("TDC ").upper()
+                        descripcion_texto = f"PAGO TDC {tier}"
 
                     renglones.append(
                         RenglonCrudo(
