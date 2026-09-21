@@ -82,6 +82,19 @@ TIPOS_TARJETA_CONOCIDOS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"beyond", re.IGNORECASE), "TDC Beyond"),
 ]
 
+
+def _detectar_tipo_tarjeta(texto_pagina: str) -> str | None:
+    """Busca en `texto_pagina` cualquiera de los tipos de tarjeta conocidos
+    y devuelve su alias normalizado, o None si ninguno aparece. Usado tanto
+    por `extraer()` (para distinguir mensajes de cortesía específicos de un
+    tier, ver `PATRON_ABONO_CORTESIA`) como por `extraer_info_cuenta()`
+    (para el alias de la cuenta) -- una sola fuente de verdad para "qué
+    tier de tarjeta es este documento"."""
+    for patron_tipo, alias_normalizado in TIPOS_TARJETA_CONOCIDOS:
+        if patron_tipo.search(texto_pagina):
+            return alias_normalizado
+    return None
+
 # Respaldo si el PDF trae un tipo de tarjeta que no está en
 # TIPOS_TARJETA_CONOCIDOS: portada "Estado de Cuenta <Tipo>" sola en su línea.
 PATRON_ALIAS = re.compile(r"^Estado de Cuenta\s+([A-Za-zÁÉÍÓÚáéíóú]+)\s*$")
@@ -128,6 +141,18 @@ PATRON_PAGO_INTERBANCARIO_CIERRE = re.compile(
 )
 PATRON_CONCEPTO = re.compile(r"^CONCEPTO:\s*(.+)$", re.IGNORECASE)
 
+# Mensaje de cortesía genérico que imprime el banco tras un abono
+# destacado ("SU ABONO...GRACIAS") -- no es un comercio real, es tu propio
+# pago a la tarjeta. Pedido explícito del usuario (2026-09-20): en un
+# documento detectado como TDC Beyond, esta línea se reclasifica a
+# categoria "PAGO TDC" / comercio "PAGO TDC BEYOND" en vez de quedar sin
+# categorizar -- por eso `extraer()` le sustituye `descripcion_texto` por
+# el literal "PAGO TDC BEYOND" (solo cuando el tier detectado es Beyond;
+# en cualquier otro tier, o si no se detectó ninguno, la línea se deja tal
+# cual el PDF la imprime, sin categorizar por defecto como antes). El texto
+# real sigue intacto en `linea_cruda` para auditoría.
+PATRON_ABONO_CORTESIA = re.compile(r"^SU ABONO\.\.\.", re.IGNORECASE)
+
 
 def _a_decimal(texto: str) -> Decimal:
     return Decimal(texto.replace(",", ""))
@@ -148,6 +173,10 @@ class BanamexTdcParser(BaseParser):
         # cualquier otro bloque en este extractor.
         tarjeta_actual: str | None = None
         bloque_interbancario: dict | None = None
+        # Tier del documento completo (Platino/Beyond/...), no por página --
+        # se detecta una sola vez con la primera página que lo mencione y
+        # ya no cambia. Solo se usa para PATRON_ABONO_CORTESIA por ahora.
+        tipo_tarjeta_documento: str | None = None
 
         def abandonar_bloque_interbancario(motivo: str) -> None:
             nonlocal bloque_interbancario
@@ -162,6 +191,10 @@ class BanamexTdcParser(BaseParser):
         with pdfplumber.open(ruta_pdf) as pdf:
             for numero_pagina, pagina in enumerate(pdf.pages, start=1):
                 texto = pagina.extract_text() or ""
+
+                if tipo_tarjeta_documento is None:
+                    tipo_tarjeta_documento = _detectar_tipo_tarjeta(texto)
+
                 for linea in texto.splitlines():
                     linea = linea.strip()
                     if not linea:
@@ -267,10 +300,17 @@ class BanamexTdcParser(BaseParser):
                     if fecha_texto is None:
                         continue
 
+                    descripcion_texto = coincidencia.group("concepto").strip()
+                    if (
+                        tipo_tarjeta_documento == "TDC Beyond"
+                        and PATRON_ABONO_CORTESIA.match(descripcion_texto)
+                    ):
+                        descripcion_texto = "PAGO TDC BEYOND"
+
                     renglones.append(
                         RenglonCrudo(
                             fecha_texto=fecha_texto,
-                            descripcion_texto=coincidencia.group("concepto").strip(),
+                            descripcion_texto=descripcion_texto,
                             monto_texto=monto_texto,
                             pagina=numero_pagina,
                             linea_cruda=linea,
@@ -305,10 +345,7 @@ class BanamexTdcParser(BaseParser):
                 texto = pagina.extract_text() or ""
 
                 if alias is None:
-                    for patron_tipo, alias_normalizado in TIPOS_TARJETA_CONOCIDOS:
-                        if patron_tipo.search(texto):
-                            alias = alias_normalizado
-                            break
+                    alias = _detectar_tipo_tarjeta(texto)
 
                 for linea in texto.splitlines():
                     linea = linea.strip()
