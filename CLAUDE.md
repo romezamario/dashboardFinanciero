@@ -272,6 +272,23 @@ statement from a bank you already support will look anything like the first one:
   `PAGO INTERBANCARIO` block's reconstructed description above. `linea_cruda` is untouched (still
   the PDF's real "SU ABONO...GRACIAS ..." text) so the audit trail doesn't lose anything even
   though `descripcion` no longer matches it verbatim for this one case.
+- **A fully-legible transaction line can still fail to match if a stray page-footer artifact
+  lands on the same physical line, with no newline in between** — confirmed on a real Beyond
+  statement (2026-09-20): the last transaction row on a page's movements table came through
+  `extract_text()` as `"...TIENDA X REF1 + $68.00 .."` — note the trailing `" .."` glued directly
+  onto the amount. `PATRON_TRANSACCION` originally anchored its end with `\s*$` right after
+  `monto`, so those two extra characters made the *whole* match fail even though every field
+  (fecha, concepto, signo, monto) was completely legible — the line fell through to
+  `PATRON_PREFIJO_FECHAS` and got reported as a false-positive "posible transacción no
+  capturada" `advertencias()` entry, identical in symptom to the genuinely-unrecoverable
+  image-rendered rows but with a completely different (and fixable) cause. Fixed by relaxing the
+  trailing anchor on both `PATRON_TRANSACCION` and `PATRON_PAGO_INTERBANCARIO_CIERRE` from `\s*$`
+  to `[\s.]*$` — tolerates trailing whitespace *and* stray dots after the monto without weakening
+  what actually gets captured (the `(?P<monto>...)` group itself is unchanged, still exactly
+  `[\d,]+\.\d{2}`). Lesson: when `advertencias()` flags something as unreadable, don't assume
+  it's the "rendered as an image" case by default — check whether the raw line genuinely has no
+  parseable amount, or whether it's fully legible and just failing a too-strict anchor;
+  the fix looks completely different depending on which one it is.
 
 **Manual row entry** (`VentanaRenglonManual` in `app/main.py`) is the other half of the
 "transaction row rendered as an image" gap above — `advertencias()` only *flags* the unreadable

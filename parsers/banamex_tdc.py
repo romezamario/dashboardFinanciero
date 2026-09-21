@@ -47,12 +47,22 @@ MESES = {
     "sep": "09", "oct": "10", "nov": "11", "dic": "12",
 }
 
-# "DD-mon-AAAA DD-mon-AAAA CONCEPTO...REFERENCIA +$1,234.56"
+# "DD-mon-AAAA DD-mon-AAAA CONCEPTO...REFERENCIA +$1,234.56" -- el final
+# tolera puntos/espacios sueltos después del monto (`[\s.]*$` en vez de
+# `\s*$`) porque en la última línea de la tabla de movimientos de una
+# página, pdfplumber a veces concatena el monto con un ".." suelto que en
+# el PDF real es un marcador de pie de página, sin salto de línea de por
+# medio -- confirmado en un estado de cuenta real (2026-09-20): una línea
+# terminaba en "... + $68.00 .." y por esos dos puntos de más el `$` al
+# final no calzaba, así que la línea entera (fecha, concepto y monto, todo
+# legible) se reportaba como "posible transacción no capturada" en vez de
+# extraerse -- el monto en sí nunca estuvo en riesgo, solo el ancla final
+# de la regex era demasiado estricta.
 PATRON_TRANSACCION = re.compile(
     r"^(?P<fecha_compra>\d{2}-[a-zA-Z]{3}-\d{4})\s+"
     r"(?P<fecha_aplicacion>\d{2}-[a-zA-Z]{3}-\d{4})\s+"
     r"(?P<concepto>.+?)\s+"
-    r"(?P<signo>[+-])\s*\$\s*(?P<monto>[\d,]+\.\d{2})\s*$"
+    r"(?P<signo>[+-])\s*\$\s*(?P<monto>[\d,]+\.\d{2})[\s.]*$"
 )
 
 # Mismo prefijo que PATRON_TRANSACCION pero sin exigir el resto de la línea
@@ -136,7 +146,7 @@ PATRON_PAGO_INTERBANCARIO_INICIO = re.compile(
     re.IGNORECASE,
 )
 PATRON_PAGO_INTERBANCARIO_CIERRE = re.compile(
-    r"REFERENCIA:\s*\S+\s+(?P<signo>[+-])\s*\$\s*(?P<monto>[\d,]+\.\d{2})\s*$",
+    r"REFERENCIA:\s*\S+\s+(?P<signo>[+-])\s*\$\s*(?P<monto>[\d,]+\.\d{2})[\s.]*$",
     re.IGNORECASE,
 )
 PATRON_CONCEPTO = re.compile(r"^CONCEPTO:\s*(.+)$", re.IGNORECASE)
