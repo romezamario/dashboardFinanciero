@@ -4,7 +4,7 @@ import {
   agruparGastoPorComercio,
   agruparIngresosGastosPorMes,
   aplicarFiltros,
-  calcularTotales,
+  calcularPromedios,
   categoriaDe,
   obtenerTransacciones,
   ocultarCategorias,
@@ -93,11 +93,10 @@ export function Dashboard() {
     aplicarFiltros(transaccionesVisibles, filtros, "comercio")
   );
 
-  // El saldo actual es un hecho de la cuenta, no una suma que deba
-  // encogerse al filtrar/ocultar -- siempre viene del set completo.
-  // Ingresos/gastos del mes sí responden a los filtros y a lo oculto.
-  const { saldoActual } = calcularTotales(transacciones);
-  const { ingresosMes, gastosMes } = calcularTotales(transaccionesFiltradas);
+  // Los promedios sí responden a los filtros y a las categorías ocultas,
+  // igual que hacían antes los KPIs de "del mes" que reemplazan.
+  const { ingresosPromedio3m, gastosPromedio3m, ingresosPromedio12m, gastosPromedio12m } =
+    calcularPromedios(transaccionesFiltradas);
 
   function alternarFiltro<K extends keyof Filtros>(campo: K, valor: string) {
     setFiltros((anterior) =>
@@ -227,10 +226,27 @@ export function Dashboard() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <StatTile label="Saldo actual" value={saldoActual} />
-              <StatTile label="Ingresos del mes" value={ingresosMes} tone="good" />
-              <StatTile label="Gastos del mes" value={gastosMes} tone="critical" />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <StatTile
+                label="Ingresos prom. (3 meses)"
+                value={ingresosPromedio3m}
+                tone="good"
+              />
+              <StatTile
+                label="Gastos prom. (3 meses)"
+                value={gastosPromedio3m}
+                tone="critical"
+              />
+              <StatTile
+                label="Ingresos prom. (12 meses)"
+                value={ingresosPromedio12m}
+                tone="good"
+              />
+              <StatTile
+                label="Gastos prom. (12 meses)"
+                value={gastosPromedio12m}
+                tone="critical"
+              />
             </div>
 
             <IngresosGastosChart
