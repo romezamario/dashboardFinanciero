@@ -93,10 +93,16 @@ export function Dashboard() {
     aplicarFiltros(transaccionesVisibles, filtros, "comercio")
   );
 
-  // Los promedios sí responden a los filtros y a las categorías ocultas,
-  // igual que hacían antes los KPIs de "del mes" que reemplazan.
+  // Los promedios responden a categoría/comercio como cualquier gráfica,
+  // pero excluyen su propio filtro de "mes" -- son agregados sobre una
+  // ventana móvil de 3/12 meses relativa a hoy, así que aplicarles ADEMÁS
+  // el filtro de un mes puntual (p. ej. al hacer clic en una barra de
+  // IngresosGastosChart) los reduciría a un solo mes de datos divididos
+  // entre 3 o 12, o a $0 si ese mes cae fuera de la ventana -- el mismo
+  // motivo por el que `ingresosGastos` arriba excluye "mes" de su propio
+  // cálculo.
   const { ingresosPromedio3m, gastosPromedio3m, ingresosPromedio12m, gastosPromedio12m } =
-    calcularPromedios(transaccionesFiltradas);
+    calcularPromedios(aplicarFiltros(transaccionesVisibles, filtros, "mes"));
 
   function alternarFiltro<K extends keyof Filtros>(campo: K, valor: string) {
     setFiltros((anterior) =>

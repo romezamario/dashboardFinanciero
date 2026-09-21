@@ -1,18 +1,38 @@
 import { supabase } from "./supabase";
 import type { Transaccion } from "./types";
 
-export async function obtenerTransacciones(): Promise<Transaccion[]> {
-  const { data, error } = await supabase
-    .from("transacciones")
-    .select(
-      `id, fecha, descripcion, monto, tipo, saldo, comercio, tarjeta,
-       categorias ( nombre ),
-       documentos ( cuentas ( alias, bancos ( nombre ) ) )`
-    )
-    .order("fecha", { ascending: true });
+/** PostgREST devuelve como máximo 1000 filas por consulta si no se pagina
+ * explícitamente -- por debajo de ese límite `obtenerTransacciones` nunca
+ * lo notó, pero al pasar de 1000 transacciones totales empezó a devolver
+ * solo las 1000 más antiguas (orden ascendente por fecha), descartando en
+ * silencio las más recientes. Se pagina con `.range()` hasta que una
+ * página llega incompleta. */
+const TAMANO_PAGINA = 1000;
 
-  if (error) throw error;
-  return (data ?? []) as unknown as Transaccion[];
+export async function obtenerTransacciones(): Promise<Transaccion[]> {
+  const todas: Transaccion[] = [];
+  let desde = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("transacciones")
+      .select(
+        `id, fecha, descripcion, monto, tipo, saldo, comercio, tarjeta,
+         categorias ( nombre ),
+         documentos ( cuentas ( alias, bancos ( nombre ) ) )`
+      )
+      .order("fecha", { ascending: true })
+      .range(desde, desde + TAMANO_PAGINA - 1);
+
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+
+    todas.push(...(data as unknown as Transaccion[]));
+    if (data.length < TAMANO_PAGINA) break;
+    desde += TAMANO_PAGINA;
+  }
+
+  return todas;
 }
 
 export interface Filtros {
