@@ -1,12 +1,17 @@
 import { useMemo, useState } from "react";
 import {
   actualizarCategoriaComercioYEvento,
+  agruparPorCategoria,
+  agruparPorComercio,
   agruparPorEvento,
   cuentaDe,
   eventoDe,
 } from "../lib/queries";
 import type { Transaccion } from "../lib/types";
 import { GastoPorEventoChart } from "./GastoPorEventoChart";
+import { GastoPorCategoriaChart } from "./GastoPorCategoriaChart";
+import { GastoPorComercioChart } from "./GastoPorComercioChart";
+import { TransaccionesTabla } from "./TransaccionesTabla";
 
 const formateadorMoneda = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -41,6 +46,7 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
   const [tarjeta, setTarjeta] = useState("");
   const [seleccionadas, setSeleccionadas] = useState<Set<string>>(new Set());
   const [nuevoEvento, setNuevoEvento] = useState("");
+  const [eventoSeleccionado, setEventoSeleccionado] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(
     null
@@ -70,6 +76,36 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
   // para ENCONTRAR transacciones que todavía no tienen evento, no para
   // acotar este resumen de los que ya lo tienen).
   const gastoPorEvento = useMemo(() => agruparPorEvento(transacciones), [transacciones]);
+
+  // Igual que el Resumen (categoría/comercio/tabla), pero aquí la única
+  // dimensión que filtra es el evento -- clic en una barra de
+  // GastoPorEventoChart aísla ese evento para las gráficas y la tabla de
+  // abajo; sin selección, se ve el desglose de TODO lo que ya tiene un
+  // evento asignado (no de todas las transacciones, eso ya lo muestra el
+  // Resumen).
+  const transaccionesConEvento = useMemo(
+    () => transacciones.filter((t) => eventoDe(t) !== null),
+    [transacciones]
+  );
+  const transaccionesDelEvento = useMemo(
+    () =>
+      eventoSeleccionado
+        ? transaccionesConEvento.filter((t) => eventoDe(t) === eventoSeleccionado)
+        : transaccionesConEvento,
+    [transaccionesConEvento, eventoSeleccionado]
+  );
+  const gastoPorCategoriaDelEvento = useMemo(
+    () => agruparPorCategoria(transaccionesDelEvento),
+    [transaccionesDelEvento]
+  );
+  const gastoPorComercioDelEvento = useMemo(
+    () => agruparPorComercio(transaccionesDelEvento),
+    [transaccionesDelEvento]
+  );
+
+  function alternarEvento(evento: string) {
+    setEventoSeleccionado((anterior) => (anterior === evento ? null : evento));
+  }
 
   const hayFiltrosActivos = Boolean(fechaDesde || fechaHasta || cuenta || tarjeta);
 
@@ -131,7 +167,35 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
 
   return (
     <div className="space-y-4">
-      <GastoPorEventoChart datos={gastoPorEvento} />
+      <GastoPorEventoChart
+        datos={gastoPorEvento}
+        eventoSeleccionado={eventoSeleccionado}
+        onClickEvento={alternarEvento}
+      />
+
+      {eventoSeleccionado && (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setEventoSeleccionado(null)}
+            className="rounded-full px-3 py-1 text-xs font-medium"
+            style={{ background: "var(--series-1)", color: "#ffffff" }}
+            title="Quitar este filtro"
+          >
+            Evento: {eventoSeleccionado} ×
+          </button>
+        </div>
+      )}
+
+      {transaccionesConEvento.length > 0 && (
+        <>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <GastoPorCategoriaChart datos={gastoPorCategoriaDelEvento} />
+            <GastoPorComercioChart datos={gastoPorComercioDelEvento} />
+          </div>
+
+          <TransaccionesTabla transacciones={transaccionesDelEvento} />
+        </>
+      )}
 
       <div
         className="rounded-lg p-4"

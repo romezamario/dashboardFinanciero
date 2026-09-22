@@ -2,6 +2,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   Legend,
   LabelList,
   ResponsiveContainer,
@@ -19,19 +20,30 @@ const formateadorMoneda = new Intl.NumberFormat("es-MX", {
 
 interface GastoPorEventoChartProps {
   datos: PuntoEvento[];
+  eventoSeleccionado?: string | null;
+  onClickEvento?: (evento: string) => void;
 }
 
 /**
  * Mismo patrón que GastoPorComercioChart (barras agrupadas
- * ingresos/gastos, sin fallback "Sin evento" ni "Otros"), pero sin
- * cross-filter -- EventosTab es una pestaña separada del Resumen y no
- * comparte su estado de `filtros`, así que aquí es solo lectura.
+ * ingresos/gastos, sin fallback "Sin evento" ni "Otros"). A diferencia del
+ * Resumen (donde mes/categoría/comercio/cuenta/tarjeta cross-filtran entre
+ * sí de forma simétrica), aquí el evento es el filtro que manda: clic en
+ * una barra aísla ese evento para el resto de EventosTab (categoría,
+ * comercio, tabla), pero nada más filtra de vuelta esta gráfica.
  */
-export function GastoPorEventoChart({ datos }: GastoPorEventoChartProps) {
+export function GastoPorEventoChart({
+  datos,
+  eventoSeleccionado,
+  onClickEvento,
+}: GastoPorEventoChartProps) {
   const TOPE = 8;
   const datosFinales = datos.slice(0, TOPE);
 
   const alturaFila = 44;
+
+  const opacidad = (evento: string) =>
+    !eventoSeleccionado || eventoSeleccionado === evento ? 1 : 0.3;
 
   return (
     <div
@@ -40,11 +52,16 @@ export function GastoPorEventoChart({ datos }: GastoPorEventoChartProps) {
     >
       <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
         Ingresos y gastos por evento
+        {onClickEvento && (
+          <span className="ml-2 font-normal" style={{ color: "var(--text-muted)" }}>
+            (clic en un evento para ver su detalle)
+          </span>
+        )}
       </h3>
       {datosFinales.length === 0 ? (
         <p className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>
           Ninguna transacción tiene un evento asignado todavía -- selecciona
-          transacciones arriba y asígnales uno.
+          transacciones abajo y asígnales uno.
         </p>
       ) : (
         <div style={{ height: Math.max(220, datosFinales.length * alturaFila + 40) }}>
@@ -78,7 +95,18 @@ export function GastoPorEventoChart({ datos }: GastoPorEventoChartProps) {
                   <span style={{ color: "var(--text-secondary)", fontSize: 12 }}>{value}</span>
                 )}
               />
-              <Bar dataKey="ingresos" name="Ingresos" fill="var(--series-1)" radius={[0, 4, 4, 0]} maxBarSize={16}>
+              <Bar
+                dataKey="ingresos"
+                name="Ingresos"
+                fill="var(--series-1)"
+                radius={[0, 4, 4, 0]}
+                maxBarSize={16}
+                onClick={onClickEvento ? (d) => onClickEvento(d.payload.evento) : undefined}
+                cursor={onClickEvento ? "pointer" : undefined}
+              >
+                {datosFinales.map((d) => (
+                  <Cell key={d.evento} fillOpacity={opacidad(d.evento)} />
+                ))}
                 <LabelList
                   dataKey="ingresos"
                   position="right"
@@ -86,7 +114,18 @@ export function GastoPorEventoChart({ datos }: GastoPorEventoChartProps) {
                   style={{ fill: "var(--text-secondary)", fontSize: 12 }}
                 />
               </Bar>
-              <Bar dataKey="gastos" name="Gastos" fill="var(--series-2)" radius={[0, 4, 4, 0]} maxBarSize={16}>
+              <Bar
+                dataKey="gastos"
+                name="Gastos"
+                fill="var(--series-2)"
+                radius={[0, 4, 4, 0]}
+                maxBarSize={16}
+                onClick={onClickEvento ? (d) => onClickEvento(d.payload.evento) : undefined}
+                cursor={onClickEvento ? "pointer" : undefined}
+              >
+                {datosFinales.map((d) => (
+                  <Cell key={d.evento} fillOpacity={opacidad(d.evento)} />
+                ))}
                 <LabelList
                   dataKey="gastos"
                   position="right"
