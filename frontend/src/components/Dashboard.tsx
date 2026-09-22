@@ -6,6 +6,7 @@ import {
   aplicarFiltros,
   calcularPromedios,
   categoriaDe,
+  cuentaDe,
   obtenerTransacciones,
   ocultarCategorias,
   type Filtros,
@@ -23,6 +24,7 @@ const ETIQUETAS_FILTRO: Record<keyof Filtros, string> = {
   mes: "Mes",
   categoria: "Categoría",
   comercio: "Comercio",
+  cuenta: "Cuenta",
 };
 
 export function Dashboard() {
@@ -52,6 +54,15 @@ export function Dashboard() {
   // control para volver a mostrarla).
   const categoriasConocidas = useMemo(
     () => Array.from(new Set(transacciones.map(categoriaDe))).sort(),
+    [transacciones]
+  );
+
+  // No hay una gráfica que impulse este filtro (a diferencia de mes/
+  // categoría/comercio, que se seleccionan haciendo clic en una barra) --
+  // se deriva de las transacciones sin filtrar, igual que categoriasConocidas,
+  // para que la lista de cuentas no cambie según lo que ya esté filtrado.
+  const cuentasConocidas = useMemo(
+    () => Array.from(new Set(transacciones.map(cuentaDe))).sort(),
     [transacciones]
   );
 
@@ -231,6 +242,34 @@ export function Dashboard() {
                 </button>
               )}
             </div>
+
+            {cuentasConocidas.length > 1 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  Cuenta:
+                </span>
+                {cuentasConocidas.map((cuenta) => {
+                  const seleccionada = filtros.cuenta === cuenta;
+                  return (
+                    <button
+                      key={cuenta}
+                      onClick={() => alternarFiltro("cuenta", cuenta)}
+                      className="rounded-full px-3 py-1 text-xs font-medium"
+                      style={{
+                        background: seleccionada ? "var(--series-1)" : "var(--surface-1)",
+                        border: `1px solid ${
+                          seleccionada ? "var(--series-1)" : "var(--border)"
+                        }`,
+                        color: seleccionada ? "#ffffff" : "var(--text-secondary)",
+                      }}
+                      title={seleccionada ? "Quitar este filtro" : "Filtrar por esta cuenta"}
+                    >
+                      {cuenta}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <StatTile

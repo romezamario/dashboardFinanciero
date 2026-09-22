@@ -39,6 +39,7 @@ export interface Filtros {
   mes?: string;
   categoria?: string;
   comercio?: string;
+  cuenta?: string;
 }
 
 /** Nombre de categoría que usa el resto del código para "sin categoría". */
@@ -46,6 +47,14 @@ export const SIN_CATEGORIA = "Sin categoría";
 
 export function categoriaDe(t: Transaccion): string {
   return t.categorias?.nombre ?? SIN_CATEGORIA;
+}
+
+/** Alias de la cuenta (ver `cuentas.alias`) -- siempre presente, a
+ * diferencia de categoría/comercio, porque toda transacción viene de un
+ * documento que ya requiere alias/últimos_4 antes de poder sincronizarse
+ * (ver Sincronizador en CLAUDE.md). */
+export function cuentaDe(t: Transaccion): string {
+  return t.documentos.cuentas.alias;
 }
 
 /**
@@ -95,6 +104,9 @@ export function aplicarFiltros(
       excluir !== "comercio" &&
       t.comercio !== filtros.comercio
     ) {
+      return false;
+    }
+    if (filtros.cuenta && excluir !== "cuenta" && cuentaDe(t) !== filtros.cuenta) {
       return false;
     }
     return true;
