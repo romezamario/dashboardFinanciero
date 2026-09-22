@@ -130,47 +130,61 @@ export function agruparIngresosGastosPorMes(
 
 export interface PuntoCategoria {
   categoria: string;
-  total: number;
+  ingresos: number;
+  gastos: number;
 }
 
-export function agruparGastoPorCategoria(
-  transacciones: Transaccion[]
-): PuntoCategoria[] {
-  const porCategoria = new Map<string, number>();
+/**
+ * Antes solo sumaba "cargo" (gasto); ahora acumula ambos tipos por
+ * categoría -- una categoría puede tener ingresos (p. ej. "Transferencia
+ * recibida") y gastos a la vez. El top-8 (aplicado en el componente) ya no
+ * ordena solo por gasto sino por la magnitud combinada
+ * (ingresos + gastos), para no dejar fuera una categoría que es
+ * mayormente de ingresos.
+ */
+export function agruparPorCategoria(transacciones: Transaccion[]): PuntoCategoria[] {
+  const porCategoria = new Map<string, { ingresos: number; gastos: number }>();
 
   for (const t of transacciones) {
-    if (t.tipo !== "cargo") continue;
     const nombre = categoriaDe(t);
-    porCategoria.set(nombre, (porCategoria.get(nombre) ?? 0) + t.monto);
+    const acumulado = porCategoria.get(nombre) ?? { ingresos: 0, gastos: 0 };
+    if (t.tipo === "abono") acumulado.ingresos += t.monto;
+    else acumulado.gastos += t.monto;
+    porCategoria.set(nombre, acumulado);
   }
 
   return Array.from(porCategoria.entries())
-    .map(([categoria, total]) => ({ categoria, total }))
-    .sort((a, b) => b.total - a.total);
+    .map(([categoria, { ingresos, gastos }]) => ({ categoria, ingresos, gastos }))
+    .sort((a, b) => b.ingresos + b.gastos - (a.ingresos + a.gastos));
 }
 
 export interface PuntoComercio {
   comercio: string;
-  total: number;
+  ingresos: number;
+  gastos: number;
 }
 
-export function agruparGastoPorComercio(
-  transacciones: Transaccion[]
-): PuntoComercio[] {
+export function agruparPorComercio(transacciones: Transaccion[]): PuntoComercio[] {
   // A diferencia de categoría, comercio no tiene un fallback "Sin comercio"
   // -- es opcional por diseño (solo lo asignan las reglas que lo definen
   // explícitamente), así que una transacción sin comercio simplemente no
   // participa en este agrupado en vez de inflar un bucket poco informativo.
-  const porComercio = new Map<string, number>();
+  // Acumula ingresos y gastos por separado -- un comercio como "Pago TDC
+  // Beyond" solo aparece del lado de ingresos (es un abono), mientras que
+  // uno de compra normal solo del lado de gastos.
+  const porComercio = new Map<string, { ingresos: number; gastos: number }>();
 
   for (const t of transacciones) {
-    if (t.tipo !== "cargo" || !t.comercio) continue;
-    porComercio.set(t.comercio, (porComercio.get(t.comercio) ?? 0) + t.monto);
+    if (!t.comercio) continue;
+    const acumulado = porComercio.get(t.comercio) ?? { ingresos: 0, gastos: 0 };
+    if (t.tipo === "abono") acumulado.ingresos += t.monto;
+    else acumulado.gastos += t.monto;
+    porComercio.set(t.comercio, acumulado);
   }
 
   return Array.from(porComercio.entries())
-    .map(([comercio, total]) => ({ comercio, total }))
-    .sort((a, b) => b.total - a.total);
+    .map(([comercio, { ingresos, gastos }]) => ({ comercio, ingresos, gastos }))
+    .sort((a, b) => b.ingresos + b.gastos - (a.ingresos + a.gastos));
 }
 
 export interface Promedios {

@@ -3,6 +3,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Legend,
   LabelList,
   ResponsiveContainer,
   Tooltip,
@@ -28,16 +29,17 @@ export function GastoPorComercioChart({
   comercioSeleccionado,
   onClickComercio,
 }: GastoPorComercioChartProps) {
-  // Igual que Gasto por categoría: ordenado descendente, más de ~8 comercios
-  // se pliegan para no saturar el eje vertical -- pero a diferencia de
-  // categoría, aquí no hay un bucket "Otros" clicable ni un "Sin comercio":
-  // el comercio es opcional por diseño (solo las reglas que lo definen
-  // explícitamente lo asignan), así que las transacciones sin comercio
-  // simplemente no entran a esta gráfica en vez de mostrarse como ruido.
+  // Igual que Ingresos y gastos por categoría: ordenado descendente por
+  // magnitud combinada, más de ~8 comercios se pliegan para no saturar el
+  // eje vertical -- pero a diferencia de categoría, aquí no hay un bucket
+  // "Otros" clicable ni un "Sin comercio": el comercio es opcional por
+  // diseño (solo las reglas que lo definen explícitamente lo asignan), así
+  // que las transacciones sin comercio simplemente no entran a esta
+  // gráfica en vez de mostrarse como ruido.
   const TOPE = 8;
   const datosFinales = datos.slice(0, TOPE);
 
-  const alturaFila = 32;
+  const alturaFila = 44;
 
   const opacidad = (comercio: string) =>
     !comercioSeleccionado || comercioSeleccionado === comercio ? 1 : 0.3;
@@ -48,7 +50,7 @@ export function GastoPorComercioChart({
       style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
     >
       <h3 className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
-        Gasto por comercio
+        Ingresos y gastos por comercio
         {onClickComercio && (
           <span className="ml-2 font-normal" style={{ color: "var(--text-muted)" }}>
             (clic en un comercio para filtrar)
@@ -61,7 +63,7 @@ export function GastoPorComercioChart({
           "Reglas de categorización..." en la app de escritorio.
         </p>
       ) : (
-        <div style={{ height: Math.max(200, datosFinales.length * alturaFila + 40) }}>
+        <div style={{ height: Math.max(220, datosFinales.length * alturaFila + 40) }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={datosFinales}
@@ -87,11 +89,17 @@ export function GastoPorComercioChart({
                   color: "var(--text-primary)",
                 }}
               />
+              <Legend
+                formatter={(value) => (
+                  <span style={{ color: "var(--text-secondary)" }}>{value}</span>
+                )}
+              />
               <Bar
-                dataKey="total"
+                dataKey="ingresos"
+                name="Ingresos"
                 fill="var(--series-1)"
                 radius={[0, 4, 4, 0]}
-                maxBarSize={20}
+                maxBarSize={16}
                 onClick={
                   onClickComercio ? (d) => onClickComercio(d.payload.comercio) : undefined
                 }
@@ -101,7 +109,28 @@ export function GastoPorComercioChart({
                   <Cell key={d.comercio} fillOpacity={opacidad(d.comercio)} />
                 ))}
                 <LabelList
-                  dataKey="total"
+                  dataKey="ingresos"
+                  position="right"
+                  formatter={(v: unknown) => formateadorMoneda.format(Number(v))}
+                  style={{ fill: "var(--text-secondary)", fontSize: 12 }}
+                />
+              </Bar>
+              <Bar
+                dataKey="gastos"
+                name="Gastos"
+                fill="var(--series-2)"
+                radius={[0, 4, 4, 0]}
+                maxBarSize={16}
+                onClick={
+                  onClickComercio ? (d) => onClickComercio(d.payload.comercio) : undefined
+                }
+                cursor={onClickComercio ? "pointer" : undefined}
+              >
+                {datosFinales.map((d) => (
+                  <Cell key={d.comercio} fillOpacity={opacidad(d.comercio)} />
+                ))}
+                <LabelList
+                  dataKey="gastos"
                   position="right"
                   formatter={(v: unknown) => formateadorMoneda.format(Number(v))}
                   style={{ fill: "var(--text-secondary)", fontSize: 12 }}

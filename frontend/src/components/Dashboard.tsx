@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  agruparGastoPorCategoria,
-  agruparGastoPorComercio,
+  agruparPorCategoria,
+  agruparPorComercio,
   agruparIngresosGastosPorMes,
   aplicarFiltros,
   calcularPromedios,
@@ -86,10 +86,10 @@ export function Dashboard() {
   const ingresosGastos = agruparIngresosGastosPorMes(
     aplicarFiltros(transaccionesVisibles, filtros, "mes")
   );
-  const gastoPorCategoria = agruparGastoPorCategoria(
+  const gastoPorCategoria = agruparPorCategoria(
     aplicarFiltros(transaccionesVisibles, filtros, "categoria")
   );
-  const gastoPorComercio = agruparGastoPorComercio(
+  const gastoPorComercio = agruparPorComercio(
     aplicarFiltros(transaccionesVisibles, filtros, "comercio")
   );
 
