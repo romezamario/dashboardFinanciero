@@ -69,10 +69,15 @@ PATRON_DOS_MONTOS = re.compile(
     r"^(?P<resto>.*?)\s*(?P<monto>-?[\d,]+\.\d{2})\s+(?P<saldo>-?[\d,]+\.\d{2})\s*$"
 )
 
-# Portada (página 1): línea "Cuenta <Tipo>" sola (ej. "Cuenta Priority") —
-# distinta de "Número de cuenta de cheques...", que siempre trae más texto
-# alrededor. Usamos esto como alias automático de la cuenta.
-PATRON_ALIAS = re.compile(r"^Cuenta\s+[A-Za-zÁÉÍÓÚáéíóú]+(?:\s+[A-Za-zÁÉÍÓÚáéíóú]+)?$")
+# Portada (página 1): "Cuenta <Tipo>" (ej. "Cuenta Priority") — distinta de
+# "Número de cuenta de cheques...", que siempre trae más texto alrededor.
+# Usamos esto como alias automático de la cuenta. Confirmado 2026-09-21
+# contra una cuenta Priority real: "Cuenta Priority" no siempre está sola en
+# su propia línea -- pdfplumber a veces la pega al final de la línea de
+# domicilio de la sucursal ("...MEXICO C.P.01234 Cuenta Priority"), por eso
+# el patrón busca el final de la línea (`$`) en vez de exigir que sea la
+# línea completa (`^...$`); así funciona en ambos casos.
+PATRON_ALIAS = re.compile(r"Cuenta\s+[A-Za-zÁÉÍÓÚáéíóú]+(?:\s+[A-Za-zÁÉÍÓÚáéíóú]+)?$")
 
 # "Número de cuenta de cheques <11 dígitos>" — de ahí solo nos quedamos con
 # los últimos 4; el resto del número nunca se guarda en ninguna variable
@@ -136,8 +141,10 @@ class BanamexParser(BaseParser):
         for linea in texto_portada.splitlines():
             linea = linea.strip()
 
-            if alias is None and PATRON_ALIAS.match(linea):
-                alias = linea
+            if alias is None:
+                coincidencia_alias = PATRON_ALIAS.search(linea)
+                if coincidencia_alias:
+                    alias = coincidencia_alias.group(0)
 
             if ultimos_4 is None:
                 coincidencia = PATRON_CUENTA_CHEQUES.search(linea)
