@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import {
-  actualizarCategoriaYComercio,
+  actualizarCategoriaComercioYEvento,
   actualizarCuentaDeDocumentos,
   buscarPorDescripcion,
   calcularImpactoCambioDeCuenta,
+  eventoDe,
 } from "../lib/queries";
 import type { Transaccion } from "../lib/types";
 
@@ -33,6 +34,7 @@ export function EditorTransacciones({
   const [nuevaCategoria, setNuevaCategoria] = useState("");
   const [nuevoComercio, setNuevoComercio] = useState("");
   const [nuevaCuentaId, setNuevaCuentaId] = useState("");
+  const [nuevoEvento, setNuevoEvento] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(
     null
@@ -62,6 +64,13 @@ export function EditorTransacciones({
     () =>
       Array.from(
         new Set(transacciones.map((t) => t.comercio).filter((c): c is string => !!c))
+      ).sort(),
+    [transacciones]
+  );
+  const eventosExistentes = useMemo(
+    () =>
+      Array.from(
+        new Set(transacciones.map(eventoDe).filter((e): e is string => e !== null))
       ).sort(),
     [transacciones]
   );
@@ -100,7 +109,8 @@ export function EditorTransacciones({
     const categoria = nuevaCategoria.trim();
     const comercio = nuevoComercio.trim();
     const cuentaId = nuevaCuentaId;
-    if (seleccionadas.size === 0 || (!categoria && !comercio && !cuentaId)) return;
+    const evento = nuevoEvento.trim();
+    if (seleccionadas.size === 0 || (!categoria && !comercio && !cuentaId && !evento)) return;
 
     const idsSeleccionados = Array.from(seleccionadas);
     let documentoIds: string[] = [];
@@ -125,10 +135,11 @@ export function EditorTransacciones({
     setGuardando(true);
     setMensaje(null);
     try {
-      if (categoria || comercio) {
-        await actualizarCategoriaYComercio(idsSeleccionados, {
+      if (categoria || comercio || evento) {
+        await actualizarCategoriaComercioYEvento(idsSeleccionados, {
           categoria: categoria || undefined,
           comercio: comercio || undefined,
+          evento: evento || undefined,
         });
       }
       if (cuentaId) {
@@ -142,6 +153,7 @@ export function EditorTransacciones({
       setNuevaCategoria("");
       setNuevoComercio("");
       setNuevaCuentaId("");
+      setNuevoEvento("");
       await onActualizado();
     } catch (e) {
       setMensaje({
@@ -155,7 +167,7 @@ export function EditorTransacciones({
 
   const puedeAplicar =
     seleccionadas.size > 0 &&
-    (nuevaCategoria.trim() || nuevoComercio.trim() || nuevaCuentaId) &&
+    (nuevaCategoria.trim() || nuevoComercio.trim() || nuevaCuentaId || nuevoEvento.trim()) &&
     !guardando;
 
   return (
@@ -164,12 +176,13 @@ export function EditorTransacciones({
       style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
     >
       <h3 className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
-        Editar categoría/comercio/cuenta en lote
+        Editar categoría/comercio/cuenta/evento en lote
       </h3>
       <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
         Busca por descripción, selecciona una o varias transacciones, y asígnales una
-        categoría, comercio y/o cuenta nuevos. Cambiar la cuenta reasigna el estado de
-        cuenta completo (ver aviso al aplicar), no solo las transacciones seleccionadas.
+        categoría, comercio, cuenta y/o evento (viaje, fiesta, etc.) nuevos. Cambiar la
+        cuenta reasigna el estado de cuenta completo (ver aviso al aplicar), no solo las
+        transacciones seleccionadas.
       </p>
 
       <input
@@ -252,6 +265,9 @@ export function EditorTransacciones({
                     <td className="py-2 pr-2" style={{ color: "var(--text-secondary)" }}>
                       {t.documentos.cuentas.alias}
                     </td>
+                    <td className="py-2 pr-2" style={{ color: "var(--text-secondary)" }}>
+                      {t.eventos?.nombre ?? "—"}
+                    </td>
                     <td
                       className="py-2 pr-2 text-right"
                       style={{ color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums" }}
@@ -263,7 +279,7 @@ export function EditorTransacciones({
                 {visibles.length === 0 && (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={9}
                       className="py-4 text-center text-sm"
                       style={{ color: "var(--text-muted)" }}
                     >
@@ -339,6 +355,28 @@ export function EditorTransacciones({
                   </option>
                 ))}
               </select>
+            </label>
+
+            <label className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              Nuevo evento
+              <input
+                type="text"
+                list="editor-eventos-existentes"
+                value={nuevoEvento}
+                onChange={(e) => setNuevoEvento(e.target.value)}
+                placeholder="(sin cambio)"
+                className="mt-1 block w-48 rounded-md px-3 py-2 text-sm"
+                style={{
+                  background: "var(--page-plane)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-primary)",
+                }}
+              />
+              <datalist id="editor-eventos-existentes">
+                {eventosExistentes.map((e) => (
+                  <option key={e} value={e} />
+                ))}
+              </datalist>
             </label>
 
             <button

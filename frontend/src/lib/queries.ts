@@ -19,6 +19,7 @@ export async function obtenerTransacciones(): Promise<Transaccion[]> {
       .select(
         `id, fecha, descripcion, monto, tipo, saldo, comercio, tarjeta,
          categorias ( nombre ),
+         eventos ( nombre ),
          documentos ( id, cuentas ( id, alias, bancos ( nombre ) ) )`
       )
       .order("fecha", { ascending: true })
@@ -41,6 +42,7 @@ export interface Filtros {
   comercio?: string;
   cuenta?: string;
   tarjeta?: string;
+  evento?: string;
 }
 
 /** Nombre de categoría que usa el resto del código para "sin categoría". */
@@ -48,6 +50,13 @@ export const SIN_CATEGORIA = "Sin categoría";
 
 export function categoriaDe(t: Transaccion): string {
   return t.categorias?.nombre ?? SIN_CATEGORIA;
+}
+
+/** A diferencia de categoría, un evento (viaje, fiesta) es opcional por
+ * diseño -- la mayoría de las transacciones no pertenecen a ninguno, así
+ * que no hay un fallback "Sin evento" (mismo criterio que comercio). */
+export function eventoDe(t: Transaccion): string | null {
+  return t.eventos?.nombre ?? null;
 }
 
 /** Alias de la cuenta (ver `cuentas.alias`) -- siempre presente, a
@@ -111,6 +120,9 @@ export function aplicarFiltros(
       return false;
     }
     if (filtros.tarjeta && excluir !== "tarjeta" && t.tarjeta !== filtros.tarjeta) {
+      return false;
+    }
+    if (filtros.evento && excluir !== "evento" && eventoDe(t) !== filtros.evento) {
       return false;
     }
     return true;
@@ -309,17 +321,40 @@ async function buscarOCrearCategoriaId(nombre: string): Promise<string> {
   return creada.id as string;
 }
 
+/** Mismo find-or-create que `buscarOCrearCategoriaId`, para `eventos` --
+ * `evento_id` también es un FK, así que escribir "Viaje a Cancún" desde el
+ * frontend necesita resolver (o crear) su fila en `eventos` primero, para
+ * que dos transacciones con el mismo nombre de evento de verdad compartan
+ * la misma fila en vez de fragmentarse por variaciones de texto. */
+async function buscarOCrearEventoId(nombre: string): Promise<string> {
+  const { data: existente, error: errorSelect } = await supabase
+    .from("eventos")
+    .select("id")
+    .eq("nombre", nombre)
+    .maybeSingle();
+  if (errorSelect) throw errorSelect;
+  if (existente) return existente.id as string;
+
+  const { data: creado, error: errorInsert } = await supabase
+    .from("eventos")
+    .insert({ nombre })
+    .select("id")
+    .single();
+  if (errorInsert) throw errorInsert;
+  return creado.id as string;
+}
+
 /**
- * Edición masiva: aplica una nueva categoría y/o comercio a los `id` dados.
- * Un campo ausente en `cambios` significa "no tocar ese campo" -- no hay
- * forma de "vaciar" categoría/comercio desde aquí, solo de reasignarlos (no
+ * Edición masiva: aplica una nueva categoría, comercio y/o evento a los
+ * `id` dados. Un campo ausente en `cambios` significa "no tocar ese campo"
+ * -- no hay forma de "vaciar" ninguno desde aquí, solo de reasignarlos (no
  * se pidió esa función; si hace falta, agrega un `null` explícito aparte).
  * RLS ya garantiza que el update solo puede tocar filas del propio usuario,
  * así que no hace falta re-validar ownership aquí.
  */
-export async function actualizarCategoriaYComercio(
+export async function actualizarCategoriaComercioYEvento(
   ids: string[],
-  cambios: { categoria?: string; comercio?: string }
+  cambios: { categoria?: string; comercio?: string; evento?: string }
 ): Promise<void> {
   if (ids.length === 0) return;
 
@@ -329,6 +364,9 @@ export async function actualizarCategoriaYComercio(
   }
   if (cambios.comercio) {
     payload.comercio = cambios.comercio;
+  }
+  if (cambios.evento) {
+    payload.evento_id = await buscarOCrearEventoId(cambios.evento);
   }
   if (Object.keys(payload).length === 0) return;
 

@@ -17,6 +17,7 @@ export interface Transaccion {
   comercio: string | null;
   tarjeta: string | null;
   categorias: { nombre: string } | null;
+  eventos: { nombre: string } | null;
   documentos: {
     id: string;
     cuentas: {

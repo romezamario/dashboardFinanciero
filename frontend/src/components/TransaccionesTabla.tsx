@@ -68,6 +68,12 @@ export function TransaccionesTabla({
                 Cuenta
               </th>
               <th
+                className="py-2 text-left font-medium"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Evento
+              </th>
+              <th
                 className="py-2 text-right font-medium"
                 style={{ color: "var(--text-muted)" }}
               >
@@ -95,6 +101,9 @@ export function TransaccionesTabla({
                 </td>
                 <td className="py-2" style={{ color: "var(--text-secondary)" }}>
                   {t.documentos.cuentas.alias}
+                </td>
+                <td className="py-2" style={{ color: "var(--text-secondary)" }}>
+                  {t.eventos?.nombre ?? "—"}
                 </td>
                 <td
                   className="py-2 text-right"

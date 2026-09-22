@@ -7,6 +7,7 @@ import {
   calcularPromedios,
   categoriaDe,
   cuentaDe,
+  eventoDe,
   obtenerTransacciones,
   ocultarCategorias,
   type Filtros,
@@ -26,6 +27,7 @@ const ETIQUETAS_FILTRO: Record<keyof Filtros, string> = {
   comercio: "Comercio",
   cuenta: "Cuenta",
   tarjeta: "Tarjeta",
+  evento: "Evento",
 };
 
 export function Dashboard() {
@@ -75,6 +77,17 @@ export function Dashboard() {
     () =>
       Array.from(
         new Set(transacciones.map((t) => t.tarjeta).filter((t): t is string => !!t))
+      ).sort(),
+    [transacciones]
+  );
+
+  // Igual que tarjeta: un evento es opcional (viajes/fiestas concretos, no
+  // todas las transacciones pertenecen a uno), así que se descartan los
+  // null en vez de mostrarlos como una opción "Sin evento".
+  const eventosConocidos = useMemo(
+    () =>
+      Array.from(
+        new Set(transacciones.map(eventoDe).filter((e): e is string => e !== null))
       ).sort(),
     [transacciones]
   );
@@ -306,6 +319,34 @@ export function Dashboard() {
                       title={seleccionada ? "Quitar este filtro" : "Filtrar por esta tarjeta"}
                     >
                       {tarjeta}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {eventosConocidos.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  Evento:
+                </span>
+                {eventosConocidos.map((evento) => {
+                  const seleccionado = filtros.evento === evento;
+                  return (
+                    <button
+                      key={evento}
+                      onClick={() => alternarFiltro("evento", evento)}
+                      className="rounded-full px-3 py-1 text-xs font-medium"
+                      style={{
+                        background: seleccionado ? "var(--series-1)" : "var(--surface-1)",
+                        border: `1px solid ${
+                          seleccionado ? "var(--series-1)" : "var(--border)"
+                        }`,
+                        color: seleccionado ? "#ffffff" : "var(--text-secondary)",
+                      }}
+                      title={seleccionado ? "Quitar este filtro" : "Filtrar por este evento"}
+                    >
+                      {evento}
                     </button>
                   );
                 })}
