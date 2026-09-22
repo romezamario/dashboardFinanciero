@@ -20,6 +20,7 @@ import { GastoPorCategoriaChart } from "./GastoPorCategoriaChart";
 import { GastoPorComercioChart } from "./GastoPorComercioChart";
 import { TransaccionesTabla } from "./TransaccionesTabla";
 import { EditorTransacciones } from "./EditorTransacciones";
+import { EventosTab } from "./EventosTab";
 
 const ETIQUETAS_FILTRO: Record<keyof Filtros, string> = {
   mes: "Mes",
@@ -30,12 +31,18 @@ const ETIQUETAS_FILTRO: Record<keyof Filtros, string> = {
   evento: "Evento",
 };
 
+const PESTANAS = [
+  { id: "resumen", etiqueta: "Resumen" },
+  { id: "eventos", etiqueta: "Eventos" },
+] as const;
+
 export function Dashboard() {
   const [transacciones, setTransacciones] = useState<Transaccion[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filtros, setFiltros] = useState<Filtros>({});
   const [categoriasOcultas, setCategoriasOcultas] = useState<Set<string>>(new Set());
+  const [vista, setVista] = useState<(typeof PESTANAS)[number]["id"]>("resumen");
 
   async function recargarTransacciones() {
     try {
@@ -83,7 +90,9 @@ export function Dashboard() {
 
   // Igual que tarjeta: un evento es opcional (viajes/fiestas concretos, no
   // todas las transacciones pertenecen a uno), así que se descartan los
-  // null en vez de mostrarlos como una opción "Sin evento".
+  // null en vez de mostrarlos como una opción "Sin evento". Asignar
+  // eventos vive en su propia pestaña (EventosTab) -- este filtro solo
+  // sirve para ver/cruzar por evento ya asignado en el Resumen.
   const eventosConocidos = useMemo(
     () =>
       Array.from(
@@ -205,202 +214,226 @@ export function Dashboard() {
           </p>
         ) : (
           <>
-            {hayFiltrosActivos && (
-              <div className="flex flex-wrap items-center gap-2">
-                {(Object.keys(filtros) as (keyof Filtros)[])
-                  .filter((campo) => filtros[campo])
-                  .map((campo) => (
-                    <button
-                      key={campo}
-                      onClick={() => setFiltros((a) => ({ ...a, [campo]: undefined }))}
-                      className="rounded-full px-3 py-1 text-xs font-medium"
-                      style={{
-                        background: "var(--series-1)",
-                        color: "#ffffff",
-                      }}
-                      title="Quitar este filtro"
-                    >
-                      {ETIQUETAS_FILTRO[campo]}: {filtros[campo]} ×
-                    </button>
-                  ))}
+            <div className="flex gap-1" style={{ borderBottom: "1px solid var(--border)" }}>
+              {PESTANAS.map((tab) => (
                 <button
-                  onClick={() => setFiltros({})}
-                  className="text-xs underline"
-                  style={{ color: "var(--text-muted)" }}
+                  key={tab.id}
+                  onClick={() => setVista(tab.id)}
+                  className="px-4 py-2 text-sm font-medium"
+                  style={{
+                    color: vista === tab.id ? "var(--series-1)" : "var(--text-secondary)",
+                    borderBottom: `2px solid ${
+                      vista === tab.id ? "var(--series-1)" : "transparent"
+                    }`,
+                  }}
                 >
-                  Limpiar todos los filtros
+                  {tab.etiqueta}
                 </button>
-              </div>
-            )}
-
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                Ocultar categorías:
-              </span>
-              {categoriasConocidas.map((categoria) => {
-                const oculta = categoriasOcultas.has(categoria);
-                return (
-                  <button
-                    key={categoria}
-                    onClick={() => alternarCategoriaOculta(categoria)}
-                    className="rounded-full px-3 py-1 text-xs font-medium"
-                    style={{
-                      background: "var(--surface-1)",
-                      border: `1px solid ${
-                        oculta ? "var(--status-critical)" : "var(--border)"
-                      }`,
-                      color: oculta ? "var(--status-critical)" : "var(--text-secondary)",
-                      textDecoration: oculta ? "line-through" : "none",
-                    }}
-                    title={oculta ? "Mostrar de nuevo" : "Ocultar esta categoría"}
-                  >
-                    {categoria}
-                  </button>
-                );
-              })}
-              {categoriasOcultas.size > 0 && (
-                <button
-                  onClick={() => setCategoriasOcultas(new Set())}
-                  className="text-xs underline"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  Mostrar todas
-                </button>
-              )}
+              ))}
             </div>
 
-            {cuentasConocidas.length > 1 && (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                  Cuenta:
-                </span>
-                {cuentasConocidas.map((cuenta) => {
-                  const seleccionada = filtros.cuenta === cuenta;
-                  return (
+            {vista === "eventos" ? (
+              <EventosTab transacciones={transacciones} onActualizado={recargarTransacciones} />
+            ) : (
+              <>
+                {hayFiltrosActivos && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {(Object.keys(filtros) as (keyof Filtros)[])
+                      .filter((campo) => filtros[campo])
+                      .map((campo) => (
+                        <button
+                          key={campo}
+                          onClick={() => setFiltros((a) => ({ ...a, [campo]: undefined }))}
+                          className="rounded-full px-3 py-1 text-xs font-medium"
+                          style={{
+                            background: "var(--series-1)",
+                            color: "#ffffff",
+                          }}
+                          title="Quitar este filtro"
+                        >
+                          {ETIQUETAS_FILTRO[campo]}: {filtros[campo]} ×
+                        </button>
+                      ))}
                     <button
-                      key={cuenta}
-                      onClick={() => alternarFiltro("cuenta", cuenta)}
-                      className="rounded-full px-3 py-1 text-xs font-medium"
-                      style={{
-                        background: seleccionada ? "var(--series-1)" : "var(--surface-1)",
-                        border: `1px solid ${
-                          seleccionada ? "var(--series-1)" : "var(--border)"
-                        }`,
-                        color: seleccionada ? "#ffffff" : "var(--text-secondary)",
-                      }}
-                      title={seleccionada ? "Quitar este filtro" : "Filtrar por esta cuenta"}
+                      onClick={() => setFiltros({})}
+                      className="text-xs underline"
+                      style={{ color: "var(--text-muted)" }}
                     >
-                      {cuenta}
+                      Limpiar todos los filtros
                     </button>
-                  );
-                })}
-              </div>
-            )}
+                  </div>
+                )}
 
-            {tarjetasConocidas.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                  Tarjeta:
-                </span>
-                {tarjetasConocidas.map((tarjeta) => {
-                  const seleccionada = filtros.tarjeta === tarjeta;
-                  return (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    Ocultar categorías:
+                  </span>
+                  {categoriasConocidas.map((categoria) => {
+                    const oculta = categoriasOcultas.has(categoria);
+                    return (
+                      <button
+                        key={categoria}
+                        onClick={() => alternarCategoriaOculta(categoria)}
+                        className="rounded-full px-3 py-1 text-xs font-medium"
+                        style={{
+                          background: "var(--surface-1)",
+                          border: `1px solid ${
+                            oculta ? "var(--status-critical)" : "var(--border)"
+                          }`,
+                          color: oculta ? "var(--status-critical)" : "var(--text-secondary)",
+                          textDecoration: oculta ? "line-through" : "none",
+                        }}
+                        title={oculta ? "Mostrar de nuevo" : "Ocultar esta categoría"}
+                      >
+                        {categoria}
+                      </button>
+                    );
+                  })}
+                  {categoriasOcultas.size > 0 && (
                     <button
-                      key={tarjeta}
-                      onClick={() => alternarFiltro("tarjeta", tarjeta)}
-                      className="rounded-full px-3 py-1 text-xs font-medium"
-                      style={{
-                        background: seleccionada ? "var(--series-1)" : "var(--surface-1)",
-                        border: `1px solid ${
-                          seleccionada ? "var(--series-1)" : "var(--border)"
-                        }`,
-                        color: seleccionada ? "#ffffff" : "var(--text-secondary)",
-                      }}
-                      title={seleccionada ? "Quitar este filtro" : "Filtrar por esta tarjeta"}
+                      onClick={() => setCategoriasOcultas(new Set())}
+                      className="text-xs underline"
+                      style={{ color: "var(--text-muted)" }}
                     >
-                      {tarjeta}
+                      Mostrar todas
                     </button>
-                  );
-                })}
-              </div>
+                  )}
+                </div>
+
+                {cuentasConocidas.length > 1 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      Cuenta:
+                    </span>
+                    {cuentasConocidas.map((cuenta) => {
+                      const seleccionada = filtros.cuenta === cuenta;
+                      return (
+                        <button
+                          key={cuenta}
+                          onClick={() => alternarFiltro("cuenta", cuenta)}
+                          className="rounded-full px-3 py-1 text-xs font-medium"
+                          style={{
+                            background: seleccionada ? "var(--series-1)" : "var(--surface-1)",
+                            border: `1px solid ${
+                              seleccionada ? "var(--series-1)" : "var(--border)"
+                            }`,
+                            color: seleccionada ? "#ffffff" : "var(--text-secondary)",
+                          }}
+                          title={seleccionada ? "Quitar este filtro" : "Filtrar por esta cuenta"}
+                        >
+                          {cuenta}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {tarjetasConocidas.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      Tarjeta:
+                    </span>
+                    {tarjetasConocidas.map((tarjeta) => {
+                      const seleccionada = filtros.tarjeta === tarjeta;
+                      return (
+                        <button
+                          key={tarjeta}
+                          onClick={() => alternarFiltro("tarjeta", tarjeta)}
+                          className="rounded-full px-3 py-1 text-xs font-medium"
+                          style={{
+                            background: seleccionada ? "var(--series-1)" : "var(--surface-1)",
+                            border: `1px solid ${
+                              seleccionada ? "var(--series-1)" : "var(--border)"
+                            }`,
+                            color: seleccionada ? "#ffffff" : "var(--text-secondary)",
+                          }}
+                          title={seleccionada ? "Quitar este filtro" : "Filtrar por esta tarjeta"}
+                        >
+                          {tarjeta}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {eventosConocidos.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                      Evento:
+                    </span>
+                    {eventosConocidos.map((evento) => {
+                      const seleccionado = filtros.evento === evento;
+                      return (
+                        <button
+                          key={evento}
+                          onClick={() => alternarFiltro("evento", evento)}
+                          className="rounded-full px-3 py-1 text-xs font-medium"
+                          style={{
+                            background: seleccionado ? "var(--series-1)" : "var(--surface-1)",
+                            border: `1px solid ${
+                              seleccionado ? "var(--series-1)" : "var(--border)"
+                            }`,
+                            color: seleccionado ? "#ffffff" : "var(--text-secondary)",
+                          }}
+                          title={seleccionado ? "Quitar este filtro" : "Filtrar por este evento"}
+                        >
+                          {evento}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <StatTile
+                    label="Ingresos prom. (3 meses)"
+                    value={ingresosPromedio3m}
+                    tone="good"
+                  />
+                  <StatTile
+                    label="Gastos prom. (3 meses)"
+                    value={gastosPromedio3m}
+                    tone="critical"
+                  />
+                  <StatTile
+                    label="Ingresos prom. (12 meses)"
+                    value={ingresosPromedio12m}
+                    tone="good"
+                  />
+                  <StatTile
+                    label="Gastos prom. (12 meses)"
+                    value={gastosPromedio12m}
+                    tone="critical"
+                  />
+                </div>
+
+                <IngresosGastosChart
+                  datos={ingresosGastos}
+                  mesSeleccionado={filtros.mes}
+                  onClickMes={(mes) => alternarFiltro("mes", mes)}
+                />
+
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                  <GastoPorCategoriaChart
+                    datos={gastoPorCategoria}
+                    categoriaSeleccionada={filtros.categoria}
+                    onClickCategoria={seleccionarCategoria}
+                  />
+                  <GastoPorComercioChart
+                    datos={gastoPorComercio}
+                    comercioSeleccionado={filtros.comercio}
+                    onClickComercio={(comercio) => alternarFiltro("comercio", comercio)}
+                  />
+                </div>
+
+                <TransaccionesTabla transacciones={transaccionesFiltradas} />
+
+                <EditorTransacciones
+                  transacciones={transacciones}
+                  onActualizado={recargarTransacciones}
+                />
+              </>
             )}
-
-            {eventosConocidos.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                  Evento:
-                </span>
-                {eventosConocidos.map((evento) => {
-                  const seleccionado = filtros.evento === evento;
-                  return (
-                    <button
-                      key={evento}
-                      onClick={() => alternarFiltro("evento", evento)}
-                      className="rounded-full px-3 py-1 text-xs font-medium"
-                      style={{
-                        background: seleccionado ? "var(--series-1)" : "var(--surface-1)",
-                        border: `1px solid ${
-                          seleccionado ? "var(--series-1)" : "var(--border)"
-                        }`,
-                        color: seleccionado ? "#ffffff" : "var(--text-secondary)",
-                      }}
-                      title={seleccionado ? "Quitar este filtro" : "Filtrar por este evento"}
-                    >
-                      {evento}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <StatTile
-                label="Ingresos prom. (3 meses)"
-                value={ingresosPromedio3m}
-                tone="good"
-              />
-              <StatTile
-                label="Gastos prom. (3 meses)"
-                value={gastosPromedio3m}
-                tone="critical"
-              />
-              <StatTile
-                label="Ingresos prom. (12 meses)"
-                value={ingresosPromedio12m}
-                tone="good"
-              />
-              <StatTile
-                label="Gastos prom. (12 meses)"
-                value={gastosPromedio12m}
-                tone="critical"
-              />
-            </div>
-
-            <IngresosGastosChart
-              datos={ingresosGastos}
-              mesSeleccionado={filtros.mes}
-              onClickMes={(mes) => alternarFiltro("mes", mes)}
-            />
-
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <GastoPorCategoriaChart
-                datos={gastoPorCategoria}
-                categoriaSeleccionada={filtros.categoria}
-                onClickCategoria={seleccionarCategoria}
-              />
-              <GastoPorComercioChart
-                datos={gastoPorComercio}
-                comercioSeleccionado={filtros.comercio}
-                onClickComercio={(comercio) => alternarFiltro("comercio", comercio)}
-              />
-            </div>
-
-            <TransaccionesTabla transacciones={transaccionesFiltradas} />
-
-            <EditorTransacciones
-              transacciones={transacciones}
-              onActualizado={recargarTransacciones}
-            />
           </>
         )}
       </main>
