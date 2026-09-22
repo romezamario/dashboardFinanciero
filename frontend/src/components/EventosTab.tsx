@@ -4,8 +4,10 @@ import {
   agruparPorCategoria,
   agruparPorComercio,
   agruparPorEvento,
+  aplicarFiltros,
   cuentaDe,
   eventoDe,
+  type Filtros,
 } from "../lib/queries";
 import type { Transaccion } from "../lib/types";
 import { GastoPorEventoChart } from "./GastoPorEventoChart";
@@ -25,6 +27,12 @@ const formateadorFecha = new Intl.DateTimeFormat("es-MX", {
 
 const TOPE_RESULTADOS = 100;
 
+const ETIQUETAS_FILTRO_EVENTO = {
+  evento: "Evento",
+  categoria: "Categoría",
+  comercio: "Comercio",
+} as const;
+
 interface EventosTabProps {
   transacciones: Transaccion[];
   onActualizado: () => void | Promise<void>;
@@ -34,10 +42,10 @@ interface EventosTabProps {
  * A diferencia de "Editar en lote" (que busca por descripción), armar un
  * evento parte de "qué pasó en tal rango de fechas, en tal cuenta/tarjeta"
  * -- no hay una palabra clave común entre un Uber, un restaurante y un
- * hotel del mismo viaje. Por eso el filtro aquí es fecha/cuenta/tarjeta en
- * vez de texto libre, y por la misma razón que el buscador de texto libre
- * (evitar listar todo por accidente), no se muestra nada hasta que al
- * menos un filtro esté activo.
+ * hotel del mismo viaje. Por eso el filtro para ENCONTRAR transacciones
+ * sin evento (abajo) es fecha/cuenta/tarjeta en vez de texto libre, y por
+ * la misma razón que el buscador de texto libre (evitar listar todo por
+ * accidente), no se muestra nada hasta que al menos uno esté activo.
  */
 export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
   const [fechaDesde, setFechaDesde] = useState("");
@@ -46,11 +54,25 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
   const [tarjeta, setTarjeta] = useState("");
   const [seleccionadas, setSeleccionadas] = useState<Set<string>>(new Set());
   const [nuevoEvento, setNuevoEvento] = useState("");
-  const [eventoSeleccionado, setEventoSeleccionado] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(
     null
   );
+
+  // Cross-filter propio de esta pestaña (evento/categoría/comercio) --
+  // estado local a EventosTab, completamente separado del `filtros` del
+  // Resumen (Dashboard.tsx tiene su propio useState, en otra instancia de
+  // componente): hacer clic aquí nunca toca ni se ve afectado por lo que
+  // esté filtrado en el Resumen, y viceversa.
+  const [filtrosEvento, setFiltrosEvento] = useState<Filtros>({});
+
+  function alternarFiltroEvento<K extends keyof Filtros>(campo: K, valor: string) {
+    setFiltrosEvento((anterior) =>
+      anterior[campo] === valor
+        ? { ...anterior, [campo]: undefined }
+        : { ...anterior, [campo]: valor }
+    );
+  }
 
   const cuentasExistentes = useMemo(
     () => Array.from(new Set(transacciones.map(cuentaDe))).sort(),
@@ -71,41 +93,36 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
     [transacciones]
   );
 
-  // Resumen de todos los eventos ya armados -- a propósito NO se calcula
-  // sobre el filtro de fecha/cuenta/tarjeta de arriba (ese filtro sirve
-  // para ENCONTRAR transacciones que todavía no tienen evento, no para
-  // acotar este resumen de los que ya lo tienen).
-  const gastoPorEvento = useMemo(() => agruparPorEvento(transacciones), [transacciones]);
-
-  // Igual que el Resumen (categoría/comercio/tabla), pero aquí la única
-  // dimensión que filtra es el evento -- clic en una barra de
-  // GastoPorEventoChart aísla ese evento para las gráficas y la tabla de
-  // abajo; sin selección, se ve el desglose de TODO lo que ya tiene un
-  // evento asignado (no de todas las transacciones, eso ya lo muestra el
-  // Resumen).
+  // Universo de esta pestaña: solo transacciones que YA tienen un evento
+  // asignado (no todas, eso ya lo muestra el Resumen). El cross-filter de
+  // categoría/comercio/evento se aplica igual que en el Resumen -- cada
+  // gráfica excluye su propia dimensión (aplicarFiltros(..., excluir)) para
+  // poder seguir mostrando todas sus opciones y cambiar la selección.
   const transaccionesConEvento = useMemo(
     () => transacciones.filter((t) => eventoDe(t) !== null),
     [transacciones]
   );
-  const transaccionesDelEvento = useMemo(
-    () =>
-      eventoSeleccionado
-        ? transaccionesConEvento.filter((t) => eventoDe(t) === eventoSeleccionado)
-        : transaccionesConEvento,
-    [transaccionesConEvento, eventoSeleccionado]
+  const gastoPorEvento = useMemo(
+    () => agruparPorEvento(aplicarFiltros(transaccionesConEvento, filtrosEvento, "evento")),
+    [transaccionesConEvento, filtrosEvento]
   );
   const gastoPorCategoriaDelEvento = useMemo(
-    () => agruparPorCategoria(transaccionesDelEvento),
-    [transaccionesDelEvento]
+    () =>
+      agruparPorCategoria(aplicarFiltros(transaccionesConEvento, filtrosEvento, "categoria")),
+    [transaccionesConEvento, filtrosEvento]
   );
   const gastoPorComercioDelEvento = useMemo(
-    () => agruparPorComercio(transaccionesDelEvento),
-    [transaccionesDelEvento]
+    () => agruparPorComercio(aplicarFiltros(transaccionesConEvento, filtrosEvento, "comercio")),
+    [transaccionesConEvento, filtrosEvento]
+  );
+  const transaccionesFiltradasPorEvento = useMemo(
+    () => aplicarFiltros(transaccionesConEvento, filtrosEvento),
+    [transaccionesConEvento, filtrosEvento]
   );
 
-  function alternarEvento(evento: string) {
-    setEventoSeleccionado((anterior) => (anterior === evento ? null : evento));
-  }
+  const hayFiltrosEventoActivos = Boolean(
+    filtrosEvento.evento || filtrosEvento.categoria || filtrosEvento.comercio
+  );
 
   const hayFiltrosActivos = Boolean(fechaDesde || fechaHasta || cuenta || tarjeta);
 
@@ -167,33 +184,53 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
 
   return (
     <div className="space-y-4">
-      <GastoPorEventoChart
-        datos={gastoPorEvento}
-        eventoSeleccionado={eventoSeleccionado}
-        onClickEvento={alternarEvento}
-      />
-
-      {eventoSeleccionado && (
+      {hayFiltrosEventoActivos && (
         <div className="flex flex-wrap items-center gap-2">
+          {(Object.keys(ETIQUETAS_FILTRO_EVENTO) as (keyof typeof ETIQUETAS_FILTRO_EVENTO)[])
+            .filter((campo) => filtrosEvento[campo])
+            .map((campo) => (
+              <button
+                key={campo}
+                onClick={() => setFiltrosEvento((a) => ({ ...a, [campo]: undefined }))}
+                className="rounded-full px-3 py-1 text-xs font-medium"
+                style={{ background: "var(--series-1)", color: "#ffffff" }}
+                title="Quitar este filtro"
+              >
+                {ETIQUETAS_FILTRO_EVENTO[campo]}: {filtrosEvento[campo]} ×
+              </button>
+            ))}
           <button
-            onClick={() => setEventoSeleccionado(null)}
-            className="rounded-full px-3 py-1 text-xs font-medium"
-            style={{ background: "var(--series-1)", color: "#ffffff" }}
-            title="Quitar este filtro"
+            onClick={() => setFiltrosEvento({})}
+            className="text-xs underline"
+            style={{ color: "var(--text-muted)" }}
           >
-            Evento: {eventoSeleccionado} ×
+            Limpiar todos los filtros
           </button>
         </div>
       )}
 
+      <GastoPorEventoChart
+        datos={gastoPorEvento}
+        eventoSeleccionado={filtrosEvento.evento}
+        onClickEvento={(evento) => alternarFiltroEvento("evento", evento)}
+      />
+
       {transaccionesConEvento.length > 0 && (
         <>
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <GastoPorCategoriaChart datos={gastoPorCategoriaDelEvento} />
-            <GastoPorComercioChart datos={gastoPorComercioDelEvento} />
+            <GastoPorCategoriaChart
+              datos={gastoPorCategoriaDelEvento}
+              categoriaSeleccionada={filtrosEvento.categoria}
+              onClickCategoria={(categoria) => alternarFiltroEvento("categoria", categoria)}
+            />
+            <GastoPorComercioChart
+              datos={gastoPorComercioDelEvento}
+              comercioSeleccionado={filtrosEvento.comercio}
+              onClickComercio={(comercio) => alternarFiltroEvento("comercio", comercio)}
+            />
           </div>
 
-          <TransaccionesTabla transacciones={transaccionesDelEvento} />
+          <TransaccionesTabla transacciones={transaccionesFiltradasPorEvento} />
         </>
       )}
 
