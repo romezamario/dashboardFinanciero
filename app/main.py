@@ -895,7 +895,11 @@ class App(tk.Tk):
         try:
             from dotenv import load_dotenv
 
-            from sync.sincronizador import crear_cliente_autenticado, sincronizar_todos
+            from sync.sincronizador import (
+                NOMBRE_ARCHIVO_ESTADO_SYNC,
+                crear_cliente_autenticado,
+                sincronizar_todos,
+            )
         except ImportError as error:
             messagebox.showerror(
                 "Faltan dependencias",
@@ -924,9 +928,17 @@ class App(tk.Tk):
 
         resultados = sincronizar_todos(client)
         if not resultados:
-            messagebox.showinfo(
-                "Sincronizar a Supabase", "No hay archivos en data/procesados/."
+            hay_archivos = any(
+                p.name != NOMBRE_ARCHIVO_ESTADO_SYNC
+                for p in CARPETA_PROCESADOS.glob("*.json")
             )
+            mensaje = (
+                "Ya estaba todo sincronizado — no había archivos nuevos ni "
+                "modificados desde la última vez."
+                if hay_archivos
+                else "No hay archivos en data/procesados/."
+            )
+            messagebox.showinfo("Sincronizar a Supabase", mensaje)
             return
 
         exitosos = [r for r in resultados if r.ok]
@@ -934,8 +946,8 @@ class App(tk.Tk):
         total_transacciones = sum(r.transacciones_sincronizadas for r in exitosos)
 
         resumen = (
-            f"{len(exitosos)}/{len(resultados)} archivo(s) sincronizados "
-            f"({total_transacciones} transacciones).\n"
+            f"{len(exitosos)}/{len(resultados)} archivo(s) nuevos/modificados "
+            f"sincronizados ({total_transacciones} transacciones).\n"
         )
         if fallidos:
             detalle = "\n".join(f"- {r.archivo}: {r.error}" for r in fallidos)

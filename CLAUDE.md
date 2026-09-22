@@ -540,6 +540,29 @@ user over the simpler alternative — don't silently change these:
   (still has the raw colliding `linea_cruda`) needs to be regenerated — reload that PDF in the app
   (it's already sitting in its `procesados/` subfolder next to the original PDF location) and
   re-save; that produces a fresh JSON with the disambiguated lines, safe to resync.
+- **Incremental sync** (2026-09-22): `sincronizar_todos` used to re-upload every `*.json` in
+  `data/procesados/` on every run, even ones already synced with no changes — harmless
+  (idempotent upsert) but slow, and it got noticeably worse as the folder accumulated one file
+  per statement ever loaded. User reported syncing 4 new records took as long as syncing the
+  entire history, because it *was* syncing the entire history. Fixed by skipping a file whose
+  content hash (sha256 of the raw JSON bytes, via `_hash_contenido`) matches what it was the last
+  time it synced *successfully* — tracked in `data/procesados/_estado_sync.json` (gitignored
+  along with the rest of that folder; excluded from `sincronizar_todos`'s own `*.json` glob by an
+  explicit name check, `NOMBRE_ARCHIVO_ESTADO_SYNC`, rather than relying on dotfile-glob
+  conventions that differ between git/Python's glob/Windows Explorer). Deliberately hash-based,
+  not filename- or mtime-based: a JSON's filename is the source PDF's hash, so reprocessing the
+  same PDF after a categorization-rule change (see the duplicate-`linea_cruda` fix above, which
+  already required a "reload and re-save" step) produces the same filename with different
+  content — that case must still sync, and content-hash comparison catches it correctly where a
+  filename-only check would have silently skipped the update. A file that fails to sync is never
+  written into `_estado_sync.json` (mirrors this module's existing "never lose an update"
+  posture, same as the duplicate-line fix above) — the next run retries it automatically, exactly
+  like before this change, just without re-touching everything else that already succeeded.
+  `forzar_todos=True` bypasses the saved state for a full re-push (state corruption, or wanting
+  to re-verify everything against Supabase) — not wired to any UI button, only a code-level
+  escape hatch for now. `App.sincronizar()` in `app/main.py` distinguishes "no files in
+  `data/procesados/` at all" from "files exist but none changed" in its messagebox, since an
+  empty `resultados` list from `sincronizar_todos` now means either.
 - **Testability**: `sincronizar_documento`/`sincronizar_todos` take an already-authenticated
   client as a parameter rather than constructing one internally, so the find-or-create/upsert
   logic can be verified against an in-memory fake client (mimicking `.table().select().eq()

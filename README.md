@@ -250,8 +250,10 @@ mismo usuario con el que después entras al frontend):
 2. Completa en tu `.env` (el mismo de arriba): `SUPABASE_EMAIL` y `SUPABASE_PASSWORD` con esas
    credenciales.
 3. Instala las dependencias si no lo has hecho: `pip install -r requirements.txt`.
-4. En la app, botón **"Sincronizar a Supabase..."** — sube todo lo que haya en
-   `data/procesados/`. Es seguro correrlo varias veces: cada entidad se busca antes de
+4. En la app, botón **"Sincronizar a Supabase..."** — sube los archivos nuevos o modificados de
+   `data/procesados/` (compara por hash de contenido contra la última sincronización exitosa,
+   guardado en `data/procesados/_estado_sync.json`, así que no vuelve a subir lo que ya estaba
+   sincronizado sin cambios). Es seguro correrlo varias veces: cada entidad se busca antes de
    insertarse, y las transacciones usan upsert sobre el mismo constraint único de la tabla
    (`documento_id, pagina, linea_cruda`), así que reintentar o repetir un archivo no duplica nada.
 
