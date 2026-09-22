@@ -137,6 +137,32 @@ export function agruparIngresosGastosPorMes(
     }
   }
 
+  // Rellena los meses sin ninguna transacción con $0 entre el primero y el
+  // último mes que sí tienen datos -- si no, el eje del tiempo se comprime
+  // (un mes sin movimientos desaparece del eje en vez de mostrarse como un
+  // hueco) y la gráfica sugiere continuidad donde en realidad hay meses
+  // faltantes.
+  const mesesConDatos = Array.from(porMes.keys()).sort();
+  if (mesesConDatos.length > 0) {
+    const [anioInicio, mesInicio] = mesesConDatos[0].split("-").map(Number);
+    const [anioFin, mesFin] = mesesConDatos[mesesConDatos.length - 1].split("-").map(Number);
+    const indiceFin = anioFin * 12 + (mesFin - 1);
+
+    let anio = anioInicio;
+    let mes = mesInicio - 1; // 0-indexado, como anoMes espera
+    while (anio * 12 + mes <= indiceFin) {
+      const clave = anoMes(anio, mes);
+      if (!porMes.has(clave)) {
+        porMes.set(clave, { mes: clave, ingresos: 0, gastos: 0 });
+      }
+      mes += 1;
+      if (mes > 11) {
+        mes = 0;
+        anio += 1;
+      }
+    }
+  }
+
   return Array.from(porMes.values()).sort((a, b) => a.mes.localeCompare(b.mes));
 }
 
