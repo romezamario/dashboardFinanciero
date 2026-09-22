@@ -30,6 +30,7 @@ from parsers.base import BaseParser, RenglonCrudo
 from parsers.ejemplo import EjemploParser
 from parsers.banamex import BanamexParser
 from parsers.banamex_tdc import BanamexTdcParser
+from parsers.invex_tdc import InvexTdcParser
 from transform.categorizador import Regla, cargar_reglas, categorizar, guardar_reglas
 from transform.transformador import (
     TransaccionCanonica,
@@ -47,6 +48,7 @@ PARSERS: dict[str, type[BaseParser]] = {
     "Ejemplo": EjemploParser,
     "Banamex": BanamexParser,
     "Banamex TDC": BanamexTdcParser,
+    "Invex TDC": InvexTdcParser,
 }
 
 COLUMNAS = ("pagina", "fecha", "descripcion", "monto", "tipo", "categoria", "comercio", "tarjeta", "origen")

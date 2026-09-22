@@ -296,6 +296,51 @@ statement from a bank you already support will look anything like the first one:
   parseable amount, or whether it's fully legible and just failing a too-strict anchor;
   the fix looks completely different depending on which one it is.
 
+**`parsers/invex_tdc.py`** (Invex credit card, added 2026-09-21) is the second TDC issuer
+supported, structurally very close to Banamex TDC (same one-line-per-transaction layout, two
+dates, trailing `+`/`-` sign convention, `[\s.]*$` trailing-artifact tolerance baked in from day
+one instead of waiting to rediscover that lesson) but **not** the same bank, so it's its own
+module rather than a special case inside `BanamexTdcParser` — confirmed against a real anonymized
+statement, not assumed just because the shapes looked similar. Key differences/unknowns, all
+confirmed only against the one real statement seen so far (2026-09-21):
+- Dates print `DD-Mon-AAAA` with the month capitalized (`"01-May-2026"`), not lowercase like
+  Banamex's `"01-may-2026"` — doesn't affect the regex (case-insensitive) or `_normalizar_fecha`
+  (lowercases before the `MESES` lookup either way), just a spelling difference worth knowing if
+  ever displaying the raw month text instead of the normalized date.
+- No multi-line block like Banamex's `PAGO INTERBANCARIO` has been seen yet, and no repeating
+  `Tarjeta Titular/Adicional/Digital` section headers either (only a single non-repeating "Tarjeta
+  Titular ************1234" line) — so `InvexTdcParser` deliberately does **not** implement either
+  of those; `RenglonCrudo.tarjeta` stays `None` for every row. Don't copy that machinery over
+  preemptively if a future Invex statement turns out to need it — confirm against the real dump
+  first, same rule as always.
+- **`puede_procesar` needed a real bank-name check this time, unlike Banamex TDC's**: both TDC
+  parsers key off "Pago mínimo" (exclusive to a credit-card statement over a checking account),
+  but with two TDC issuers now sharing that marker, "Pago mínimo" alone stopped being enough —
+  confirmed by testing the same synthetic PDF against both parsers and getting `True` from both
+  (which `App._detectar_banco` treats as an unresolvable tie, degrading *both* to manual selection
+  instead of picking the right one). Unlike Banamex TDC's own history (where dropping the
+  "BANAMEX" requirement was safe because no other TDC parser existed yet to collide with),
+  `InvexTdcParser.puede_procesar` requires "INVEX" **and** "Pago mínimo" both present, and
+  `BanamexTdcParser.puede_procesar` was updated to add `and not PATRON_INVEX.search(...)` as an
+  explicit exclusion (see its own module — re-adding a positive "BANAMEX" requirement there isn't
+  an option since that text still isn't selectable on a real Banamex TDC statement, per its
+  existing documented lesson). This cross-exclusion approach is a stopgap that works for exactly
+  two issuers sharing one generic marker; a third TDC issuer with the same "Pago mínimo, no
+  selectable bank name" shape would need this rethought rather than mechanically repeated.
+- **Unverified risk, flagged rather than resolved**: whether "INVEX" actually appears as
+  selectable text on a real statement (vs. being image-only, the same trap that bit the original
+  "BANAMEX" check) hasn't been confirmed against a real PDF yet, only against the anonymized
+  dump/screenshots the user shared (which, being anonymized, can't prove either way — any run of
+  capital letters the right length looks identical whether it started as "INVEX" or something
+  else). If it turns out to be image-only, auto-detection simply never fires for Invex (safe
+  degradation to the manual "Banco" dropdown, not a wrong guess) — confirm on the next real load
+  and tighten the marker then if needed, same iterative pattern used throughout this file.
+- Alias for `extraer_info_cuenta` is a fixed `"Invex TDC"` string (no tier concept confirmed to
+  exist for this issuer, unlike Banamex's Platino/Beyond) — last-4 comes from a "Número de la
+  tarjeta" line on the cover page, same longest-digit-run extraction trick as Banamex TDC's
+  `PATRON_LINEA_TARJETA` (the masked digits before it are literal `X` characters in the real PDF,
+  not actual digits, so they never show up in the `\d+` matches to begin with).
+
 **Manual row entry** (`VentanaRenglonManual` in `app/main.py`) is the other half of the
 "transaction row rendered as an image" gap above — `advertencias()` only *flags* the unreadable
 row, it can't recover it, so the "Agregar renglón manual..." button (next to "Inspeccionar

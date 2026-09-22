@@ -152,8 +152,12 @@ del banco solo no basta si ese banco tiene más de un tipo de documento (ver `Ba
 `BanamexTdcParser`, que distinguen cuenta de cheques vs. tarjeta de crédito por un encabezado/
 término exclusivo de cada tipo de estado de cuenta, no solo por "BANAMEX"). Si agregas un segundo
 producto de un banco que ya tenías, revisa que el `puede_procesar` del extractor existente siga
-siendo suficientemente selectivo. Opcional: sin esta función, ese banco solo se puede seleccionar
-a mano.
+siendo suficientemente selectivo. La misma colisión puede pasar entre **bancos distintos** que
+comparten un término genérico: `BanamexTdcParser` e `InvexTdcParser` (`parsers/invex_tdc.py`)
+matcheaban ambos con solo "Pago mínimo", así que `BanamexTdcParser` tuvo que excluirse
+explícitamente cuando detecta "INVEX" — revisa esto también al agregar un segundo emisor de un
+mismo tipo de documento (ej. otra tarjeta de crédito). Opcional: sin esta función, ese banco solo
+se puede seleccionar a mano.
 
 Flujo completo una vez que el extractor de tu banco existe:
 

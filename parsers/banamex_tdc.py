@@ -118,6 +118,20 @@ PATRON_LINEA_TARJETA = re.compile(r"n[uú]mero de tarjeta", re.IGNORECASE)
 # bien el carácter según la fuente del PDF.
 PATRON_PAGO_MINIMO = re.compile(r"pago\s+m[ií]nimo", re.IGNORECASE)
 
+# Desde que se agregó parsers/invex_tdc.py (2026-09-21), "Pago mínimo" solo
+# ya NO alcanza para identificar un TDC como de Banamex -- ambos emisores lo
+# traen, así que un estado de cuenta de Invex también matcheaba aquí
+# (confirmado con una prueba: los dos parsers devolvían True para el mismo
+# PDF, lo que en `App._detectar_banco` degrada a selección manual para
+# AMBOS en vez de acertar ninguno). No podemos volver a exigir "BANAMEX"
+# como antes (ver el docstring del módulo: no aparece como texto
+# seleccionable en un TDC real de Banamex), así que en vez de eso excluimos
+# explícitamente cuando aparece "INVEX" -- funciona mientras el universo de
+# emisores de TDC soportados sea chico; si se agrega un tercero que también
+# comparta "Pago mínimo" sin nombre de banco seleccionable, este patrón de
+# exclusión cruzada hay que repetirlo (o repensarlo) para cada par.
+PATRON_INVEX = re.compile(r"invex", re.IGNORECASE)
+
 # Un estado de cuenta con tarjetas adicionales agrupa las transacciones bajo
 # encabezados "Tarjeta Titular: ...", "Tarjeta Adicional: ...", "Tarjeta
 # Digital: ..." (confirmado contra un estado de cuenta real, 2026-09-20) --
@@ -401,10 +415,12 @@ class BanamexTdcParser(BaseParser):
         # trae), así que basta como único marcador.
         try:
             with pdfplumber.open(ruta_pdf) as pdf:
-                for pagina in pdf.pages[:2]:
-                    texto = pagina.extract_text() or ""
-                    if PATRON_PAGO_MINIMO.search(texto):
-                        return True
+                texto_acumulado = "\n".join(
+                    pagina.extract_text() or "" for pagina in pdf.pages[:2]
+                )
         except Exception:  # noqa: BLE001 — un PDF ilegible simplemente no matchea
             return False
-        return False
+        return bool(
+            PATRON_PAGO_MINIMO.search(texto_acumulado)
+            and not PATRON_INVEX.search(texto_acumulado)
+        )
