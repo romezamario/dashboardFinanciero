@@ -25,11 +25,11 @@ export function StatTile({ label, value, tone = "neutral" }: StatTileProps) {
         border: "1px solid var(--border)",
       }}
     >
-      <div className="text-sm" style={{ color: "var(--text-secondary)" }}>
+      <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
         {label}
       </div>
       <div
-        className="mt-1 text-2xl font-semibold"
+        className="mt-1 text-xl font-semibold"
         style={{ color: colorPorTono[tone] }}
       >
         {value === null ? "—" : formateador.format(value)}

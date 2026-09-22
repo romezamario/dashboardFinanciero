@@ -24,11 +24,11 @@ export function TransaccionesTabla({
       className="rounded-lg p-4"
       style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
     >
-      <h3 className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+      <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
         Transacciones
       </h3>
       <div className="mt-3 max-h-96 overflow-auto">
-        <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+        <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ borderBottom: "1px solid var(--gridline)" }}>
               <th

@@ -49,7 +49,7 @@ export function GastoPorComercioChart({
       className="rounded-lg p-4"
       style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
     >
-      <h3 className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+      <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
         Ingresos y gastos por comercio
         {onClickComercio && (
           <span className="ml-2 font-normal" style={{ color: "var(--text-muted)" }}>
@@ -58,7 +58,7 @@ export function GastoPorComercioChart({
         )}
       </h3>
       {datosFinales.length === 0 ? (
-        <p className="mt-3 text-sm" style={{ color: "var(--text-muted)" }}>
+        <p className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>
           Ninguna transacción tiene un comercio asignado todavía — agrégalo desde
           "Reglas de categorización..." en la app de escritorio.
         </p>
@@ -91,7 +91,7 @@ export function GastoPorComercioChart({
               />
               <Legend
                 formatter={(value) => (
-                  <span style={{ color: "var(--text-secondary)" }}>{value}</span>
+                  <span style={{ color: "var(--text-secondary)", fontSize: 12 }}>{value}</span>
                 )}
               />
               <Bar

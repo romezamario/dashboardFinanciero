@@ -163,7 +163,7 @@ export function EditorTransacciones({
       className="rounded-lg p-4"
       style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
     >
-      <h3 className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+      <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
         Editar categoría/comercio/cuenta en lote
       </h3>
       <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
@@ -217,7 +217,7 @@ export function EditorTransacciones({
           </div>
 
           <div className="mt-2 max-h-64 overflow-auto rounded-md" style={{ border: "1px solid var(--border)" }}>
-            <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+            <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
               <tbody>
                 {visibles.map((t) => (
                   <tr
@@ -264,7 +264,7 @@ export function EditorTransacciones({
                   <tr>
                     <td
                       colSpan={8}
-                      className="py-4 text-center text-sm"
+                      className="py-4 text-center text-xs"
                       style={{ color: "var(--text-muted)" }}
                     >
                       Sin coincidencias.
@@ -276,7 +276,7 @@ export function EditorTransacciones({
           </div>
 
           <div className="mt-3 flex flex-wrap items-end gap-3">
-            <label className="text-sm" style={{ color: "var(--text-secondary)" }}>
+            <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
               Nueva categoría
               <input
                 type="text"
@@ -298,7 +298,7 @@ export function EditorTransacciones({
               </datalist>
             </label>
 
-            <label className="text-sm" style={{ color: "var(--text-secondary)" }}>
+            <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
               Nuevo comercio
               <input
                 type="text"
@@ -320,7 +320,7 @@ export function EditorTransacciones({
               </datalist>
             </label>
 
-            <label className="text-sm" style={{ color: "var(--text-secondary)" }}>
+            <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
               Nueva cuenta
               <select
                 value={nuevaCuentaId}
@@ -344,7 +344,7 @@ export function EditorTransacciones({
             <button
               onClick={aplicarCambios}
               disabled={!puedeAplicar}
-              className="rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              className="rounded-md px-4 py-2 text-xs font-medium text-white disabled:opacity-50"
               style={{ background: "var(--series-1)" }}
             >
               {guardando
@@ -355,7 +355,7 @@ export function EditorTransacciones({
 
           {mensaje && (
             <p
-              className="mt-2 text-sm"
+              className="mt-2 text-xs"
               style={{
                 color:
                   mensaje.tipo === "ok" ? "var(--status-good)" : "var(--status-critical)",

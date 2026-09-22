@@ -104,7 +104,7 @@ export function Dashboard() {
   if (cargando) {
     return (
       <CentroDePagina>
-        <p style={{ color: "var(--text-secondary)" }}>Cargando…</p>
+        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Cargando…</p>
       </CentroDePagina>
     );
   }
@@ -112,7 +112,7 @@ export function Dashboard() {
   if (error) {
     return (
       <CentroDePagina>
-        <p style={{ color: "var(--status-critical)" }}>
+        <p className="text-sm" style={{ color: "var(--status-critical)" }}>
           No se pudieron cargar las transacciones: {error}
         </p>
       </CentroDePagina>
@@ -192,14 +192,14 @@ export function Dashboard() {
         style={{ borderBottom: "1px solid var(--border)" }}
       >
         <h1
-          className="text-lg font-semibold"
+          className="text-base font-semibold"
           style={{ color: "var(--text-primary)" }}
         >
           Dashboard Financiero
         </h1>
         <button
           onClick={() => supabase.auth.signOut()}
-          className="text-sm"
+          className="text-xs"
           style={{ color: "var(--text-secondary)" }}
         >
           Cerrar sesión
@@ -208,7 +208,7 @@ export function Dashboard() {
 
       <main className="mx-auto max-w-5xl space-y-6 p-6">
         {transacciones.length === 0 ? (
-          <p style={{ color: "var(--text-secondary)" }}>
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
             No hay transacciones sincronizadas todavía — usa la app de
             escritorio para procesar un estado de cuenta y sincronizarlo.
           </p>
@@ -219,7 +219,7 @@ export function Dashboard() {
                 <button
                   key={tab.id}
                   onClick={() => setVista(tab.id)}
-                  className="px-4 py-2 text-sm font-medium"
+                  className="px-4 py-2 text-xs font-medium"
                   style={{
                     color: vista === tab.id ? "var(--series-1)" : "var(--text-secondary)",
                     borderBottom: `2px solid ${
