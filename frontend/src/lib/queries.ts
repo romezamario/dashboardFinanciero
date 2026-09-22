@@ -241,6 +241,32 @@ export function agruparPorComercio(transacciones: Transaccion[]): PuntoComercio[
     .sort((a, b) => b.ingresos + b.gastos - (a.ingresos + a.gastos));
 }
 
+export interface PuntoEvento {
+  evento: string;
+  ingresos: number;
+  gastos: number;
+}
+
+/** Mismo patrón que `agruparPorComercio`: un evento es opcional (solo lo
+ * asignan manualmente desde `EventosTab`), así que no hay un fallback "Sin
+ * evento" -- las transacciones sin evento simplemente no participan. */
+export function agruparPorEvento(transacciones: Transaccion[]): PuntoEvento[] {
+  const porEvento = new Map<string, { ingresos: number; gastos: number }>();
+
+  for (const t of transacciones) {
+    const evento = eventoDe(t);
+    if (!evento) continue;
+    const acumulado = porEvento.get(evento) ?? { ingresos: 0, gastos: 0 };
+    if (t.tipo === "abono") acumulado.ingresos += t.monto;
+    else acumulado.gastos += t.monto;
+    porEvento.set(evento, acumulado);
+  }
+
+  return Array.from(porEvento.entries())
+    .map(([evento, { ingresos, gastos }]) => ({ evento, ingresos, gastos }))
+    .sort((a, b) => b.ingresos + b.gastos - (a.ingresos + a.gastos));
+}
+
 export interface Promedios {
   ingresosPromedio3m: number;
   gastosPromedio3m: number;

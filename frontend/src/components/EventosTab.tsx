@@ -1,6 +1,12 @@
 import { useMemo, useState } from "react";
-import { actualizarCategoriaComercioYEvento, cuentaDe, eventoDe } from "../lib/queries";
+import {
+  actualizarCategoriaComercioYEvento,
+  agruparPorEvento,
+  cuentaDe,
+  eventoDe,
+} from "../lib/queries";
 import type { Transaccion } from "../lib/types";
+import { GastoPorEventoChart } from "./GastoPorEventoChart";
 
 const formateadorMoneda = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -58,6 +64,12 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
       ).sort(),
     [transacciones]
   );
+
+  // Resumen de todos los eventos ya armados -- a propósito NO se calcula
+  // sobre el filtro de fecha/cuenta/tarjeta de arriba (ese filtro sirve
+  // para ENCONTRAR transacciones que todavía no tienen evento, no para
+  // acotar este resumen de los que ya lo tienen).
+  const gastoPorEvento = useMemo(() => agruparPorEvento(transacciones), [transacciones]);
 
   const hayFiltrosActivos = Boolean(fechaDesde || fechaHasta || cuenta || tarjeta);
 
@@ -119,12 +131,14 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
 
   return (
     <div className="space-y-4">
+      <GastoPorEventoChart datos={gastoPorEvento} />
+
       <div
         className="rounded-lg p-4"
         style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
       >
         <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-          Eventos
+          Asignar transacciones a un evento
         </h3>
         <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
           Filtra por fecha, cuenta y/o tarjeta para encontrar las transacciones de un
