@@ -40,6 +40,7 @@ export interface Filtros {
   categoria?: string;
   comercio?: string;
   cuenta?: string;
+  tarjeta?: string;
 }
 
 /** Nombre de categoría que usa el resto del código para "sin categoría". */
@@ -107,6 +108,9 @@ export function aplicarFiltros(
       return false;
     }
     if (filtros.cuenta && excluir !== "cuenta" && cuentaDe(t) !== filtros.cuenta) {
+      return false;
+    }
+    if (filtros.tarjeta && excluir !== "tarjeta" && t.tarjeta !== filtros.tarjeta) {
       return false;
     }
     return true;

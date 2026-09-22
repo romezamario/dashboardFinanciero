@@ -25,6 +25,7 @@ const ETIQUETAS_FILTRO: Record<keyof Filtros, string> = {
   categoria: "Categoría",
   comercio: "Comercio",
   cuenta: "Cuenta",
+  tarjeta: "Tarjeta",
 };
 
 export function Dashboard() {
@@ -63,6 +64,18 @@ export function Dashboard() {
   // para que la lista de cuentas no cambie según lo que ya esté filtrado.
   const cuentasConocidas = useMemo(
     () => Array.from(new Set(transacciones.map(cuentaDe))).sort(),
+    [transacciones]
+  );
+
+  // `tarjeta` es opcional por diseño (solo lo asigna BanamexTdcParser para
+  // estados de cuenta con tarjetas adicionales/digitales) -- la mayoría de
+  // las transacciones no lo tienen, así que se descartan los null en vez
+  // de mostrarlos como una opción "Sin tarjeta".
+  const tarjetasConocidas = useMemo(
+    () =>
+      Array.from(
+        new Set(transacciones.map((t) => t.tarjeta).filter((t): t is string => !!t))
+      ).sort(),
     [transacciones]
   );
 
@@ -265,6 +278,34 @@ export function Dashboard() {
                       title={seleccionada ? "Quitar este filtro" : "Filtrar por esta cuenta"}
                     >
                       {cuenta}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {tarjetasConocidas.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  Tarjeta:
+                </span>
+                {tarjetasConocidas.map((tarjeta) => {
+                  const seleccionada = filtros.tarjeta === tarjeta;
+                  return (
+                    <button
+                      key={tarjeta}
+                      onClick={() => alternarFiltro("tarjeta", tarjeta)}
+                      className="rounded-full px-3 py-1 text-xs font-medium"
+                      style={{
+                        background: seleccionada ? "var(--series-1)" : "var(--surface-1)",
+                        border: `1px solid ${
+                          seleccionada ? "var(--series-1)" : "var(--border)"
+                        }`,
+                        color: seleccionada ? "#ffffff" : "var(--text-secondary)",
+                      }}
+                      title={seleccionada ? "Quitar este filtro" : "Filtrar por esta tarjeta"}
+                    >
+                      {tarjeta}
                     </button>
                   );
                 })}
