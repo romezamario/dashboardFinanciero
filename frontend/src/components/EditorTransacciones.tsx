@@ -1,5 +1,10 @@
 import { useMemo, useState } from "react";
-import { actualizarCategoriaYComercio, buscarPorDescripcion } from "../lib/queries";
+import {
+  actualizarCategoriaYComercio,
+  actualizarCuentaDeDocumentos,
+  buscarPorDescripcion,
+  calcularImpactoCambioDeCuenta,
+} from "../lib/queries";
 import type { Transaccion } from "../lib/types";
 
 const formateadorMoneda = new Intl.NumberFormat("es-MX", {
@@ -27,6 +32,7 @@ export function EditorTransacciones({
   const [seleccionadas, setSeleccionadas] = useState<Set<string>>(new Set());
   const [nuevaCategoria, setNuevaCategoria] = useState("");
   const [nuevoComercio, setNuevoComercio] = useState("");
+  const [nuevaCuentaId, setNuevaCuentaId] = useState("");
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(
     null
@@ -59,6 +65,19 @@ export function EditorTransacciones({
       ).sort(),
     [transacciones]
   );
+  // Solo cuentas que ya existen (traídas de las transacciones ya
+  // sincronizadas) -- a diferencia de categoría/comercio, no hay
+  // find-or-create aquí: crear una cuenta nueva requiere banco + últimos 4
+  // dígitos, que no tiene sentido pedir como texto libre en este editor.
+  const cuentasExistentes = useMemo(() => {
+    const porId = new Map<string, string>();
+    for (const t of transacciones) {
+      porId.set(t.documentos.cuentas.id, t.documentos.cuentas.alias);
+    }
+    return Array.from(porId.entries())
+      .map(([id, alias]) => ({ id, alias }))
+      .sort((a, b) => a.alias.localeCompare(b.alias));
+  }, [transacciones]);
 
   function alternarSeleccion(id: string) {
     setSeleccionadas((anterior) => {
@@ -80,22 +99,49 @@ export function EditorTransacciones({
   async function aplicarCambios() {
     const categoria = nuevaCategoria.trim();
     const comercio = nuevoComercio.trim();
-    if (seleccionadas.size === 0 || (!categoria && !comercio)) return;
+    const cuentaId = nuevaCuentaId;
+    if (seleccionadas.size === 0 || (!categoria && !comercio && !cuentaId)) return;
+
+    const idsSeleccionados = Array.from(seleccionadas);
+    let documentoIds: string[] = [];
+    let totalAfectadas = idsSeleccionados.length;
+    if (cuentaId) {
+      const impacto = calcularImpactoCambioDeCuenta(transacciones, idsSeleccionados);
+      documentoIds = impacto.documentoIds;
+      totalAfectadas = impacto.totalTransaccionesAfectadas;
+      const extra = totalAfectadas - idsSeleccionados.length;
+      if (extra > 0) {
+        const confirmado = window.confirm(
+          `La cuenta pertenece al estado de cuenta completo, no a cada transacción: ` +
+            `este cambio va a reasignar ${documentoIds.length} documento(s) y afectará ` +
+            `${totalAfectadas} transacción(es) en total ` +
+            `(${extra} además de las ${idsSeleccionados.length} que seleccionaste). ` +
+            `¿Continuar?`
+        );
+        if (!confirmado) return;
+      }
+    }
 
     setGuardando(true);
     setMensaje(null);
     try {
-      await actualizarCategoriaYComercio(Array.from(seleccionadas), {
-        categoria: categoria || undefined,
-        comercio: comercio || undefined,
-      });
+      if (categoria || comercio) {
+        await actualizarCategoriaYComercio(idsSeleccionados, {
+          categoria: categoria || undefined,
+          comercio: comercio || undefined,
+        });
+      }
+      if (cuentaId) {
+        await actualizarCuentaDeDocumentos(documentoIds, cuentaId);
+      }
       setMensaje({
         tipo: "ok",
-        texto: `Se actualizaron ${seleccionadas.size} transacción(es).`,
+        texto: `Se actualizaron ${totalAfectadas} transacción(es).`,
       });
       setSeleccionadas(new Set());
       setNuevaCategoria("");
       setNuevoComercio("");
+      setNuevaCuentaId("");
       await onActualizado();
     } catch (e) {
       setMensaje({
@@ -108,7 +154,9 @@ export function EditorTransacciones({
   }
 
   const puedeAplicar =
-    seleccionadas.size > 0 && (nuevaCategoria.trim() || nuevoComercio.trim()) && !guardando;
+    seleccionadas.size > 0 &&
+    (nuevaCategoria.trim() || nuevoComercio.trim() || nuevaCuentaId) &&
+    !guardando;
 
   return (
     <div
@@ -116,11 +164,12 @@ export function EditorTransacciones({
       style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
     >
       <h3 className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
-        Editar categoría/comercio en lote
+        Editar categoría/comercio/cuenta en lote
       </h3>
       <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
         Busca por descripción, selecciona una o varias transacciones, y asígnales una
-        categoría y/o comercio nuevos.
+        categoría, comercio y/o cuenta nuevos. Cambiar la cuenta reasigna el estado de
+        cuenta completo (ver aviso al aplicar), no solo las transacciones seleccionadas.
       </p>
 
       <input
@@ -200,6 +249,9 @@ export function EditorTransacciones({
                     <td className="py-2 pr-2" style={{ color: "var(--text-secondary)" }}>
                       {t.tarjeta ?? "—"}
                     </td>
+                    <td className="py-2 pr-2" style={{ color: "var(--text-secondary)" }}>
+                      {t.documentos.cuentas.alias}
+                    </td>
                     <td
                       className="py-2 pr-2 text-right"
                       style={{ color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums" }}
@@ -211,7 +263,7 @@ export function EditorTransacciones({
                 {visibles.length === 0 && (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="py-4 text-center text-sm"
                       style={{ color: "var(--text-muted)" }}
                     >
@@ -266,6 +318,27 @@ export function EditorTransacciones({
                   <option key={c} value={c} />
                 ))}
               </datalist>
+            </label>
+
+            <label className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              Nueva cuenta
+              <select
+                value={nuevaCuentaId}
+                onChange={(e) => setNuevaCuentaId(e.target.value)}
+                className="mt-1 block w-48 rounded-md px-3 py-2 text-sm"
+                style={{
+                  background: "var(--page-plane)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-primary)",
+                }}
+              >
+                <option value="">(sin cambio)</option>
+                {cuentasExistentes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.alias}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <button

@@ -19,7 +19,7 @@ export async function obtenerTransacciones(): Promise<Transaccion[]> {
       .select(
         `id, fecha, descripcion, monto, tipo, saldo, comercio, tarjeta,
          categorias ( nombre ),
-         documentos ( cuentas ( alias, bancos ( nombre ) ) )`
+         documentos ( id, cuentas ( id, alias, bancos ( nombre ) ) )`
       )
       .order("fecha", { ascending: true })
       .range(desde, desde + TAMANO_PAGINA - 1);
@@ -329,6 +329,57 @@ export async function actualizarCategoriaYComercio(
   if (Object.keys(payload).length === 0) return;
 
   const { error } = await supabase.from("transacciones").update(payload).in("id", ids);
+  if (error) throw error;
+}
+
+export interface ImpactoCambioDeCuenta {
+  documentoIds: string[];
+  totalTransaccionesAfectadas: number;
+}
+
+/**
+ * A diferencia de categoría/comercio (columnas de `transacciones`),
+ * `cuenta_id` vive en `documentos` -- cada transacción hereda la cuenta de
+ * su documento (estado de cuenta), no la tiene individualmente. Reasignar
+ * la cuenta de una transacción seleccionada implica reasignar el
+ * documento *completo*, lo que también mueve cualquier otra transacción
+ * de ese mismo documento aunque no esté seleccionada. Esta función calcula
+ * ese impacto real (documentos únicos + total de transacciones afectadas,
+ * incluidas las no seleccionadas) para poder avisarle al usuario antes de
+ * aplicar el cambio.
+ */
+export function calcularImpactoCambioDeCuenta(
+  transacciones: Transaccion[],
+  idsSeleccionados: string[]
+): ImpactoCambioDeCuenta {
+  const seleccionados = new Set(idsSeleccionados);
+  const documentoIds = new Set<string>();
+  for (const t of transacciones) {
+    if (seleccionados.has(t.id)) documentoIds.add(t.documentos.id);
+  }
+  const totalTransaccionesAfectadas = transacciones.filter((t) =>
+    documentoIds.has(t.documentos.id)
+  ).length;
+  return { documentoIds: Array.from(documentoIds), totalTransaccionesAfectadas };
+}
+
+/**
+ * Reasigna `cuenta_id` de los documentos dados -- ver
+ * `calcularImpactoCambioDeCuenta` para el porqué esto mueve el documento
+ * completo y no transacciones individuales. Solo elige entre cuentas ya
+ * existentes (no hay find-or-create como en categoría): crear una cuenta
+ * nueva requiere banco + últimos 4 dígitos, que no tiene sentido pedir
+ * como texto libre en este editor -- para eso está la app de escritorio.
+ */
+export async function actualizarCuentaDeDocumentos(
+  documentoIds: string[],
+  cuentaId: string
+): Promise<void> {
+  if (documentoIds.length === 0) return;
+  const { error } = await supabase
+    .from("documentos")
+    .update({ cuenta_id: cuentaId })
+    .in("id", documentoIds);
   if (error) throw error;
 }
 

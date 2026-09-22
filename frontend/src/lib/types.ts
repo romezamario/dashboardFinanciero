@@ -18,7 +18,9 @@ export interface Transaccion {
   tarjeta: string | null;
   categorias: { nombre: string } | null;
   documentos: {
+    id: string;
     cuentas: {
+      id: string;
       alias: string;
       bancos: { nombre: string };
     };
