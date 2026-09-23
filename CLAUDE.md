@@ -336,10 +336,22 @@ confirmed only against the one real statement seen so far (2026-09-21):
   degradation to the manual "Banco" dropdown, not a wrong guess) — confirm on the next real load
   and tighten the marker then if needed, same iterative pattern used throughout this file.
 - Alias for `extraer_info_cuenta` is a fixed `"Invex TDC"` string (no tier concept confirmed to
-  exist for this issuer, unlike Banamex's Platino/Beyond) — last-4 comes from a "Número de la
-  tarjeta" line on the cover page, same longest-digit-run extraction trick as Banamex TDC's
+  exist for this issuer, unlike Banamex's Platino/Beyond) — last-4 comes from a card-number line
+  on the cover page, same longest-digit-run extraction trick as Banamex TDC's
   `PATRON_LINEA_TARJETA` (the masked digits before it are literal `X` characters in the real PDF,
   not actual digits, so they never show up in the `\d+` matches to begin with).
+- **`PATRON_LINEA_TARJETA` initially guessed the wrong label text and silently never matched**:
+  written by analogy with Banamex TDC's "Número de tarjeta" before ever seeing an Invex cover page
+  — confirmed against a real statement (2026-09-22) that Invex actually prints **"No. Tarjeta XXXX
+  XXXX XXXX 1234"**, not "Número de la tarjeta" at all, so `extraer_info_cuenta` always returned
+  `(None, None)` and the app never auto-filled alias/últimos 4 dígitos, exactly the "confirmed
+  only against one real statement, not verified yet" risk the module's own docstring had already
+  flagged for other assumptions. Fixed by widening the pattern to accept both `"No.? Tarjeta"` and
+  `"Número de la tarjeta"`. Lesson repeated from `banamex_tdc.py`'s own history: a label that
+  looks structurally identical to another bank's isn't guaranteed to use the same wording — verify
+  against the real cover page before trusting a hook that "should" work by analogy, the same
+  caution already applied to `puede_procesar`'s "INVEX" marker (still unconfirmed as selectable
+  text, separately from this fix).
 
 **Manual row entry** (`VentanaRenglonManual` in `app/main.py`) is the other half of the
 "transaction row rendered as an image" gap above — `advertencias()` only *flags* the unreadable

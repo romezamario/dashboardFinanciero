@@ -95,12 +95,21 @@ PATRON_INVEX = re.compile(r"invex", re.IGNORECASE)
 # dos lo traen) -- por eso puede_procesar exige también PATRON_INVEX.
 PATRON_PAGO_MINIMO = re.compile(r"pago\s+m[ií]nimo", re.IGNORECASE)
 
-# "Número de la tarjeta XXXX XXXX XXXX 1234" en la portada -- nos quedamos
-# solo con el run de dígitos más largo de la línea (el número de tarjeta
-# real casi siempre es el único grupo de 4+ dígitos; el resto de la línea,
-# si trae un monto en la misma línea física, produce grupos más cortos por
-# las comas/puntos del formato de moneda). Mismo truco que banamex_tdc.py.
-PATRON_LINEA_TARJETA = re.compile(r"n[uú]mero de la tarjeta", re.IGNORECASE)
+# La portada dice "No. Tarjeta XXXX XXXX XXXX 1234 ..." -- confirmado contra
+# un estado de cuenta real (2026-09-22); la primera versión de este parser
+# asumía "Número de la tarjeta" (por analogía con Banamex TDC) sin haber
+# visto todavía la portada real de Invex, y ese texto simplemente no
+# aparece en el PDF real, así que `extraer_info_cuenta` nunca encontraba el
+# alias/últimos 4 dígitos. Acepta ambas formas ("No. Tarjeta" y "Número de
+# la tarjeta") por si un futuro estado de cuenta de Invex trae la otra
+# grafía. Nos quedamos solo con el run de dígitos más largo de la línea (el
+# número de tarjeta real casi siempre es el único grupo de 4+ dígitos; el
+# resto de la línea, si trae un monto en la misma línea física como pasa
+# aquí, produce grupos más cortos por las comas/puntos del formato de
+# moneda). Mismo truco que banamex_tdc.py.
+PATRON_LINEA_TARJETA = re.compile(
+    r"no\.?\s*tarjeta|n[uú]mero de la tarjeta", re.IGNORECASE
+)
 
 
 def _a_decimal(texto: str) -> Decimal:
