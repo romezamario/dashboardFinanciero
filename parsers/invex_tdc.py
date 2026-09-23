@@ -176,15 +176,31 @@ PATRON_TARJETA_ENMASCARADA = re.compile(r"\*{4,}(\d{4})\b")
 #     (el nombre del tarjetahabiente, sin la palabra "Titular"/"Adicional"
 #     en ningún lado de esa línea, confirmado contra el volcado real) --
 #     ahí no hay nada legible que sirva de rol, así que se usan los
-#     últimos 4 dígitos mismos como identificador de tarjeta. Cuál número
-#     corresponde a "la titular" o "la adicional" es algo que el usuario
-#     sabe por su propia cuenta, no algo que este documento diga en texto
-#     -- no lo adivinamos ni lo hardcodeamos aquí.
+#     últimos 4 dígitos mismos como identificador de tarjeta -- pero como
+#     cuál rol corresponde a cuál número es algo que el documento NUNCA
+#     dice en texto (es conocimiento del dueño de la cuenta, no algo
+#     extraíble), `ROLES_TARJETA_CONOCIDOS` (más abajo) lo traduce a
+#     "Titular"/"Adicional" para los números ya confirmados por el usuario
+#     (2026-09-22); un número no listado ahí se queda con los 4 dígitos
+#     crudos en vez de fallar o adivinar.
 # Se intenta la variante V1 primero (más legible) y solo si no matchea se
 # cae al número enmascarado solo.
 PATRON_SECCION_TARJETA_CON_ROL = re.compile(
     r"^Tarjeta\s+(Titular|Adicional|Digital)\b", re.IGNORECASE
 )
+
+# Traduce últimos-4-dígitos -> rol, solo para el caso V2 (ver arriba) donde
+# el PDF no imprime ningún rol como texto. Específico de la cuenta de este
+# usuario -- confirmado por él mismo (2026-09-22), no inferido del PDF --
+# mismo patrón "lista conocida, con fallback si no está" que
+# `TIPOS_TARJETA_CONOCIDOS` en banamex_tdc.py usa para tiers de tarjeta.
+# Si aparece una tarjeta nueva no listada aquí, `tarjeta` simplemente
+# muestra sus últimos 4 dígitos hasta que el usuario confirme su rol y se
+# agregue una entrada nueva.
+ROLES_TARJETA_CONOCIDOS: dict[str, str] = {
+    "1096": "Titular",
+    "5005": "Adicional",
+}
 
 # Fuente DE RESPALDO, solo para V1 -- ver el docstring del módulo. La
 # portada de V1 dice "No. Tarjeta XXXX XXXX XXXX 1234 ..."; V2 no tiene
@@ -235,7 +251,10 @@ class InvexTdcParser(BaseParser):
 
                     coincidencia_mascara_seccion = PATRON_TARJETA_ENMASCARADA.match(linea)
                     if coincidencia_mascara_seccion:
-                        tarjeta_actual = coincidencia_mascara_seccion.group(1)
+                        ultimos_4_seccion = coincidencia_mascara_seccion.group(1)
+                        tarjeta_actual = ROLES_TARJETA_CONOCIDOS.get(
+                            ultimos_4_seccion, ultimos_4_seccion
+                        )
                         continue
 
                     coincidencia_v1 = PATRON_TRANSACCION_V1.match(linea)

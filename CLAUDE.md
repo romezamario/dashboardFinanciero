@@ -334,12 +334,14 @@ patterns per line (V1 first, then V2) so a document could in principle mix both 
     dump, it's just `"************1234 NOMBRE APELLIDO"` (the cardholder's name, no "Titular"/
     "Adicional" text at all). There is nothing in the document to say which physical card is "the
     titular" vs "the adicional" — that's something only the account owner knows, not something
-    the PDF states in extractable text — so guessing/hardcoding it would be wrong for any
-    statement but this specific user's. Instead, `tarjeta` falls back to the masked card's last 4
-    digits themselves as the section identifier (e.g. `"1096"`, `"5005"`) — still a small, stable,
-    per-document identifier, just numeric instead of a role name. If the user wants "Titular"/
-    "Adicional" labels for a V2 statement, that's a manual relabel via the bulk editor or a rule,
-    not something this parser can determine generally.
+    the PDF states in extractable text. `tarjeta` falls back to the masked card's last 4 digits as
+    the section identifier (e.g. `"1096"`, `"5005"`), then `ROLES_TARJETA_CONOCIDOS` (a small
+    `{últimos_4: rol}` dict, confirmed by the user 2026-09-22: `"1096"` → Titular, `"5005"` →
+    Adicional) translates known numbers to a readable role — same "known list + fallback to the
+    raw value" shape as Banamex TDC's `TIPOS_TARJETA_CONOCIDOS`. This is deliberately specific to
+    this user's own account (there's no way to derive it from the document), which is fine for a
+    single-user personal finance tool — an unrecognized card number just falls back to showing its
+    last 4 digits until the user confirms its role and a new entry gets added.
   - `PATRON_TARJETA_ENMASCARADA` (already used by `extraer_info_cuenta` for the account's overall
     last-4) doubles as the V2 section-boundary detector when matched with `.match()` anchored at
     line start — a transaction line never starts with asterisks, so there's no collision risk
