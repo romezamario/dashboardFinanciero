@@ -297,22 +297,34 @@ statement from a bank you already support will look anything like the first one:
   the fix looks completely different depending on which one it is.
 
 **`parsers/invex_tdc.py`** (Invex credit card, added 2026-09-21) is the second TDC issuer
-supported, structurally very close to Banamex TDC (same one-line-per-transaction layout, two
-dates, trailing `+`/`-` sign convention, `[\s.]*$` trailing-artifact tolerance baked in from day
-one instead of waiting to rediscover that lesson) but **not** the same bank, so it's its own
-module rather than a special case inside `BanamexTdcParser` — confirmed against a real anonymized
-statement, not assumed just because the shapes looked similar. Key differences/unknowns, all
-confirmed only against the one real statement seen so far (2026-09-21):
-- Dates print `DD-Mon-AAAA` with the month capitalized (`"01-May-2026"`), not lowercase like
-  Banamex's `"01-may-2026"` — doesn't affect the regex (case-insensitive) or `_normalizar_fecha`
-  (lowercases before the `MESES` lookup either way), just a spelling difference worth knowing if
-  ever displaying the raw month text instead of the normalized date.
-- No multi-line block like Banamex's `PAGO INTERBANCARIO` has been seen yet, and no repeating
-  `Tarjeta Titular/Adicional/Digital` section headers either (only a single non-repeating "Tarjeta
-  Titular ************1234" line) — so `InvexTdcParser` deliberately does **not** implement either
-  of those; `RenglonCrudo.tarjeta` stays `None` for every row. Don't copy that machinery over
-  preemptively if a future Invex statement turns out to need it — confirm against the real dump
-  first, same rule as always.
+supported — **not** the same bank as Banamex TDC, so it's its own module rather than a special
+case inside `BanamexTdcParser`. Unlike Banamex, where one transaction format covers every card
+tier (see that module's "one parser class covers every TDC tier" lesson), Invex turned out to
+have **two structurally different document formats for the same product**, confirmed against two
+real statements a day apart (2026-09-21 and 2026-09-22) — not a tier difference, cause unknown
+(account age, a mid-year template migration by the bank, something else). `extraer()` tries both
+patterns per line (V1 first, then V2) so a document could in principle mix both without breaking:
+- **V1** (first statement seen): `"DD-Mon-AAAA DD-Mon-AAAA CONCEPTO CIUDAD +$MONTO"` — two dates,
+  month abbreviated with a capital first letter (`"01-May-2026"`, unlike Banamex's lowercase
+  `"01-may-2026"` — doesn't affect the case-insensitive regex or `_normalizar_fecha_v1`, which
+  lowercases before its `MESES` lookup either way), explicit `+`/`-` sign: `+` = cargo, `-` = abono.
+- **V2** (second statement seen, next day): `"DD/MM/AAAA CONCEPTO $MONTO[ CR]"` — a single date
+  with slashes (already in `BaseParser.formato_fecha`'s default `DD/MM/AAAA`, so no conversion
+  needed, unlike V1), and **no `+`/`-` character in the text at all** — asked the user directly
+  since it genuinely couldn't be inferred from an anonymized dump (anonymization hides letters):
+  a literal trailing `"CR"` after the monto marks an abono, its *absence* marks a cargo. This is
+  the inverse of V1's shape (there, a symbol explicitly marks the cargo; here, the absence of a
+  marker means cargo) — easy to invert by mistake if this gets touched again, worth re-reading the
+  regex comment before changing it. V2 also has echo/annotation lines after several transactions
+  (`"XXXXXX XXXX XXXXXX ... $0.00"` in the anonymized dump, exact real text unconfirmed) that
+  match the same transaction pattern and almost always carry `$0.00` — left as ordinary extracted
+  rows instead of guessing which ones to filter out, since they don't affect the total either way.
+- No multi-line block like Banamex's `PAGO INTERBANCARIO` has been seen in either format yet, and
+  no repeating `Tarjeta Titular/Adicional/Digital` section headers either (only a single
+  non-repeating masked card-number line, `PATRON_TARJETA_ENMASCARADA`) — so `InvexTdcParser`
+  deliberately does **not** implement either of those; `RenglonCrudo.tarjeta` stays `None` for
+  every row in both formats. Don't copy that machinery over preemptively if a future Invex
+  statement turns out to need it — confirm against the real dump first, same rule as always.
 - **`puede_procesar` needed a real bank-name check this time, unlike Banamex TDC's**: both TDC
   parsers key off "Pago mínimo" (exclusive to a credit-card statement over a checking account),
   but with two TDC issuers now sharing that marker, "Pago mínimo" alone stopped being enough —
@@ -329,29 +341,21 @@ confirmed only against the one real statement seen so far (2026-09-21):
   selectable bank name" shape would need this rethought rather than mechanically repeated.
 - **Unverified risk, flagged rather than resolved**: whether "INVEX" actually appears as
   selectable text on a real statement (vs. being image-only, the same trap that bit the original
-  "BANAMEX" check) hasn't been confirmed against a real PDF yet, only against the anonymized
-  dump/screenshots the user shared (which, being anonymized, can't prove either way — any run of
-  capital letters the right length looks identical whether it started as "INVEX" or something
-  else). If it turns out to be image-only, auto-detection simply never fires for Invex (safe
-  degradation to the manual "Banco" dropdown, not a wrong guess) — confirm on the next real load
-  and tighten the marker then if needed, same iterative pattern used throughout this file.
-- Alias for `extraer_info_cuenta` is a fixed `"Invex TDC"` string (no tier concept confirmed to
-  exist for this issuer, unlike Banamex's Platino/Beyond) — last-4 comes from a card-number line
-  on the cover page, same longest-digit-run extraction trick as Banamex TDC's
-  `PATRON_LINEA_TARJETA` (the masked digits before it are literal `X` characters in the real PDF,
-  not actual digits, so they never show up in the `\d+` matches to begin with).
-- **`PATRON_LINEA_TARJETA` initially guessed the wrong label text and silently never matched**:
-  written by analogy with Banamex TDC's "Número de tarjeta" before ever seeing an Invex cover page
-  — confirmed against a real statement (2026-09-22) that Invex actually prints **"No. Tarjeta XXXX
-  XXXX XXXX 1234"**, not "Número de la tarjeta" at all, so `extraer_info_cuenta` always returned
-  `(None, None)` and the app never auto-filled alias/últimos 4 dígitos, exactly the "confirmed
-  only against one real statement, not verified yet" risk the module's own docstring had already
-  flagged for other assumptions. Fixed by widening the pattern to accept both `"No.? Tarjeta"` and
-  `"Número de la tarjeta"`. Lesson repeated from `banamex_tdc.py`'s own history: a label that
-  looks structurally identical to another bank's isn't guaranteed to use the same wording — verify
-  against the real cover page before trusting a hook that "should" work by analogy, the same
-  caution already applied to `puede_procesar`'s "INVEX" marker (still unconfirmed as selectable
-  text, separately from this fix).
+  "BANAMEX" check) still hasn't been directly confirmed — confirm on a real load and tighten the
+  marker then if needed, same iterative pattern used throughout this file.
+- **Alias/últimos 4 dígitos source changed after the format split**: V1's cover page has a
+  "No. Tarjeta XXXX XXXX XXXX 1234" label (`PATRON_LINEA_TARJETA` — originally written by analogy
+  with Banamex TDC's "Número de tarjeta" wording *before ever seeing an Invex cover page*,
+  confirmed wrong the same day and fixed to accept both spellings); **V2's cover page doesn't have
+  that label at all**. What both formats *do* share reliably is the masked card-number line inside
+  the movements table itself, `"************1234 ..."` (`PATRON_TARJETA_ENMASCARADA`, 12+
+  asterisks then exactly 4 digits, unambiguous against any other number on the line) — so
+  `extraer_info_cuenta` now tries that first and only falls back to the portada-label method
+  (which only V1 has) if it comes up empty. No tier concept confirmed for either format (unlike
+  Banamex's Platino/Beyond) — alias is a fixed `"Invex TDC"` string. Lesson repeated twice now in
+  this one module: a label or format that looks structurally identical to another bank's, or even
+  to *the same bank's own earlier statement*, isn't guaranteed to hold — verify against the real
+  document before trusting a hook that "should" work by analogy.
 
 **Manual row entry** (`VentanaRenglonManual` in `app/main.py`) is the other half of the
 "transaction row rendered as an image" gap above — `advertencias()` only *flags* the unreadable
