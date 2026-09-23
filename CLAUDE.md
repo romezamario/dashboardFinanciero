@@ -319,12 +319,31 @@ patterns per line (V1 first, then V2) so a document could in principle mix both 
   (`"XXXXXX XXXX XXXXXX ... $0.00"` in the anonymized dump, exact real text unconfirmed) that
   match the same transaction pattern and almost always carry `$0.00` — left as ordinary extracted
   rows instead of guessing which ones to filter out, since they don't affect the total either way.
-- No multi-line block like Banamex's `PAGO INTERBANCARIO` has been seen in either format yet, and
-  no repeating `Tarjeta Titular/Adicional/Digital` section headers either (only a single
-  non-repeating masked card-number line, `PATRON_TARJETA_ENMASCARADA`) — so `InvexTdcParser`
-  deliberately does **not** implement either of those; `RenglonCrudo.tarjeta` stays `None` for
-  every row in both formats. Don't copy that machinery over preemptively if a future Invex
-  statement turns out to need it — confirm against the real dump first, same rule as always.
+- No multi-line block like Banamex's `PAGO INTERBANCARIO` has been seen in either format yet — if
+  one appears, add that handling then (see the Banamex TDC module as reference), not before.
+- **`tarjeta` (Titular/Adicional): confirmed 2026-09-22 that a V2 statement with a supplementary
+  card DOES group its transactions into sections**, same idea as Banamex TDC's
+  `PATRON_SECCION_TARJETA` — the initial assumption that Invex had no repeating card sections was
+  wrong, just hadn't been tested against a statement with more than one card yet. The *label*
+  available to identify each section differs by format, though, so `extraer()` tries two patterns
+  per line, V1-style first:
+  - **V1**: prints the role as a word, `"Tarjeta Titular ************1234 ..."` —
+    `PATRON_SECCION_TARJETA_CON_ROL` captures `"Titular"/"Adicional"/"Digital"` directly, same as
+    Banamex.
+  - **V2**: does **not** print any role word anywhere on that line — confirmed against the real
+    dump, it's just `"************1234 NOMBRE APELLIDO"` (the cardholder's name, no "Titular"/
+    "Adicional" text at all). There is nothing in the document to say which physical card is "the
+    titular" vs "the adicional" — that's something only the account owner knows, not something
+    the PDF states in extractable text — so guessing/hardcoding it would be wrong for any
+    statement but this specific user's. Instead, `tarjeta` falls back to the masked card's last 4
+    digits themselves as the section identifier (e.g. `"1096"`, `"5005"`) — still a small, stable,
+    per-document identifier, just numeric instead of a role name. If the user wants "Titular"/
+    "Adicional" labels for a V2 statement, that's a manual relabel via the bulk editor or a rule,
+    not something this parser can determine generally.
+  - `PATRON_TARJETA_ENMASCARADA` (already used by `extraer_info_cuenta` for the account's overall
+    last-4) doubles as the V2 section-boundary detector when matched with `.match()` anchored at
+    line start — a transaction line never starts with asterisks, so there's no collision risk
+    between "this is a section header" and "this is a transaction."
 - **`puede_procesar` needed a real bank-name check this time, unlike Banamex TDC's**: both TDC
   parsers key off "Pago mínimo" (exclusive to a credit-card statement over a checking account),
   but with two TDC issuers now sharing that marker, "Pago mínimo" alone stopped being enough —

@@ -46,13 +46,25 @@ funcionaría igual:
     INTERBANCARIO" de Banamex) en ninguno de los dos formatos vistos hasta
     ahora -- si aparece uno en el futuro, agregar ese manejo entonces (ver
     el módulo de Banamex TDC como referencia), no antes.
-  - Tampoco se detectaron secciones "Tarjeta Titular/Adicional/Digital"
-    repetidas en ninguno de los dos formatos -- solo una línea con el
-    número de tarjeta enmascarado (`"************1234"`, ver
-    `PATRON_TARJETA_ENMASCARADA`) que aparece una sola vez como encabezado
-    de la tabla, no agrupando bloques distintos de transacciones. Por eso
-    este extractor NO llena el campo `tarjeta` de `RenglonCrudo` (queda
-    `None` en todas las filas, como cualquier extractor sin ese concepto).
+  - **`tarjeta` (Titular/Adicional) SÍ agrupa secciones**, confirmado
+    2026-09-22 contra un estado de cuenta V2 con tarjeta adicional -- la
+    suposición inicial de que Invex no repetía secciones era prematura,
+    solo faltaba ver un estado de cuenta con más de una tarjeta. El texto
+    disponible para identificar cada sección difiere por formato: V1
+    imprime el rol como palabra (`"Tarjeta Titular ************1234 ..."`,
+    `PATRON_SECCION_TARJETA_CON_ROL`, igual que Banamex); V2 NO imprime
+    ningún rol -- solo `"************1234 NOMBRE APELLIDO"` (el nombre del
+    tarjetahabiente, confirmado contra el volcado real que no hay ninguna
+    palabra "Titular"/"Adicional" en esa línea). Cuál tarjeta física es
+    "la titular" y cuál "la adicional" es algo que el dueño de la cuenta
+    sabe, no algo que el PDF diga en texto -- así que para V2 el campo
+    `tarjeta` cae a los últimos 4 dígitos mismos como identificador
+    (`"1096"`, `"5005"`) en vez de un nombre de rol. `PATRON_TARJETA_ENMASCARADA`
+    (la misma que usa `extraer_info_cuenta` para el últimos-4 de la
+    cuenta) hace doble función como detector de encabezado de sección
+    cuando matchea con `.match()` anclado al inicio de línea -- una
+    transacción nunca empieza con asteriscos, así que no hay riesgo de
+    confundir una cosa con la otra.
 
 **Alias/últimos 4 dígitos**: el primer estado de cuenta (V1) traía la
 etiqueta "No. Tarjeta XXXX XXXX XXXX 1234" en la portada; el segundo (V2)
@@ -154,6 +166,26 @@ PATRON_PAGO_MINIMO = re.compile(r"pago\s+m[ií]nimo", re.IGNORECASE)
 # la línea (montos, CLABE, etc. no usan asteriscos).
 PATRON_TARJETA_ENMASCARADA = re.compile(r"\*{4,}(\d{4})\b")
 
+# Encabezado de sección de tarjeta dentro de la tabla de movimientos --
+# confirmado (2026-09-22) que un documento con tarjeta titular + adicional
+# agrupa sus transacciones igual que Banamex TDC, pero el texto disponible
+# para identificar cada sección difiere según el formato:
+#   - V1: imprime el rol como palabra, "Tarjeta Titular ************1234
+#     ..." -- se captura "Titular"/"Adicional"/"Digital" tal cual Banamex.
+#   - V2: NO imprime ningún rol, solo "************1234 NOMBRE APELLIDO"
+#     (el nombre del tarjetahabiente, sin la palabra "Titular"/"Adicional"
+#     en ningún lado de esa línea, confirmado contra el volcado real) --
+#     ahí no hay nada legible que sirva de rol, así que se usan los
+#     últimos 4 dígitos mismos como identificador de tarjeta. Cuál número
+#     corresponde a "la titular" o "la adicional" es algo que el usuario
+#     sabe por su propia cuenta, no algo que este documento diga en texto
+#     -- no lo adivinamos ni lo hardcodeamos aquí.
+# Se intenta la variante V1 primero (más legible) y solo si no matchea se
+# cae al número enmascarado solo.
+PATRON_SECCION_TARJETA_CON_ROL = re.compile(
+    r"^Tarjeta\s+(Titular|Adicional|Digital)\b", re.IGNORECASE
+)
+
 # Fuente DE RESPALDO, solo para V1 -- ver el docstring del módulo. La
 # portada de V1 dice "No. Tarjeta XXXX XXXX XXXX 1234 ..."; V2 no tiene
 # esta etiqueta en absoluto, así que `extraer_info_cuenta` solo llega aquí
@@ -182,6 +214,10 @@ class InvexTdcParser(BaseParser):
     def extraer(self, ruta_pdf: Path) -> list[RenglonCrudo]:
         renglones: list[RenglonCrudo] = []
         self._advertencias = []
+        # Estado del documento completo, no por página -- una sección de
+        # tarjeta sigue vigente a través de un salto de página, igual que
+        # en banamex_tdc.py.
+        tarjeta_actual: str | None = None
 
         with pdfplumber.open(ruta_pdf) as pdf:
             for numero_pagina, pagina in enumerate(pdf.pages, start=1):
@@ -190,6 +226,16 @@ class InvexTdcParser(BaseParser):
                 for linea in texto.splitlines():
                     linea = linea.strip()
                     if not linea:
+                        continue
+
+                    coincidencia_rol = PATRON_SECCION_TARJETA_CON_ROL.match(linea)
+                    if coincidencia_rol:
+                        tarjeta_actual = coincidencia_rol.group(1).capitalize()
+                        continue
+
+                    coincidencia_mascara_seccion = PATRON_TARJETA_ENMASCARADA.match(linea)
+                    if coincidencia_mascara_seccion:
+                        tarjeta_actual = coincidencia_mascara_seccion.group(1)
                         continue
 
                     coincidencia_v1 = PATRON_TRANSACCION_V1.match(linea)
@@ -216,6 +262,7 @@ class InvexTdcParser(BaseParser):
                                 monto_texto=monto_texto,
                                 pagina=numero_pagina,
                                 linea_cruda=linea,
+                                tarjeta=tarjeta_actual,
                             )
                         )
                         continue
@@ -239,6 +286,7 @@ class InvexTdcParser(BaseParser):
                                 monto_texto=monto_texto,
                                 pagina=numero_pagina,
                                 linea_cruda=linea,
+                                tarjeta=tarjeta_actual,
                             )
                         )
                         continue
