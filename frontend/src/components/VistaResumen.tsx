@@ -1,0 +1,374 @@
+import { useMemo } from "react";
+import {
+  agruparPorCategoria,
+  agruparPorComercio,
+  agruparIngresosGastosPorMes,
+  aplicarFiltros,
+  calcularPromedios,
+  categoriaDe,
+  cuentaDe,
+  eventoDe,
+  ocultarCategorias,
+  type Filtros,
+} from "../lib/queries";
+import type { Transaccion } from "../lib/types";
+import { StatTile } from "./StatTile";
+import { IngresosGastosChart } from "./IngresosGastosChart";
+import { GastoPorCategoriaChart } from "./GastoPorCategoriaChart";
+import { GastoPorComercioChart } from "./GastoPorComercioChart";
+import { TransaccionesTabla } from "./TransaccionesTabla";
+import { EditorTransacciones } from "./EditorTransacciones";
+
+const ETIQUETAS_FILTRO: Record<keyof Filtros, string> = {
+  mes: "Mes",
+  categoria: "Categoría",
+  comercio: "Comercio",
+  cuenta: "Cuenta",
+  tarjeta: "Tarjeta",
+  evento: "Evento",
+};
+
+type Actualizador<T> = (anterior: T) => T;
+
+interface VistaResumenProps {
+  /** Transacciones que esta vista muestra -- todas en "Resumen", solo las
+   * de una cuenta en cada pestaña de tarjeta. */
+  transacciones: Transaccion[];
+  /** Todas las transacciones sin acotar, para el editor masivo (ver
+   * `EditorTransacciones.catalogo`). */
+  catalogo: Transaccion[];
+  // El estado de filtros vive en `Dashboard`, una copia por pestaña, y
+  // llega aquí controlado -- así cada pestaña filtra de forma
+  // independiente y no pierde su selección al cambiar de pestaña (si el
+  // estado viviera aquí, desmontar la vista al cambiar de pestaña lo
+  // borraría).
+  filtros: Filtros;
+  onCambiarFiltros: (actualizar: Actualizador<Filtros>) => void;
+  categoriasOcultas: Set<string>;
+  onCambiarCategoriasOcultas: (actualizar: Actualizador<Set<string>>) => void;
+  onActualizado: () => void | Promise<void>;
+}
+
+/** El contenido de la pestaña "Resumen" (KPIs, gráficas con cross-filter,
+ * tabla y editor), reutilizado tal cual por cada pestaña de tarjeta. */
+export function VistaResumen({
+  transacciones,
+  catalogo,
+  filtros,
+  onCambiarFiltros,
+  categoriasOcultas,
+  onCambiarCategoriasOcultas,
+  onActualizado,
+}: VistaResumenProps) {
+  // Todas las categorías que existen, sin importar si están ocultas -- así
+  // el control de "Ocultar categorías" no pierde de vista una categoría una
+  // vez que el usuario la esconde (si derivara de la lista ya filtrada,
+  // ocultar la última categoría visible la haría desaparecer del propio
+  // control para volver a mostrarla).
+  const categoriasConocidas = useMemo(
+    () => Array.from(new Set(transacciones.map(categoriaDe))).sort(),
+    [transacciones]
+  );
+
+  // No hay una gráfica que impulse este filtro (a diferencia de mes/
+  // categoría/comercio, que se seleccionan haciendo clic en una barra) --
+  // se deriva de las transacciones sin filtrar, igual que categoriasConocidas,
+  // para que la lista de cuentas no cambie según lo que ya esté filtrado.
+  const cuentasConocidas = useMemo(
+    () => Array.from(new Set(transacciones.map(cuentaDe))).sort(),
+    [transacciones]
+  );
+
+  // `tarjeta` es opcional por diseño (solo lo asigna BanamexTdcParser para
+  // estados de cuenta con tarjetas adicionales/digitales) -- la mayoría de
+  // las transacciones no lo tienen, así que se descartan los null en vez
+  // de mostrarlos como una opción "Sin tarjeta".
+  const tarjetasConocidas = useMemo(
+    () =>
+      Array.from(
+        new Set(transacciones.map((t) => t.tarjeta).filter((t): t is string => !!t))
+      ).sort(),
+    [transacciones]
+  );
+
+  // Igual que tarjeta: un evento es opcional (viajes/fiestas concretos, no
+  // todas las transacciones pertenecen a uno), así que se descartan los
+  // null en vez de mostrarlos como una opción "Sin evento". Asignar
+  // eventos vive en su propia pestaña (EventosTab) -- este filtro solo
+  // sirve para ver/cruzar por evento ya asignado en el Resumen.
+  const eventosConocidos = useMemo(
+    () =>
+      Array.from(
+        new Set(transacciones.map(eventoDe).filter((e): e is string => e !== null))
+      ).sort(),
+    [transacciones]
+  );
+
+  // Categorías ocultas se quitan de raíz antes de todo lo demás -- a
+  // diferencia del cross-filter (que aísla UNA categoría a la vez sin
+  // tocar las demás gráficas), esto elimina varias categorías del dashboard
+  // entero, incluida su propia gráfica de origen.
+  const transaccionesVisibles = ocultarCategorias(transacciones, categoriasOcultas);
+
+  // Cross-filter estilo Power BI: cada gráfica se calcula excluyendo su
+  // propia dimensión (para poder seguir viendo/cambiando su selección) pero
+  // respetando las demás -- así un clic en una gráfica filtra a las otras.
+  const transaccionesFiltradas = aplicarFiltros(transaccionesVisibles, filtros);
+  const ingresosGastos = agruparIngresosGastosPorMes(
+    aplicarFiltros(transaccionesVisibles, filtros, "mes")
+  );
+  const gastoPorCategoria = agruparPorCategoria(
+    aplicarFiltros(transaccionesVisibles, filtros, "categoria")
+  );
+  const gastoPorComercio = agruparPorComercio(
+    aplicarFiltros(transaccionesVisibles, filtros, "comercio")
+  );
+
+  // Los promedios responden a categoría/comercio como cualquier gráfica,
+  // pero excluyen su propio filtro de "mes" -- son agregados sobre una
+  // ventana móvil de 3/12 meses relativa a hoy, así que aplicarles ADEMÁS
+  // el filtro de un mes puntual (p. ej. al hacer clic en una barra de
+  // IngresosGastosChart) los reduciría a un solo mes de datos divididos
+  // entre 3 o 12, o a $0 si ese mes cae fuera de la ventana -- el mismo
+  // motivo por el que `ingresosGastos` arriba excluye "mes" de su propio
+  // cálculo.
+  const { ingresosPromedio3m, gastosPromedio3m, ingresosPromedio12m, gastosPromedio12m } =
+    calcularPromedios(aplicarFiltros(transaccionesVisibles, filtros, "mes"));
+
+  function alternarFiltro<K extends keyof Filtros>(campo: K, valor: string) {
+    onCambiarFiltros((anterior) =>
+      anterior[campo] === valor
+        ? { ...anterior, [campo]: undefined }
+        : { ...anterior, [campo]: valor }
+    );
+  }
+
+  function alternarCategoriaOculta(categoria: string) {
+    onCambiarCategoriasOcultas((anterior) => {
+      const siguiente = new Set(anterior);
+      if (siguiente.has(categoria)) siguiente.delete(categoria);
+      else siguiente.add(categoria);
+      return siguiente;
+    });
+    // Evita el estado contradictorio de aislar por clic una categoría que
+    // al mismo tiempo se acaba de ocultar (o viceversa).
+    if (filtros.categoria === categoria) {
+      onCambiarFiltros((anterior) => ({ ...anterior, categoria: undefined }));
+    }
+  }
+
+  function seleccionarCategoria(categoria: string) {
+    if (categoriasOcultas.has(categoria)) {
+      onCambiarCategoriasOcultas((anterior) => {
+        const siguiente = new Set(anterior);
+        siguiente.delete(categoria);
+        return siguiente;
+      });
+    }
+    alternarFiltro("categoria", categoria);
+  }
+
+  const hayFiltrosActivos = Object.values(filtros).some(Boolean);
+
+  return (
+    <>
+      {hayFiltrosActivos && (
+        <div className="flex flex-wrap items-center gap-2">
+          {(Object.keys(filtros) as (keyof Filtros)[])
+            .filter((campo) => filtros[campo])
+            .map((campo) => (
+              <button
+                key={campo}
+                onClick={() => onCambiarFiltros((a) => ({ ...a, [campo]: undefined }))}
+                className="rounded-full px-3 py-1 text-xs font-medium"
+                style={{
+                  background: "var(--series-1)",
+                  color: "#ffffff",
+                }}
+                title="Quitar este filtro"
+              >
+                {ETIQUETAS_FILTRO[campo]}: {filtros[campo]} ×
+              </button>
+            ))}
+          <button
+            onClick={() => onCambiarFiltros(() => ({}))}
+            className="text-xs underline"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Limpiar todos los filtros
+          </button>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+          Ocultar categorías:
+        </span>
+        {categoriasConocidas.map((categoria) => {
+          const oculta = categoriasOcultas.has(categoria);
+          return (
+            <button
+              key={categoria}
+              onClick={() => alternarCategoriaOculta(categoria)}
+              className="rounded-full px-3 py-1 text-xs font-medium"
+              style={{
+                background: "var(--surface-1)",
+                border: `1px solid ${
+                  oculta ? "var(--status-critical)" : "var(--border)"
+                }`,
+                color: oculta ? "var(--status-critical)" : "var(--text-secondary)",
+                textDecoration: oculta ? "line-through" : "none",
+              }}
+              title={oculta ? "Mostrar de nuevo" : "Ocultar esta categoría"}
+            >
+              {categoria}
+            </button>
+          );
+        })}
+        {categoriasOcultas.size > 0 && (
+          <button
+            onClick={() => onCambiarCategoriasOcultas(() => new Set())}
+            className="text-xs underline"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Mostrar todas
+          </button>
+        )}
+      </div>
+
+      {cuentasConocidas.length > 1 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+            Cuenta:
+          </span>
+          {cuentasConocidas.map((cuenta) => {
+            const seleccionada = filtros.cuenta === cuenta;
+            return (
+              <button
+                key={cuenta}
+                onClick={() => alternarFiltro("cuenta", cuenta)}
+                className="rounded-full px-3 py-1 text-xs font-medium"
+                style={{
+                  background: seleccionada ? "var(--series-1)" : "var(--surface-1)",
+                  border: `1px solid ${
+                    seleccionada ? "var(--series-1)" : "var(--border)"
+                  }`,
+                  color: seleccionada ? "#ffffff" : "var(--text-secondary)",
+                }}
+                title={seleccionada ? "Quitar este filtro" : "Filtrar por esta cuenta"}
+              >
+                {cuenta}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {tarjetasConocidas.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+            Tarjeta:
+          </span>
+          {tarjetasConocidas.map((tarjeta) => {
+            const seleccionada = filtros.tarjeta === tarjeta;
+            return (
+              <button
+                key={tarjeta}
+                onClick={() => alternarFiltro("tarjeta", tarjeta)}
+                className="rounded-full px-3 py-1 text-xs font-medium"
+                style={{
+                  background: seleccionada ? "var(--series-1)" : "var(--surface-1)",
+                  border: `1px solid ${
+                    seleccionada ? "var(--series-1)" : "var(--border)"
+                  }`,
+                  color: seleccionada ? "#ffffff" : "var(--text-secondary)",
+                }}
+                title={seleccionada ? "Quitar este filtro" : "Filtrar por esta tarjeta"}
+              >
+                {tarjeta}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {eventosConocidos.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+            Evento:
+          </span>
+          {eventosConocidos.map((evento) => {
+            const seleccionado = filtros.evento === evento;
+            return (
+              <button
+                key={evento}
+                onClick={() => alternarFiltro("evento", evento)}
+                className="rounded-full px-3 py-1 text-xs font-medium"
+                style={{
+                  background: seleccionado ? "var(--series-1)" : "var(--surface-1)",
+                  border: `1px solid ${
+                    seleccionado ? "var(--series-1)" : "var(--border)"
+                  }`,
+                  color: seleccionado ? "#ffffff" : "var(--text-secondary)",
+                }}
+                title={seleccionado ? "Quitar este filtro" : "Filtrar por este evento"}
+              >
+                {evento}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatTile
+          label="Ingresos prom. (3 meses)"
+          value={ingresosPromedio3m}
+          tone="good"
+        />
+        <StatTile
+          label="Gastos prom. (3 meses)"
+          value={gastosPromedio3m}
+          tone="critical"
+        />
+        <StatTile
+          label="Ingresos prom. (12 meses)"
+          value={ingresosPromedio12m}
+          tone="good"
+        />
+        <StatTile
+          label="Gastos prom. (12 meses)"
+          value={gastosPromedio12m}
+          tone="critical"
+        />
+      </div>
+
+      <IngresosGastosChart
+        datos={ingresosGastos}
+        mesSeleccionado={filtros.mes}
+        onClickMes={(mes) => alternarFiltro("mes", mes)}
+      />
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <GastoPorCategoriaChart
+          datos={gastoPorCategoria}
+          categoriaSeleccionada={filtros.categoria}
+          onClickCategoria={seleccionarCategoria}
+        />
+        <GastoPorComercioChart
+          datos={gastoPorComercio}
+          comercioSeleccionado={filtros.comercio}
+          onClickComercio={(comercio) => alternarFiltro("comercio", comercio)}
+        />
+      </div>
+
+      <TransaccionesTabla transacciones={transaccionesFiltradas} />
+
+      <EditorTransacciones
+        transacciones={transacciones}
+        catalogo={catalogo}
+        onActualizado={onActualizado}
+      />
+    </>
+  );
+}

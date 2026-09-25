@@ -21,13 +21,21 @@ const TOPE_RESULTADOS = 100;
 
 interface EditorTransaccionesProps {
   transacciones: Transaccion[];
+  /** Universo completo para sugerencias de categoría/comercio, la lista de
+   * cuentas destino y el cálculo de impacto de un cambio de cuenta. En una
+   * pestaña de tarjeta `transacciones` viene acotado a esa cuenta (la
+   * búsqueda solo encuentra sus transacciones), pero mover un documento a
+   * OTRA cuenta necesita ver las demás. Si se omite, se usa `transacciones`. */
+  catalogo?: Transaccion[];
   onActualizado: () => void | Promise<void>;
 }
 
 export function EditorTransacciones({
   transacciones,
+  catalogo: catalogoProp,
   onActualizado,
 }: EditorTransaccionesProps) {
+  const catalogo = catalogoProp ?? transacciones;
   const [busqueda, setBusqueda] = useState("");
   const [seleccionadas, setSeleccionadas] = useState<Set<string>>(new Set());
   const [nuevaCategoria, setNuevaCategoria] = useState("");
@@ -53,17 +61,17 @@ export function EditorTransacciones({
     () =>
       Array.from(
         new Set(
-          transacciones.map((t) => t.categorias?.nombre).filter((n): n is string => !!n)
+          catalogo.map((t) => t.categorias?.nombre).filter((n): n is string => !!n)
         )
       ).sort(),
-    [transacciones]
+    [catalogo]
   );
   const comerciosExistentes = useMemo(
     () =>
       Array.from(
-        new Set(transacciones.map((t) => t.comercio).filter((c): c is string => !!c))
+        new Set(catalogo.map((t) => t.comercio).filter((c): c is string => !!c))
       ).sort(),
-    [transacciones]
+    [catalogo]
   );
   // Solo cuentas que ya existen (traídas de las transacciones ya
   // sincronizadas) -- a diferencia de categoría/comercio, no hay
@@ -71,13 +79,13 @@ export function EditorTransacciones({
   // dígitos, que no tiene sentido pedir como texto libre en este editor.
   const cuentasExistentes = useMemo(() => {
     const porId = new Map<string, string>();
-    for (const t of transacciones) {
+    for (const t of catalogo) {
       porId.set(t.documentos.cuentas.id, t.documentos.cuentas.alias);
     }
     return Array.from(porId.entries())
       .map(([id, alias]) => ({ id, alias }))
       .sort((a, b) => a.alias.localeCompare(b.alias));
-  }, [transacciones]);
+  }, [catalogo]);
 
   function alternarSeleccion(id: string) {
     setSeleccionadas((anterior) => {
@@ -106,7 +114,7 @@ export function EditorTransacciones({
     let documentoIds: string[] = [];
     let totalAfectadas = idsSeleccionados.length;
     if (cuentaId) {
-      const impacto = calcularImpactoCambioDeCuenta(transacciones, idsSeleccionados);
+      const impacto = calcularImpactoCambioDeCuenta(catalogo, idsSeleccionados);
       documentoIds = impacto.documentoIds;
       totalAfectadas = impacto.totalTransaccionesAfectadas;
       const extra = totalAfectadas - idsSeleccionados.length;
