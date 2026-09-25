@@ -461,6 +461,22 @@ windows in `calcularPromedios`/`sumaPorTipoUltimosMeses` are the 3/12 *complete*
 before the current one — statements arrive a month late, so the current month's data is always
 partial and would drag the average down.
 
+**Indicadores tab (added 2026-09-25, user's request: indicators that give visibility for better
+personal finances)**: `IndicadoresTab.tsx`, calculations as pure functions in `src/lib/indicadores.ts`
+(kept out of `queries.ts`). All computed over *complete* months before the current one (same reason
+as the averages above) across every account: hero savings rate (3 months, delta in points vs. the
+previous 3, plus the 12-month rate), average net flow, last month's spending vs. 12-month average,
+months of spending covered by the available balance (latest `saldo` per account — only debit
+accounts carry `saldo`, TDCs don't), recurring expenses (a `comercio` with charges in 3+ of the last
+6 months and active in the last 2 — only catches what categorization rules tag with `comercio`),
+"gasto hormiga" (charges under `UMBRAL_GASTO_HORMIGA` = $200 last month), categories above their
+3-month average, a monthly net-flow bar chart (`FlujoNetoChart`, blue = savings / orange = deficit,
+reusing the two validated series tokens rather than adding colors), and two tables. Transfers
+between the user's own accounts (e.g. paying the TDC from checking) would count as both expense and
+income, so the tab has its own "no contar como ingreso/gasto" pill row that starts with categories
+matching `pago tdc|entre cuentas|traspaso` excluded (`categoriasExcluidasPorDefecto`); the selection
+reuses `estadosPorPestana["indicadores"].categoriasOcultas`, so it survives tab switches.
+
 **Hide categories (the inverse of cross-filter, added 2026-09-20)**: the "Ocultar categorías" pill
 row (right under the active-filter chips, above the KPIs) is deliberately a *separate* mechanism
 from `filtros.categoria`, not another value it can hold — cross-filter *isolates* exactly one

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { cuentaDe, obtenerTransacciones, type Filtros } from "../lib/queries";
+import { categoriaDe, cuentaDe, obtenerTransacciones, type Filtros } from "../lib/queries";
+import { categoriasExcluidasPorDefecto } from "../lib/indicadores";
 import type { Transaccion } from "../lib/types";
 import { supabase } from "../lib/supabase";
 import { EventosTab } from "./EventosTab";
+import { IndicadoresTab } from "./IndicadoresTab";
 import { VistaResumen } from "./VistaResumen";
 
 /** Estado de filtros de UNA pestaña -- cada pestaña (Resumen y una por
@@ -17,6 +19,7 @@ const ESTADO_VACIO: EstadoVista = { filtros: {}, categoriasOcultas: new Set() };
 
 const PESTANA_RESUMEN = "resumen";
 const PESTANA_EVENTOS = "eventos";
+const PESTANA_INDICADORES = "indicadores";
 // Prefijo para no chocar con "resumen"/"eventos" si alguna cuenta tuviera
 // ese mismo alias.
 const PREFIJO_PESTANA_CUENTA = "cuenta:";
@@ -53,6 +56,7 @@ export function Dashboard() {
   const pestanas = [
     { id: PESTANA_RESUMEN, etiqueta: "Resumen" },
     { id: PESTANA_EVENTOS, etiqueta: "Eventos" },
+    { id: PESTANA_INDICADORES, etiqueta: "Indicadores" },
     ...cuentasConocidas.map((cuenta) => ({
       id: PREFIJO_PESTANA_CUENTA + cuenta,
       etiqueta: cuenta,
@@ -114,6 +118,14 @@ export function Dashboard() {
     );
   }
 
+  // La pestaña Indicadores reutiliza `categoriasOcultas` de su estado por
+  // pestaña como "categorías excluidas". Hasta que el usuario toque la
+  // selección, arranca excluyendo los movimientos entre cuentas propias (ver
+  // categoriasExcluidasPorDefecto).
+  const categoriasExcluidasIndicadores =
+    estadosPorPestana[PESTANA_INDICADORES]?.categoriasOcultas ??
+    categoriasExcluidasPorDefecto(Array.from(new Set(transacciones.map(categoriaDe))));
+
   return (
     <div style={{ background: "var(--page-plane)", minHeight: "100vh" }}>
       <header
@@ -164,7 +176,18 @@ export function Dashboard() {
               ))}
             </div>
 
-            {vistaActiva === PESTANA_EVENTOS ? (
+            {vistaActiva === PESTANA_INDICADORES ? (
+              <IndicadoresTab
+                transacciones={transacciones}
+                categoriasExcluidas={categoriasExcluidasIndicadores}
+                onCambiarCategoriasExcluidas={(cambio) =>
+                  actualizarEstado(PESTANA_INDICADORES, (e) => ({
+                    ...e,
+                    categoriasOcultas: cambio(categoriasExcluidasIndicadores),
+                  }))
+                }
+              />
+            ) : vistaActiva === PESTANA_EVENTOS ? (
               <EventosTab transacciones={transacciones} onActualizado={recargarTransacciones} />
             ) : vistaActiva === PESTANA_RESUMEN ? (
               renderVistaResumen(PESTANA_RESUMEN, transacciones)
