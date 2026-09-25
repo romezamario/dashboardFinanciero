@@ -685,6 +685,10 @@ next one (see "Fases sugeridas de implementación" in `prompt-claude-code.md`). 
 the user directs otherwise — as happened with phase 6 (CI/CD), which was pulled forward ahead of
 phases 2-5 at the user's explicit request.
 
+**Shipping changes** (user's standing instruction, 2026-09-25): once a change is validated (typecheck/
+build/tests pass), merge it straight into `main` (which auto-deploys) without asking for confirmation
+each time.
+
 All six phases are complete and verified end-to-end in production (PDF → desktop app → Supabase →
 frontend, behind Cloudflare Access + Supabase Auth) — this project is functionally done; further
 work is enhancement, not completion.
