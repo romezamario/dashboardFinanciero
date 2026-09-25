@@ -289,20 +289,24 @@ function anoMes(anio: number, mes: number): string {
 }
 
 /**
- * Suma ingresos/gastos de una ventana de calendario fija: el mes en curso y
- * los `cantidadMeses - 1` anteriores.
+ * Suma ingresos/gastos de una ventana de calendario fija: los
+ * `cantidadMeses` meses completos ANTERIORES al mes en curso. El mes en
+ * curso se excluye porque los estados de cuenta llegan a mes vencido -- sus
+ * datos siempre están incompletos y bajarían el promedio.
  */
 function sumaPorTipoUltimosMeses(
   transacciones: Transaccion[],
   cantidadMeses: number
 ): { ingresos: number; gastos: number } {
   const ahora = new Date();
-  const mesInicio = anoMes(ahora.getFullYear(), ahora.getMonth() - (cantidadMeses - 1));
+  const mesInicio = anoMes(ahora.getFullYear(), ahora.getMonth() - cantidadMeses);
+  const mesActual = anoMes(ahora.getFullYear(), ahora.getMonth());
 
   let ingresos = 0;
   let gastos = 0;
   for (const t of transacciones) {
-    if (t.fecha.slice(0, 7) < mesInicio) continue;
+    const mes = t.fecha.slice(0, 7);
+    if (mes < mesInicio || mes >= mesActual) continue;
     if (t.tipo === "abono") ingresos += t.monto;
     else gastos += t.monto;
   }
@@ -453,7 +457,8 @@ export async function actualizarCuentaDeDocumentos(
 
 /**
  * Promedio mensual de ingresos/gastos sobre los últimos 3 y últimos 12
- * meses de calendario (contando el mes en curso). Se divide siempre entre
+ * meses de calendario completos (sin contar el mes en curso, ver
+ * `sumaPorTipoUltimosMeses`). Se divide siempre entre
  * `cantidadMeses` fija, no entre los meses que realmente tienen
  * transacciones -- un mes sin movimientos es un mes real con $0, no un dato
  * faltante que deba excluirse del promedio.

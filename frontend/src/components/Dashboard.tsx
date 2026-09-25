@@ -52,11 +52,11 @@ export function Dashboard() {
 
   const pestanas = [
     { id: PESTANA_RESUMEN, etiqueta: "Resumen" },
+    { id: PESTANA_EVENTOS, etiqueta: "Eventos" },
     ...cuentasConocidas.map((cuenta) => ({
       id: PREFIJO_PESTANA_CUENTA + cuenta,
       etiqueta: cuenta,
     })),
-    { id: PESTANA_EVENTOS, etiqueta: "Eventos" },
   ];
 
   // Si la pestaña activa desaparece (p. ej. tras reasignar todos los

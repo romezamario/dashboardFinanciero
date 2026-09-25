@@ -441,8 +441,8 @@ via per-bar `<Cell fillOpacity>` rather than being hidden, so the full shape of 
 visible while showing what's filtered. The "Otros" fold in `GastoPorCategoriaChart` (categories
 past the top 8) is explicitly not clickable — it has no single real category name to filter by.
 
-**Per-card tabs (added 2026-09-25, user's request)**: besides "Resumen" and "Eventos", `Dashboard`
-renders one tab per account (`cuentaDe` = `cuentas.alias`, e.g. "TDC Beyond", "Invex TDC") — "tarjeta"
+**Per-card tabs (added 2026-09-25, user's request)**: after "Resumen" and "Eventos" (in that order),
+`Dashboard` renders one tab per account (`cuentaDe` = `cuentas.alias`, e.g. "TDC Beyond", "Invex TDC") — "tarjeta"
 here means the account/card product, *not* `transacciones.tarjeta` (Titular/Adicional/Digital,
 whose values repeat across accounts; it stays available as a pill filter inside each tab). Each tab
 is the same `VistaResumen` component (the whole former Resumen body — KPIs, charts, cross-filter,
@@ -455,6 +455,11 @@ tab only *searches* that card's transactions, but gets the full list via
 `EditorTransacciones.catalogo` for category/comercio suggestions, the destination-account list and
 the account-change impact count — otherwise you couldn't move a document to a different account
 from a card tab.
+
+**3/12-month averages exclude the current month** (2026-09-25, user's request): the KPI tiles
+windows in `calcularPromedios`/`sumaPorTipoUltimosMeses` are the 3/12 *complete* calendar months
+before the current one — statements arrive a month late, so the current month's data is always
+partial and would drag the average down.
 
 **Hide categories (the inverse of cross-filter, added 2026-09-20)**: the "Ocultar categorías" pill
 row (right under the active-filter chips, above the KPIs) is deliberately a *separate* mechanism
