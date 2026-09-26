@@ -176,7 +176,10 @@ Flujo completo una vez que el extractor de tu banco existe:
    de texto seleccionable — ahí el extractor no puede leer nada y la app te avisa con el número
    de página. Usa **Agregar renglón manual...** para capturarla a mano (fecha, descripción, monto
    sin signo, tipo, y la página si la conoces) — se agrega a la tabla igual que cualquier otro
-   renglón, con categoría/comercio asignados por las mismas reglas.
+   renglón, con categoría/comercio asignados por las mismas reglas. La pestaña **Sin
+   categorizar**, junto a la tabla, lista las descripciones únicas que quedaron sin categoría —
+   botón "Copiar todo" para pegarlas directo en un chat con Claude y pedir una propuesta de
+   reglas nuevas.
 3. **Validación de totales**: escribe el neto del periodo tal como lo imprime el estado de cuenta
    (saldo actual − saldo anterior) y da **Validar** — si no cuadra, hay algo mal parseado o un
    renglón faltante antes de confiar en el resultado.

@@ -450,6 +450,20 @@ typed in. There is still no UI to *delete* a row from the table: if a parser fix
 extracting a row that was previously added by hand, the recovered manual copy has to be removed by
 editing the JSON.
 
+**"Sin categorizar" tab (added 2026-09-26)** — the transaction table area is now a `ttk.Notebook`
+with two tabs: "Transacciones" (the `Treeview` that always existed) and "Sin categorizar", a
+plain read-only `tk.Text` listing the *unique* descriptions (not every occurrence — pasting the
+same "UBER" fifty times over doesn't help) of transactions whose `categoria` is `None`, one per
+line, plus a "Copiar todo" button (same `clipboard_clear`/`clipboard_append` pattern already used
+by `VentanaInspeccion`). User's explicit request: they'd been taking screenshots of the table to
+paste into a chat with Claude asking for a categorization proposal — this replaces that with a
+plain-text list they can copy directly. `App._refrescar_sin_categorizar()` is called from inside
+`_refrescar_tabla()`, so it's already implicitly kept in sync everywhere that method already runs
+(after `cargar_pdf`, and after `recategorizar()` — which `VentanaReglas` calls on close) without
+needing new call sites. Deliberately just descriptions, no categoria/comercio/monto columns — the
+point is a minimal paste-ready list, not a second view of the table (that's what the other tab is
+for).
+
 The app can be packaged as a standalone `.exe` via `DashboardFinanciero.spec` (PyInstaller,
 `--windowed`, icon from `app/icono.ico` — see README's "Empaquetar como ejecutable"). Build deps
 (pyinstaller, pillow) live in `requirements-dev.txt`, not `requirements.txt` — they're not needed

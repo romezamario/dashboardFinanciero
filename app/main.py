@@ -509,7 +509,13 @@ class App(tk.Tk):
             foreground="#a00",
         ).pack(side="left", padx=8)
 
-        self.tabla = ttk.Treeview(self, columns=COLUMNAS, show="headings")
+        self.notebook = ttk.Notebook(self)
+        self.notebook.pack(fill="both", expand=True, padx=8, pady=4)
+
+        pestana_transacciones = ttk.Frame(self.notebook)
+        self.notebook.add(pestana_transacciones, text="Transacciones")
+
+        self.tabla = ttk.Treeview(pestana_transacciones, columns=COLUMNAS, show="headings")
         encabezados = {
             "pagina": "Pág.",
             "fecha": "Fecha",
@@ -535,7 +541,35 @@ class App(tk.Tk):
         for col in COLUMNAS:
             self.tabla.heading(col, text=encabezados[col])
             self.tabla.column(col, width=anchos[col], anchor="w")
-        self.tabla.pack(fill="both", expand=True, padx=8, pady=4)
+        self.tabla.pack(fill="both", expand=True)
+
+        # Pestaña separada (no solo un filtro de la tabla) para que las
+        # descripciones sin categoría queden en texto plano, una por línea,
+        # listas para copiar y pegar directo en el chat con Claude y pedir
+        # una propuesta de reglas -- pedido explícito del usuario
+        # (2026-09-26) en vez de tener que tomar capturas de pantalla de la
+        # tabla como se venía haciendo. Únicas y sin acentos/orden de
+        # aparición alterado: no tiene caso pegar la misma descripción
+        # repetida 20 veces si "Uber" apareció 20 veces sin categorizar.
+        pestana_sin_categorizar = ttk.Frame(self.notebook)
+        self.notebook.add(pestana_sin_categorizar, text="Sin categorizar")
+
+        marco_sin_categorizar_top = ttk.Frame(pestana_sin_categorizar)
+        marco_sin_categorizar_top.pack(fill="x", padx=8, pady=(8, 4))
+        self.etiqueta_sin_categorizar = ttk.Label(
+            marco_sin_categorizar_top, text="Sin datos cargados."
+        )
+        self.etiqueta_sin_categorizar.pack(side="left")
+        ttk.Button(
+            marco_sin_categorizar_top,
+            text="Copiar todo",
+            command=self._copiar_sin_categorizar,
+        ).pack(side="right")
+
+        self.texto_sin_categorizar = tk.Text(
+            pestana_sin_categorizar, wrap="none", height=10, state="disabled"
+        )
+        self.texto_sin_categorizar.pack(fill="both", expand=True, padx=8, pady=(0, 8))
 
         self.etiqueta_resumen = ttk.Label(self, text="Sin datos cargados.")
         self.etiqueta_resumen.pack(fill="x", padx=8)
@@ -799,6 +833,34 @@ class App(tk.Tk):
                     t.origen or "",
                 ),
             )
+        self._refrescar_sin_categorizar()
+
+    def _refrescar_sin_categorizar(self) -> None:
+        # Únicas y en orden de primera aparición -- ver el porqué en el
+        # comentario de la pestaña, junto a donde se crea self.texto_sin_categorizar.
+        descripciones_unicas: list[str] = []
+        vistas: set[str] = set()
+        for t in self.transacciones:
+            if t.categoria is None and t.descripcion not in vistas:
+                vistas.add(t.descripcion)
+                descripciones_unicas.append(t.descripcion)
+
+        self.texto_sin_categorizar.config(state="normal")
+        self.texto_sin_categorizar.delete("1.0", "end")
+        self.texto_sin_categorizar.insert("1.0", "\n".join(descripciones_unicas))
+        self.texto_sin_categorizar.config(state="disabled")
+
+        if not self.transacciones:
+            texto_etiqueta = "Sin datos cargados."
+        elif descripciones_unicas:
+            texto_etiqueta = f"{len(descripciones_unicas)} descripción(es) única(s) sin categoría."
+        else:
+            texto_etiqueta = "Todas las transacciones tienen categoría."
+        self.etiqueta_sin_categorizar.config(text=texto_etiqueta)
+
+    def _copiar_sin_categorizar(self) -> None:
+        self.clipboard_clear()
+        self.clipboard_append(self.texto_sin_categorizar.get("1.0", "end-1c"))
 
     def _actualizar_totales(self) -> None:
         cargos_efectivo = [
