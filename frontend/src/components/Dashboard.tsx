@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { categoriaDe, cuentaDe, obtenerTransacciones, type Filtros } from "../lib/queries";
-import { categoriasExcluidasPorDefecto } from "../lib/indicadores";
+import { categoriasExcluidasPorDefecto, RANGO_FECHAS_VACIO, type RangoFechas } from "../lib/indicadores";
 import type { Transaccion } from "../lib/types";
 import { supabase } from "../lib/supabase";
 import { EventosTab } from "./EventosTab";
@@ -9,13 +9,21 @@ import { VistaResumen } from "./VistaResumen";
 
 /** Estado de filtros de UNA pestaña -- cada pestaña (Resumen y una por
  * tarjeta) tiene el suyo, guardado en `estadosPorPestana`, para que
- * filtrar o ocultar categorías en una no afecte a las demás. */
+ * filtrar o ocultar categorías en una no afecte a las demás. `rangoFechas`
+ * solo lo usa Indicadores hoy, pero vive aquí igual que `categoriasOcultas`
+ * (que Indicadores también reutiliza con otro significado) para no perder
+ * la selección al cambiar de pestaña. */
 interface EstadoVista {
   filtros: Filtros;
   categoriasOcultas: Set<string>;
+  rangoFechas: RangoFechas;
 }
 
-const ESTADO_VACIO: EstadoVista = { filtros: {}, categoriasOcultas: new Set() };
+const ESTADO_VACIO: EstadoVista = {
+  filtros: {},
+  categoriasOcultas: new Set(),
+  rangoFechas: RANGO_FECHAS_VACIO,
+};
 
 const PESTANA_RESUMEN = "resumen";
 const PESTANA_EVENTOS = "eventos";
@@ -184,6 +192,13 @@ export function Dashboard() {
                   actualizarEstado(PESTANA_INDICADORES, (e) => ({
                     ...e,
                     categoriasOcultas: cambio(categoriasExcluidasIndicadores),
+                  }))
+                }
+                rangoFechas={estadosPorPestana[PESTANA_INDICADORES]?.rangoFechas ?? RANGO_FECHAS_VACIO}
+                onCambiarRangoFechas={(cambio) =>
+                  actualizarEstado(PESTANA_INDICADORES, (e) => ({
+                    ...e,
+                    rangoFechas: cambio(e.rangoFechas),
                   }))
                 }
               />

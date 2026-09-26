@@ -25,6 +25,15 @@ export function categoriasExcluidasPorDefecto(categorias: string[]): Set<string>
   return new Set(categorias.filter((c) => PATRON_EXCLUIDA_POR_DEFECTO.test(c)));
 }
 
+/** Filtro de fechas de la pestaña Indicadores -- vive en `Dashboard` (junto
+ * a `categoriasOcultas`) para no perderse al cambiar de pestaña. */
+export interface RangoFechas {
+  desde: string;
+  hasta: string;
+}
+
+export const RANGO_FECHAS_VACIO: RangoFechas = { desde: "", hasta: "" };
+
 function claveMes(anio: number, mes: number): string {
   // `mes` 0-indexado como Date.getMonth(); normaliza el acarreo de año sin
   // pasar por Date/toISOString (que convierte a UTC y puede correr el mes).

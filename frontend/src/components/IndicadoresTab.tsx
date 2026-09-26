@@ -4,9 +4,11 @@ import {
   calcularFlujoSankey,
   calcularIndicadores,
   MESES_MINIMOS_RECURRENTE,
+  RANGO_FECHAS_VACIO,
   saldoDisponible,
   UMBRAL_GASTO_HORMIGA,
   VENTANA_RECURRENTES,
+  type RangoFechas,
 } from "../lib/indicadores";
 import type { Transaccion } from "../lib/types";
 import { FlujoNetoChart } from "./FlujoNetoChart";
@@ -29,31 +31,67 @@ interface IndicadoresTabProps {
    * cambiar de pestaña. */
   categoriasExcluidas: Set<string>;
   onCambiarCategoriasExcluidas: (actualizar: Actualizador<Set<string>>) => void;
+  /** Igual que `categoriasExcluidas`: vive en `Dashboard` para no perderse
+   * al cambiar de pestaña. */
+  rangoFechas: RangoFechas;
+  onCambiarRangoFechas: (actualizar: Actualizador<RangoFechas>) => void;
 }
 
 export function IndicadoresTab({
   transacciones,
   categoriasExcluidas,
   onCambiarCategoriasExcluidas,
+  rangoFechas,
+  onCambiarRangoFechas,
 }: IndicadoresTabProps) {
+  const { desde: fechaDesde, hasta: fechaHasta } = rangoFechas;
+
+  // "Ocultar categorías" ya usa las transacciones sin filtrar para que un
+  // toggle no desaparezca de su propia lista -- categoriasConocidas se
+  // deriva de `transacciones` (todo el historial), no del rango de fechas.
   const categoriasConocidas = useMemo(
     () => Array.from(new Set(transacciones.map(categoriaDe))).sort(),
     [transacciones]
   );
 
+  const transaccionesEnRango = useMemo(() => {
+    if (!fechaDesde && !fechaHasta) return transacciones;
+    return transacciones.filter(
+      (t) => (!fechaDesde || t.fecha >= fechaDesde) && (!fechaHasta || t.fecha <= fechaHasta)
+    );
+  }, [transacciones, fechaDesde, fechaHasta]);
+
+  // Todos los indicadores miden "los N meses completos antes de hoy" -- si
+  // el filtro solo recortara `transacciones` sin mover ese ancla, un rango
+  // de fechas fuera de los últimos 3/12 meses reales dejaría todo en $0 sin
+  // que se note por qué. Por eso "hasta" reemplaza a `hoy` como ancla (deja
+  // ver "cómo se veían mis indicadores en esa fecha"), y "desde" actúa como
+  // un piso adicional sobre esa misma ventana.
+  const hoyEfectivo = useMemo(
+    () => (fechaHasta ? new Date(`${fechaHasta}T00:00:00`) : new Date()),
+    [fechaHasta]
+  );
+
   const indicadores = useMemo(
     () =>
       calcularIndicadores(
-        ocultarCategorias(transacciones, categoriasExcluidas),
-        saldoDisponible(transacciones)
+        ocultarCategorias(transaccionesEnRango, categoriasExcluidas),
+        saldoDisponible(transaccionesEnRango),
+        hoyEfectivo
       ),
-    [transacciones, categoriasExcluidas]
+    [transaccionesEnRango, categoriasExcluidas, hoyEfectivo]
   );
 
   const flujoSankey = useMemo(
-    () => calcularFlujoSankey(ocultarCategorias(transacciones, categoriasExcluidas)),
-    [transacciones, categoriasExcluidas]
+    () =>
+      calcularFlujoSankey(
+        ocultarCategorias(transaccionesEnRango, categoriasExcluidas),
+        hoyEfectivo
+      ),
+    [transaccionesEnRango, categoriasExcluidas, hoyEfectivo]
   );
+
+  const hayRangoActivo = Boolean(fechaDesde || fechaHasta);
 
   const {
     tasaAhorro3m,
@@ -90,6 +128,57 @@ export function IndicadoresTab({
 
   return (
     <>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+          Desde
+          <input
+            type="date"
+            value={fechaDesde}
+            onChange={(e) =>
+              onCambiarRangoFechas((anterior) => ({ ...anterior, desde: e.target.value }))
+            }
+            className="mt-1 block rounded-md px-3 py-2 text-sm"
+            style={{
+              background: "var(--page-plane)",
+              border: "1px solid var(--border)",
+              color: "var(--text-primary)",
+            }}
+          />
+        </label>
+        <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+          Hasta
+          <input
+            type="date"
+            value={fechaHasta}
+            onChange={(e) =>
+              onCambiarRangoFechas((anterior) => ({ ...anterior, hasta: e.target.value }))
+            }
+            className="mt-1 block rounded-md px-3 py-2 text-sm"
+            style={{
+              background: "var(--page-plane)",
+              border: "1px solid var(--border)",
+              color: "var(--text-primary)",
+            }}
+          />
+        </label>
+        {hayRangoActivo && (
+          <button
+            onClick={() => onCambiarRangoFechas(() => RANGO_FECHAS_VACIO)}
+            className="text-xs underline"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Quitar filtro de fechas
+          </button>
+        )}
+      </div>
+      {hayRangoActivo && (
+        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+          "Hasta" reemplaza a hoy como fecha de referencia para las ventanas de 3/12 meses
+          (así puedes ver cómo se veían tus indicadores en una fecha pasada); "Desde" además
+          recorta cualquier dato anterior a esa fecha.
+        </p>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs" style={{ color: "var(--text-muted)" }}>
           No contar como ingreso/gasto (movimientos entre tus cuentas):
