@@ -5,6 +5,20 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dashboard Financiero</title>
+    <script>
+      // Aplica el tema guardado ANTES de pintar, para no ver un parpadeo del
+      // tema equivocado al cargar. Si el usuario nunca forzó uno, no toca
+      // nada -- el CSS sigue el tema del sistema (@media prefers-color-scheme)
+      // por su cuenta, incluso en vivo si el usuario cambia su SO después.
+      (function () {
+        try {
+          var guardado = localStorage.getItem("tema");
+          if (guardado === "light" || guardado === "dark") {
+            document.documentElement.setAttribute("data-theme", guardado);
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

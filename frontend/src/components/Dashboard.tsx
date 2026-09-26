@@ -32,12 +32,36 @@ const PESTANA_INDICADORES = "indicadores";
 // ese mismo alias.
 const PREFIJO_PESTANA_CUENTA = "cuenta:";
 
+type Tema = "light" | "dark";
+const CLAVE_TEMA = "tema";
+
+/** El botón de tema alterna sobre lo que se ve HOY, sin importar si viene
+ * del sistema o de una elección previa -- por eso lee `data-theme` (ya
+ * aplicado por el script inline de index.html si el usuario había elegido
+ * uno) y si no hay ninguno forzado, cae al `prefers-color-scheme` real del
+ * navegador en vez de asumir "light". */
+function temaEfectivoInicial(): Tema {
+  const forzado = document.documentElement.getAttribute("data-theme");
+  if (forzado === "light" || forzado === "dark") return forzado;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
 export function Dashboard() {
   const [transacciones, setTransacciones] = useState<Transaccion[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [estadosPorPestana, setEstadosPorPestana] = useState<Record<string, EstadoVista>>({});
   const [vista, setVista] = useState<string>(PESTANA_RESUMEN);
+  const [tema, setTema] = useState<Tema>(temaEfectivoInicial);
+
+  function alternarTema() {
+    setTema((anterior) => {
+      const siguiente: Tema = anterior === "dark" ? "light" : "dark";
+      document.documentElement.setAttribute("data-theme", siguiente);
+      localStorage.setItem(CLAVE_TEMA, siguiente);
+      return siguiente;
+    });
+  }
 
   async function recargarTransacciones() {
     try {
@@ -146,13 +170,27 @@ export function Dashboard() {
         >
           Dashboard Financiero
         </h1>
-        <button
-          onClick={() => supabase.auth.signOut()}
-          className="text-xs"
-          style={{ color: "var(--text-secondary)" }}
-        >
-          Cerrar sesión
-        </button>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={alternarTema}
+            className="rounded-full px-3 py-1 text-xs font-medium"
+            style={{
+              background: "var(--surface-1)",
+              border: "1px solid var(--border)",
+              color: "var(--text-secondary)",
+            }}
+            title={tema === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+          >
+            {tema === "dark" ? "Modo claro" : "Modo oscuro"}
+          </button>
+          <button
+            onClick={() => supabase.auth.signOut()}
+            className="text-xs"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            Cerrar sesión
+          </button>
+        </div>
       </header>
 
       <main className="mx-auto max-w-5xl space-y-6 p-6">
