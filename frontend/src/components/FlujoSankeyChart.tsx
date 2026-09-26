@@ -43,8 +43,8 @@ function construirDatosSankey(datos: FlujoSankeyDatos): { nodes: NodoSankey[]; l
   let idIngresosTotales: number | null = null;
   if (datos.ingresos.length > 0) {
     idIngresosTotales = agregarNodo("Ingresos totales", COLOR_INGRESO);
-    for (const { categoria, monto } of datos.ingresos) {
-      const id = agregarNodo(categoria, COLOR_INGRESO);
+    for (const { etiqueta, monto } of datos.ingresos) {
+      const id = agregarNodo(etiqueta, COLOR_INGRESO);
       links.push({ source: id, target: idIngresosTotales, value: monto });
     }
   }
@@ -73,8 +73,8 @@ function construirDatosSankey(datos: FlujoSankeyDatos): { nodes: NodoSankey[]; l
       links.push({ source: idDeficit, target: idGastosTotales, value: deficit });
     }
 
-    for (const { categoria, monto } of datos.gastos) {
-      const id = agregarNodo(categoria, COLOR_GASTO);
+    for (const { etiqueta, monto } of datos.gastos) {
+      const id = agregarNodo(etiqueta, COLOR_GASTO);
       links.push({ source: idGastosTotales, target: id, value: monto });
     }
   }
@@ -152,7 +152,15 @@ function EnlacePersonalizado(props: PropsEnlacePersonalizado) {
   );
 }
 
-export function FlujoSankeyChart({ datos }: { datos: FlujoSankeyDatos }) {
+interface FlujoSankeyChartProps {
+  datos: FlujoSankeyDatos;
+  titulo?: string;
+}
+
+export function FlujoSankeyChart({
+  datos,
+  titulo = "Flujo de ingresos y gastos",
+}: FlujoSankeyChartProps) {
   const { nodes, links } = construirDatosSankey(datos);
   const sinDatos = links.length === 0;
 
@@ -162,7 +170,7 @@ export function FlujoSankeyChart({ datos }: { datos: FlujoSankeyDatos }) {
       style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
     >
       <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-        Flujo de ingresos y gastos
+        {titulo}
         {datos.meses.length > 0 ? ` (${nombrePeriodo(datos.meses)})` : ""}
       </h3>
       {sinDatos ? (

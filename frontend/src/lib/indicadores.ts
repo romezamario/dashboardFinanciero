@@ -326,7 +326,7 @@ export const TOPE_SANKEY_INGRESOS = 5;
 export const TOPE_SANKEY_GASTOS = 8;
 
 export interface RamaSankey {
-  categoria: string;
+  etiqueta: string;
   monto: number;
 }
 
@@ -340,41 +340,60 @@ export interface FlujoSankeyDatos {
   meses: string[];
 }
 
-function topeConOtros(porCategoria: Map<string, number>, tope: number): RamaSankey[] {
-  const ordenado = Array.from(porCategoria.entries())
-    .map(([categoria, monto]) => ({ categoria, monto }))
+function topeConOtros(porEtiqueta: Map<string, number>, tope: number): RamaSankey[] {
+  const ordenado = Array.from(porEtiqueta.entries())
+    .map(([etiqueta, monto]) => ({ etiqueta, monto }))
     .sort((a, b) => b.monto - a.monto);
   const visibles = ordenado.slice(0, tope);
   const otros = ordenado.slice(tope).reduce((s, c) => s + c.monto, 0);
-  return otros > 0 ? [...visibles, { categoria: "Otros", monto: otros }] : visibles;
+  return otros > 0 ? [...visibles, { etiqueta: "Otros", monto: otros }] : visibles;
 }
 
 /**
  * Desglose para el diagrama de flujo (Sankey) de ingresos y gastos: de qué
- * categorías viene el ingreso, cuánto se ahorra vs. se gasta, y a qué
- * categorías va el gasto. Totales de los meses del periodo.
+ * agrupa `etiquetaDe` viene el ingreso, cuánto se ahorra vs. se gasta, y a
+ * qué agrupa va el gasto. Totales de los meses del periodo. Genérico sobre
+ * la dimensión de agrupación -- `calcularFlujoSankey` la agrupa por
+ * categoría, `calcularFlujoSankeyPorCuenta` por cuenta/tarjeta, mismo
+ * balanceo de ahorro/déficit para ambas.
  */
-export function calcularFlujoSankey(transacciones: Transaccion[], meses: string[]): FlujoSankeyDatos {
+function calcularFlujoSankeyGenerico(
+  transacciones: Transaccion[],
+  meses: string[],
+  etiquetaDe: (t: Transaccion) => string
+): FlujoSankeyDatos {
   const ventana = new Set(meses);
-  const porCategoriaIngreso = new Map<string, number>();
-  const porCategoriaGasto = new Map<string, number>();
+  const porEtiquetaIngreso = new Map<string, number>();
+  const porEtiquetaGasto = new Map<string, number>();
 
   for (const t of transacciones) {
     if (!ventana.has(mesDe(t))) continue;
-    const categoria = categoriaDe(t);
+    const etiqueta = etiquetaDe(t);
     if (t.tipo === "abono") {
-      porCategoriaIngreso.set(categoria, (porCategoriaIngreso.get(categoria) ?? 0) + t.monto);
+      porEtiquetaIngreso.set(etiqueta, (porEtiquetaIngreso.get(etiqueta) ?? 0) + t.monto);
     } else {
-      porCategoriaGasto.set(categoria, (porCategoriaGasto.get(categoria) ?? 0) + t.monto);
+      porEtiquetaGasto.set(etiqueta, (porEtiquetaGasto.get(etiqueta) ?? 0) + t.monto);
     }
   }
 
-  const ingresos = topeConOtros(porCategoriaIngreso, TOPE_SANKEY_INGRESOS);
-  const gastos = topeConOtros(porCategoriaGasto, TOPE_SANKEY_GASTOS);
+  const ingresos = topeConOtros(porEtiquetaIngreso, TOPE_SANKEY_INGRESOS);
+  const gastos = topeConOtros(porEtiquetaGasto, TOPE_SANKEY_GASTOS);
   const totalIngresos = ingresos.reduce((s, c) => s + c.monto, 0);
   const totalGastos = gastos.reduce((s, c) => s + c.monto, 0);
 
   return { ingresos, gastos, totalIngresos, totalGastos, ahorro: totalIngresos - totalGastos, meses };
+}
+
+export function calcularFlujoSankey(transacciones: Transaccion[], meses: string[]): FlujoSankeyDatos {
+  return calcularFlujoSankeyGenerico(transacciones, meses, categoriaDe);
+}
+
+/** Mismo diagrama que `calcularFlujoSankey`, pero agrupado por cuenta/
+ * tarjeta en vez de por categoría: por cuál entra el ingreso y por cuál
+ * sale el gasto -- por ejemplo, para ver cuánto se concentra en una
+ * tarjeta de crédito frente a la cuenta de cheques. */
+export function calcularFlujoSankeyPorCuenta(transacciones: Transaccion[], meses: string[]): FlujoSankeyDatos {
+  return calcularFlujoSankeyGenerico(transacciones, meses, cuentaDe);
 }
 
 /** Mínimo de meses que muestra la gráfica de flujo neto: aunque el periodo

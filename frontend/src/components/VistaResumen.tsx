@@ -13,6 +13,7 @@ import {
 } from "../lib/queries";
 import {
   calcularFlujoSankey,
+  calcularFlujoSankeyPorCuenta,
   calcularGastoHormiga,
   calcularIndicadores,
   categoriasEnAlza,
@@ -207,6 +208,10 @@ export function VistaResumen({
   const gastoPorComercio = agruparPorComercio(aplicarFiltros(delPeriodo, filtros, "comercio"));
   const flujoSankey = useMemo(
     () => calcularFlujoSankey(conFiltros, periodo.meses),
+    [conFiltros, periodo]
+  );
+  const flujoSankeyPorCuenta = useMemo(
+    () => calcularFlujoSankeyPorCuenta(conFiltros, periodo.meses),
     [conFiltros, periodo]
   );
   const hormiga = useMemo(
@@ -633,6 +638,17 @@ export function VistaResumen({
       />
 
       <FlujoSankeyChart datos={flujoSankey} />
+
+      {/* Con una sola cuenta en la vista (pestaña de una tarjeta) esta
+          gráfica sería un Sankey degenerado: la misma cuenta como único
+          origen y único destino. Solo aporta algo cuando hay varias, como
+          en "Resumen". */}
+      {cuentasConocidas.length > 1 && (
+        <FlujoSankeyChart
+          datos={flujoSankeyPorCuenta}
+          titulo="Flujo de ingresos y gastos por cuenta/tarjeta"
+        />
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <GastoPorCategoriaChart
