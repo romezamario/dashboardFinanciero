@@ -37,6 +37,8 @@ export async function obtenerTransacciones(): Promise<Transaccion[]> {
 }
 
 export interface Filtros {
+  /** "YYYY" -- lo fija un clic en la vista por años de IngresosGastosChart. */
+  anio?: string;
   mes?: string;
   categoria?: string;
   comercio?: string;
@@ -96,33 +98,32 @@ export function ocultarCategorias(
 export function aplicarFiltros(
   transacciones: Transaccion[],
   filtros: Filtros,
-  excluir?: keyof Filtros
+  excluir?: keyof Filtros | (keyof Filtros)[]
 ): Transaccion[] {
+  // Una gráfica puede excluir más de una dimensión: la de ingresos/gastos
+  // excluye año y mes a la vez en su vista por años.
+  const excluidas = new Set(excluir === undefined ? [] : Array.isArray(excluir) ? excluir : [excluir]);
+  const aplica = (campo: keyof Filtros) => Boolean(filtros[campo]) && !excluidas.has(campo);
   return transacciones.filter((t) => {
-    if (filtros.mes && excluir !== "mes" && t.fecha.slice(0, 7) !== filtros.mes) {
+    if (aplica("anio") && t.fecha.slice(0, 4) !== filtros.anio) {
       return false;
     }
-    if (
-      filtros.categoria &&
-      excluir !== "categoria" &&
-      categoriaDe(t) !== filtros.categoria
-    ) {
+    if (aplica("mes") && t.fecha.slice(0, 7) !== filtros.mes) {
       return false;
     }
-    if (
-      filtros.comercio &&
-      excluir !== "comercio" &&
-      t.comercio !== filtros.comercio
-    ) {
+    if (aplica("categoria") && categoriaDe(t) !== filtros.categoria) {
       return false;
     }
-    if (filtros.cuenta && excluir !== "cuenta" && cuentaDe(t) !== filtros.cuenta) {
+    if (aplica("comercio") && t.comercio !== filtros.comercio) {
       return false;
     }
-    if (filtros.tarjeta && excluir !== "tarjeta" && t.tarjeta !== filtros.tarjeta) {
+    if (aplica("cuenta") && cuentaDe(t) !== filtros.cuenta) {
       return false;
     }
-    if (filtros.evento && excluir !== "evento" && eventoDe(t) !== filtros.evento) {
+    if (aplica("tarjeta") && t.tarjeta !== filtros.tarjeta) {
+      return false;
+    }
+    if (aplica("evento") && eventoDe(t) !== filtros.evento) {
       return false;
     }
     return true;
@@ -130,7 +131,8 @@ export function aplicarFiltros(
 }
 
 export interface PuntoIngresoGasto {
-  mes: string; // "2026-06"
+  /** "2026-06" en la vista por meses, "2026" en la vista por años. */
+  periodo: string;
   ingresos: number;
   gastos: number;
 }
@@ -143,7 +145,7 @@ export function agruparIngresosGastosPorMes(
   for (const t of transacciones) {
     const mes = t.fecha.slice(0, 7);
     if (!porMes.has(mes)) {
-      porMes.set(mes, { mes, ingresos: 0, gastos: 0 });
+      porMes.set(mes, { periodo: mes, ingresos: 0, gastos: 0 });
     }
     const punto = porMes.get(mes)!;
     if (t.tipo === "abono") {
@@ -169,7 +171,7 @@ export function agruparIngresosGastosPorMes(
     while (anio * 12 + mes <= indiceFin) {
       const clave = anoMes(anio, mes);
       if (!porMes.has(clave)) {
-        porMes.set(clave, { mes: clave, ingresos: 0, gastos: 0 });
+        porMes.set(clave, { periodo: clave, ingresos: 0, gastos: 0 });
       }
       mes += 1;
       if (mes > 11) {
@@ -179,7 +181,29 @@ export function agruparIngresosGastosPorMes(
     }
   }
 
-  return Array.from(porMes.values()).sort((a, b) => a.mes.localeCompare(b.mes));
+  return Array.from(porMes.values()).sort((a, b) => a.periodo.localeCompare(b.periodo));
+}
+
+/** Igual que `agruparIngresosGastosPorMes`, por año calendario; también
+ * rellena con $0 los años sin movimientos entre el primero y el último. */
+export function agruparIngresosGastosPorAnio(
+  transacciones: Transaccion[]
+): PuntoIngresoGasto[] {
+  const porAnio = new Map<string, PuntoIngresoGasto>();
+  for (const t of transacciones) {
+    const anio = t.fecha.slice(0, 4);
+    const punto = porAnio.get(anio) ?? { periodo: anio, ingresos: 0, gastos: 0 };
+    if (t.tipo === "abono") punto.ingresos += t.monto;
+    else punto.gastos += t.monto;
+    porAnio.set(anio, punto);
+  }
+  const anios = Array.from(porAnio.keys()).map(Number);
+  if (anios.length > 0) {
+    for (let a = Math.min(...anios); a <= Math.max(...anios); a++) {
+      if (!porAnio.has(String(a))) porAnio.set(String(a), { periodo: String(a), ingresos: 0, gastos: 0 });
+    }
+  }
+  return Array.from(porAnio.values()).sort((a, b) => a.periodo.localeCompare(b.periodo));
 }
 
 export interface PuntoCategoria {

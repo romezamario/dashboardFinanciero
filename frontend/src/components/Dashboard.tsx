@@ -5,6 +5,7 @@ import type { Transaccion } from "../lib/types";
 import { supabase } from "../lib/supabase";
 import { EventosTab } from "./EventosTab";
 import { IndicadoresTab } from "./IndicadoresTab";
+import type { VistaTiempo } from "./IngresosGastosChart";
 import { VistaResumen } from "./VistaResumen";
 
 /** Estado de filtros de UNA pestaña -- cada pestaña (Resumen y una por
@@ -17,12 +18,14 @@ interface EstadoVista {
   filtros: Filtros;
   categoriasOcultas: Set<string>;
   rangoMeses: RangoMeses;
+  vistaTiempo: VistaTiempo;
 }
 
 const ESTADO_VACIO: EstadoVista = {
   filtros: {},
   categoriasOcultas: new Set(),
   rangoMeses: RANGO_MESES_VACIO,
+  vistaTiempo: "meses",
 };
 
 const PESTANA_RESUMEN = "resumen";
@@ -120,6 +123,10 @@ export function Dashboard() {
             ...e,
             categoriasOcultas: cambio(e.categoriasOcultas),
           }))
+        }
+        vistaTiempo={estado.vistaTiempo}
+        onCambiarVistaTiempo={(vistaTiempo) =>
+          actualizarEstado(pestana, (e) => ({ ...e, vistaTiempo }))
         }
         onActualizado={recargarTransacciones}
       />

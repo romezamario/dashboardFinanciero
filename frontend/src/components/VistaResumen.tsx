@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import {
   agruparPorCategoria,
   agruparPorComercio,
+  agruparIngresosGastosPorAnio,
   agruparIngresosGastosPorMes,
   aplicarFiltros,
   calcularPromedios,
@@ -13,13 +14,14 @@ import {
 } from "../lib/queries";
 import type { Transaccion } from "../lib/types";
 import { StatTile } from "./StatTile";
-import { IngresosGastosChart } from "./IngresosGastosChart";
+import { IngresosGastosChart, type VistaTiempo } from "./IngresosGastosChart";
 import { GastoPorCategoriaChart } from "./GastoPorCategoriaChart";
 import { GastoPorComercioChart } from "./GastoPorComercioChart";
 import { TransaccionesTabla } from "./TransaccionesTabla";
 import { EditorTransacciones } from "./EditorTransacciones";
 
 const ETIQUETAS_FILTRO: Record<keyof Filtros, string> = {
+  anio: "Año",
   mes: "Mes",
   categoria: "Categoría",
   comercio: "Comercio",
@@ -46,6 +48,10 @@ interface VistaResumenProps {
   onCambiarFiltros: (actualizar: Actualizador<Filtros>) => void;
   categoriasOcultas: Set<string>;
   onCambiarCategoriasOcultas: (actualizar: Actualizador<Set<string>>) => void;
+  /** Agrupación de la gráfica de ingresos vs. gastos (por mes o por año);
+   * vive en `Dashboard` por pestaña, igual que los filtros. */
+  vistaTiempo: VistaTiempo;
+  onCambiarVistaTiempo: (vista: VistaTiempo) => void;
   onActualizado: () => void | Promise<void>;
 }
 
@@ -58,6 +64,8 @@ export function VistaResumen({
   onCambiarFiltros,
   categoriasOcultas,
   onCambiarCategoriasOcultas,
+  vistaTiempo,
+  onCambiarVistaTiempo,
   onActualizado,
 }: VistaResumenProps) {
   // Todas las categorías que existen, sin importar si están ocultas -- así
@@ -114,9 +122,13 @@ export function VistaResumen({
   // propia dimensión (para poder seguir viendo/cambiando su selección) pero
   // respetando las demás -- así un clic en una gráfica filtra a las otras.
   const transaccionesFiltradas = aplicarFiltros(transaccionesVisibles, filtros);
-  const ingresosGastos = agruparIngresosGastosPorMes(
-    aplicarFiltros(transaccionesVisibles, filtros, "mes")
-  );
+  // Vista por meses: excluye su propio filtro de mes pero respeta el de
+  // año (clic en un año y luego "Meses" = los meses de ese año). Vista por
+  // años: excluye año y mes, para seguir viendo todos los años.
+  const ingresosGastos =
+    vistaTiempo === "anios"
+      ? agruparIngresosGastosPorAnio(aplicarFiltros(transaccionesVisibles, filtros, ["anio", "mes"]))
+      : agruparIngresosGastosPorMes(aplicarFiltros(transaccionesVisibles, filtros, "mes"));
   const gastoPorCategoria = agruparPorCategoria(
     aplicarFiltros(transaccionesVisibles, filtros, "categoria")
   );
@@ -131,9 +143,9 @@ export function VistaResumen({
   // IngresosGastosChart) los reduciría a un solo mes de datos divididos
   // entre 3 o 12, o a $0 si ese mes cae fuera de la ventana -- el mismo
   // motivo por el que `ingresosGastos` arriba excluye "mes" de su propio
-  // cálculo.
+  // cálculo. Lo mismo aplica al filtro de año.
   const { ingresosPromedio3m, gastosPromedio3m, ingresosPromedio12m, gastosPromedio12m } =
-    calcularPromedios(aplicarFiltros(transaccionesVisibles, filtros, "mes"));
+    calcularPromedios(aplicarFiltros(transaccionesVisibles, filtros, ["mes", "anio"]));
 
   function alternarFiltro<K extends keyof Filtros>(campo: K, valor: string) {
     onCambiarFiltros((anterior) =>
@@ -141,6 +153,19 @@ export function VistaResumen({
         ? { ...anterior, [campo]: undefined }
         : { ...anterior, [campo]: valor }
     );
+  }
+
+  // Un mes seleccionado de otro año contradiría el año nuevo (no quedaría
+  // ninguna transacción), así que elegir un año suelta ese mes.
+  function seleccionarAnio(anio: string) {
+    onCambiarFiltros((anterior) => {
+      const quitar = anterior.anio === anio;
+      return {
+        ...anterior,
+        anio: quitar ? undefined : anio,
+        mes: !quitar && anterior.mes && !anterior.mes.startsWith(anio) ? undefined : anterior.mes,
+      };
+    });
   }
 
   function alternarCategoriaOculta(categoria: string) {
@@ -345,8 +370,12 @@ export function VistaResumen({
 
       <IngresosGastosChart
         datos={ingresosGastos}
-        mesSeleccionado={filtros.mes}
-        onClickMes={(mes) => alternarFiltro("mes", mes)}
+        vista={vistaTiempo}
+        onCambiarVista={onCambiarVistaTiempo}
+        seleccionado={vistaTiempo === "anios" ? filtros.anio : filtros.mes}
+        onClickPeriodo={(periodo) =>
+          vistaTiempo === "anios" ? seleccionarAnio(periodo) : alternarFiltro("mes", periodo)
+        }
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

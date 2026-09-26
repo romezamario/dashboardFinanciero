@@ -464,6 +464,16 @@ via per-bar `<Cell fillOpacity>` rather than being hidden, so the full shape of 
 visible while showing what's filtered. The "Otros" fold in `GastoPorCategoriaChart` (categories
 past the top 8) is explicitly not clickable — it has no single real category name to filter by.
 
+**Year/month view on the income-vs-expenses chart** (added 2026-09-26, user's request):
+`IngresosGastosChart` has a Meses/Años toggle (`VistaTiempo`, stored per tab in
+`EstadoVista.vistaTiempo` like the filters). `PuntoIngresoGasto`'s key is `periodo` ("2026-06" or
+"2026"); `agruparIngresosGastosPorAnio` fills empty years like the monthly version fills empty
+months. Clicking a year sets a new `Filtros.anio` cross-filter dimension (chip "Año"); the yearly
+view excludes both `anio` and `mes` from its own data (so every year stays visible), the monthly
+view excludes only `mes` (so "click 2025, then Meses" drills into 2025's months), and picking a year
+drops a selected month from a different year. `aplicarFiltros`'s `excluir` now accepts an array for
+this. The 3/12-month average tiles ignore `anio` as well as `mes` (same reason as for `mes`).
+
 **Per-card tabs (added 2026-09-25, user's request)**: after "Resumen" and "Eventos" (in that order),
 `Dashboard` renders one tab per account (`cuentaDe` = `cuentas.alias`, e.g. "TDC Beyond", "Invex TDC") — "tarjeta"
 here means the account/card product, *not* `transacciones.tarjeta` (Titular/Adicional/Digital,
