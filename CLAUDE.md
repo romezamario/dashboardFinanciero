@@ -209,7 +209,30 @@ statement from a bank you already support will look anything like the first one:
   `puede_procesar` already didn't gate on a specific tier (just "Pago mínimo", which every TDC
   statement has) so it needed no change at all. Lesson for a future tier: verify structural
   identity against the real anonymized dump before assuming a new class is needed — a new card
-  product from the same issuer is not automatically a new document *format*.
+  product from the same issuer is not automatically a new document *format*. **Confirmed again
+  2026-09-26** with a third tier, Conquista (the current name for what used to be called
+  Prestige — same normalize-to-one-alias treatment as Platino/Platinum, both patterns mapping to
+  `"TDC Conquista"` in `TIPOS_TARJETA_CONOCIDOS`): transaction format, sign convention, card
+  sectioning, and the `PAGO INTERBANCARIO` multi-line block were all identical to Platino/Beyond,
+  so this was a one-line addition to `TIPOS_TARJETA_CONOCIDOS` plus its own
+  `"PAGO TDC CONQUISTA"` rule in `reglas_categorizacion.json` — no parser logic changed.
+- **A real Conquista statement also revealed a `PAGO INTERBANCARIO` shape not seen before: a
+  one-line variant with the amount inline**, `"SU PAGO INTERBANCARIO - $X,XXX.XX"` — distinct from
+  the multi-line block above (which opens with bare `"PAGO INTERBANCARIO"`, no amount, and needs
+  `PATRON_PAGO_INTERBANCARIO_INICIO`/`_CIERRE` to reconstruct it). Because this one-line version
+  already has fecha/concepto/signo/monto all on one line, it matches `PATRON_TRANSACCION` directly
+  and needed no parser change — but it *does* contain the substring `"PAGO INTERBANCARIO"`, so
+  without a fix it fell into the generic `"PAGO INTERBANCARIO"` → `"Transferencia enviada"` rule,
+  mislabeling an incoming abono (confirmed sign `"-"` in the real statement) as an outgoing
+  transfer — the exact wrong-direction mistake the multi-line block's custom `"PAGO RECIBIDO
+  {concepto}"` description was already built to avoid, just not for this second shape. Fixed with
+  a `"SU PAGO INTERBANCARIO"` rule (categoria `"Transferencia recibida"`) placed before the
+  generic `"PAGO INTERBANCARIO"` rule in `reglas_categorizacion.json` — a pure categorization-rule
+  fix, since the parser already extracts fecha/monto/signo correctly for this line; only
+  `categorizar()`'s first-match-wins ordering was wrong. Deliberately generic (`"Transferencia
+  recibida"`, not tier-specific `"Pago TDC"`) rather than extending the `PATRON_ABONO_CORTESIA`
+  parser rewrite to cover this too — a smaller, more conservative fix for now since the concept
+  text here doesn't say who's on the other end the way `"SU ABONO...GRACIAS"` does.
 - **`tarjeta` (Titular/Adicional/Digital): a TDC with supplementary cards groups its transaction
   table into sections**, each opened by a line matching `PATRON_SECCION_TARJETA` —
   `^Tarjeta\s+(Titular|Adicional|Digital)\b` (case-insensitive; confirmed 2026-09-20 against a

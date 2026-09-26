@@ -90,6 +90,12 @@ PATRON_PREFIJO_FECHAS = re.compile(
 TIPOS_TARJETA_CONOCIDOS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"platino|platinum", re.IGNORECASE), "TDC Platino"),
     (re.compile(r"beyond", re.IGNORECASE), "TDC Beyond"),
+    # "Conquista" es el nombre actual de un tier que antes se llamaba
+    # "Prestige" (confirmado por el usuario, 2026-09-26) -- mismo caso que
+    # "platino"/"platinum" arriba: dos grafías, un solo alias normalizado,
+    # para no partir la cuenta en dos filas de `cuentas` si un estado de
+    # cuenta viejo trae la grafía anterior.
+    (re.compile(r"conquista|prestige", re.IGNORECASE), "TDC Conquista"),
 ]
 
 
