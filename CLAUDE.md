@@ -514,7 +514,14 @@ reference (up to 12 months before the period, counting only months since the fir
 missing history isn't averaged in as $0), and the net-flow chart (≥12 months ending at the period,
 with the period's months highlighted and the rest dimmed). Changing the month filter seeds the
 tab's state with the current category exclusions — before, the first filter change created state
-from `ESTADO_VACIO` and silently re-included "Pago TDC".
+from `ESTADO_VACIO` and silently re-included "Pago TDC". The "Categorías al alza" table has a
+"Tendencia 12 meses" column (added 2026-09-26, user's request: "como acciones de la bolsa"):
+`Sparkline.tsx`, a hand-rolled inline SVG (no Recharts — 8 tiny charts per table), fed by
+`gastoMensualPorCategoria` over the 12 months ending at the period's last month. Per the dataviz
+stat-tile/sparkline spec: context line in `--text-muted`, the period's months + last point in the
+gastos accent (`--series-2`), each series scaled 0→its own max (it shows shape, not cross-category
+magnitude — the amount columns do that), native `<title>` tooltip per month, and an `aria-label`
+listing every month's value.
 
 **Hide categories (the inverse of cross-filter, added 2026-09-20)**: the "Ocultar categorías" pill
 row (right under the active-filter chips, above the KPIs) is deliberately a *separate* mechanism

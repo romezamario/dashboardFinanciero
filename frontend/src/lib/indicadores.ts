@@ -243,6 +243,26 @@ export function categoriasEnAlza(transacciones: Transaccion[], periodo: Periodo)
     .sort((a, b) => b.diferencia - a.diferencia);
 }
 
+/** Gasto (cargos) de cada categoría en cada mes de `meses`, en el mismo
+ * orden -- alimenta las minigráficas de tendencia de "Categorías al alza".
+ * Un mes sin cargos es $0 (la línea baja a cero, no se interrumpe). */
+export function gastoMensualPorCategoria(
+  transacciones: Transaccion[],
+  categorias: string[],
+  meses: string[]
+): Map<string, number[]> {
+  const indiceMes = new Map(meses.map((m, i) => [m, i]));
+  const series = new Map(categorias.map((c) => [c, meses.map(() => 0)]));
+  for (const t of transacciones) {
+    if (t.tipo !== "cargo") continue;
+    const i = indiceMes.get(mesDe(t));
+    const serie = series.get(categoriaDe(t));
+    if (i === undefined || !serie) continue;
+    serie[i] += t.monto;
+  }
+  return series;
+}
+
 /** Saldo más reciente, al cierre de `hastaMes` (inclusive), de cada cuenta
  * que reporta saldo (las TDC no traen saldo por renglón, así que solo
  * cuentan cuentas de débito/cheques). null si ninguna cuenta tiene saldo. */

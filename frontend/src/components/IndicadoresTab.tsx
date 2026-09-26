@@ -3,7 +3,9 @@ import { categoriaDe, ocultarCategorias } from "../lib/queries";
 import {
   calcularFlujoSankey,
   calcularIndicadores,
+  gastoMensualPorCategoria,
   mesActual,
+  mesesHasta,
   MESES_MINIMOS_RECURRENTE,
   MESES_PERIODO_POR_DEFECTO,
   nombreMes,
@@ -18,6 +20,7 @@ import {
 import type { Transaccion } from "../lib/types";
 import { FlujoNetoChart } from "./FlujoNetoChart";
 import { FlujoSankeyChart } from "./FlujoSankeyChart";
+import { Sparkline } from "./Sparkline";
 
 const moneda = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -124,6 +127,21 @@ export function IndicadoresTab({
     gastoPromedioReferencia !== null && gastoPromedioReferencia > 0
       ? (gastoPromedio - gastoPromedioReferencia) / gastoPromedioReferencia
       : null;
+
+  // Tendencia de 12 meses (terminando en el último mes del periodo) para
+  // cada categoría que se muestra en "Categorías al alza".
+  const categoriasAlzaVisibles = useMemo(() => enAlza.slice(0, 8), [enAlza]);
+  const mesesTendencia = useMemo(() => mesesHasta(ultimoMes, 12), [ultimoMes]);
+  const tendencias = useMemo(
+    () =>
+      gastoMensualPorCategoria(
+        transaccionesContadas,
+        categoriasAlzaVisibles.map((c) => c.categoria),
+        mesesTendencia
+      ),
+    [transaccionesContadas, categoriasAlzaVisibles, mesesTendencia]
+  );
+  const mesesDelPeriodo = useMemo(() => new Set(periodo.meses), [periodo]);
 
   function cambiarMes(campo: keyof RangoMeses, valor: string) {
     onCambiarRangoMeses((anterior) => ({ ...anterior, [campo]: valor }));
@@ -338,12 +356,20 @@ export function IndicadoresTab({
             unMes ? nombreMes(ultimoMes, true) : "Periodo",
             unMes ? nombreMes(periodo.anteriores[0], true) : "Anterior",
             "Diferencia",
+            "Tendencia 12 meses",
           ]}
-          filas={enAlza.slice(0, 8).map((c) => [
+          filas={categoriasAlzaVisibles.map((c) => [
             c.categoria,
             moneda.format(c.promedioPeriodo),
             moneda.format(c.promedioAnterior),
             `+${moneda.format(c.diferencia)}`,
+            <Sparkline
+              key="tendencia"
+              valores={tendencias.get(c.categoria) ?? []}
+              meses={mesesTendencia}
+              resaltados={mesesDelPeriodo}
+              etiqueta={c.categoria}
+            />,
           ])}
         />
         <Tabla
@@ -424,7 +450,7 @@ function Tabla({
   titulo: string;
   vacio: string;
   encabezados: string[];
-  filas: string[][];
+  filas: React.ReactNode[][];
 }) {
   return (
     <div
@@ -446,7 +472,7 @@ function Tabla({
                 {encabezados.map((e, i) => (
                   <th
                     key={e}
-                    className={`py-2 font-medium ${i === 0 ? "text-left" : "text-right"}`}
+                    className={`whitespace-nowrap py-2 font-medium ${i === 0 ? "text-left" : "pl-3 text-right"}`}
                     style={{ color: "var(--text-muted)" }}
                   >
                     {e}
@@ -456,11 +482,11 @@ function Tabla({
             </thead>
             <tbody>
               {filas.map((fila) => (
-                <tr key={fila[0]} style={{ borderBottom: "1px solid var(--gridline)" }}>
+                <tr key={String(fila[0])} style={{ borderBottom: "1px solid var(--gridline)" }}>
                   {fila.map((celda, i) => (
                     <td
                       key={i}
-                      className={`py-2 ${i === 0 ? "text-left" : "text-right"}`}
+                      className={`whitespace-nowrap py-2 ${i === 0 ? "text-left" : "pl-3 text-right"}`}
                       style={{
                         color: i === 0 ? "var(--text-primary)" : "var(--text-secondary)",
                         fontVariantNumeric: i === 0 ? undefined : "tabular-nums",
