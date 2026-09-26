@@ -189,6 +189,15 @@ export function FlujoSankeyChart({ datos }: { datos: FlujoSankeyDatos }) {
                   borderRadius: 8,
                   color: "var(--text-primary)",
                 }}
+                // Recharts pinta cada línea del tooltip con `entry.color ||
+                // '#000'` (negro fijo) -- en las gráficas de barras eso cae
+                // en el color de la serie (azul/naranja), pero un nodo/
+                // enlace de Sankey no trae ese color al tooltip, así que sin
+                // esto se quedaba en negro fijo, ilegible en modo oscuro.
+                // `contentStyle.color` no basta: el `<li>` de cada línea
+                // define su propio `color` inline con más prioridad.
+                itemStyle={{ color: "var(--text-primary)" }}
+                labelStyle={{ color: "var(--text-primary)" }}
               />
             </Sankey>
           </ResponsiveContainer>
