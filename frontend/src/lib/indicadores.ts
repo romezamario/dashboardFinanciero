@@ -1,4 +1,4 @@
-import { categoriaDe, cuentaDe } from "./queries";
+import { categoriaDe, cuentaDe, eventoDe } from "./queries";
 import type { Transaccion } from "./types";
 
 // Cálculos de la pestaña "Indicadores". Todo se mide sobre un PERIODO: una
@@ -171,7 +171,8 @@ export interface GastoRecurrente {
  * fijo vigente). `montoMensual` = total en la ventana / meses con cargo. Se
  * agrupa por `comercio` (no por descripción cruda, que trae referencias
  * distintas en cada cargo), así que solo detecta lo que las reglas de
- * categorización ya etiquetan con comercio. Es la única métrica que mira
+ * categorización ya etiquetan con comercio. Los cargos con evento asociado
+ * se ignoran (son gastos puntuales). Es la única métrica que mira
  * fuera del periodo: detectar "se repite cada mes" necesita historial, así
  * que con un periodo de un mes igual revisa los 6 meses hasta ese mes.
  */
@@ -184,7 +185,12 @@ export function detectarGastosRecurrentes(
   const porComercio = new Map<string, { meses: Set<string>; total: number }>();
 
   for (const t of transacciones) {
-    if (t.tipo !== "cargo" || !t.comercio || !ventana.has(mesDe(t))) continue;
+    // Un cargo asociado a un evento (viaje, fiesta) es un gasto puntual por
+    // definición, aunque el comercio se repita (p. ej. el mismo restaurante
+    // en un viaje): no cuenta ni para detectar recurrencia ni para el monto.
+    if (t.tipo !== "cargo" || !t.comercio || !ventana.has(mesDe(t)) || eventoDe(t) !== null) {
+      continue;
+    }
     const acumulado = porComercio.get(t.comercio) ?? { meses: new Set<string>(), total: 0 };
     acumulado.meses.add(mesDe(t));
     acumulado.total += t.monto;

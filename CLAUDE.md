@@ -491,7 +491,9 @@ as the averages above) across every account: hero savings rate (3 months, delta 
 previous 3, plus the 12-month rate), average net flow, last month's spending vs. 12-month average,
 months of spending covered by the available balance (latest `saldo` per account — only debit
 accounts carry `saldo`, TDCs don't), recurring expenses (a `comercio` with charges in 3+ of the last
-6 months and active in the last 2 — only catches what categorization rules tag with `comercio`),
+6 months and active in the last 2 — only catches what categorization rules tag with `comercio`; charges
+with an `evento` are skipped entirely, since an event is a one-off by definition — user's request
+2026-09-26),
 "gasto hormiga" (charges under `UMBRAL_GASTO_HORMIGA` = $200 last month), categories above their
 3-month average, a monthly net-flow bar chart (`FlujoNetoChart`, blue = savings / orange = deficit,
 reusing the two validated series tokens rather than adding colors), and two tables. Transfers
