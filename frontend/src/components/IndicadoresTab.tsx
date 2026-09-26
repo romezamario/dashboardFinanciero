@@ -93,9 +93,10 @@ export function IndicadoresTab({
     () =>
       calcularFlujoSankey(
         ocultarCategorias(transaccionesEnRango, categoriasExcluidas),
-        hoyEfectivo
+        hoyEfectivo,
+        fechaDesde || undefined
       ),
-    [transaccionesEnRango, categoriasExcluidas, hoyEfectivo]
+    [transaccionesEnRango, categoriasExcluidas, hoyEfectivo, fechaDesde]
   );
 
   const hayRangoActivo = Boolean(fechaDesde || fechaHasta);

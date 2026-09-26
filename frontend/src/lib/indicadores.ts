@@ -219,15 +219,35 @@ function topeConOtros(porCategoria: Map<string, number>, tope: number): RamaSank
   return otros > 0 ? [...visibles, { categoria: "Otros", monto: otros }] : visibles;
 }
 
+/** Meses (YYYY-MM) desde el mes de `desde` (YYYY-MM-DD) hasta el último mes
+ * completo antes de `hoy`, ambos inclusive. Vacío si `desde` es posterior. */
+function mesesDesde(desde: string, hoy: Date): string[] {
+  const [anio, mes] = desde.split("-").map(Number);
+  const inicio = anio * 12 + (mes - 1);
+  const fin = hoy.getFullYear() * 12 + hoy.getMonth() - 1;
+  const meses: string[] = [];
+  for (let i = inicio; i <= fin; i++) meses.push(claveMes(0, i));
+  return meses;
+}
+
 /**
  * Desglose para el diagrama de flujo (Sankey) de ingresos y gastos: de qué
  * categorías viene el ingreso, cuánto se ahorra vs. se gasta, y a qué
- * categorías va el gasto. Ventana de los últimos 3 meses completos -- igual
- * que la tasa de ahorro "hero" de la pestaña, para que ambos números
- * cuenten la misma historia reciente sin que un solo mes atípico domine.
+ * categorías va el gasto. Sin `desde`, ventana de los últimos 3 meses
+ * completos -- igual que la tasa de ahorro "hero" de la pestaña, para que
+ * ambos números cuenten la misma historia reciente sin que un solo mes
+ * atípico domine. Con `desde` (filtro "Desde" de la pestaña), cubre
+ * exactamente del mes de `desde` al último mes de la ventana: un Sankey es
+ * un total del periodo, así que debe mostrar el periodo que se eligió (antes
+ * mostraba siempre 3 meses y el título decía "2026-06 a 2026-08" aunque el
+ * filtro fuera solo agosto).
  */
-export function calcularFlujoSankey(transacciones: Transaccion[], hoy = new Date()): FlujoSankeyDatos {
-  const meses = mesesCompletos(3, 0, hoy);
+export function calcularFlujoSankey(
+  transacciones: Transaccion[],
+  hoy = new Date(),
+  desde?: string
+): FlujoSankeyDatos {
+  const meses = desde ? mesesDesde(desde, hoy) : mesesCompletos(3, 0, hoy);
   const ventana = new Set(meses);
   const porCategoriaIngreso = new Map<string, number>();
   const porCategoriaGasto = new Map<string, number>();

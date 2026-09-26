@@ -503,7 +503,9 @@ date filter moves the reference date instead of just trimming rows: the windows 
 1st of the month *after* "Hasta" (`hoyEfectivo` in `IndicadoresTab`), so the month containing
 "Hasta" is the last month counted. Anchoring on the "Hasta" date itself was a bug (fixed
 2026-09-26): its own month was treated as the in-progress month and dropped, so "Hasta 31-ago"
-showed July as the last month.
+showed July as the last month. The Sankey (`calcularFlujoSankey`) additionally honors "Desde": with it set, it
+totals exactly from the "Desde" month through the "Hasta" month (otherwise the fixed last-3-months
+window), since a Sankey is a period total and should match the chosen period.
 
 **Hide categories (the inverse of cross-filter, added 2026-09-20)**: the "Ocultar categorías" pill
 row (right under the active-filter chips, above the KPIs) is deliberately a *separate* mechanism

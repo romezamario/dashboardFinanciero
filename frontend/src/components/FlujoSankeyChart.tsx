@@ -158,11 +158,16 @@ export function FlujoSankeyChart({ datos }: { datos: FlujoSankeyDatos }) {
       style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
     >
       <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-        Flujo de ingresos y gastos ({datos.meses[0]} a {datos.meses[datos.meses.length - 1]})
+        Flujo de ingresos y gastos
+        {datos.meses.length === 1
+          ? ` (${datos.meses[0]})`
+          : datos.meses.length > 1
+            ? ` (${datos.meses[0]} a ${datos.meses[datos.meses.length - 1]})`
+            : ""}
       </h3>
       {sinDatos ? (
         <p className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>
-          No hay ingresos ni gastos en los últimos 3 meses completos.
+          No hay ingresos ni gastos en este periodo.
         </p>
       ) : (
         <div className="mt-3" style={{ height: 460 }}>
