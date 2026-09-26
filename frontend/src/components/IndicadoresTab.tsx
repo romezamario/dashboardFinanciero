@@ -67,10 +67,17 @@ export function IndicadoresTab({
   // que se note por qué. Por eso "hasta" reemplaza a `hoy` como ancla (deja
   // ver "cómo se veían mis indicadores en esa fecha"), y "desde" actúa como
   // un piso adicional sobre esa misma ventana.
-  const hoyEfectivo = useMemo(
-    () => (fechaHasta ? new Date(`${fechaHasta}T00:00:00`) : new Date()),
-    [fechaHasta]
-  );
+  //
+  // El ancla es el día 1 del mes SIGUIENTE a "hasta", no "hasta" mismo: las
+  // ventanas cuentan los meses completos *anteriores* al ancla, así que usar
+  // la fecha tal cual trataba su propio mes como "mes en curso" y lo
+  // descartaba (hasta = 31-ago dejaba julio como último mes). Elegir
+  // "hasta" en agosto significa incluir agosto.
+  const hoyEfectivo = useMemo(() => {
+    if (!fechaHasta) return new Date();
+    const [anio, mes] = fechaHasta.split("-").map(Number);
+    return new Date(anio, mes, 1); // `mes` viene 1-indexado: esto es el 1 del mes siguiente
+  }, [fechaHasta]);
 
   const indicadores = useMemo(
     () =>
@@ -173,9 +180,10 @@ export function IndicadoresTab({
       </div>
       {hayRangoActivo && (
         <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-          "Hasta" reemplaza a hoy como fecha de referencia para las ventanas de 3/12 meses
-          (así puedes ver cómo se veían tus indicadores en una fecha pasada); "Desde" además
-          recorta cualquier dato anterior a esa fecha.
+          "Hasta" reemplaza a hoy como fecha de referencia: el mes de esa fecha pasa a ser el
+          último mes de las ventanas de 3/12 meses (así puedes ver cómo se veían tus
+          indicadores en una fecha pasada); "Desde" además recorta cualquier dato anterior a
+          esa fecha.
         </p>
       )}
 

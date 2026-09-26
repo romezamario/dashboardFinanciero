@@ -498,7 +498,12 @@ reusing the two validated series tokens rather than adding colors), and two tabl
 between the user's own accounts (e.g. paying the TDC from checking) would count as both expense and
 income, so the tab has its own "no contar como ingreso/gasto" pill row that starts with categories
 matching `pago tdc|entre cuentas|traspaso` excluded (`categoriasExcluidasPorDefecto`); the selection
-reuses `estadosPorPestana["indicadores"].categoriasOcultas`, so it survives tab switches.
+reuses `estadosPorPestana["indicadores"].categoriasOcultas`, so it survives tab switches. Its "Desde/Hasta"
+date filter moves the reference date instead of just trimming rows: the windows are anchored to the
+1st of the month *after* "Hasta" (`hoyEfectivo` in `IndicadoresTab`), so the month containing
+"Hasta" is the last month counted. Anchoring on the "Hasta" date itself was a bug (fixed
+2026-09-26): its own month was treated as the in-progress month and dropped, so "Hasta 31-ago"
+showed July as the last month.
 
 **Hide categories (the inverse of cross-filter, added 2026-09-20)**: the "Ocultar categorías" pill
 row (right under the active-filter chips, above the KPIs) is deliberately a *separate* mechanism
