@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { categoriaDe, cuentaDe, obtenerTransacciones, type Filtros } from "../lib/queries";
-import { categoriasExcluidasPorDefecto, RANGO_FECHAS_VACIO, type RangoFechas } from "../lib/indicadores";
+import { categoriasExcluidasPorDefecto, RANGO_MESES_VACIO, type RangoMeses } from "../lib/indicadores";
 import type { Transaccion } from "../lib/types";
 import { supabase } from "../lib/supabase";
 import { EventosTab } from "./EventosTab";
@@ -9,20 +9,20 @@ import { VistaResumen } from "./VistaResumen";
 
 /** Estado de filtros de UNA pestaña -- cada pestaña (Resumen y una por
  * tarjeta) tiene el suyo, guardado en `estadosPorPestana`, para que
- * filtrar o ocultar categorías en una no afecte a las demás. `rangoFechas`
+ * filtrar o ocultar categorías en una no afecte a las demás. `rangoMeses`
  * solo lo usa Indicadores hoy, pero vive aquí igual que `categoriasOcultas`
  * (que Indicadores también reutiliza con otro significado) para no perder
  * la selección al cambiar de pestaña. */
 interface EstadoVista {
   filtros: Filtros;
   categoriasOcultas: Set<string>;
-  rangoFechas: RangoFechas;
+  rangoMeses: RangoMeses;
 }
 
 const ESTADO_VACIO: EstadoVista = {
   filtros: {},
   categoriasOcultas: new Set(),
-  rangoFechas: RANGO_FECHAS_VACIO,
+  rangoMeses: RANGO_MESES_VACIO,
 };
 
 const PESTANA_RESUMEN = "resumen";
@@ -194,11 +194,16 @@ export function Dashboard() {
                     categoriasOcultas: cambio(categoriasExcluidasIndicadores),
                   }))
                 }
-                rangoFechas={estadosPorPestana[PESTANA_INDICADORES]?.rangoFechas ?? RANGO_FECHAS_VACIO}
-                onCambiarRangoFechas={(cambio) =>
+                rangoMeses={estadosPorPestana[PESTANA_INDICADORES]?.rangoMeses ?? RANGO_MESES_VACIO}
+                onCambiarRangoMeses={(cambio) =>
                   actualizarEstado(PESTANA_INDICADORES, (e) => ({
                     ...e,
-                    rangoFechas: cambio(e.rangoFechas),
+                    // Si este es el primer cambio en la pestaña, `e` viene de
+                    // ESTADO_VACIO (sin categorías excluidas): se fija la
+                    // selección vigente para no perder las exclusiones por
+                    // defecto (antes, elegir un mes volvía a contar "Pago TDC").
+                    categoriasOcultas: categoriasExcluidasIndicadores,
+                    rangoMeses: cambio(e.rangoMeses),
                   }))
                 }
               />

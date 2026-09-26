@@ -32,7 +32,20 @@ const formateadorPorcentaje = new Intl.NumberFormat("es-MX", {
 const COLOR_AHORRO = "var(--series-1)";
 const COLOR_DEFICIT = "var(--series-2)";
 
-export function FlujoNetoChart({ datos }: { datos: ResumenMes[] }) {
+interface FlujoNetoChartProps {
+  datos: ResumenMes[];
+  /** Meses del periodo filtrado: se ven completos y el resto se atenúa
+   * (mismo recurso que el cross-filter del Resumen), para ubicar el periodo
+   * sin perder el contexto de los meses de alrededor. Sin él, todo igual. */
+  resaltados?: Set<string>;
+  titulo?: string;
+}
+
+export function FlujoNetoChart({
+  datos,
+  resaltados,
+  titulo = "Flujo neto mensual (ingresos − gastos), últimos 12 meses completos",
+}: FlujoNetoChartProps) {
   return (
     <div
       className="rounded-lg p-4"
@@ -40,7 +53,7 @@ export function FlujoNetoChart({ datos }: { datos: ResumenMes[] }) {
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-          Flujo neto mensual (ingresos − gastos), últimos 12 meses completos
+          {titulo}
         </h3>
         <div className="flex gap-4 text-xs" style={{ color: "var(--text-secondary)" }}>
           <Leyenda color={COLOR_AHORRO} texto="Ahorro" />
@@ -98,7 +111,11 @@ export function FlujoNetoChart({ datos }: { datos: ResumenMes[] }) {
             />
             <Bar dataKey="neto" name="Flujo neto" radius={[4, 4, 0, 0]} maxBarSize={28}>
               {datos.map((d) => (
-                <Cell key={d.mes} fill={d.neto >= 0 ? COLOR_AHORRO : COLOR_DEFICIT} />
+                <Cell
+                  key={d.mes}
+                  fill={d.neto >= 0 ? COLOR_AHORRO : COLOR_DEFICIT}
+                  fillOpacity={!resaltados || resaltados.has(d.mes) ? 1 : 0.3}
+                />
               ))}
             </Bar>
           </BarChart>

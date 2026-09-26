@@ -3,12 +3,17 @@ import { categoriaDe, ocultarCategorias } from "../lib/queries";
 import {
   calcularFlujoSankey,
   calcularIndicadores,
+  mesActual,
   MESES_MINIMOS_RECURRENTE,
-  RANGO_FECHAS_VACIO,
+  MESES_PERIODO_POR_DEFECTO,
+  nombreMes,
+  nombrePeriodo,
+  RANGO_MESES_VACIO,
+  resolverPeriodo,
   saldoDisponible,
   UMBRAL_GASTO_HORMIGA,
   VENTANA_RECURRENTES,
-  type RangoFechas,
+  type RangoMeses,
 } from "../lib/indicadores";
 import type { Transaccion } from "../lib/types";
 import { FlujoNetoChart } from "./FlujoNetoChart";
@@ -33,97 +38,96 @@ interface IndicadoresTabProps {
   onCambiarCategoriasExcluidas: (actualizar: Actualizador<Set<string>>) => void;
   /** Igual que `categoriasExcluidas`: vive en `Dashboard` para no perderse
    * al cambiar de pestaña. */
-  rangoFechas: RangoFechas;
-  onCambiarRangoFechas: (actualizar: Actualizador<RangoFechas>) => void;
+  rangoMeses: RangoMeses;
+  onCambiarRangoMeses: (actualizar: Actualizador<RangoMeses>) => void;
 }
 
 export function IndicadoresTab({
   transacciones,
   categoriasExcluidas,
   onCambiarCategoriasExcluidas,
-  rangoFechas,
-  onCambiarRangoFechas,
+  rangoMeses,
+  onCambiarRangoMeses,
 }: IndicadoresTabProps) {
-  const { desde: fechaDesde, hasta: fechaHasta } = rangoFechas;
-
   // "Ocultar categorías" ya usa las transacciones sin filtrar para que un
   // toggle no desaparezca de su propia lista -- categoriasConocidas se
-  // deriva de `transacciones` (todo el historial), no del rango de fechas.
+  // deriva de `transacciones` (todo el historial), no del periodo.
   const categoriasConocidas = useMemo(
     () => Array.from(new Set(transacciones.map(categoriaDe))).sort(),
     [transacciones]
   );
 
-  const transaccionesEnRango = useMemo(() => {
-    if (!fechaDesde && !fechaHasta) return transacciones;
-    return transacciones.filter(
-      (t) => (!fechaDesde || t.fecha >= fechaDesde) && (!fechaHasta || t.fecha <= fechaHasta)
-    );
-  }, [transacciones, fechaDesde, fechaHasta]);
+  // Opciones del filtro: los meses que tienen al menos una transacción, del
+  // más reciente al más antiguo.
+  const mesesConDatos = useMemo(
+    () => Array.from(new Set(transacciones.map((t) => t.fecha.slice(0, 7)))).sort().reverse(),
+    [transacciones]
+  );
+  const mesEnCurso = mesActual();
 
-  // Todos los indicadores miden "los N meses completos antes de hoy" -- si
-  // el filtro solo recortara `transacciones` sin mover ese ancla, un rango
-  // de fechas fuera de los últimos 3/12 meses reales dejaría todo en $0 sin
-  // que se note por qué. Por eso "hasta" reemplaza a `hoy` como ancla (deja
-  // ver "cómo se veían mis indicadores en esa fecha"), y "desde" actúa como
-  // un piso adicional sobre esa misma ventana.
-  //
-  // El ancla es el día 1 del mes SIGUIENTE a "hasta", no "hasta" mismo: las
-  // ventanas cuentan los meses completos *anteriores* al ancla, así que usar
-  // la fecha tal cual trataba su propio mes como "mes en curso" y lo
-  // descartaba (hasta = 31-ago dejaba julio como último mes). Elegir
-  // "hasta" en agosto significa incluir agosto.
-  const hoyEfectivo = useMemo(() => {
-    if (!fechaHasta) return new Date();
-    const [anio, mes] = fechaHasta.split("-").map(Number);
-    return new Date(anio, mes, 1); // `mes` viene 1-indexado: esto es el 1 del mes siguiente
-  }, [fechaHasta]);
+  // Un solo periodo para todo: sin filtro, los últimos 3 meses completos;
+  // con filtro, exactamente los meses elegidos. Las transacciones NO se
+  // recortan antes de calcular -- cada indicador toma solo los meses del
+  // periodo, pero las comparaciones (periodo anterior, promedio de 12
+  // meses previos, recurrentes) necesitan ver los meses de antes.
+  const periodo = useMemo(() => resolverPeriodo(rangoMeses), [rangoMeses]);
+  const ultimoMes = periodo.meses[periodo.meses.length - 1];
+
+  const transaccionesContadas = useMemo(
+    () => ocultarCategorias(transacciones, categoriasExcluidas),
+    [transacciones, categoriasExcluidas]
+  );
 
   const indicadores = useMemo(
     () =>
-      calcularIndicadores(
-        ocultarCategorias(transaccionesEnRango, categoriasExcluidas),
-        saldoDisponible(transaccionesEnRango),
-        hoyEfectivo
-      ),
-    [transaccionesEnRango, categoriasExcluidas, hoyEfectivo]
+      calcularIndicadores(transaccionesContadas, saldoDisponible(transacciones, ultimoMes), periodo),
+    [transaccionesContadas, transacciones, ultimoMes, periodo]
   );
 
   const flujoSankey = useMemo(
-    () =>
-      calcularFlujoSankey(
-        ocultarCategorias(transaccionesEnRango, categoriasExcluidas),
-        hoyEfectivo,
-        fechaDesde || undefined
-      ),
-    [transaccionesEnRango, categoriasExcluidas, hoyEfectivo, fechaDesde]
+    () => calcularFlujoSankey(transaccionesContadas, periodo.meses),
+    [transaccionesContadas, periodo]
   );
 
-  const hayRangoActivo = Boolean(fechaDesde || fechaHasta);
+  const hayFiltro = !periodo.porDefecto;
+  const unMes = periodo.meses.length === 1;
+  // "agosto 2026" / "jun 2026 – ago 2026"; sin filtro, "últimos 3 meses".
+  const nombreDelPeriodo = hayFiltro
+    ? nombrePeriodo(periodo.meses)
+    : `últimos ${MESES_PERIODO_POR_DEFECTO} meses`;
+  const nombreDelAnterior = unMes
+    ? nombreMes(periodo.anteriores[0])
+    : hayFiltro
+      ? nombrePeriodo(periodo.anteriores)
+      : `los ${MESES_PERIODO_POR_DEFECTO} meses anteriores`;
 
   const {
-    tasaAhorro3m,
-    tasaAhorro3mAnterior,
+    tasaAhorro,
+    tasaAhorroAnterior,
     tasaAhorro12m,
-    flujoNetoPromedio3m,
-    gastoUltimoMes,
-    gastoPromedio12m,
-    mesUltimo,
+    flujoNetoPromedio,
+    gastoPromedio,
+    gastoPromedioReferencia,
     recurrentes,
     totalRecurrenteMensual,
     hormiga,
     enAlza,
     mesesDeCobertura,
-    saldoDisponible: saldo,
+    saldoAlCierre: saldo,
   } = indicadores;
 
   const cambioAhorroPuntos =
-    tasaAhorro3m !== null && tasaAhorro3mAnterior !== null
-      ? (tasaAhorro3m - tasaAhorro3mAnterior) * 100
+    tasaAhorro !== null && tasaAhorroAnterior !== null
+      ? (tasaAhorro - tasaAhorroAnterior) * 100
       : null;
   const variacionGasto =
-    gastoPromedio12m > 0 ? (gastoUltimoMes - gastoPromedio12m) / gastoPromedio12m : null;
-  const gastoPromedio3m = indicadores.meses.slice(-3).reduce((s, m) => s + m.gastos, 0) / 3;
+    gastoPromedioReferencia !== null && gastoPromedioReferencia > 0
+      ? (gastoPromedio - gastoPromedioReferencia) / gastoPromedioReferencia
+      : null;
+
+  function cambiarMes(campo: keyof RangoMeses, valor: string) {
+    onCambiarRangoMeses((anterior) => ({ ...anterior, [campo]: valor }));
+  }
 
   function alternarExcluida(categoria: string) {
     onCambiarCategoriasExcluidas((anterior) => {
@@ -137,56 +141,39 @@ export function IndicadoresTab({
   return (
     <>
       <div className="flex flex-wrap items-end gap-3">
-        <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
-          Desde
-          <input
-            type="date"
-            value={fechaDesde}
-            onChange={(e) =>
-              onCambiarRangoFechas((anterior) => ({ ...anterior, desde: e.target.value }))
-            }
-            className="mt-1 block rounded-md px-3 py-2 text-sm"
-            style={{
-              background: "var(--page-plane)",
-              border: "1px solid var(--border)",
-              color: "var(--text-primary)",
-            }}
-          />
-        </label>
-        <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
-          Hasta
-          <input
-            type="date"
-            value={fechaHasta}
-            onChange={(e) =>
-              onCambiarRangoFechas((anterior) => ({ ...anterior, hasta: e.target.value }))
-            }
-            className="mt-1 block rounded-md px-3 py-2 text-sm"
-            style={{
-              background: "var(--page-plane)",
-              border: "1px solid var(--border)",
-              color: "var(--text-primary)",
-            }}
-          />
-        </label>
-        {hayRangoActivo && (
+        {(["desde", "hasta"] as const).map((campo) => (
+          <label key={campo} className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            {campo === "desde" ? "Desde" : "Hasta"}
+            <select
+              value={rangoMeses[campo]}
+              onChange={(e) => cambiarMes(campo, e.target.value)}
+              className="mt-1 block rounded-md px-3 py-2 text-sm"
+              style={{
+                background: "var(--page-plane)",
+                border: "1px solid var(--border)",
+                color: "var(--text-primary)",
+              }}
+            >
+              <option value="">—</option>
+              {mesesConDatos.map((mes) => (
+                <option key={mes} value={mes}>
+                  {nombreMes(mes)}
+                  {mes === mesEnCurso ? " (en curso)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
+        {hayFiltro && (
           <button
-            onClick={() => onCambiarRangoFechas(() => RANGO_FECHAS_VACIO)}
+            onClick={() => onCambiarRangoMeses(() => RANGO_MESES_VACIO)}
             className="text-xs underline"
             style={{ color: "var(--text-muted)" }}
           >
-            Quitar filtro de fechas
+            Quitar filtro
           </button>
         )}
       </div>
-      {hayRangoActivo && (
-        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-          "Hasta" reemplaza a hoy como fecha de referencia: el mes de esa fecha pasa a ser el
-          último mes de las ventanas de 3/12 meses (así puedes ver cómo se veían tus
-          indicadores en una fecha pasada); "Desde" además recorta cualquier dato anterior a
-          esa fecha.
-        </p>
-      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs" style={{ color: "var(--text-muted)" }}>
@@ -214,8 +201,23 @@ export function IndicadoresTab({
       </div>
 
       <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-        Todos los indicadores usan meses completos (el último es {mesUltimo}); el mes en curso
-        no se cuenta porque sus estados de cuenta aún no llegan.
+        {hayFiltro ? (
+          <>
+            Periodo: <strong>{nombreDelPeriodo}</strong>. Todos los indicadores cuentan solo esos
+            meses y se comparan contra{" "}
+            {unMes ? "el mes anterior" : "el periodo anterior de la misma duración"} (
+            {nombreDelAnterior}).
+            {periodo.meses.includes(mesEnCurso) &&
+              " El mes en curso está incompleto porque sus estados de cuenta aún no llegan."}
+          </>
+        ) : (
+          <>
+            Sin filtro, los indicadores usan los últimos {MESES_PERIODO_POR_DEFECTO} meses
+            completos ({nombrePeriodo(periodo.meses)}); el mes en curso no se cuenta porque sus
+            estados de cuenta aún no llegan. Elige un mes en "Desde"/"Hasta" para revisarlo por
+            separado.
+          </>
+        )}
       </p>
 
       <section
@@ -223,24 +225,25 @@ export function IndicadoresTab({
         style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
       >
         <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
-          Tasa de ahorro, últimos 3 meses
+          Tasa de ahorro, {nombreDelPeriodo}
         </div>
         <div
           className="mt-1 font-semibold"
           style={{ fontSize: 48, lineHeight: 1.1, color: "var(--text-primary)" }}
         >
-          {tasaAhorro3m === null ? "—" : porcentaje.format(tasaAhorro3m)}
+          {tasaAhorro === null ? "—" : porcentaje.format(tasaAhorro)}
         </div>
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
           {cambioAhorroPuntos !== null && (
             <Delta
-              texto={`${cambioAhorroPuntos >= 0 ? "+" : ""}${decimal.format(cambioAhorroPuntos)} pts vs. los 3 meses anteriores`}
+              texto={`${cambioAhorroPuntos >= 0 ? "+" : ""}${decimal.format(cambioAhorroPuntos)} pts vs. ${nombreDelAnterior}`}
               sube={cambioAhorroPuntos >= 0}
               favorable={cambioAhorroPuntos >= 0}
             />
           )}
           <span style={{ color: "var(--text-secondary)" }}>
-            12 meses: {tasaAhorro12m === null ? "—" : porcentaje.format(tasaAhorro12m)}
+            12 meses hasta {nombreMes(ultimoMes, true)}:{" "}
+            {tasaAhorro12m === null ? "—" : porcentaje.format(tasaAhorro12m)}
           </span>
         </div>
         <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
@@ -251,18 +254,28 @@ export function IndicadoresTab({
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Tile
-          etiqueta="Flujo neto promedio (3 meses)"
-          valor={moneda.format(flujoNetoPromedio3m)}
-          detalle="Lo que te sobra (o falta) en un mes típico"
+          etiqueta={
+            unMes
+              ? `Flujo neto de ${nombreDelPeriodo}`
+              : `Flujo neto promedio mensual (${nombreDelPeriodo})`
+          }
+          valor={moneda.format(flujoNetoPromedio)}
+          detalle={
+            unMes
+              ? "Lo que te sobró (o faltó) ese mes"
+              : "Lo que te sobra (o falta) en un mes típico del periodo"
+          }
         />
         <Tile
-          etiqueta={`Gasto de ${mesUltimo}`}
-          valor={moneda.format(gastoUltimoMes)}
+          etiqueta={
+            unMes ? `Gasto de ${nombreDelPeriodo}` : `Gasto mensual promedio (${nombreDelPeriodo})`
+          }
+          valor={moneda.format(gastoPromedio)}
           delta={
             variacionGasto === null
               ? undefined
               : {
-                  texto: `${variacionGasto >= 0 ? "+" : ""}${porcentaje.format(variacionGasto)} vs. promedio 12 meses (${moneda.format(gastoPromedio12m)})`,
+                  texto: `${variacionGasto >= 0 ? "+" : ""}${porcentaje.format(variacionGasto)} vs. tu promedio mensual previo (${moneda.format(gastoPromedioReferencia!)})`,
                   sube: variacionGasto > 0,
                   favorable: variacionGasto <= 0,
                 }
@@ -274,23 +287,23 @@ export function IndicadoresTab({
           detalle={
             saldo === null
               ? "Sin cuentas de débito con saldo"
-              : `${moneda.format(saldo)} de saldo ÷ ${moneda.format(gastoPromedio3m)} de gasto mensual. Referencia: 3–6 meses de fondo de emergencia`
+              : `${moneda.format(saldo)} de saldo al cierre de ${nombreMes(ultimoMes, true)} ÷ ${moneda.format(gastoPromedio)} de gasto mensual. Referencia: 3–6 meses de fondo de emergencia`
           }
         />
         <Tile
           etiqueta="Gastos recurrentes (por mes)"
           valor={moneda.format(totalRecurrenteMensual)}
           detalle={
-            gastoPromedio3m > 0
-              ? `${recurrentes.length} comercio(s), ${porcentaje.format(totalRecurrenteMensual / gastoPromedio3m)} de tu gasto mensual`
+            gastoPromedio > 0
+              ? `${recurrentes.length} comercio(s), ${porcentaje.format(totalRecurrenteMensual / gastoPromedio)} de tu gasto mensual`
               : `${recurrentes.length} comercio(s)`
           }
         />
         <Tile
-          etiqueta={`Gasto hormiga en ${mesUltimo}`}
+          etiqueta={`Gasto hormiga, ${nombreDelPeriodo}`}
           valor={moneda.format(hormiga.total)}
           detalle={`${hormiga.cantidad} compra(s) de menos de ${moneda.format(UMBRAL_GASTO_HORMIGA)}${
-            hormiga.proporcion === null ? "" : `, ${porcentaje.format(hormiga.proporcion)} del gasto del mes`
+            hormiga.proporcion === null ? "" : `, ${porcentaje.format(hormiga.proporcion)} del gasto ${unMes ? "del mes" : "del periodo"}`
           }`}
         />
         <Tile
@@ -298,30 +311,43 @@ export function IndicadoresTab({
           valor={String(enAlza.length)}
           detalle={
             enAlza.length > 0
-              ? `En total, ${moneda.format(enAlza.reduce((s, c) => s + c.diferencia, 0))} arriba de su promedio`
-              : "Ninguna categoría arriba de su promedio"
+              ? `En total, ${moneda.format(enAlza.reduce((s, c) => s + c.diferencia, 0))}${unMes ? "" : " al mes"} más que en ${nombreDelAnterior}`
+              : `Ninguna categoría gastó más que en ${nombreDelAnterior}`
           }
         />
       </div>
 
       <FlujoSankeyChart datos={flujoSankey} />
 
-      <FlujoNetoChart datos={indicadores.meses} />
+      <FlujoNetoChart
+        datos={indicadores.serie}
+        resaltados={hayFiltro ? new Set(periodo.meses) : undefined}
+        titulo={
+          hayFiltro
+            ? `Flujo neto mensual (ingresos − gastos) hasta ${nombreMes(ultimoMes)}; resaltado: ${nombreDelPeriodo}`
+            : "Flujo neto mensual (ingresos − gastos), últimos 12 meses completos"
+        }
+      />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Tabla
-          titulo={`Categorías al alza en ${mesUltimo} (vs. promedio de los 3 meses anteriores)`}
-          vacio="Ninguna categoría gastó más que su promedio."
-          encabezados={["Categoría", mesUltimo, "Promedio", "Diferencia"]}
+          titulo={`Categorías al alza: ${nombreDelPeriodo} vs. ${nombreDelAnterior}${unMes ? "" : " (promedio mensual)"}`}
+          vacio={`Ninguna categoría gastó más que en ${nombreDelAnterior}.`}
+          encabezados={[
+            "Categoría",
+            unMes ? nombreMes(ultimoMes, true) : "Periodo",
+            unMes ? nombreMes(periodo.anteriores[0], true) : "Anterior",
+            "Diferencia",
+          ]}
           filas={enAlza.slice(0, 8).map((c) => [
             c.categoria,
-            moneda.format(c.ultimoMes),
+            moneda.format(c.promedioPeriodo),
             moneda.format(c.promedioAnterior),
             `+${moneda.format(c.diferencia)}`,
           ])}
         />
         <Tabla
-          titulo={`Gastos recurrentes (comercios con cargo en ${MESES_MINIMOS_RECURRENTE}+ de los últimos ${VENTANA_RECURRENTES} meses)`}
+          titulo={`Gastos recurrentes (comercios con cargo en ${MESES_MINIMOS_RECURRENTE}+ de los ${VENTANA_RECURRENTES} meses hasta ${nombreMes(ultimoMes, true)})`}
           vacio="No se detectaron gastos recurrentes. Solo se detectan comercios que tus reglas de categorización ya etiquetan."
           encabezados={["Comercio", "Meses", "Promedio mensual"]}
           filas={recurrentes.map((r) => [

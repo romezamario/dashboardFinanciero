@@ -499,13 +499,22 @@ between the user's own accounts (e.g. paying the TDC from checking) would count 
 income, so the tab has its own "no contar como ingreso/gasto" pill row that starts with categories
 matching `pago tdc|entre cuentas|traspaso` excluded (`categoriasExcluidasPorDefecto`); the selection
 reuses `estadosPorPestana["indicadores"].categoriasOcultas`, so it survives tab switches. Its "Desde/Hasta"
-date filter moves the reference date instead of just trimming rows: the windows are anchored to the
-1st of the month *after* "Hasta" (`hoyEfectivo` in `IndicadoresTab`), so the month containing
-"Hasta" is the last month counted. Anchoring on the "Hasta" date itself was a bug (fixed
-2026-09-26): its own month was treated as the in-progress month and dropped, so "Hasta 31-ago"
-showed July as the last month. The Sankey (`calcularFlujoSankey`) additionally honors "Desde": with it set, it
-totals exactly from the "Desde" month through the "Hasta" month (otherwise the fixed last-3-months
-window), since a Sankey is a period total and should match the chosen period.
+filter is **months only** (two `<select>`s over months that have data, `RangoMeses` of "YYYY-MM"
+strings — the user reviews finances month by month; day-level dates were replaced 2026-09-26).
+Everything in the tab is computed over one **period** (`resolverPeriodo`): no filter = last 3
+complete months; a filter = exactly the chosen months (one side empty = that single month). Every
+indicator counts only the period's months (averages divide by the period's month count, never by
+fixed 3/12 — earlier versions trimmed transactions but still divided by 3/12, and anchored windows
+on the "Hasta" date, which dropped its own month), and deltas compare against the immediately
+preceding period of the same length (August vs. July). Transactions are *not* pre-trimmed: the
+comparisons need the months before. Deliberate exceptions that look outside the period: recurring
+expenses (6 months ending at the period's last month — detecting "repeats monthly" needs history),
+the 12-month savings rate shown as long-run context, the "vs. your previous monthly average"
+reference (up to 12 months before the period, counting only months since the first statement so
+missing history isn't averaged in as $0), and the net-flow chart (≥12 months ending at the period,
+with the period's months highlighted and the rest dimmed). Changing the month filter seeds the
+tab's state with the current category exclusions — before, the first filter change created state
+from `ESTADO_VACIO` and silently re-included "Pago TDC".
 
 **Hide categories (the inverse of cross-filter, added 2026-09-20)**: the "Ocultar categorías" pill
 row (right under the active-filter chips, above the KPIs) is deliberately a *separate* mechanism

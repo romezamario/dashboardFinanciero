@@ -1,6 +1,6 @@
 import { ResponsiveContainer, Sankey, Tooltip } from "recharts";
 import type { SankeyLinkProps, SankeyNodeProps } from "recharts";
-import type { FlujoSankeyDatos } from "../lib/indicadores";
+import { nombrePeriodo, type FlujoSankeyDatos } from "../lib/indicadores";
 
 const formateadorMoneda = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -159,11 +159,7 @@ export function FlujoSankeyChart({ datos }: { datos: FlujoSankeyDatos }) {
     >
       <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
         Flujo de ingresos y gastos
-        {datos.meses.length === 1
-          ? ` (${datos.meses[0]})`
-          : datos.meses.length > 1
-            ? ` (${datos.meses[0]} a ${datos.meses[datos.meses.length - 1]})`
-            : ""}
+        {datos.meses.length > 0 ? ` (${nombrePeriodo(datos.meses)})` : ""}
       </h3>
       {sinDatos ? (
         <p className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>
