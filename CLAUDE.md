@@ -448,119 +448,79 @@ skips transactions with `comercio === null` rather than lumping them into a nois
 way `categoriaDe()`'s `SIN_CATEGORIA` fallback does for categories (categorization is expected to
 eventually cover everything; comercio tagging isn't and that's fine).
 
-**Cross-filter (Power BI style)**: `Dashboard` holds one `filtros: Filtros` state
-(`{mes?, categoria?, comercio?}`) and `queries.ts`'s `aplicarFiltros(transacciones, filtros, excluir?)`
-does the filtering — the `excluir` param is the whole trick: each chart is computed from
-transacciones filtered by every *other* active dimension but not its own, so clicking a bar still
-shows every other bar/category/comercio to click next (self-filtering would collapse a chart down
-to one visible option after the first click, which isn't how Power BI cross-filter reads). KPIs and
-the table use the fully-filtered set — except `saldoActual`, which is deliberately taken from the
-*unfiltered* `transacciones` (it's a fact about the account's current balance, not an aggregate
-that should shrink when you filter by category/month). Click handlers live in the chart
-components (`onClickMes`/`onClickCategoria`/`onClickComercio` props) and call a shared
-`alternarFiltro` in `Dashboard` that toggles: clicking the already-selected value clears it, same
-as clicking a chip in the filter-chips row above the KPIs. Non-selected marks dim to ~0.3 opacity
-via per-bar `<Cell fillOpacity>` rather than being hidden, so the full shape of the data stays
-visible while showing what's filtered. The "Otros" fold in `GastoPorCategoriaChart` (categories
-past the top 8) is explicitly not clickable — it has no single real category name to filter by.
+**Resumen tab = former Resumen + former Indicadores, merged (2026-09-26, user's request)**:
+`VistaResumen.tsx` is the single view for the "Resumen" tab *and* every per-card tab; the separate
+"Indicadores" tab/`IndicadoresTab.tsx` is gone (its presentational pieces live in
+`IndicadoresUI.tsx`: `Tile`, `Delta`, `Tabla`; calculations stay in `src/lib/indicadores.ts`).
+Tabs: Resumen, Eventos, then one per account. The merge unified three controls whose **scopes
+differ on purpose** (user chose each one explicitly) — keep them this way:
 
-**Year/month view on the income-vs-expenses chart** (added 2026-09-26, user's request):
-`IngresosGastosChart` has a Meses/Años toggle (`VistaTiempo`, stored per tab in
-`EstadoVista.vistaTiempo` like the filters). `PuntoIngresoGasto`'s key is `periodo` ("2026-06" or
-"2026"); `agruparIngresosGastosPorAnio` fills empty years like the monthly version fills empty
-months. Clicking a year sets a new `Filtros.anio` cross-filter dimension (chip "Año"); the yearly
-view excludes both `anio` and `mes` from its own data (so every year stays visible), the monthly
-view excludes only `mes` (so "click 2025, then Meses" drills into 2025's months), and picking a year
-drops a selected month from a different year. `aplicarFiltros`'s `excluir` now accepts an array for
-this. The 3/12-month average tiles ignore `anio` as well as `mes` (same reason as for `mes`).
+- **Period (applies to everything)**: `rangoMeses` "Desde/Hasta" month `<select>`s over months with
+  data → `resolverPeriodo` → a list of months (no filter = last 3 *complete* months; one side empty =
+  that single month). There is no longer a `mes`/`anio` cross-filter: clicking a month bar in
+  `IngresosGastosChart` sets the period to that month, clicking a year (Meses/Años toggle,
+  `VistaTiempo`) sets it to that year's first..last month *with data* (`rangoDeAnio`, so missing
+  months don't average in as $0); clicking the same bar again resets to the default. That chart is
+  the one that *chooses* the period, so it shows the whole history and highlights the period
+  (`resaltados`, others dimmed) instead of being trimmed to it. Indicators count only the period's
+  months, average over the period's month count, and compare against the immediately preceding
+  period of the same length (Aug vs. Jul). Deliberate exceptions that look outside the period:
+  recurring expenses (6 months ending at the period's last month — needs history; charges with an
+  `evento` are skipped, an event is a one-off by definition), the 12-month savings rate shown as
+  long-run context, the "vs. your previous monthly average" reference (up to 12 months before the
+  period, only months since the first statement), and `FlujoNetoChart` (≥12 months ending at the
+  period, period highlighted). The old 3/12-month average KPI tiles (`StatTile`,
+  `calcularPromedios`) were removed — the period-based tiles replace them.
+- **Ocultar categorías (applies to everything)**: one pill row; `categoriasOcultas` is removed from
+  the whole history *before* anything else (`ocultarCategorias`). Defaults to hiding transfers
+  between the user's own accounts (`categoriasExcluidasPorDefecto`: names matching
+  `pago tdc|entre cuentas|traspaso` — paying the card from checking would otherwise count as both
+  expense and income). The default is stored as `null` in `EstadoVista` and resolved at render
+  (`categoriasOcultas ?? categoriasOcultasPorDefecto` in `Dashboard`) — storing a copy at state
+  creation caused a real bug twice (the first change to *another* field created the state from
+  empty and silently re-counted "Pago TDC"). The pill list derives from the raw transactions so a
+  hidden category never disappears from its own toggle. Hiding vs. click-isolating the same
+  category cross-clears (`alternarCategoriaOculta`/`seleccionarCategoria`). The bulk editor's search
+  is exempt from hiding.
+- **Click filters / cross-filter, Power BI style (detail only)**: `Filtros` = categoría, comercio,
+  cuenta, tarjeta, evento (pill rows + chart clicks, chips to clear). They filter the *spending
+  detail*: category/comercio charts, the transactions table, the Sankey, gasto hormiga
+  (`calcularGastoHormiga`), categorías al alza (+ sparklines), and the income-vs-expenses chart.
+  They do **not** filter the financial-health indicators (hero savings rate, net flow, average
+  spend, months covered, recurring, `FlujoNetoChart`) — a savings rate of just "Comida" means
+  nothing; `calcularIndicadores` gets the hidden-categories set but never `filtros` (a note under
+  the chips says so). `aplicarFiltros(transacciones, filtros, excluir?)` — `excluir` (a key or an
+  array) is the cross-filter trick: each chart is computed with every *other* active dimension but
+  not its own, so it still shows the other options to click. Non-selected marks dim to ~0.3 via
+  `<Cell fillOpacity>`. The "Otros" fold in `GastoPorCategoriaChart` is not clickable.
 
-**Per-card tabs (added 2026-09-25, user's request)**: after "Resumen" and "Eventos" (in that order),
-`Dashboard` renders one tab per account (`cuentaDe` = `cuentas.alias`, e.g. "TDC Beyond", "Invex TDC") — "tarjeta"
-here means the account/card product, *not* `transacciones.tarjeta` (Titular/Adicional/Digital,
-whose values repeat across accounts; it stays available as a pill filter inside each tab). Each tab
-is the same `VistaResumen` component (the whole former Resumen body — KPIs, charts, cross-filter,
-hide-categories, table, bulk editor) fed only that account's transactions. Filter state
-(`filtros` + `categoriasOcultas`) is **per tab**: `Dashboard` keeps `estadosPorPestana:
-Record<tabId, EstadoVista>` and passes each `VistaResumen` its own slice as controlled props, so
-filtering in one tab never touches another and a tab keeps its selection when you switch away and
-back (state living inside `VistaResumen` would be lost on unmount). The bulk editor inside a card
-tab only *searches* that card's transactions, but gets the full list via
-`EditorTransacciones.catalogo` for category/comercio suggestions, the destination-account list and
-the account-change impact count — otherwise you couldn't move a document to a different account
-from a card tab.
+**Per-card tabs (added 2026-09-25, user's request)**: one tab per account (`cuentaDe` =
+`cuentas.alias`, e.g. "TDC Beyond", "Invex TDC") — "tarjeta" here means the account/card product,
+*not* `transacciones.tarjeta` (Titular/Adicional/Digital, whose values repeat across accounts; it
+stays available as a pill filter inside each tab). Each is the full merged `VistaResumen` fed only
+that account's transactions. On a credit card with "Pago TDC" hidden there is no income, so the
+savings rate shows "—" with an explanatory note, months-covered shows "—" (TDCs carry no `saldo`),
+and the Sankey starts at "Gastos totales" instead of labeling all spending "Déficit". All view state
+(`filtros`, `categoriasOcultas`, `rangoMeses`, `vistaTiempo`) is **per tab**: `Dashboard` keeps
+`estadosPorPestana: Record<tabId, EstadoVista>` and passes each `VistaResumen` its slice as
+controlled props, so filtering in one tab never touches another and a tab keeps its selection when
+you switch away and back. The bulk editor inside a card tab only *searches* that card's
+transactions, but gets the full list via `EditorTransacciones.catalogo` for suggestions, the
+destination-account list and the account-change impact count.
 
-**3/12-month averages exclude the current month** (2026-09-25, user's request): the KPI tiles
-windows in `calcularPromedios`/`sumaPorTipoUltimosMeses` are the 3/12 *complete* calendar months
-before the current one — statements arrive a month late, so the current month's data is always
-partial and would drag the average down.
-
-**Indicadores tab (added 2026-09-25, user's request: indicators that give visibility for better
-personal finances)**: `IndicadoresTab.tsx`, calculations as pure functions in `src/lib/indicadores.ts`
-(kept out of `queries.ts`). All computed over *complete* months before the current one (same reason
-as the averages above) across every account: hero savings rate (3 months, delta in points vs. the
-previous 3, plus the 12-month rate), average net flow, last month's spending vs. 12-month average,
-months of spending covered by the available balance (latest `saldo` per account — only debit
-accounts carry `saldo`, TDCs don't), recurring expenses (a `comercio` with charges in 3+ of the last
-6 months and active in the last 2 — only catches what categorization rules tag with `comercio`; charges
-with an `evento` are skipped entirely, since an event is a one-off by definition — user's request
-2026-09-26),
-"gasto hormiga" (charges under `UMBRAL_GASTO_HORMIGA` = $200 last month), categories above their
-3-month average, a monthly net-flow bar chart (`FlujoNetoChart`, blue = savings / orange = deficit,
-reusing the two validated series tokens rather than adding colors), and two tables. Transfers
-between the user's own accounts (e.g. paying the TDC from checking) would count as both expense and
-income, so the tab has its own "no contar como ingreso/gasto" pill row that starts with categories
-matching `pago tdc|entre cuentas|traspaso` excluded (`categoriasExcluidasPorDefecto`); the selection
-reuses `estadosPorPestana["indicadores"].categoriasOcultas`, so it survives tab switches. Its "Desde/Hasta"
-filter is **months only** (two `<select>`s over months that have data, `RangoMeses` of "YYYY-MM"
-strings — the user reviews finances month by month; day-level dates were replaced 2026-09-26).
-Everything in the tab is computed over one **period** (`resolverPeriodo`): no filter = last 3
-complete months; a filter = exactly the chosen months (one side empty = that single month). Every
-indicator counts only the period's months (averages divide by the period's month count, never by
-fixed 3/12 — earlier versions trimmed transactions but still divided by 3/12, and anchored windows
-on the "Hasta" date, which dropped its own month), and deltas compare against the immediately
-preceding period of the same length (August vs. July). Transactions are *not* pre-trimmed: the
-comparisons need the months before. Deliberate exceptions that look outside the period: recurring
-expenses (6 months ending at the period's last month — detecting "repeats monthly" needs history),
-the 12-month savings rate shown as long-run context, the "vs. your previous monthly average"
-reference (up to 12 months before the period, counting only months since the first statement so
-missing history isn't averaged in as $0), and the net-flow chart (≥12 months ending at the period,
-with the period's months highlighted and the rest dimmed). Changing the month filter seeds the
-tab's state with the current category exclusions — before, the first filter change created state
-from `ESTADO_VACIO` and silently re-included "Pago TDC". The "Categorías al alza" table has a
-"Tendencia 12 meses" column (added 2026-09-26, user's request: "como acciones de la bolsa"):
-`Sparkline.tsx`, a hand-rolled inline SVG (no Recharts — 8 tiny charts per table), fed by
-`gastoMensualPorCategoria` over the 12 months ending at the period's last month. Per the dataviz
-stat-tile/sparkline spec: context line in `--text-muted`, the period's months + last point in the
-gastos accent (`--series-2`), each series scaled 0→its own max (it shows shape, not cross-category
-magnitude — the amount columns do that), native `<title>` tooltip per month, and an `aria-label`
-listing every month's value.
-
-**Hide categories (the inverse of cross-filter, added 2026-09-20)**: the "Ocultar categorías" pill
-row (right under the active-filter chips, above the KPIs) is deliberately a *separate* mechanism
-from `filtros.categoria`, not another value it can hold — cross-filter *isolates* exactly one
-category everywhere except its own chart (so you can still see and switch to another); hiding
-*removes* however many categories you pick from the whole dashboard, including their own chart
-(`Gasto por categoría` shouldn't keep showing a bar for something you just asked to hide). Backed
-by `categoriasOcultas: Set<string>` state in `Dashboard` and `queries.ts`'s
-`ocultarCategorias(transacciones, categoriasOcultas)`, applied *before* `aplicarFiltros` in the
-pipeline — everything downstream (KPIs except `saldoActual`, every chart, the table) computes off
-that already-narrowed set, not off the raw `transacciones`. The pill list itself is derived from
-the *raw* `transacciones` (`categoriasConocidas`, unaffected by hiding) so a category doesn't
-disappear from its own toggle once you hide it — otherwise there'd be no way to click it again to
-bring it back. The two mechanisms can contradict each other (isolate category X while also hiding
-X), so `alternarCategoriaOculta`/`seleccionarCategoria` cross-clear: hiding a category that's
-currently isolated clears the isolation, and clicking a chart bar for a category that's currently
-hidden un-hides it first. `EditorTransacciones`'s search is deliberately exempt from hiding (still
-receives raw `transacciones`) — hiding is a *view* preference, not a restriction on what you can
-find and bulk-edit.
+The "Categorías al alza" table has a "Tendencia 12 meses" column (`Sparkline.tsx`, hand-rolled
+inline SVG fed by `gastoMensualPorCategoria` over the 12 months ending at the period's last month):
+context line in `--text-muted`, period months + last point in `--series-2`, each series scaled
+0→its own max (shape, not cross-category magnitude), native `<title>` tooltip per month, and an
+`aria-label` with every value.
 
 **Removed: `TendenciaSaldoChart` / filtering by `cuenta`** (2026-09-20, user's explicit request,
 no risk flagged — it was a straightforward swap, not a correction of a bug). It plotted one line
 per account's running `saldo` over time and was the *only* UI source of the `cuenta` filter
 dimension, so removing it made that whole dimension unreachable — `Filtros.cuenta` and its
 `aplicarFiltros` branch were removed too rather than left as dead code with no way to trigger it.
-`saldoActual` (the KPI tile) is unaffected — it was always computed independently via
-`calcularTotales`, never from this chart's data. If per-account balance trend is wanted again
+(The `saldoActual` KPI tile mentioned in older notes no longer exists; balance now surfaces as
+"Meses cubiertos con tu saldo", computed from the latest `saldo` per account.) If per-account balance trend is wanted again
 later, it needs a new UI entry point (chart, toggle, whatever), not just restoring the deleted
 files — the underlying `saldo` data was never removed from the query/select.
 

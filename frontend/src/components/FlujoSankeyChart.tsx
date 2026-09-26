@@ -32,7 +32,8 @@ interface EnlaceSankey {
  * -> categorías de gasto. Si se gastó más de lo que entró (ahorro < 0), un
  * nodo "Déficit" aporta la diferencia directo a "Gastos totales" en vez de
  * dejar ese nodo con más salida que entrada -- un Sankey no tiene forma de
- * representar "de dónde salió" ese exceso más que nombrándolo.
+ * representar "de dónde salió" ese exceso más que nombrándolo. Sin ningún
+ * ingreso no se dibuja "Déficit" (todo sería déficit, sin información).
  */
 function construirDatosSankey(datos: FlujoSankeyDatos): { nodes: NodoSankey[]; links: EnlaceSankey[] } {
   const nodes: NodoSankey[] = [];
@@ -64,7 +65,10 @@ function construirDatosSankey(datos: FlujoSankeyDatos): { nodes: NodoSankey[]; l
         links.push({ source: idIngresosTotales, target: idGastosTotales, value: flujoDeIngresos });
       }
     }
-    if (deficit > 0) {
+    // Sin ningún ingreso (p. ej. la pestaña de una tarjeta de crédito, que se
+    // paga desde otra cuenta con "Pago TDC" oculto) no hay contra qué hablar
+    // de déficit: el diagrama arranca directo en "Gastos totales".
+    if (deficit > 0 && idIngresosTotales !== null) {
       const idDeficit = agregarNodo("Déficit", COLOR_GASTO);
       links.push({ source: idDeficit, target: idGastosTotales, value: deficit });
     }

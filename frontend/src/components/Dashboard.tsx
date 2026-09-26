@@ -4,33 +4,34 @@ import { categoriasExcluidasPorDefecto, RANGO_MESES_VACIO, type RangoMeses } fro
 import type { Transaccion } from "../lib/types";
 import { supabase } from "../lib/supabase";
 import { EventosTab } from "./EventosTab";
-import { IndicadoresTab } from "./IndicadoresTab";
 import type { VistaTiempo } from "./IngresosGastosChart";
 import { VistaResumen } from "./VistaResumen";
 
 /** Estado de filtros de UNA pestaña -- cada pestaña (Resumen y una por
  * tarjeta) tiene el suyo, guardado en `estadosPorPestana`, para que
- * filtrar o ocultar categorías en una no afecte a las demás. `rangoMeses`
- * solo lo usa Indicadores hoy, pero vive aquí igual que `categoriasOcultas`
- * (que Indicadores también reutiliza con otro significado) para no perder
- * la selección al cambiar de pestaña. */
+ * filtrar, elegir periodo u ocultar categorías en una no afecte a las
+ * demás. */
 interface EstadoVista {
   filtros: Filtros;
-  categoriasOcultas: Set<string>;
+  /** null = el usuario aún no toca la selección: se usan las categorías
+   * ocultas por defecto (movimientos entre cuentas propias, ver
+   * categoriasExcluidasPorDefecto). Resolverlo al render -- y no copiarlo
+   * al crear el estado -- evita que el primer cambio de OTRO campo (p. ej.
+   * el periodo) cree el estado desde vacío y vuelva a mostrar "Pago TDC". */
+  categoriasOcultas: Set<string> | null;
   rangoMeses: RangoMeses;
   vistaTiempo: VistaTiempo;
 }
 
 const ESTADO_VACIO: EstadoVista = {
   filtros: {},
-  categoriasOcultas: new Set(),
+  categoriasOcultas: null,
   rangoMeses: RANGO_MESES_VACIO,
   vistaTiempo: "meses",
 };
 
 const PESTANA_RESUMEN = "resumen";
 const PESTANA_EVENTOS = "eventos";
-const PESTANA_INDICADORES = "indicadores";
 // Prefijo para no chocar con "resumen"/"eventos" si alguna cuenta tuviera
 // ese mismo alias.
 const PREFIJO_PESTANA_CUENTA = "cuenta:";
@@ -67,7 +68,6 @@ export function Dashboard() {
   const pestanas = [
     { id: PESTANA_RESUMEN, etiqueta: "Resumen" },
     { id: PESTANA_EVENTOS, etiqueta: "Eventos" },
-    { id: PESTANA_INDICADORES, etiqueta: "Indicadores" },
     ...cuentasConocidas.map((cuenta) => ({
       id: PREFIJO_PESTANA_CUENTA + cuenta,
       etiqueta: cuenta,
@@ -105,6 +105,7 @@ export function Dashboard() {
 
   function renderVistaResumen(pestana: string, transaccionesVista: Transaccion[]) {
     const estado = estadosPorPestana[pestana] ?? ESTADO_VACIO;
+    const categoriasOcultas = estado.categoriasOcultas ?? categoriasOcultasPorDefecto;
     return (
       <VistaResumen
         // `key` por pestaña: sin ella React reutilizaría la misma instancia
@@ -117,12 +118,16 @@ export function Dashboard() {
         onCambiarFiltros={(cambio) =>
           actualizarEstado(pestana, (e) => ({ ...e, filtros: cambio(e.filtros) }))
         }
-        categoriasOcultas={estado.categoriasOcultas}
+        categoriasOcultas={categoriasOcultas}
         onCambiarCategoriasOcultas={(cambio) =>
           actualizarEstado(pestana, (e) => ({
             ...e,
-            categoriasOcultas: cambio(e.categoriasOcultas),
+            categoriasOcultas: cambio(e.categoriasOcultas ?? categoriasOcultasPorDefecto),
           }))
+        }
+        rangoMeses={estado.rangoMeses}
+        onCambiarRangoMeses={(cambio) =>
+          actualizarEstado(pestana, (e) => ({ ...e, rangoMeses: cambio(e.rangoMeses) }))
         }
         vistaTiempo={estado.vistaTiempo}
         onCambiarVistaTiempo={(vistaTiempo) =>
@@ -133,13 +138,12 @@ export function Dashboard() {
     );
   }
 
-  // La pestaña Indicadores reutiliza `categoriasOcultas` de su estado por
-  // pestaña como "categorías excluidas". Hasta que el usuario toque la
-  // selección, arranca excluyendo los movimientos entre cuentas propias (ver
-  // categoriasExcluidasPorDefecto).
-  const categoriasExcluidasIndicadores =
-    estadosPorPestana[PESTANA_INDICADORES]?.categoriasOcultas ??
-    categoriasExcluidasPorDefecto(Array.from(new Set(transacciones.map(categoriaDe))));
+  // Por defecto se ocultan los movimientos entre cuentas propias (p. ej.
+  // pagar la TDC desde la cuenta de cheques): contarían como gasto en una
+  // cuenta e ingreso en la otra.
+  const categoriasOcultasPorDefecto = categoriasExcluidasPorDefecto(
+    Array.from(new Set(transacciones.map(categoriaDe)))
+  );
 
   return (
     <div style={{ background: "var(--page-plane)", minHeight: "100vh" }}>
@@ -191,30 +195,7 @@ export function Dashboard() {
               ))}
             </div>
 
-            {vistaActiva === PESTANA_INDICADORES ? (
-              <IndicadoresTab
-                transacciones={transacciones}
-                categoriasExcluidas={categoriasExcluidasIndicadores}
-                onCambiarCategoriasExcluidas={(cambio) =>
-                  actualizarEstado(PESTANA_INDICADORES, (e) => ({
-                    ...e,
-                    categoriasOcultas: cambio(categoriasExcluidasIndicadores),
-                  }))
-                }
-                rangoMeses={estadosPorPestana[PESTANA_INDICADORES]?.rangoMeses ?? RANGO_MESES_VACIO}
-                onCambiarRangoMeses={(cambio) =>
-                  actualizarEstado(PESTANA_INDICADORES, (e) => ({
-                    ...e,
-                    // Si este es el primer cambio en la pestaña, `e` viene de
-                    // ESTADO_VACIO (sin categorías excluidas): se fija la
-                    // selección vigente para no perder las exclusiones por
-                    // defecto (antes, elegir un mes volvía a contar "Pago TDC").
-                    categoriasOcultas: categoriasExcluidasIndicadores,
-                    rangoMeses: cambio(e.rangoMeses),
-                  }))
-                }
-              />
-            ) : vistaActiva === PESTANA_EVENTOS ? (
+            {vistaActiva === PESTANA_EVENTOS ? (
               <EventosTab transacciones={transacciones} onActualizado={recargarTransacciones} />
             ) : vistaActiva === PESTANA_RESUMEN ? (
               renderVistaResumen(PESTANA_RESUMEN, transacciones)

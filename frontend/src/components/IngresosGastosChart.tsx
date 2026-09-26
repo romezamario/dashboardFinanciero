@@ -27,8 +27,10 @@ interface IngresosGastosChartProps {
   datos: PuntoIngresoGasto[];
   vista: VistaTiempo;
   onCambiarVista?: (vista: VistaTiempo) => void;
-  /** Mes ("2026-06") o año ("2026") seleccionado por cross-filter. */
-  seleccionado?: string;
+  /** Meses ("2026-06") o años ("2026") del periodo de la vista: se ven
+   * completos y el resto se atenúa. Sin él (periodo por defecto), todo
+   * igual. */
+  resaltados?: Set<string>;
   onClickPeriodo?: (periodo: string) => void;
 }
 
@@ -36,13 +38,12 @@ export function IngresosGastosChart({
   datos,
   vista,
   onCambiarVista,
-  seleccionado,
+  resaltados,
   onClickPeriodo,
 }: IngresosGastosChartProps) {
   // Cuando hay una selección, lo no seleccionado se atenúa en vez de
   // desaparecer -- así se ve qué está filtrado sin perder el eje completo.
-  const opacidad = (periodo: string) =>
-    !seleccionado || seleccionado === periodo ? 1 : 0.3;
+  const opacidad = (periodo: string) => (!resaltados || resaltados.has(periodo) ? 1 : 0.3);
   const unidad = vista === "anios" ? "año" : "mes";
 
   return (
@@ -55,7 +56,7 @@ export function IngresosGastosChart({
           Ingresos vs. gastos por {unidad}
           {onClickPeriodo && (
             <span className="ml-2 font-normal" style={{ color: "var(--text-muted)" }}>
-              (clic en un {unidad} para filtrar)
+              (clic en un {unidad} para verlo como periodo)
             </span>
           )}
         </h3>

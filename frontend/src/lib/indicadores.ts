@@ -1,11 +1,11 @@
 import { categoriaDe, cuentaDe, eventoDe } from "./queries";
 import type { Transaccion } from "./types";
 
-// Cálculos de la pestaña "Indicadores". Todo se mide sobre un PERIODO: una
-// lista de meses de calendario. Sin filtro, el periodo son los últimos 3
-// meses completos (igual que los promedios del Resumen, el mes en curso no
-// cuenta porque los estados de cuenta llegan a mes vencido); con el filtro
-// de meses de la pestaña, es exactamente el rango elegido. Cada indicador se
+// Cálculos de los indicadores de la pestaña Resumen (VistaResumen). Todo se
+// mide sobre un PERIODO: una lista de meses de calendario. Sin filtro, el
+// periodo son los últimos 3 meses completos (el mes en curso no cuenta
+// porque los estados de cuenta llegan a mes vencido); con el filtro de
+// meses de la pestaña, es exactamente el rango elegido. Cada indicador se
 // calcula solo con los meses del periodo, y las comparaciones son contra el
 // periodo anterior de la misma duración (agosto vs. julio, jun–ago vs.
 // mar–may) -- así nada se divide entre meses que el usuario no eligió.
@@ -29,7 +29,7 @@ export function categoriasExcluidasPorDefecto(categorias: string[]): Set<string>
   return new Set(categorias.filter((c) => PATRON_EXCLUIDA_POR_DEFECTO.test(c)));
 }
 
-/** Filtro de meses de la pestaña Indicadores ("YYYY-MM", o "" = sin
+/** Filtro de meses (periodo) de la pestaña Resumen ("YYYY-MM", o "" = sin
  * elegir) -- vive en `Dashboard` (junto a `categoriasOcultas`) para no
  * perderse al cambiar de pestaña. Solo meses, no fechas: el usuario revisa
  * sus finanzas mes a mes, y un día suelto partía meses a la mitad. */
@@ -105,6 +105,38 @@ export function resolverPeriodo(rango: RangoMeses, hoy = new Date()): Periodo {
 
 const formatoMesLargo = new Intl.DateTimeFormat("es-MX", { month: "long", year: "numeric" });
 const formatoMesCorto = new Intl.DateTimeFormat("es-MX", { month: "short", year: "numeric" });
+
+/** Solo las transacciones de los meses dados. */
+export function enMeses(transacciones: Transaccion[], meses: string[]): Transaccion[] {
+  const conjunto = new Set(meses);
+  return transacciones.filter((t) => conjunto.has(mesDe(t)));
+}
+
+/** Rango de meses para un año elegido con clic (vista por años): de su
+ * primer a su último mes con datos -- no enero–diciembre, para que los
+ * meses sin estados de cuenta (antes del primero, o el resto del año en
+ * curso) no cuenten como $0 y abaraten los promedios. */
+export function rangoDeAnio(anio: string, mesesConDatos: string[]): RangoMeses {
+  const delAnio = mesesConDatos.filter((m) => m.startsWith(`${anio}-`)).sort();
+  if (delAnio.length === 0) return { desde: `${anio}-01`, hasta: `${anio}-12` };
+  return { desde: delAnio[0], hasta: delAnio[delAnio.length - 1] };
+}
+
+export interface GastoHormiga {
+  cantidad: number;
+  total: number;
+  /** Parte del gasto del periodo; null si no hubo gasto. */
+  proporcion: number | null;
+}
+
+/** Cargos de menos de `UMBRAL_GASTO_HORMIGA` en los meses del periodo. */
+export function calcularGastoHormiga(transacciones: Transaccion[], meses: string[]): GastoHormiga {
+  const delPeriodo = enMeses(transacciones, meses).filter((t) => t.tipo === "cargo");
+  const hormigas = delPeriodo.filter((t) => t.monto < UMBRAL_GASTO_HORMIGA);
+  const total = hormigas.reduce((s, t) => s + t.monto, 0);
+  const gastos = delPeriodo.reduce((s, t) => s + t.monto, 0);
+  return { cantidad: hormigas.length, total, proporcion: gastos > 0 ? total / gastos : null };
+}
 
 /** "agosto de 2026" → "agosto 2026". */
 export function nombreMes(mes: string, corto = false): string {
@@ -367,14 +399,18 @@ export interface Indicadores {
   gastoPromedioReferencia: number | null;
   recurrentes: GastoRecurrente[];
   totalRecurrenteMensual: number;
-  hormiga: { cantidad: number; total: number; proporcion: number | null };
-  enAlza: CategoriaEnAlza[];
   /** Meses de gasto promedio del periodo que cubre el saldo al cierre. */
   mesesDeCobertura: number | null;
   saldoAlCierre: number | null;
 }
 
-/** `transacciones` ya debe venir sin las categorías excluidas. `saldo` se
+/** Indicadores de salud financiera del periodo (tasa de ahorro, flujo
+ * neto, gasto promedio, cobertura, recurrentes). `transacciones` ya debe
+ * venir sin las categorías ocultas, pero SIN los filtros por clic
+ * (categoría, comercio, cuenta, tarjeta, evento): estos indicadores
+ * describen tus finanzas completas -- una tasa de ahorro de solo "Comida"
+ * no significa nada. El detalle de gasto (hormiga, categorías al alza,
+ * Sankey) sí se calcula aparte con las transacciones ya filtradas. `saldo` se
  * calcula aparte (ver `saldoDisponible`) sobre el conjunto sin excluir: es
  * un hecho de la cuenta, no un agregado que dependa de qué categorías se
  * cuentan como gasto. */
@@ -399,12 +435,6 @@ export function calcularIndicadores(
 
   const recurrentes = detectarGastosRecurrentes(transacciones, ultimoMes);
 
-  const mesesPeriodo = new Set(periodo.meses);
-  const hormigas = transacciones.filter(
-    (t) => t.tipo === "cargo" && mesesPeriodo.has(mesDe(t)) && t.monto < UMBRAL_GASTO_HORMIGA
-  );
-  const totalHormiga = hormigas.reduce((s, t) => s + t.monto, 0);
-
   const gastoPromedio = actual.gastos / n;
 
   return {
@@ -418,12 +448,6 @@ export function calcularIndicadores(
     gastoPromedioReferencia: mesesReferencia.length > 0 ? referencia.gastos / mesesReferencia.length : null,
     recurrentes,
     totalRecurrenteMensual: recurrentes.reduce((s, r) => s + r.montoMensual, 0),
-    hormiga: {
-      cantidad: hormigas.length,
-      total: totalHormiga,
-      proporcion: actual.gastos > 0 ? totalHormiga / actual.gastos : null,
-    },
-    enAlza: categoriasEnAlza(transacciones, periodo),
     mesesDeCobertura: saldo !== null && gastoPromedio > 0 ? saldo / gastoPromedio : null,
     saldoAlCierre: saldo,
   };
