@@ -22,7 +22,12 @@ export async function obtenerTransacciones(): Promise<Transaccion[]> {
          eventos ( nombre ),
          documentos ( id, cuentas ( id, alias, bancos ( nombre ) ) )`
       )
+      // Desempate por `id`: con solo `fecha`, Postgres no garantiza un orden
+      // estable entre filas del mismo día, así que al paginar con offset una
+      // transacción podía salir en dos páginas y otra en ninguna (justo en
+      // el borde entre páginas, con más de 1000 transacciones).
       .order("fecha", { ascending: true })
+      .order("id", { ascending: true })
       .range(desde, desde + TAMANO_PAGINA - 1);
 
     if (error) throw error;
@@ -387,8 +392,22 @@ export async function actualizarCategoriaComercioYEvento(
   }
   if (Object.keys(payload).length === 0) return;
 
-  const { error } = await supabase.from("transacciones").update(payload).in("id", ids);
-  if (error) throw error;
+  for (const lote of enLotes(ids)) {
+    const { error } = await supabase.from("transacciones").update(payload).in("id", lote);
+    if (error) throw error;
+  }
+}
+
+/** `.in("id", ids)` viaja en la URL de la petición (?id=in.(...)): con
+ * cientos de ids seleccionados ("Seleccionar todas las coincidencias" sobre
+ * años de historial) la URL rebasaba el límite del servidor y la edición
+ * completa fallaba. ~150 UUIDs por petición dejan la URL en ~6 KB. */
+const TAMANO_LOTE_IDS = 150;
+
+function enLotes<T>(elementos: T[], tamano = TAMANO_LOTE_IDS): T[][] {
+  const lotes: T[][] = [];
+  for (let i = 0; i < elementos.length; i += tamano) lotes.push(elementos.slice(i, i + tamano));
+  return lotes;
 }
 
 export interface ImpactoCambioDeCuenta {
@@ -435,10 +454,12 @@ export async function actualizarCuentaDeDocumentos(
   cuentaId: string
 ): Promise<void> {
   if (documentoIds.length === 0) return;
-  const { error } = await supabase
-    .from("documentos")
-    .update({ cuenta_id: cuentaId })
-    .in("id", documentoIds);
-  if (error) throw error;
+  for (const lote of enLotes(documentoIds)) {
+    const { error } = await supabase
+      .from("documentos")
+      .update({ cuenta_id: cuentaId })
+      .in("id", lote);
+    if (error) throw error;
+  }
 }
 

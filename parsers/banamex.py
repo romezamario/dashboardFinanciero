@@ -100,6 +100,13 @@ class BanamexParser(BaseParser):
     def __init__(self, ano_estado_de_cuenta: str = "2025") -> None:
         # El PDF no trae el año en cada renglón — ver docstring del módulo.
         self.ano_estado_de_cuenta = ano_estado_de_cuenta
+        self._advertencias: list[str] = []
+
+    def advertencias(self) -> list[str]:
+        """Bloques que se descartaron en la última llamada a `extraer()` en
+        vez de emitirse como transacción -- antes se perdían en silencio y
+        solo se notaban si el total no cuadraba. Ver `_procesar_documento`."""
+        return list(self._advertencias)
 
     def extraer(self, ruta_pdf: Path) -> list[RenglonCrudo]:
         lineas_documento: list[tuple[int, str]] = []
@@ -184,6 +191,11 @@ class BanamexParser(BaseParser):
         self, lineas_documento: list[tuple[int, str]]
     ) -> list[RenglonCrudo]:
         renglones: list[RenglonCrudo] = []
+        self._advertencias = []
+
+        def advertir(motivo: str, pagina: int | None, concepto: list[str]) -> None:
+            texto = " ".join(concepto).strip() or "(sin concepto)"
+            self._advertencias.append(f"Página {pagina or '?'}: {motivo} -- {texto[:120]}")
 
         saldo_actual: Decimal | None = None
         bloque_fecha: str | None = None
@@ -196,6 +208,12 @@ class BanamexParser(BaseParser):
             # Si el bloque anterior nunca cerró (línea rota / formato
             # inesperado), lo descartamos sin emitir en vez de arrastrar
             # texto de una transacción a la siguiente.
+            if bloque_fecha is not None and bloque_concepto:
+                advertir(
+                    "un movimiento empezó pero nunca cerró con monto y saldo (se descartó)",
+                    bloque_pagina,
+                    bloque_concepto,
+                )
             mes = MESES.get(mes_abrev, "01")
             bloque_fecha = f"{dia}/{mes}/{self.ano_estado_de_cuenta}"
             bloque_pagina = pagina
@@ -206,6 +224,13 @@ class BanamexParser(BaseParser):
             nonlocal saldo_actual, bloque_fecha, bloque_pagina
             nonlocal bloque_concepto, bloque_lineas_crudas
 
+            if saldo_actual is None and bloque_fecha is not None:
+                advertir(
+                    "movimiento antes del SALDO ANTERIOR, sin saldo previo para calcular "
+                    "su monto (se descartó)",
+                    bloque_pagina,
+                    bloque_concepto,
+                )
             if bloque_fecha is not None and saldo_actual is not None:
                 delta = saldo_nuevo - saldo_actual
                 if delta != 0:
@@ -262,4 +287,10 @@ class BanamexParser(BaseParser):
             if resto.strip():
                 bloque_concepto.append(resto.strip())
 
+        if bloque_fecha is not None and bloque_concepto:
+            advertir(
+                "el documento terminó con un movimiento sin cerrar (se descartó)",
+                bloque_pagina,
+                bloque_concepto,
+            )
         return renglones

@@ -58,6 +58,11 @@ COLUMNAS = ("pagina", "fecha", "descripcion", "monto", "tipo", "categoria", "com
 # separarla del resto de los cargos.
 CATEGORIA_DISPOSICION_EFECTIVO = "Disposición de efectivo"
 
+# Prefijo de `linea_cruda` de un renglón capturado a mano (VentanaRenglonManual):
+# lo distingue de una línea real del PDF, y permite recuperarlo al recargar el
+# mismo PDF (App._recuperar_renglones_manuales).
+PREFIJO_RENGLON_MANUAL = "(manual) "
+
 
 def _hash_pdf(ruta: Path) -> str:
     return hashlib.sha256(ruta.read_bytes()).hexdigest()
@@ -69,7 +74,7 @@ class VentanaReglas(tk.Toplevel):
     def __init__(self, master: "App") -> None:
         super().__init__(master)
         self.title("Reglas de categorización")
-        self.geometry("420x420")
+        self.geometry("560x440")
         self.master_app = master
         self.reglas = list(master.reglas)
 
@@ -106,6 +111,16 @@ class VentanaReglas(tk.Toplevel):
         ttk.Button(
             marco_botones, text="Eliminar seleccionada", command=self._eliminar
         ).pack(side="left", padx=4)
+        # La primera regla que coincide gana, así que el orden importa (p. ej.
+        # "SU PAGO INTERBANCARIO" debe ir antes que "PAGO INTERBANCARIO"); una
+        # regla nueva se agrega al final, y sin esto la única forma de
+        # adelantarla era editar el JSON a mano.
+        ttk.Button(marco_botones, text="▲ Subir", command=lambda: self._mover(-1)).pack(
+            side="left"
+        )
+        ttk.Button(marco_botones, text="▼ Bajar", command=lambda: self._mover(1)).pack(
+            side="left", padx=4
+        )
         ttk.Button(
             marco_botones, text="Guardar y cerrar", command=self._guardar_y_cerrar
         ).pack(side="right")
@@ -139,6 +154,20 @@ class VentanaReglas(tk.Toplevel):
         indice = self.tabla.index(seleccion[0])
         del self.reglas[indice]
         self._refrescar_tabla()
+
+    def _mover(self, direccion: int) -> None:
+        seleccion = self.tabla.selection()
+        if not seleccion:
+            return
+        indice = self.tabla.index(seleccion[0])
+        destino = indice + direccion
+        if not 0 <= destino < len(self.reglas):
+            return
+        self.reglas[indice], self.reglas[destino] = self.reglas[destino], self.reglas[indice]
+        self._refrescar_tabla()
+        hijo = self.tabla.get_children()[destino]
+        self.tabla.selection_set(hijo)
+        self.tabla.see(hijo)
 
     def _guardar_y_cerrar(self) -> None:
         guardar_reglas(self.reglas)
@@ -369,7 +398,20 @@ class VentanaRenglonManual(tk.Toplevel):
         # lo hace único por (fecha, descripción, monto, tipo) para no
         # chocar con el constraint (documento_id, pagina, linea_cruda) del
         # upsert si se agrega más de un renglón manual al mismo documento.
-        linea_cruda = f"(manual) {fecha.isoformat()} | {descripcion} | {monto} | {tipo}"
+        linea_cruda = f"{PREFIJO_RENGLON_MANUAL}{fecha.isoformat()} | {descripcion} | {monto} | {tipo}"
+        # Dos renglones manuales idénticos (p. ej. dos casetas iguales el
+        # mismo día, ambas ilegibles en el PDF) chocarían en ese constraint y
+        # Postgres rechazaría el documento COMPLETO al sincronizar -- mismo
+        # problema y misma solución que _desambiguar_renglones_duplicados
+        # para las filas extraídas: sufijo " (2)", " (3)", ...
+        existentes = {
+            t.linea_cruda for t in self.master_app.transacciones if t.pagina == pagina
+        }
+        if linea_cruda in existentes:
+            ocurrencia = 2
+            while f"{linea_cruda} ({ocurrencia})" in existentes:
+                ocurrencia += 1
+            linea_cruda = f"{linea_cruda} ({ocurrencia})"
 
         categoria, comercio = categorizar(descripcion, self.master_app.reglas)
         origen = self.master_app.ruta_pdf_actual.name if self.master_app.ruta_pdf_actual else None
@@ -611,11 +653,15 @@ class App(tk.Tk):
         except Exception:  # noqa: BLE001 — nunca debe tumbar la carga de transacciones
             advertencias_extraccion = []
 
+        # Siempre se limpian primero: si este PDF no trae la cuenta
+        # detectable, dejar los valores del PDF cargado ANTES haría que "Guardar"
+        # atribuyera este estado de cuenta a la cuenta equivocada sin aviso
+        # (el resumen ya pide "complétala a mano" en ese caso).
+        self.entrada_alias_cuenta.delete(0, "end")
+        self.entrada_ultimos_4.delete(0, "end")
         if alias_detectado:
-            self.entrada_alias_cuenta.delete(0, "end")
             self.entrada_alias_cuenta.insert(0, alias_detectado)
         if ultimos_4_detectados:
-            self.entrada_ultimos_4.delete(0, "end")
             self.entrada_ultimos_4.insert(0, ultimos_4_detectados)
 
         if not renglones:
@@ -636,6 +682,9 @@ class App(tk.Tk):
             )
         transacciones = nuevas_transacciones
 
+        manuales_recuperados = self._recuperar_renglones_manuales(ruta_pdf)
+        transacciones = [*transacciones, *manuales_recuperados]
+
         self.transacciones = transacciones
         self.ruta_pdf_actual = ruta_pdf
         self.banco_actual = banco
@@ -651,6 +700,8 @@ class App(tk.Tk):
             resumen += " · no se detectó la cuenta automáticamente, complétala a mano"
         if anio_detectado_automaticamente:
             resumen += f" · año detectado del PDF: {anio_usado}"
+        if manuales_recuperados:
+            resumen += f" · {len(manuales_recuperados)} renglón(es) manual(es) recuperado(s) de la carga anterior"
         if advertencias_extraccion:
             resumen += f" — {len(advertencias_extraccion)} posible(s) transacción(es) no capturada(s), revisa el PDF"
         self.etiqueta_resumen.config(text=resumen)
@@ -678,6 +729,47 @@ class App(tk.Tk):
                 "captúralas a mano antes de validar el total.\n\n"
                 f"{detalle_advertencias}",
             )
+
+    def _recuperar_renglones_manuales(self, ruta_pdf: Path) -> list[TransaccionCanonica]:
+        """Renglones capturados a mano (VentanaRenglonManual) en una carga
+        anterior de ESTE mismo PDF, leídos de su data/procesados/<hash>.json.
+
+        El extractor solo vuelve a producir lo que puede leer del PDF, así que
+        sin esto recargar un estado de cuenta (p. ej. para recategorizar tras
+        cambiar una regla) y volver a guardarlo perdía en silencio los
+        renglones manuales -- justo los que el usuario tuvo que teclear porque
+        el PDF no los traía legibles. Se reconocen por el prefijo "(manual) "
+        de su `linea_cruda` y se recategorizan con las reglas actuales, igual
+        que las filas extraídas. Cualquier problema leyendo el JSON anterior
+        se ignora: en el peor caso no se recupera nada, como antes."""
+        ruta_json = CARPETA_PROCESADOS / f"{_hash_pdf(ruta_pdf)}.json"
+        if not ruta_json.exists():
+            return []
+        try:
+            datos = json.loads(ruta_json.read_text(encoding="utf-8"))
+            recuperados = []
+            for t in datos.get("transacciones", []):
+                if not str(t.get("linea_cruda", "")).startswith(PREFIJO_RENGLON_MANUAL):
+                    continue
+                categoria, comercio = categorizar(t["descripcion"], self.reglas)
+                recuperados.append(
+                    TransaccionCanonica(
+                        fecha=date.fromisoformat(t["fecha"]),
+                        descripcion=t["descripcion"],
+                        monto=Decimal(t["monto"]),
+                        tipo=t["tipo"],
+                        pagina=int(t["pagina"]),
+                        linea_cruda=t["linea_cruda"],
+                        moneda=t.get("moneda", "MXN"),
+                        categoria=categoria,
+                        comercio=comercio,
+                        tarjeta=t.get("tarjeta"),
+                        origen=ruta_pdf.name,
+                    )
+                )
+            return recuperados
+        except (OSError, ValueError, KeyError, InvalidOperation):
+            return []
 
     def recategorizar(self) -> None:
         nuevas_transacciones = []

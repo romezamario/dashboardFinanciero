@@ -65,6 +65,27 @@ export function Dashboard() {
     [transacciones]
   );
 
+  // Por defecto se ocultan los movimientos entre cuentas propias (p. ej.
+  // pagar la TDC desde la cuenta de cheques): contarían como gasto en una
+  // cuenta e ingreso en la otra. Memoizado (igual que las transacciones por
+  // cuenta abajo) para que su identidad no cambie en cada render: VistaResumen
+  // memoiza todos sus cálculos sobre estas referencias, y un Set/arreglo nuevo
+  // en cada render los invalidaba todos.
+  const categoriasOcultasPorDefecto = useMemo(
+    () => categoriasExcluidasPorDefecto(Array.from(new Set(transacciones.map(categoriaDe)))),
+    [transacciones]
+  );
+  const transaccionesPorCuenta = useMemo(() => {
+    const porCuenta = new Map<string, Transaccion[]>();
+    for (const t of transacciones) {
+      const clave = PREFIJO_PESTANA_CUENTA + cuentaDe(t);
+      const lista = porCuenta.get(clave);
+      if (lista) lista.push(t);
+      else porCuenta.set(clave, [t]);
+    }
+    return porCuenta;
+  }, [transacciones]);
+
   const pestanas = [
     { id: PESTANA_RESUMEN, etiqueta: "Resumen" },
     { id: PESTANA_EVENTOS, etiqueta: "Eventos" },
@@ -138,13 +159,6 @@ export function Dashboard() {
     );
   }
 
-  // Por defecto se ocultan los movimientos entre cuentas propias (p. ej.
-  // pagar la TDC desde la cuenta de cheques): contarían como gasto en una
-  // cuenta e ingreso en la otra.
-  const categoriasOcultasPorDefecto = categoriasExcluidasPorDefecto(
-    Array.from(new Set(transacciones.map(categoriaDe)))
-  );
-
   return (
     <div style={{ background: "var(--page-plane)", minHeight: "100vh" }}>
       <header
@@ -200,12 +214,7 @@ export function Dashboard() {
             ) : vistaActiva === PESTANA_RESUMEN ? (
               renderVistaResumen(PESTANA_RESUMEN, transacciones)
             ) : (
-              renderVistaResumen(
-                vistaActiva,
-                transacciones.filter(
-                  (t) => PREFIJO_PESTANA_CUENTA + cuentaDe(t) === vistaActiva
-                )
-              )
+              renderVistaResumen(vistaActiva, transaccionesPorCuenta.get(vistaActiva) ?? [])
             )}
           </>
         )}

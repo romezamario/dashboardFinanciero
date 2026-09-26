@@ -210,27 +210,36 @@ def sincronizar_todos(
         p for p in carpeta.glob("*.json") if p.name != NOMBRE_ARCHIVO_ESTADO_SYNC
     )
 
-    for ruta_json in archivos:
-        hash_actual = _hash_contenido(ruta_json)
-        if estado_previo.get(ruta_json.name) == hash_actual:
-            continue  # sin cambios desde la última sincronización exitosa
+    # `finally`: si algo inesperado corta el ciclo a la mitad (p. ej. se cae
+    # la red con una excepción que no hereda de Exception, o se cierra la
+    # app), los archivos que SÍ se sincronizaron quedan registrados y no se
+    # vuelven a subir en la próxima corrida.
+    try:
+        for ruta_json in archivos:
+            hash_actual = _hash_contenido(ruta_json)
+            if estado_previo.get(ruta_json.name) == hash_actual:
+                continue  # sin cambios desde la última sincronización exitosa
 
-        datos = json.loads(ruta_json.read_text(encoding="utf-8"))
-        try:
-            resultado = sincronizar_documento(client, datos)
-            resultado.archivo = ruta_json.name
-            estado_nuevo[ruta_json.name] = hash_actual
-        except Exception as error:  # noqa: BLE001 — se reporta, no se aborta el resto
-            resultado = ResultadoSincronizacion(
-                archivo=ruta_json.name,
-                documento_hash=datos.get("documento_hash"),
-                transacciones_sincronizadas=0,
-                ok=False,
-                error=str(error),
-            )
-        resultados.append(resultado)
-
-    _guardar_estado_sync(ruta_estado, estado_nuevo)
+            # Leer el JSON va DENTRO del try: un archivo corrupto o a medio
+            # escribir se reporta como fallido y el resto se sincroniza igual
+            # (antes, un solo JSON ilegible abortaba toda la sincronización).
+            datos: dict[str, Any] = {}
+            try:
+                datos = json.loads(ruta_json.read_text(encoding="utf-8"))
+                resultado = sincronizar_documento(client, datos)
+                resultado.archivo = ruta_json.name
+                estado_nuevo[ruta_json.name] = hash_actual
+            except Exception as error:  # noqa: BLE001 — se reporta, no se aborta el resto
+                resultado = ResultadoSincronizacion(
+                    archivo=ruta_json.name,
+                    documento_hash=datos.get("documento_hash"),
+                    transacciones_sincronizadas=0,
+                    ok=False,
+                    error=str(error),
+                )
+            resultados.append(resultado)
+    finally:
+        _guardar_estado_sync(ruta_estado, estado_nuevo)
     return resultados
 
 
