@@ -179,6 +179,68 @@ export function saldoDisponible(transacciones: Transaccion[]): number | null {
   return Array.from(ultimoPorCuenta.values()).reduce((s, c) => s + c.saldo, 0);
 }
 
+/** Cuántas categorías de ingreso/gasto se muestran con nombre propio en el
+ * diagrama de flujo antes de plegar el resto en "Otros" -- mismo criterio
+ * que el tope de 8 en GastoPorCategoriaChart, pero más chico del lado de
+ * ingresos porque en la práctica hay muy pocas categorías de ingreso. */
+export const TOPE_SANKEY_INGRESOS = 5;
+export const TOPE_SANKEY_GASTOS = 8;
+
+export interface RamaSankey {
+  categoria: string;
+  monto: number;
+}
+
+export interface FlujoSankeyDatos {
+  ingresos: RamaSankey[];
+  gastos: RamaSankey[];
+  totalIngresos: number;
+  totalGastos: number;
+  /** ingresos - gastos; negativo = se gastó más de lo que entró. */
+  ahorro: number;
+  meses: string[];
+}
+
+function topeConOtros(porCategoria: Map<string, number>, tope: number): RamaSankey[] {
+  const ordenado = Array.from(porCategoria.entries())
+    .map(([categoria, monto]) => ({ categoria, monto }))
+    .sort((a, b) => b.monto - a.monto);
+  const visibles = ordenado.slice(0, tope);
+  const otros = ordenado.slice(tope).reduce((s, c) => s + c.monto, 0);
+  return otros > 0 ? [...visibles, { categoria: "Otros", monto: otros }] : visibles;
+}
+
+/**
+ * Desglose para el diagrama de flujo (Sankey) de ingresos y gastos: de qué
+ * categorías viene el ingreso, cuánto se ahorra vs. se gasta, y a qué
+ * categorías va el gasto. Ventana de los últimos 3 meses completos -- igual
+ * que la tasa de ahorro "hero" de la pestaña, para que ambos números
+ * cuenten la misma historia reciente sin que un solo mes atípico domine.
+ */
+export function calcularFlujoSankey(transacciones: Transaccion[], hoy = new Date()): FlujoSankeyDatos {
+  const meses = mesesCompletos(3, 0, hoy);
+  const ventana = new Set(meses);
+  const porCategoriaIngreso = new Map<string, number>();
+  const porCategoriaGasto = new Map<string, number>();
+
+  for (const t of transacciones) {
+    if (!ventana.has(mesDe(t))) continue;
+    const categoria = categoriaDe(t);
+    if (t.tipo === "abono") {
+      porCategoriaIngreso.set(categoria, (porCategoriaIngreso.get(categoria) ?? 0) + t.monto);
+    } else {
+      porCategoriaGasto.set(categoria, (porCategoriaGasto.get(categoria) ?? 0) + t.monto);
+    }
+  }
+
+  const ingresos = topeConOtros(porCategoriaIngreso, TOPE_SANKEY_INGRESOS);
+  const gastos = topeConOtros(porCategoriaGasto, TOPE_SANKEY_GASTOS);
+  const totalIngresos = ingresos.reduce((s, c) => s + c.monto, 0);
+  const totalGastos = gastos.reduce((s, c) => s + c.monto, 0);
+
+  return { ingresos, gastos, totalIngresos, totalGastos, ahorro: totalIngresos - totalGastos, meses };
+}
+
 export interface Indicadores {
   /** Últimos 12 meses completos, para la gráfica de flujo neto. */
   meses: ResumenMes[];

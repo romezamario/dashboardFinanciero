@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { categoriaDe, ocultarCategorias } from "../lib/queries";
 import {
+  calcularFlujoSankey,
   calcularIndicadores,
   MESES_MINIMOS_RECURRENTE,
   saldoDisponible,
@@ -9,6 +10,7 @@ import {
 } from "../lib/indicadores";
 import type { Transaccion } from "../lib/types";
 import { FlujoNetoChart } from "./FlujoNetoChart";
+import { FlujoSankeyChart } from "./FlujoSankeyChart";
 
 const moneda = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -45,6 +47,11 @@ export function IndicadoresTab({
         ocultarCategorias(transacciones, categoriasExcluidas),
         saldoDisponible(transacciones)
       ),
+    [transacciones, categoriasExcluidas]
+  );
+
+  const flujoSankey = useMemo(
+    () => calcularFlujoSankey(ocultarCategorias(transacciones, categoriasExcluidas)),
     [transacciones, categoriasExcluidas]
   );
 
@@ -198,6 +205,8 @@ export function IndicadoresTab({
           }
         />
       </div>
+
+      <FlujoSankeyChart datos={flujoSankey} />
 
       <FlujoNetoChart datos={indicadores.meses} />
 
