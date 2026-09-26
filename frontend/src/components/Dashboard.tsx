@@ -1,48 +1,35 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  agruparPorCategoria,
-  agruparPorComercio,
-  agruparIngresosGastosPorMes,
-  aplicarFiltros,
-  calcularPromedios,
-  categoriaDe,
-  cuentaDe,
-  eventoDe,
-  obtenerTransacciones,
-  ocultarCategorias,
-  type Filtros,
-} from "../lib/queries";
+import { categoriaDe, cuentaDe, obtenerTransacciones, type Filtros } from "../lib/queries";
+import { categoriasExcluidasPorDefecto } from "../lib/indicadores";
 import type { Transaccion } from "../lib/types";
 import { supabase } from "../lib/supabase";
-import { StatTile } from "./StatTile";
-import { IngresosGastosChart } from "./IngresosGastosChart";
-import { GastoPorCategoriaChart } from "./GastoPorCategoriaChart";
-import { GastoPorComercioChart } from "./GastoPorComercioChart";
-import { TransaccionesTabla } from "./TransaccionesTabla";
-import { EditorTransacciones } from "./EditorTransacciones";
 import { EventosTab } from "./EventosTab";
+import { IndicadoresTab } from "./IndicadoresTab";
+import { VistaResumen } from "./VistaResumen";
 
-const ETIQUETAS_FILTRO: Record<keyof Filtros, string> = {
-  mes: "Mes",
-  categoria: "Categoría",
-  comercio: "Comercio",
-  cuenta: "Cuenta",
-  tarjeta: "Tarjeta",
-  evento: "Evento",
-};
+/** Estado de filtros de UNA pestaña -- cada pestaña (Resumen y una por
+ * tarjeta) tiene el suyo, guardado en `estadosPorPestana`, para que
+ * filtrar o ocultar categorías en una no afecte a las demás. */
+interface EstadoVista {
+  filtros: Filtros;
+  categoriasOcultas: Set<string>;
+}
 
-const PESTANAS = [
-  { id: "resumen", etiqueta: "Resumen" },
-  { id: "eventos", etiqueta: "Eventos" },
-] as const;
+const ESTADO_VACIO: EstadoVista = { filtros: {}, categoriasOcultas: new Set() };
+
+const PESTANA_RESUMEN = "resumen";
+const PESTANA_EVENTOS = "eventos";
+const PESTANA_INDICADORES = "indicadores";
+// Prefijo para no chocar con "resumen"/"eventos" si alguna cuenta tuviera
+// ese mismo alias.
+const PREFIJO_PESTANA_CUENTA = "cuenta:";
 
 export function Dashboard() {
   const [transacciones, setTransacciones] = useState<Transaccion[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filtros, setFiltros] = useState<Filtros>({});
-  const [categoriasOcultas, setCategoriasOcultas] = useState<Set<string>>(new Set());
-  const [vista, setVista] = useState<(typeof PESTANAS)[number]["id"]>("resumen");
+  const [estadosPorPestana, setEstadosPorPestana] = useState<Record<string, EstadoVista>>({});
+  const [vista, setVista] = useState<string>(PESTANA_RESUMEN);
 
   async function recargarTransacciones() {
     try {
@@ -57,49 +44,28 @@ export function Dashboard() {
     recargarTransacciones().finally(() => setCargando(false));
   }, []);
 
-  // Todas las categorías que existen, sin importar si están ocultas -- así
-  // el control de "Ocultar categorías" no pierde de vista una categoría una
-  // vez que el usuario la esconde (si derivara de la lista ya filtrada,
-  // ocultar la última categoría visible la haría desaparecer del propio
-  // control para volver a mostrarla).
-  const categoriasConocidas = useMemo(
-    () => Array.from(new Set(transacciones.map(categoriaDe))).sort(),
-    [transacciones]
-  );
-
-  // No hay una gráfica que impulse este filtro (a diferencia de mes/
-  // categoría/comercio, que se seleccionan haciendo clic en una barra) --
-  // se deriva de las transacciones sin filtrar, igual que categoriasConocidas,
-  // para que la lista de cuentas no cambie según lo que ya esté filtrado.
+  // Una pestaña por tarjeta = una por cuenta (`cuentas.alias`, p. ej.
+  // "TDC Beyond", "Invex TDC") -- no por `transacciones.tarjeta`
+  // (Titular/Adicional/Digital), que se repite entre cuentas distintas y
+  // sigue disponible como filtro dentro de cada pestaña.
   const cuentasConocidas = useMemo(
     () => Array.from(new Set(transacciones.map(cuentaDe))).sort(),
     [transacciones]
   );
 
-  // `tarjeta` es opcional por diseño (solo lo asigna BanamexTdcParser para
-  // estados de cuenta con tarjetas adicionales/digitales) -- la mayoría de
-  // las transacciones no lo tienen, así que se descartan los null en vez
-  // de mostrarlos como una opción "Sin tarjeta".
-  const tarjetasConocidas = useMemo(
-    () =>
-      Array.from(
-        new Set(transacciones.map((t) => t.tarjeta).filter((t): t is string => !!t))
-      ).sort(),
-    [transacciones]
-  );
+  const pestanas = [
+    { id: PESTANA_RESUMEN, etiqueta: "Resumen" },
+    { id: PESTANA_EVENTOS, etiqueta: "Eventos" },
+    { id: PESTANA_INDICADORES, etiqueta: "Indicadores" },
+    ...cuentasConocidas.map((cuenta) => ({
+      id: PREFIJO_PESTANA_CUENTA + cuenta,
+      etiqueta: cuenta,
+    })),
+  ];
 
-  // Igual que tarjeta: un evento es opcional (viajes/fiestas concretos, no
-  // todas las transacciones pertenecen a uno), así que se descartan los
-  // null en vez de mostrarlos como una opción "Sin evento". Asignar
-  // eventos vive en su propia pestaña (EventosTab) -- este filtro solo
-  // sirve para ver/cruzar por evento ya asignado en el Resumen.
-  const eventosConocidos = useMemo(
-    () =>
-      Array.from(
-        new Set(transacciones.map(eventoDe).filter((e): e is string => e !== null))
-      ).sort(),
-    [transacciones]
-  );
+  // Si la pestaña activa desaparece (p. ej. tras reasignar todos los
+  // documentos de una cuenta a otra desde el editor), vuelve al Resumen.
+  const vistaActiva = pestanas.some((p) => p.id === vista) ? vista : PESTANA_RESUMEN;
 
   if (cargando) {
     return (
@@ -119,71 +85,46 @@ export function Dashboard() {
     );
   }
 
-  // Categorías ocultas se quitan de raíz antes de todo lo demás -- a
-  // diferencia del cross-filter (que aísla UNA categoría a la vez sin
-  // tocar las demás gráficas), esto elimina varias categorías del dashboard
-  // entero, incluida su propia gráfica de origen.
-  const transaccionesVisibles = ocultarCategorias(transacciones, categoriasOcultas);
+  function actualizarEstado(pestana: string, cambio: (anterior: EstadoVista) => EstadoVista) {
+    setEstadosPorPestana((anteriores) => ({
+      ...anteriores,
+      [pestana]: cambio(anteriores[pestana] ?? ESTADO_VACIO),
+    }));
+  }
 
-  // Cross-filter estilo Power BI: cada gráfica se calcula excluyendo su
-  // propia dimensión (para poder seguir viendo/cambiando su selección) pero
-  // respetando las demás -- así un clic en una gráfica filtra a las otras.
-  const transaccionesFiltradas = aplicarFiltros(transaccionesVisibles, filtros);
-  const ingresosGastos = agruparIngresosGastosPorMes(
-    aplicarFiltros(transaccionesVisibles, filtros, "mes")
-  );
-  const gastoPorCategoria = agruparPorCategoria(
-    aplicarFiltros(transaccionesVisibles, filtros, "categoria")
-  );
-  const gastoPorComercio = agruparPorComercio(
-    aplicarFiltros(transaccionesVisibles, filtros, "comercio")
-  );
-
-  // Los promedios responden a categoría/comercio como cualquier gráfica,
-  // pero excluyen su propio filtro de "mes" -- son agregados sobre una
-  // ventana móvil de 3/12 meses relativa a hoy, así que aplicarles ADEMÁS
-  // el filtro de un mes puntual (p. ej. al hacer clic en una barra de
-  // IngresosGastosChart) los reduciría a un solo mes de datos divididos
-  // entre 3 o 12, o a $0 si ese mes cae fuera de la ventana -- el mismo
-  // motivo por el que `ingresosGastos` arriba excluye "mes" de su propio
-  // cálculo.
-  const { ingresosPromedio3m, gastosPromedio3m, ingresosPromedio12m, gastosPromedio12m } =
-    calcularPromedios(aplicarFiltros(transaccionesVisibles, filtros, "mes"));
-
-  function alternarFiltro<K extends keyof Filtros>(campo: K, valor: string) {
-    setFiltros((anterior) =>
-      anterior[campo] === valor
-        ? { ...anterior, [campo]: undefined }
-        : { ...anterior, [campo]: valor }
+  function renderVistaResumen(pestana: string, transaccionesVista: Transaccion[]) {
+    const estado = estadosPorPestana[pestana] ?? ESTADO_VACIO;
+    return (
+      <VistaResumen
+        // `key` por pestaña: sin ella React reutilizaría la misma instancia
+        // al cambiar entre pestañas de tarjeta y el estado interno del
+        // editor masivo (búsqueda, selección) se arrastraría de una a otra.
+        key={pestana}
+        transacciones={transaccionesVista}
+        catalogo={transacciones}
+        filtros={estado.filtros}
+        onCambiarFiltros={(cambio) =>
+          actualizarEstado(pestana, (e) => ({ ...e, filtros: cambio(e.filtros) }))
+        }
+        categoriasOcultas={estado.categoriasOcultas}
+        onCambiarCategoriasOcultas={(cambio) =>
+          actualizarEstado(pestana, (e) => ({
+            ...e,
+            categoriasOcultas: cambio(e.categoriasOcultas),
+          }))
+        }
+        onActualizado={recargarTransacciones}
+      />
     );
   }
 
-  function alternarCategoriaOculta(categoria: string) {
-    setCategoriasOcultas((anterior) => {
-      const siguiente = new Set(anterior);
-      if (siguiente.has(categoria)) siguiente.delete(categoria);
-      else siguiente.add(categoria);
-      return siguiente;
-    });
-    // Evita el estado contradictorio de aislar por clic una categoría que
-    // al mismo tiempo se acaba de ocultar (o viceversa).
-    if (filtros.categoria === categoria) {
-      setFiltros((anterior) => ({ ...anterior, categoria: undefined }));
-    }
-  }
-
-  function seleccionarCategoria(categoria: string) {
-    if (categoriasOcultas.has(categoria)) {
-      setCategoriasOcultas((anterior) => {
-        const siguiente = new Set(anterior);
-        siguiente.delete(categoria);
-        return siguiente;
-      });
-    }
-    alternarFiltro("categoria", categoria);
-  }
-
-  const hayFiltrosActivos = Object.values(filtros).some(Boolean);
+  // La pestaña Indicadores reutiliza `categoriasOcultas` de su estado por
+  // pestaña como "categorías excluidas". Hasta que el usuario toque la
+  // selección, arranca excluyendo los movimientos entre cuentas propias (ver
+  // categoriasExcluidasPorDefecto).
+  const categoriasExcluidasIndicadores =
+    estadosPorPestana[PESTANA_INDICADORES]?.categoriasOcultas ??
+    categoriasExcluidasPorDefecto(Array.from(new Set(transacciones.map(categoriaDe))));
 
   return (
     <div style={{ background: "var(--page-plane)", minHeight: "100vh" }}>
@@ -214,16 +155,19 @@ export function Dashboard() {
           </p>
         ) : (
           <>
-            <div className="flex gap-1" style={{ borderBottom: "1px solid var(--border)" }}>
-              {PESTANAS.map((tab) => (
+            <div
+              className="flex gap-1 overflow-x-auto"
+              style={{ borderBottom: "1px solid var(--border)" }}
+            >
+              {pestanas.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setVista(tab.id)}
-                  className="px-4 py-2 text-xs font-medium"
+                  className="whitespace-nowrap px-4 py-2 text-xs font-medium"
                   style={{
-                    color: vista === tab.id ? "var(--series-1)" : "var(--text-secondary)",
+                    color: vistaActiva === tab.id ? "var(--series-1)" : "var(--text-secondary)",
                     borderBottom: `2px solid ${
-                      vista === tab.id ? "var(--series-1)" : "transparent"
+                      vistaActiva === tab.id ? "var(--series-1)" : "transparent"
                     }`,
                   }}
                 >
@@ -232,207 +176,28 @@ export function Dashboard() {
               ))}
             </div>
 
-            {vista === "eventos" ? (
+            {vistaActiva === PESTANA_INDICADORES ? (
+              <IndicadoresTab
+                transacciones={transacciones}
+                categoriasExcluidas={categoriasExcluidasIndicadores}
+                onCambiarCategoriasExcluidas={(cambio) =>
+                  actualizarEstado(PESTANA_INDICADORES, (e) => ({
+                    ...e,
+                    categoriasOcultas: cambio(categoriasExcluidasIndicadores),
+                  }))
+                }
+              />
+            ) : vistaActiva === PESTANA_EVENTOS ? (
               <EventosTab transacciones={transacciones} onActualizado={recargarTransacciones} />
+            ) : vistaActiva === PESTANA_RESUMEN ? (
+              renderVistaResumen(PESTANA_RESUMEN, transacciones)
             ) : (
-              <>
-                {hayFiltrosActivos && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    {(Object.keys(filtros) as (keyof Filtros)[])
-                      .filter((campo) => filtros[campo])
-                      .map((campo) => (
-                        <button
-                          key={campo}
-                          onClick={() => setFiltros((a) => ({ ...a, [campo]: undefined }))}
-                          className="rounded-full px-3 py-1 text-xs font-medium"
-                          style={{
-                            background: "var(--series-1)",
-                            color: "#ffffff",
-                          }}
-                          title="Quitar este filtro"
-                        >
-                          {ETIQUETAS_FILTRO[campo]}: {filtros[campo]} ×
-                        </button>
-                      ))}
-                    <button
-                      onClick={() => setFiltros({})}
-                      className="text-xs underline"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      Limpiar todos los filtros
-                    </button>
-                  </div>
-                )}
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                    Ocultar categorías:
-                  </span>
-                  {categoriasConocidas.map((categoria) => {
-                    const oculta = categoriasOcultas.has(categoria);
-                    return (
-                      <button
-                        key={categoria}
-                        onClick={() => alternarCategoriaOculta(categoria)}
-                        className="rounded-full px-3 py-1 text-xs font-medium"
-                        style={{
-                          background: "var(--surface-1)",
-                          border: `1px solid ${
-                            oculta ? "var(--status-critical)" : "var(--border)"
-                          }`,
-                          color: oculta ? "var(--status-critical)" : "var(--text-secondary)",
-                          textDecoration: oculta ? "line-through" : "none",
-                        }}
-                        title={oculta ? "Mostrar de nuevo" : "Ocultar esta categoría"}
-                      >
-                        {categoria}
-                      </button>
-                    );
-                  })}
-                  {categoriasOcultas.size > 0 && (
-                    <button
-                      onClick={() => setCategoriasOcultas(new Set())}
-                      className="text-xs underline"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      Mostrar todas
-                    </button>
-                  )}
-                </div>
-
-                {cuentasConocidas.length > 1 && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                      Cuenta:
-                    </span>
-                    {cuentasConocidas.map((cuenta) => {
-                      const seleccionada = filtros.cuenta === cuenta;
-                      return (
-                        <button
-                          key={cuenta}
-                          onClick={() => alternarFiltro("cuenta", cuenta)}
-                          className="rounded-full px-3 py-1 text-xs font-medium"
-                          style={{
-                            background: seleccionada ? "var(--series-1)" : "var(--surface-1)",
-                            border: `1px solid ${
-                              seleccionada ? "var(--series-1)" : "var(--border)"
-                            }`,
-                            color: seleccionada ? "#ffffff" : "var(--text-secondary)",
-                          }}
-                          title={seleccionada ? "Quitar este filtro" : "Filtrar por esta cuenta"}
-                        >
-                          {cuenta}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {tarjetasConocidas.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                      Tarjeta:
-                    </span>
-                    {tarjetasConocidas.map((tarjeta) => {
-                      const seleccionada = filtros.tarjeta === tarjeta;
-                      return (
-                        <button
-                          key={tarjeta}
-                          onClick={() => alternarFiltro("tarjeta", tarjeta)}
-                          className="rounded-full px-3 py-1 text-xs font-medium"
-                          style={{
-                            background: seleccionada ? "var(--series-1)" : "var(--surface-1)",
-                            border: `1px solid ${
-                              seleccionada ? "var(--series-1)" : "var(--border)"
-                            }`,
-                            color: seleccionada ? "#ffffff" : "var(--text-secondary)",
-                          }}
-                          title={seleccionada ? "Quitar este filtro" : "Filtrar por esta tarjeta"}
-                        >
-                          {tarjeta}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {eventosConocidos.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-                      Evento:
-                    </span>
-                    {eventosConocidos.map((evento) => {
-                      const seleccionado = filtros.evento === evento;
-                      return (
-                        <button
-                          key={evento}
-                          onClick={() => alternarFiltro("evento", evento)}
-                          className="rounded-full px-3 py-1 text-xs font-medium"
-                          style={{
-                            background: seleccionado ? "var(--series-1)" : "var(--surface-1)",
-                            border: `1px solid ${
-                              seleccionado ? "var(--series-1)" : "var(--border)"
-                            }`,
-                            color: seleccionado ? "#ffffff" : "var(--text-secondary)",
-                          }}
-                          title={seleccionado ? "Quitar este filtro" : "Filtrar por este evento"}
-                        >
-                          {evento}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <StatTile
-                    label="Ingresos prom. (3 meses)"
-                    value={ingresosPromedio3m}
-                    tone="good"
-                  />
-                  <StatTile
-                    label="Gastos prom. (3 meses)"
-                    value={gastosPromedio3m}
-                    tone="critical"
-                  />
-                  <StatTile
-                    label="Ingresos prom. (12 meses)"
-                    value={ingresosPromedio12m}
-                    tone="good"
-                  />
-                  <StatTile
-                    label="Gastos prom. (12 meses)"
-                    value={gastosPromedio12m}
-                    tone="critical"
-                  />
-                </div>
-
-                <IngresosGastosChart
-                  datos={ingresosGastos}
-                  mesSeleccionado={filtros.mes}
-                  onClickMes={(mes) => alternarFiltro("mes", mes)}
-                />
-
-                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                  <GastoPorCategoriaChart
-                    datos={gastoPorCategoria}
-                    categoriaSeleccionada={filtros.categoria}
-                    onClickCategoria={seleccionarCategoria}
-                  />
-                  <GastoPorComercioChart
-                    datos={gastoPorComercio}
-                    comercioSeleccionado={filtros.comercio}
-                    onClickComercio={(comercio) => alternarFiltro("comercio", comercio)}
-                  />
-                </div>
-
-                <TransaccionesTabla transacciones={transaccionesFiltradas} />
-
-                <EditorTransacciones
-                  transacciones={transacciones}
-                  onActualizado={recargarTransacciones}
-                />
-              </>
+              renderVistaResumen(
+                vistaActiva,
+                transacciones.filter(
+                  (t) => PREFIJO_PESTANA_CUENTA + cuentaDe(t) === vistaActiva
+                )
+              )
             )}
           </>
         )}
