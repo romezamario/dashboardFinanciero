@@ -5,39 +5,64 @@ import type { Transaccion } from "./types";
  * explícitamente -- por debajo de ese límite `obtenerTransacciones` nunca
  * lo notó, pero al pasar de 1000 transacciones totales empezó a devolver
  * solo las 1000 más antiguas (orden ascendente por fecha), descartando en
- * silencio las más recientes. Se pagina con `.range()` hasta que una
- * página llega incompleta. */
+ * silencio las más recientes. */
 const TAMANO_PAGINA = 1000;
 
+const SELECT_TRANSACCIONES = `id, fecha, descripcion, monto, tipo, saldo, comercio, tarjeta,
+   categorias ( nombre ),
+   eventos ( nombre ),
+   documentos ( id, cuentas ( id, alias, bancos ( nombre ) ) )`;
+
+// Desempate por `id`: con solo `fecha`, Postgres no garantiza un orden
+// estable entre filas del mismo día, así que al paginar con offset una
+// transacción podía salir en dos páginas y otra en ninguna (justo en el
+// borde entre páginas, con más de 1000 transacciones).
+function consultaPagina(desde: number, hasta: number) {
+  return supabase
+    .from("transacciones")
+    .select(SELECT_TRANSACCIONES)
+    .order("fecha", { ascending: true })
+    .order("id", { ascending: true })
+    .range(desde, hasta);
+}
+
+/**
+ * La primera página pide el total (`count: "exact"`) para saber cuántas
+ * páginas más hacen falta, y esas se piden TODAS en paralelo -- ya no
+ * dependen una de otra, así que esperarlas en serie (una API call tras
+ * otra) solo sumaba latencia de red sin necesidad. Con 2000+ transacciones
+ * (3 páginas) esto corta el tiempo de espera de ~3 round-trips seguidos a
+ * ~1. El orden final se conserva igual: `Promise.all` respeta el orden del
+ * arreglo de solicitudes, no el orden en que responden.
+ */
 export async function obtenerTransacciones(): Promise<Transaccion[]> {
-  const todas: Transaccion[] = [];
-  let desde = 0;
+  const primera = await supabase
+    .from("transacciones")
+    .select(SELECT_TRANSACCIONES, { count: "exact" })
+    .order("fecha", { ascending: true })
+    .order("id", { ascending: true })
+    .range(0, TAMANO_PAGINA - 1);
 
-  while (true) {
-    const { data, error } = await supabase
-      .from("transacciones")
-      .select(
-        `id, fecha, descripcion, monto, tipo, saldo, comercio, tarjeta,
-         categorias ( nombre ),
-         eventos ( nombre ),
-         documentos ( id, cuentas ( id, alias, bancos ( nombre ) ) )`
-      )
-      // Desempate por `id`: con solo `fecha`, Postgres no garantiza un orden
-      // estable entre filas del mismo día, así que al paginar con offset una
-      // transacción podía salir en dos páginas y otra en ninguna (justo en
-      // el borde entre páginas, con más de 1000 transacciones).
-      .order("fecha", { ascending: true })
-      .order("id", { ascending: true })
-      .range(desde, desde + TAMANO_PAGINA - 1);
+  if (primera.error) throw primera.error;
+  const primerasFilas = (primera.data ?? []) as unknown as Transaccion[];
+  const total = primera.count ?? primerasFilas.length;
 
-    if (error) throw error;
-    if (!data || data.length === 0) break;
-
-    todas.push(...(data as unknown as Transaccion[]));
-    if (data.length < TAMANO_PAGINA) break;
-    desde += TAMANO_PAGINA;
+  if (primerasFilas.length < TAMANO_PAGINA || total <= TAMANO_PAGINA) {
+    return primerasFilas;
   }
 
+  const paginasRestantes = Math.ceil((total - TAMANO_PAGINA) / TAMANO_PAGINA);
+  const solicitudes = Array.from({ length: paginasRestantes }, (_, i) => {
+    const desde = TAMANO_PAGINA * (i + 1);
+    return consultaPagina(desde, desde + TAMANO_PAGINA - 1);
+  });
+
+  const resultados = await Promise.all(solicitudes);
+  const todas = primerasFilas;
+  for (const { data, error } of resultados) {
+    if (error) throw error;
+    todas.push(...((data ?? []) as unknown as Transaccion[]));
+  }
   return todas;
 }
 
