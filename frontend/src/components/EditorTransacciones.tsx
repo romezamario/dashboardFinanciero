@@ -4,6 +4,7 @@ import {
   actualizarCuentaDeDocumentos,
   buscarPorDescripcion,
   calcularImpactoCambioDeCuenta,
+  categoriaDe,
 } from "../lib/queries";
 import type { Transaccion } from "../lib/types";
 
@@ -37,6 +38,8 @@ export function EditorTransacciones({
 }: EditorTransaccionesProps) {
   const catalogo = catalogoProp ?? transacciones;
   const [busqueda, setBusqueda] = useState("");
+  const [categoriaFiltro, setCategoriaFiltro] = useState("");
+  const [comercioFiltro, setComercioFiltro] = useState("");
   const [seleccionadas, setSeleccionadas] = useState<Set<string>>(new Set());
   const [nuevaCategoria, setNuevaCategoria] = useState("");
   const [nuevoComercio, setNuevoComercio] = useState("");
@@ -46,15 +49,23 @@ export function EditorTransacciones({
     null
   );
 
-  // Todas las transacciones que coinciden con la búsqueda -- se acota la
-  // tabla a un tope para no renderizar cientos de filas, pero "Seleccionar
-  // todo" opera sobre TODAS las coincidencias, no solo las visibles, para
-  // que buscar un patrón amplio (ej. "TELEVIA") de verdad sirva para
-  // editar todas sus transacciones de un golpe.
-  const coincidencias = useMemo(
-    () => buscarPorDescripcion(transacciones, busqueda),
-    [transacciones, busqueda]
-  );
+  const hayFiltroActivo = Boolean(busqueda.trim() || categoriaFiltro || comercioFiltro);
+
+  // Todas las transacciones que coinciden con la búsqueda/filtros -- se
+  // acota la tabla a un tope para no renderizar cientos de filas, pero
+  // "Seleccionar todo" opera sobre TODAS las coincidencias, no solo las
+  // visibles, para que buscar un patrón amplio (ej. "TELEVIA") de verdad
+  // sirva para editar todas sus transacciones de un golpe. La búsqueda por
+  // descripción y los filtros de categoría/comercio se combinan (Y lógico):
+  // sin texto pero con un filtro elegido, arranca del universo completo en
+  // vez de la lista vacía que `buscarPorDescripcion("")` da a propósito.
+  const coincidencias = useMemo(() => {
+    if (!hayFiltroActivo) return [];
+    let resultado = busqueda.trim() ? buscarPorDescripcion(transacciones, busqueda) : transacciones;
+    if (categoriaFiltro) resultado = resultado.filter((t) => categoriaDe(t) === categoriaFiltro);
+    if (comercioFiltro) resultado = resultado.filter((t) => t.comercio === comercioFiltro);
+    return resultado;
+  }, [transacciones, busqueda, categoriaFiltro, comercioFiltro, hayFiltroActivo]);
   const visibles = coincidencias.slice(0, TOPE_RESULTADOS);
 
   const categoriasExistentes = useMemo(
@@ -175,9 +186,10 @@ export function EditorTransacciones({
         Editar categoría/comercio/cuenta en lote
       </h3>
       <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-        Busca por descripción, selecciona una o varias transacciones, y asígnales una
-        categoría, comercio y/o cuenta nuevos. Cambiar la cuenta reasigna el estado de
-        cuenta completo (ver aviso al aplicar), no solo las transacciones seleccionadas.
+        Busca por descripción y/o filtra por categoría o comercio, selecciona una o
+        varias transacciones, y asígnales una categoría, comercio y/o cuenta nuevos.
+        Cambiar la cuenta reasigna el estado de cuenta completo (ver aviso al aplicar),
+        no solo las transacciones seleccionadas.
       </p>
 
       <input
@@ -196,7 +208,71 @@ export function EditorTransacciones({
         }}
       />
 
-      {busqueda.trim() && (
+      <div className="mt-3 flex flex-wrap items-end gap-3">
+        <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+          Filtrar por categoría
+          <select
+            value={categoriaFiltro}
+            onChange={(e) => {
+              setCategoriaFiltro(e.target.value);
+              setSeleccionadas(new Set());
+            }}
+            className="mt-1 block w-48 rounded-md px-3 py-2 text-sm"
+            style={{
+              background: "var(--page-plane)",
+              border: "1px solid var(--border)",
+              color: "var(--text-primary)",
+            }}
+          >
+            <option value="">(todas)</option>
+            {categoriasExistentes.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+          Filtrar por comercio
+          <select
+            value={comercioFiltro}
+            onChange={(e) => {
+              setComercioFiltro(e.target.value);
+              setSeleccionadas(new Set());
+            }}
+            className="mt-1 block w-48 rounded-md px-3 py-2 text-sm"
+            style={{
+              background: "var(--page-plane)",
+              border: "1px solid var(--border)",
+              color: "var(--text-primary)",
+            }}
+          >
+            <option value="">(todos)</option>
+            {comerciosExistentes.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {(categoriaFiltro || comercioFiltro) && (
+          <button
+            onClick={() => {
+              setCategoriaFiltro("");
+              setComercioFiltro("");
+              setSeleccionadas(new Set());
+            }}
+            className="text-xs underline"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Quitar filtros de categoría/comercio
+          </button>
+        )}
+      </div>
+
+      {hayFiltroActivo && (
         <>
           <div className="mt-3 flex items-center justify-between">
             <span className="text-xs" style={{ color: "var(--text-muted)" }}>
