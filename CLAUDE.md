@@ -27,6 +27,16 @@ spec) was later replaced by "gasto por comercio" at the user's explicit request 
 - No hardcoded Supabase credentials — environment variables only (`.env`, gitignored).
 - No custom auth — Supabase Auth only.
 
+**Known, accepted deviation (user's explicit decision, 2026-09-26)**: the "account numbers masked to
+the last 4 digits" rule is only enforced for `cuentas.ultimos_4_digitos`. The original spec also
+asked the Transformer to mask account numbers inside the audit text ("texto crudo de esa línea, ya
+enmascarado"), but that was never implemented: `descripcion` and `linea_cruda` reach Supabase exactly
+as the PDF prints them — e.g. Banamex checking SPEI blocks can carry a CLABE or destination account
+number. A code review surfaced this and the user chose to leave it as is (not masking going forward,
+not backfilling). Don't "fix" it silently: masking changes `linea_cruda`, which is part of the
+upsert key, so re-syncing would duplicate every affected row unless stale rows are also deleted
+(see "Stale rows" under Sincronizador) — it has to be a deliberate, coordinated change.
+
 ## Architecture
 
 **Local pipeline** — entry point is a **Tkinter desktop app** (`app/main.py`), not a folder
@@ -136,6 +146,12 @@ All three hooks are best-effort: on no match/exception they return the "unsuppor
 sentinel and the app silently falls back to whatever the user already has in the manual fields —
 never a hard failure, never a silently wrong guess presented as certain.
 
+**Categorization rule order matters — first match wins** (`categorizar()`): a more specific pattern
+must come before a generic one that it contains (e.g. `"SU PAGO INTERBANCARIO"` before `"PAGO
+INTERBANCARIO"`). `VentanaReglas` has "▲ Subir / ▼ Bajar" buttons (2026-09-26) because new rules are
+appended at the end, where a specific rule would never win; before that, reordering meant editing
+`reglas_categorizacion.json` by hand.
+
 **Lessons from writing `parsers/banamex.py`, worth checking before writing any new bank parser:**
 - `pagina.extract_tables()` is not reliable — some banks' PDFs look like ruled tables visually but
   have no real vector gridlines pdfplumber can detect (confirmed via the app's anonymized
@@ -150,6 +166,13 @@ never a hard failure, never a silently wrong guess presented as certain.
   closing amount+saldo line starts the next, no repeated date). Process the whole document as
   one flat stream of `(pagina, linea)` tuples, not per-page, or you'll silently drop or fork
   transactions at page breaks.
+- **`BanamexParser.advertencias()`** (added 2026-09-26): the checking parser used to drop a
+  transaction silently in three cases — a dated block that never closed with amount+balance before
+  the next date, a block before the "SALDO ANTERIOR" anchor (no previous balance to diff against),
+  and a block still open at the end of the document. Each now produces a warning the app shows
+  like the TDC parsers' ones. A "balance changed with no open block" warning was considered and
+  left out: summary/total lines at the end of a real statement may also end in two amounts, and
+  without a real PDF to check against it risked false positives.
 
 **`parsers/banamex_tdc.py`** (Banamex credit card, e.g. TDC Platino) is a structurally different
 document from the checking account above, despite being the same bank — don't assume a second
@@ -416,7 +439,16 @@ defaults to `0` and `linea_cruda` is built as `f"(manual) {fecha} | {descripcion
 across manual entries in the same document to not collide with each other on the sync upsert's
 `(documento_id, pagina, linea_cruda)` constraint. The row is a plain `TransaccionCanonica`
 appended to `self.transacciones`, so it flows through totals/validation/export/sync identically
-to an extracted one — no special-casing anywhere downstream.
+to an extracted one — no special-casing anywhere downstream. Two rules added 2026-09-26: (1) two
+*identical* manual rows (same fecha/descripción/monto/tipo, e.g. two unreadable identical tolls)
+get `" (2)"`, `" (3)"`… appended to `linea_cruda`, same as `_desambiguar_renglones_duplicados` does
+for extracted rows — otherwise the upsert rejects the whole document; (2) reloading a PDF recovers
+its manual rows from its previous `data/procesados/<hash>.json` (`App._recuperar_renglones_manuales`,
+recognized by the `PREFIJO_RENGLON_MANUAL = "(manual) "` prefix, re-categorized with the current
+rules) — before, reloading to recategorize and re-saving silently dropped every row the user had
+typed in. There is still no UI to *delete* a row from the table: if a parser fix later starts
+extracting a row that was previously added by hand, the recovered manual copy has to be removed by
+editing the JSON.
 
 The app can be packaged as a standalone `.exe` via `DashboardFinanciero.spec` (PyInstaller,
 `--windowed`, icon from `app/icono.ico` — see README's "Empaquetar como ejecutable"). Build deps
@@ -448,84 +480,79 @@ skips transactions with `comercio === null` rather than lumping them into a nois
 way `categoriaDe()`'s `SIN_CATEGORIA` fallback does for categories (categorization is expected to
 eventually cover everything; comercio tagging isn't and that's fine).
 
-**Cross-filter (Power BI style)**: `Dashboard` holds one `filtros: Filtros` state
-(`{mes?, categoria?, comercio?}`) and `queries.ts`'s `aplicarFiltros(transacciones, filtros, excluir?)`
-does the filtering — the `excluir` param is the whole trick: each chart is computed from
-transacciones filtered by every *other* active dimension but not its own, so clicking a bar still
-shows every other bar/category/comercio to click next (self-filtering would collapse a chart down
-to one visible option after the first click, which isn't how Power BI cross-filter reads). KPIs and
-the table use the fully-filtered set — except `saldoActual`, which is deliberately taken from the
-*unfiltered* `transacciones` (it's a fact about the account's current balance, not an aggregate
-that should shrink when you filter by category/month). Click handlers live in the chart
-components (`onClickMes`/`onClickCategoria`/`onClickComercio` props) and call a shared
-`alternarFiltro` in `Dashboard` that toggles: clicking the already-selected value clears it, same
-as clicking a chip in the filter-chips row above the KPIs. Non-selected marks dim to ~0.3 opacity
-via per-bar `<Cell fillOpacity>` rather than being hidden, so the full shape of the data stays
-visible while showing what's filtered. The "Otros" fold in `GastoPorCategoriaChart` (categories
-past the top 8) is explicitly not clickable — it has no single real category name to filter by.
+**Resumen tab = former Resumen + former Indicadores, merged (2026-09-26, user's request)**:
+`VistaResumen.tsx` is the single view for the "Resumen" tab *and* every per-card tab; the separate
+"Indicadores" tab/`IndicadoresTab.tsx` is gone (its presentational pieces live in
+`IndicadoresUI.tsx`: `Tile`, `Delta`, `Tabla`; calculations stay in `src/lib/indicadores.ts`).
+Tabs: Resumen, Eventos, then one per account. The merge unified three controls whose **scopes
+differ on purpose** (user chose each one explicitly) — keep them this way:
 
-**Per-card tabs (added 2026-09-25, user's request)**: after "Resumen" and "Eventos" (in that order),
-`Dashboard` renders one tab per account (`cuentaDe` = `cuentas.alias`, e.g. "TDC Beyond", "Invex TDC") — "tarjeta"
-here means the account/card product, *not* `transacciones.tarjeta` (Titular/Adicional/Digital,
-whose values repeat across accounts; it stays available as a pill filter inside each tab). Each tab
-is the same `VistaResumen` component (the whole former Resumen body — KPIs, charts, cross-filter,
-hide-categories, table, bulk editor) fed only that account's transactions. Filter state
-(`filtros` + `categoriasOcultas`) is **per tab**: `Dashboard` keeps `estadosPorPestana:
-Record<tabId, EstadoVista>` and passes each `VistaResumen` its own slice as controlled props, so
-filtering in one tab never touches another and a tab keeps its selection when you switch away and
-back (state living inside `VistaResumen` would be lost on unmount). The bulk editor inside a card
-tab only *searches* that card's transactions, but gets the full list via
-`EditorTransacciones.catalogo` for category/comercio suggestions, the destination-account list and
-the account-change impact count — otherwise you couldn't move a document to a different account
-from a card tab.
+- **Period (applies to everything)**: `rangoMeses` "Desde/Hasta" month `<select>`s over months with
+  data → `resolverPeriodo` → a list of months (no filter = last 3 *complete* months; one side empty =
+  that single month). There is no longer a `mes`/`anio` cross-filter: clicking a month bar in
+  `IngresosGastosChart` sets the period to that month, clicking a year (Meses/Años toggle,
+  `VistaTiempo`) sets it to that year's first..last month *with data* (`rangoDeAnio`, so missing
+  months don't average in as $0); clicking the same bar again resets to the default. That chart is
+  the one that *chooses* the period, so it shows the whole history and highlights the period
+  (`resaltados`, others dimmed) instead of being trimmed to it. Indicators count only the period's
+  months, average over the period's month count, and compare against the immediately preceding
+  period of the same length (Aug vs. Jul). Deliberate exceptions that look outside the period:
+  recurring expenses (6 months ending at the period's last month — needs history; charges with an
+  `evento` are skipped, an event is a one-off by definition), the 12-month savings rate shown as
+  long-run context, the "vs. your previous monthly average" reference (up to 12 months before the
+  period, only months since the first statement), and `FlujoNetoChart` (≥12 months ending at the
+  period, period highlighted). The old 3/12-month average KPI tiles (`StatTile`,
+  `calcularPromedios`) were removed — the period-based tiles replace them.
+- **Ocultar categorías (applies to everything)**: one pill row; `categoriasOcultas` is removed from
+  the whole history *before* anything else (`ocultarCategorias`). Defaults to hiding transfers
+  between the user's own accounts (`categoriasExcluidasPorDefecto`: names matching
+  `pago tdc|entre cuentas|traspaso` — paying the card from checking would otherwise count as both
+  expense and income). The default is stored as `null` in `EstadoVista` and resolved at render
+  (`categoriasOcultas ?? categoriasOcultasPorDefecto` in `Dashboard`) — storing a copy at state
+  creation caused a real bug twice (the first change to *another* field created the state from
+  empty and silently re-counted "Pago TDC"). The pill list derives from the raw transactions so a
+  hidden category never disappears from its own toggle. Hiding vs. click-isolating the same
+  category cross-clears (`alternarCategoriaOculta`/`seleccionarCategoria`). The bulk editor's search
+  is exempt from hiding.
+- **Click filters / cross-filter, Power BI style (detail only)**: `Filtros` = categoría, comercio,
+  cuenta, tarjeta, evento (pill rows + chart clicks, chips to clear). They filter the *spending
+  detail*: category/comercio charts, the transactions table, the Sankey, gasto hormiga
+  (`calcularGastoHormiga`), categorías al alza (+ sparklines), and the income-vs-expenses chart.
+  They do **not** filter the financial-health indicators (hero savings rate, net flow, average
+  spend, months covered, recurring, `FlujoNetoChart`) — a savings rate of just "Comida" means
+  nothing; `calcularIndicadores` gets the hidden-categories set but never `filtros` (a note under
+  the chips says so). `aplicarFiltros(transacciones, filtros, excluir?)` — `excluir` (a key or an
+  array) is the cross-filter trick: each chart is computed with every *other* active dimension but
+  not its own, so it still shows the other options to click. Non-selected marks dim to ~0.3 via
+  `<Cell fillOpacity>`. The "Otros" fold in `GastoPorCategoriaChart` is not clickable.
 
-**3/12-month averages exclude the current month** (2026-09-25, user's request): the KPI tiles
-windows in `calcularPromedios`/`sumaPorTipoUltimosMeses` are the 3/12 *complete* calendar months
-before the current one — statements arrive a month late, so the current month's data is always
-partial and would drag the average down.
+**Per-card tabs (added 2026-09-25, user's request)**: one tab per account (`cuentaDe` =
+`cuentas.alias`, e.g. "TDC Beyond", "Invex TDC") — "tarjeta" here means the account/card product,
+*not* `transacciones.tarjeta` (Titular/Adicional/Digital, whose values repeat across accounts; it
+stays available as a pill filter inside each tab). Each is the full merged `VistaResumen` fed only
+that account's transactions. On a credit card with "Pago TDC" hidden there is no income, so the
+savings rate shows "—" with an explanatory note, months-covered shows "—" (TDCs carry no `saldo`),
+and the Sankey starts at "Gastos totales" instead of labeling all spending "Déficit". All view state
+(`filtros`, `categoriasOcultas`, `rangoMeses`, `vistaTiempo`) is **per tab**: `Dashboard` keeps
+`estadosPorPestana: Record<tabId, EstadoVista>` and passes each `VistaResumen` its slice as
+controlled props, so filtering in one tab never touches another and a tab keeps its selection when
+you switch away and back. The bulk editor inside a card tab only *searches* that card's
+transactions, but gets the full list via `EditorTransacciones.catalogo` for suggestions, the
+destination-account list and the account-change impact count.
 
-**Indicadores tab (added 2026-09-25, user's request: indicators that give visibility for better
-personal finances)**: `IndicadoresTab.tsx`, calculations as pure functions in `src/lib/indicadores.ts`
-(kept out of `queries.ts`). All computed over *complete* months before the current one (same reason
-as the averages above) across every account: hero savings rate (3 months, delta in points vs. the
-previous 3, plus the 12-month rate), average net flow, last month's spending vs. 12-month average,
-months of spending covered by the available balance (latest `saldo` per account — only debit
-accounts carry `saldo`, TDCs don't), recurring expenses (a `comercio` with charges in 3+ of the last
-6 months and active in the last 2 — only catches what categorization rules tag with `comercio`),
-"gasto hormiga" (charges under `UMBRAL_GASTO_HORMIGA` = $200 last month), categories above their
-3-month average, a monthly net-flow bar chart (`FlujoNetoChart`, blue = savings / orange = deficit,
-reusing the two validated series tokens rather than adding colors), and two tables. Transfers
-between the user's own accounts (e.g. paying the TDC from checking) would count as both expense and
-income, so the tab has its own "no contar como ingreso/gasto" pill row that starts with categories
-matching `pago tdc|entre cuentas|traspaso` excluded (`categoriasExcluidasPorDefecto`); the selection
-reuses `estadosPorPestana["indicadores"].categoriasOcultas`, so it survives tab switches.
-
-**Hide categories (the inverse of cross-filter, added 2026-09-20)**: the "Ocultar categorías" pill
-row (right under the active-filter chips, above the KPIs) is deliberately a *separate* mechanism
-from `filtros.categoria`, not another value it can hold — cross-filter *isolates* exactly one
-category everywhere except its own chart (so you can still see and switch to another); hiding
-*removes* however many categories you pick from the whole dashboard, including their own chart
-(`Gasto por categoría` shouldn't keep showing a bar for something you just asked to hide). Backed
-by `categoriasOcultas: Set<string>` state in `Dashboard` and `queries.ts`'s
-`ocultarCategorias(transacciones, categoriasOcultas)`, applied *before* `aplicarFiltros` in the
-pipeline — everything downstream (KPIs except `saldoActual`, every chart, the table) computes off
-that already-narrowed set, not off the raw `transacciones`. The pill list itself is derived from
-the *raw* `transacciones` (`categoriasConocidas`, unaffected by hiding) so a category doesn't
-disappear from its own toggle once you hide it — otherwise there'd be no way to click it again to
-bring it back. The two mechanisms can contradict each other (isolate category X while also hiding
-X), so `alternarCategoriaOculta`/`seleccionarCategoria` cross-clear: hiding a category that's
-currently isolated clears the isolation, and clicking a chart bar for a category that's currently
-hidden un-hides it first. `EditorTransacciones`'s search is deliberately exempt from hiding (still
-receives raw `transacciones`) — hiding is a *view* preference, not a restriction on what you can
-find and bulk-edit.
+The "Categorías al alza" table has a "Tendencia 12 meses" column (`Sparkline.tsx`, hand-rolled
+inline SVG fed by `gastoMensualPorCategoria` over the 12 months ending at the period's last month):
+context line in `--text-muted`, period months + last point in `--series-2`, each series scaled
+0→its own max (shape, not cross-category magnitude), native `<title>` tooltip per month, and an
+`aria-label` with every value.
 
 **Removed: `TendenciaSaldoChart` / filtering by `cuenta`** (2026-09-20, user's explicit request,
 no risk flagged — it was a straightforward swap, not a correction of a bug). It plotted one line
 per account's running `saldo` over time and was the *only* UI source of the `cuenta` filter
 dimension, so removing it made that whole dimension unreachable — `Filtros.cuenta` and its
 `aplicarFiltros` branch were removed too rather than left as dead code with no way to trigger it.
-`saldoActual` (the KPI tile) is unaffected — it was always computed independently via
-`calcularTotales`, never from this chart's data. If per-account balance trend is wanted again
+(The `saldoActual` KPI tile mentioned in older notes no longer exists; balance now surfaces as
+"Meses cubiertos con tu saldo", computed from the latest `saldo` per account.) If per-account balance trend is wanted again
 later, it needs a new UI entry point (chart, toggle, whatever), not just restoring the deleted
 files — the underlying `saldo` data was never removed from the query/select.
 
@@ -541,6 +568,15 @@ CSS custom properties for the palette live in `src/index.css`, keyed by role (`-
 `--text-secondary`, etc.) and redefined for dark via both `prefers-color-scheme` and a
 `[data-theme]` override — same pattern artifacts use. If you add a chart, re-run the dataviz
 skill's procedure (form → color → validate) rather than picking colors by eye.
+
+**Data loading & writes**: `obtenerTransacciones` pages with `.range()` ordered by `fecha` **and
+`id`** — ordering by date alone isn't stable for same-day rows, so offset paging could return a
+row twice and skip another at a 1000-row page boundary. Bulk updates (`actualizarCategoriaComercioYEvento`,
+`actualizarCuentaDeDocumentos`) send ids in batches of 150 (`enLotes`) because `.in("id", ids)` goes in
+the URL and hundreds of UUIDs exceeded the server's URL limit. `Dashboard` memoizes the
+default-hidden categories and the per-account transaction lists so their identity is stable across
+renders — `VistaResumen` memoizes every calculation on those references. `EventosTab`'s own filters
+are local component state (unlike the per-tab `EstadoVista`), so they reset when leaving that tab.
 
 `monto`/`saldo` come back from PostgREST as JSON numbers (not the decimal-strings the Python
 pipeline uses) — intentional: this is display-only aggregation in the browser, not writing back
@@ -597,8 +633,19 @@ touches `supabase/migrations/**`, or manually via that workflow's `workflow_disp
 the GitHub Actions UI. It runs `supabase link` + `supabase db push` using three repo secrets:
 `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_ID`, `SUPABASE_DB_PASSWORD`.
 
-Tables: `bancos` (shared catalog, no `user_id`, no RLS) and `cuentas`/`categorias`/`documentos`/
-`transacciones` (all RLS-scoped to `user_id = auth.uid()`, four policies each — select/insert/update/delete).
+Tables: `bancos` (shared catalog, no `user_id`) and `cuentas`/`categorias`/`documentos`/
+`transacciones`/`eventos` (all RLS-scoped to `user_id = auth.uid()`, four policies each —
+select/insert/update/delete). `eventos` (added in `20260922010000_add_eventos.sql`) is a per-user
+catalog like `categorias` (find-or-create by `nombre`, unique per user) referenced by
+`transacciones.evento_id`; events are assigned from the frontend only (Eventos tab / bulk editor),
+never by the desktop pipeline, and the sync upsert doesn't send `evento_id`, so re-syncing a
+document keeps its events. `bancos` had **no RLS** until `20260926120000_bancos_rls.sql`: with RLS
+off, the `anon` role (whose key ships in the frontend bundle) could insert/rename/delete banks
+through the REST API without logging in. Now authenticated users may select and insert (what the
+frontend's nested read and the sync's find-or-create need) and nobody may update/delete via the
+API. Known, accepted gap for a single-user app: the insert/update policies only check `user_id =
+auth.uid()` on the row itself, not that the referenced `documento_id`/`categoria_id`/`evento_id`/
+`cuenta_id` belong to the same user.
 `transacciones.comercio` (added in `20260920145914_add_comercio.sql`) and `transacciones.tarjeta`
 (added in `20260920180242_add_tarjeta.sql`) are both plain nullable text columns, not catalog
 tables with their own FK like `categoria_id` — see the `comercio` bullet in Architecture above
@@ -659,6 +706,19 @@ user over the simpler alternative — don't silently change these:
   escape hatch for now. `App.sincronizar()` in `app/main.py` distinguishes "no files in
   `data/procesados/` at all" from "files exist but none changed" in its messagebox, since an
   empty `resultados` list from `sincronizar_todos` now means either.
+- **Robustness** (2026-09-26): reading/parsing each JSON happens inside the per-file `try`, so a
+  corrupt or half-written file is reported as that file's failure and the rest still sync (before,
+  one unreadable JSON aborted the whole run); `_estado_sync.json` is written in a `finally`, so
+  files that did sync stay recorded even if the loop is cut short.
+- **Stale rows are never deleted (user's explicit decision, 2026-09-26)**: `sincronizar_documento`
+  only inserts/updates. If a re-processed document no longer contains a row (a parser fix changed
+  a `linea_cruda`, a line is no longer extracted, a manual row wasn't re-added), the old row stays
+  in Supabase alongside the new one — a duplicate that inflates totals. The user chose not to add
+  deletion; if duplicates show up after reprocessing a statement, they have to be removed by hand
+  (Supabase Table Editor, filtering by `documento_id`).
+- **`documentos.ruta_local`** receives the full local path of the moved PDF
+  (`ruta_pdf_original` in the JSON), which can include the OS user name — by design of the original
+  schema, but worth knowing since it's the only local path that leaves the laptop.
 - **Testability**: `sincronizar_documento`/`sincronizar_todos` take an already-authenticated
   client as a parameter rather than constructing one internally, so the find-or-create/upsert
   logic can be verified against an in-memory fake client (mimicking `.table().select().eq()
@@ -677,6 +737,9 @@ user over the simpler alternative — don't silently change these:
   account number must never be stored in any variable, log, or return value beyond the `[-4:]`
   slice — take the last 4 digits and let the rest go out of scope immediately. Auto-fill always
   stays user-editable; the app labels it as "verify before saving," never silently trusted.
+  `App.cargar_pdf` **clears both fields on every load** before filling in whatever was detected
+  (2026-09-26): previously, loading a PDF whose account wasn't detected kept the *previous* PDF's
+  alias/last-4 in the fields, so "Guardar" would silently attach the statement to the wrong account.
 - `monto`/`saldo` travel through the exported JSON and into the Supabase payload as decimal
   strings ("199.00"), never Python floats — Postgres casts them to `numeric` server-side.
 
@@ -711,6 +774,23 @@ the Node 20 deprecation warning.
 
 Account-side setup (Cloudflare tokens, Supabase tokens, GitHub secrets) is documented in
 [README.md](README.md) — that's manual, one-time, and outside the code.
+
+## Tests
+
+`tests/` (stdlib `unittest`, no extra dependency; added 2026-09-26) covers the transformer
+(signed amounts, deterministic duplicate-line suffixes, total validation), the sync against an
+in-memory fake Supabase client (corrupt JSON doesn't abort the run, unchanged files are skipped,
+re-sync is idempotent — the fake raises Postgres' error 21000 on duplicate upsert keys), and
+`BanamexParser`'s warnings. Run from the repo root (needs `requirements.txt` installed, for
+pdfplumber):
+
+```
+python -m unittest discover -s tests -t .
+```
+
+Real PDFs can't be fixtures (they never leave the laptop), so parser tests feed synthetic
+`(pagina, linea)` tuples to `_procesar_documento`. The Tkinter app itself has no tests. The
+frontend has no test runner either — `npm run build` (typecheck) and `npm run lint` are the checks.
 
 ## Working locally with Supabase CLI
 

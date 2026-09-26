@@ -22,7 +22,12 @@ export async function obtenerTransacciones(): Promise<Transaccion[]> {
          eventos ( nombre ),
          documentos ( id, cuentas ( id, alias, bancos ( nombre ) ) )`
       )
+      // Desempate por `id`: con solo `fecha`, Postgres no garantiza un orden
+      // estable entre filas del mismo día, así que al paginar con offset una
+      // transacción podía salir en dos páginas y otra en ninguna (justo en
+      // el borde entre páginas, con más de 1000 transacciones).
       .order("fecha", { ascending: true })
+      .order("id", { ascending: true })
       .range(desde, desde + TAMANO_PAGINA - 1);
 
     if (error) throw error;
@@ -36,8 +41,10 @@ export async function obtenerTransacciones(): Promise<Transaccion[]> {
   return todas;
 }
 
+/** Filtros por clic (cross-filter). El tiempo NO es parte de ellos: lo
+ * maneja el periodo de la vista (`resolverPeriodo` en indicadores.ts), que
+ * también fijan los clics en la gráfica de ingresos vs. gastos. */
 export interface Filtros {
-  mes?: string;
   categoria?: string;
   comercio?: string;
   cuenta?: string;
@@ -96,33 +103,25 @@ export function ocultarCategorias(
 export function aplicarFiltros(
   transacciones: Transaccion[],
   filtros: Filtros,
-  excluir?: keyof Filtros
+  excluir?: keyof Filtros | (keyof Filtros)[]
 ): Transaccion[] {
+  // Una gráfica puede excluir más de una dimensión a la vez.
+  const excluidas = new Set(excluir === undefined ? [] : Array.isArray(excluir) ? excluir : [excluir]);
+  const aplica = (campo: keyof Filtros) => Boolean(filtros[campo]) && !excluidas.has(campo);
   return transacciones.filter((t) => {
-    if (filtros.mes && excluir !== "mes" && t.fecha.slice(0, 7) !== filtros.mes) {
+    if (aplica("categoria") && categoriaDe(t) !== filtros.categoria) {
       return false;
     }
-    if (
-      filtros.categoria &&
-      excluir !== "categoria" &&
-      categoriaDe(t) !== filtros.categoria
-    ) {
+    if (aplica("comercio") && t.comercio !== filtros.comercio) {
       return false;
     }
-    if (
-      filtros.comercio &&
-      excluir !== "comercio" &&
-      t.comercio !== filtros.comercio
-    ) {
+    if (aplica("cuenta") && cuentaDe(t) !== filtros.cuenta) {
       return false;
     }
-    if (filtros.cuenta && excluir !== "cuenta" && cuentaDe(t) !== filtros.cuenta) {
+    if (aplica("tarjeta") && t.tarjeta !== filtros.tarjeta) {
       return false;
     }
-    if (filtros.tarjeta && excluir !== "tarjeta" && t.tarjeta !== filtros.tarjeta) {
-      return false;
-    }
-    if (filtros.evento && excluir !== "evento" && eventoDe(t) !== filtros.evento) {
+    if (aplica("evento") && eventoDe(t) !== filtros.evento) {
       return false;
     }
     return true;
@@ -130,7 +129,8 @@ export function aplicarFiltros(
 }
 
 export interface PuntoIngresoGasto {
-  mes: string; // "2026-06"
+  /** "2026-06" en la vista por meses, "2026" en la vista por años. */
+  periodo: string;
   ingresos: number;
   gastos: number;
 }
@@ -143,7 +143,7 @@ export function agruparIngresosGastosPorMes(
   for (const t of transacciones) {
     const mes = t.fecha.slice(0, 7);
     if (!porMes.has(mes)) {
-      porMes.set(mes, { mes, ingresos: 0, gastos: 0 });
+      porMes.set(mes, { periodo: mes, ingresos: 0, gastos: 0 });
     }
     const punto = porMes.get(mes)!;
     if (t.tipo === "abono") {
@@ -169,7 +169,7 @@ export function agruparIngresosGastosPorMes(
     while (anio * 12 + mes <= indiceFin) {
       const clave = anoMes(anio, mes);
       if (!porMes.has(clave)) {
-        porMes.set(clave, { mes: clave, ingresos: 0, gastos: 0 });
+        porMes.set(clave, { periodo: clave, ingresos: 0, gastos: 0 });
       }
       mes += 1;
       if (mes > 11) {
@@ -179,7 +179,29 @@ export function agruparIngresosGastosPorMes(
     }
   }
 
-  return Array.from(porMes.values()).sort((a, b) => a.mes.localeCompare(b.mes));
+  return Array.from(porMes.values()).sort((a, b) => a.periodo.localeCompare(b.periodo));
+}
+
+/** Igual que `agruparIngresosGastosPorMes`, por año calendario; también
+ * rellena con $0 los años sin movimientos entre el primero y el último. */
+export function agruparIngresosGastosPorAnio(
+  transacciones: Transaccion[]
+): PuntoIngresoGasto[] {
+  const porAnio = new Map<string, PuntoIngresoGasto>();
+  for (const t of transacciones) {
+    const anio = t.fecha.slice(0, 4);
+    const punto = porAnio.get(anio) ?? { periodo: anio, ingresos: 0, gastos: 0 };
+    if (t.tipo === "abono") punto.ingresos += t.monto;
+    else punto.gastos += t.monto;
+    porAnio.set(anio, punto);
+  }
+  const anios = Array.from(porAnio.keys()).map(Number);
+  if (anios.length > 0) {
+    for (let a = Math.min(...anios); a <= Math.max(...anios); a++) {
+      if (!porAnio.has(String(a))) porAnio.set(String(a), { periodo: String(a), ingresos: 0, gastos: 0 });
+    }
+  }
+  return Array.from(porAnio.values()).sort((a, b) => a.periodo.localeCompare(b.periodo));
 }
 
 export interface PuntoCategoria {
@@ -267,12 +289,6 @@ export function agruparPorEvento(transacciones: Transaccion[]): PuntoEvento[] {
     .sort((a, b) => b.ingresos + b.gastos - (a.ingresos + a.gastos));
 }
 
-export interface Promedios {
-  ingresosPromedio3m: number;
-  gastosPromedio3m: number;
-  ingresosPromedio12m: number;
-  gastosPromedio12m: number;
-}
 
 function anoMes(anio: number, mes: number): string {
   // `mes` es 0-indexado como Date.getMonth(); normaliza el acarreo de año
@@ -288,30 +304,6 @@ function anoMes(anio: number, mes: number): string {
   return `${a}-${String(m + 1).padStart(2, "0")}`;
 }
 
-/**
- * Suma ingresos/gastos de una ventana de calendario fija: los
- * `cantidadMeses` meses completos ANTERIORES al mes en curso. El mes en
- * curso se excluye porque los estados de cuenta llegan a mes vencido -- sus
- * datos siempre están incompletos y bajarían el promedio.
- */
-function sumaPorTipoUltimosMeses(
-  transacciones: Transaccion[],
-  cantidadMeses: number
-): { ingresos: number; gastos: number } {
-  const ahora = new Date();
-  const mesInicio = anoMes(ahora.getFullYear(), ahora.getMonth() - cantidadMeses);
-  const mesActual = anoMes(ahora.getFullYear(), ahora.getMonth());
-
-  let ingresos = 0;
-  let gastos = 0;
-  for (const t of transacciones) {
-    const mes = t.fecha.slice(0, 7);
-    if (mes < mesInicio || mes >= mesActual) continue;
-    if (t.tipo === "abono") ingresos += t.monto;
-    else gastos += t.monto;
-  }
-  return { ingresos, gastos };
-}
 
 /**
  * Coincidencia por substring, insensible a mayúsculas, sobre la descripción
@@ -400,8 +392,22 @@ export async function actualizarCategoriaComercioYEvento(
   }
   if (Object.keys(payload).length === 0) return;
 
-  const { error } = await supabase.from("transacciones").update(payload).in("id", ids);
-  if (error) throw error;
+  for (const lote of enLotes(ids)) {
+    const { error } = await supabase.from("transacciones").update(payload).in("id", lote);
+    if (error) throw error;
+  }
+}
+
+/** `.in("id", ids)` viaja en la URL de la petición (?id=in.(...)): con
+ * cientos de ids seleccionados ("Seleccionar todas las coincidencias" sobre
+ * años de historial) la URL rebasaba el límite del servidor y la edición
+ * completa fallaba. ~150 UUIDs por petición dejan la URL en ~6 KB. */
+const TAMANO_LOTE_IDS = 150;
+
+function enLotes<T>(elementos: T[], tamano = TAMANO_LOTE_IDS): T[][] {
+  const lotes: T[][] = [];
+  for (let i = 0; i < elementos.length; i += tamano) lotes.push(elementos.slice(i, i + tamano));
+  return lotes;
 }
 
 export interface ImpactoCambioDeCuenta {
@@ -448,28 +454,12 @@ export async function actualizarCuentaDeDocumentos(
   cuentaId: string
 ): Promise<void> {
   if (documentoIds.length === 0) return;
-  const { error } = await supabase
-    .from("documentos")
-    .update({ cuenta_id: cuentaId })
-    .in("id", documentoIds);
-  if (error) throw error;
+  for (const lote of enLotes(documentoIds)) {
+    const { error } = await supabase
+      .from("documentos")
+      .update({ cuenta_id: cuentaId })
+      .in("id", lote);
+    if (error) throw error;
+  }
 }
 
-/**
- * Promedio mensual de ingresos/gastos sobre los últimos 3 y últimos 12
- * meses de calendario completos (sin contar el mes en curso, ver
- * `sumaPorTipoUltimosMeses`). Se divide siempre entre
- * `cantidadMeses` fija, no entre los meses que realmente tienen
- * transacciones -- un mes sin movimientos es un mes real con $0, no un dato
- * faltante que deba excluirse del promedio.
- */
-export function calcularPromedios(transacciones: Transaccion[]): Promedios {
-  const ultimos3 = sumaPorTipoUltimosMeses(transacciones, 3);
-  const ultimos12 = sumaPorTipoUltimosMeses(transacciones, 12);
-  return {
-    ingresosPromedio3m: ultimos3.ingresos / 3,
-    gastosPromedio3m: ultimos3.gastos / 3,
-    ingresosPromedio12m: ultimos12.ingresos / 12,
-    gastosPromedio12m: ultimos12.gastos / 12,
-  };
-}

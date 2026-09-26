@@ -1,32 +1,63 @@
 import { useMemo } from "react";
 import {
+  agruparIngresosGastosPorAnio,
+  agruparIngresosGastosPorMes,
   agruparPorCategoria,
   agruparPorComercio,
-  agruparIngresosGastosPorMes,
   aplicarFiltros,
-  calcularPromedios,
   categoriaDe,
   cuentaDe,
   eventoDe,
   ocultarCategorias,
   type Filtros,
 } from "../lib/queries";
+import {
+  calcularFlujoSankey,
+  calcularGastoHormiga,
+  calcularIndicadores,
+  categoriasEnAlza,
+  enMeses,
+  gastoMensualPorCategoria,
+  mesActual,
+  MESES_MINIMOS_RECURRENTE,
+  MESES_PERIODO_POR_DEFECTO,
+  mesesHasta,
+  nombreMes,
+  nombrePeriodo,
+  RANGO_MESES_VACIO,
+  rangoDeAnio,
+  resolverPeriodo,
+  saldoDisponible,
+  UMBRAL_GASTO_HORMIGA,
+  VENTANA_RECURRENTES,
+  type RangoMeses,
+} from "../lib/indicadores";
 import type { Transaccion } from "../lib/types";
-import { StatTile } from "./StatTile";
-import { IngresosGastosChart } from "./IngresosGastosChart";
+import { IngresosGastosChart, type VistaTiempo } from "./IngresosGastosChart";
 import { GastoPorCategoriaChart } from "./GastoPorCategoriaChart";
 import { GastoPorComercioChart } from "./GastoPorComercioChart";
+import { FlujoNetoChart } from "./FlujoNetoChart";
+import { FlujoSankeyChart } from "./FlujoSankeyChart";
+import { Sparkline } from "./Sparkline";
+import { Delta, Tabla, Tile } from "./IndicadoresUI";
 import { TransaccionesTabla } from "./TransaccionesTabla";
 import { EditorTransacciones } from "./EditorTransacciones";
 
 const ETIQUETAS_FILTRO: Record<keyof Filtros, string> = {
-  mes: "Mes",
   categoria: "Categoría",
   comercio: "Comercio",
   cuenta: "Cuenta",
   tarjeta: "Tarjeta",
   evento: "Evento",
 };
+
+const moneda = new Intl.NumberFormat("es-MX", {
+  style: "currency",
+  currency: "MXN",
+  maximumFractionDigits: 0,
+});
+const porcentaje = new Intl.NumberFormat("es-MX", { style: "percent", maximumFractionDigits: 0 });
+const decimal = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 1 });
 
 type Actualizador<T> = (anterior: T) => T;
 
@@ -37,8 +68,8 @@ interface VistaResumenProps {
   /** Todas las transacciones sin acotar, para el editor masivo (ver
    * `EditorTransacciones.catalogo`). */
   catalogo: Transaccion[];
-  // El estado de filtros vive en `Dashboard`, una copia por pestaña, y
-  // llega aquí controlado -- así cada pestaña filtra de forma
+  // Todo el estado de la vista vive en `Dashboard`, una copia por pestaña,
+  // y llega aquí controlado -- así cada pestaña filtra de forma
   // independiente y no pierde su selección al cambiar de pestaña (si el
   // estado viviera aquí, desmontar la vista al cambiar de pestaña lo
   // borraría).
@@ -46,11 +77,31 @@ interface VistaResumenProps {
   onCambiarFiltros: (actualizar: Actualizador<Filtros>) => void;
   categoriasOcultas: Set<string>;
   onCambiarCategoriasOcultas: (actualizar: Actualizador<Set<string>>) => void;
+  rangoMeses: RangoMeses;
+  onCambiarRangoMeses: (actualizar: Actualizador<RangoMeses>) => void;
+  /** Agrupación de la gráfica de ingresos vs. gastos (por mes o por año). */
+  vistaTiempo: VistaTiempo;
+  onCambiarVistaTiempo: (vista: VistaTiempo) => void;
   onActualizado: () => void | Promise<void>;
 }
 
-/** El contenido de la pestaña "Resumen" (KPIs, gráficas con cross-filter,
- * tabla y editor), reutilizado tal cual por cada pestaña de tarjeta. */
+/**
+ * La pestaña "Resumen" (fusión del Resumen y de los Indicadores), reutilizada
+ * tal cual por cada pestaña de tarjeta. Tres controles, con alcances
+ * distintos a propósito:
+ *
+ * - **Periodo** (Desde/Hasta por mes, o clic en un mes/año de la gráfica de
+ *   ingresos vs. gastos): aplica a TODO. Sin filtro, los últimos 3 meses
+ *   completos.
+ * - **Ocultar categorías**: aplica a TODO (por defecto oculta los
+ *   movimientos entre cuentas propias, p. ej. "Pago TDC", que si no se
+ *   contarían como gasto en una cuenta e ingreso en la otra).
+ * - **Filtros por clic** (categoría, comercio, cuenta, tarjeta, evento):
+ *   solo al detalle de gasto (gráficas, tabla, Sankey, gasto hormiga,
+ *   categorías al alza). Los indicadores de salud (tasa de ahorro, flujo
+ *   neto, gasto promedio, meses cubiertos, recurrentes, flujo neto mensual)
+ *   siempre describen tus finanzas completas del periodo.
+ */
 export function VistaResumen({
   transacciones,
   catalogo,
@@ -58,6 +109,10 @@ export function VistaResumen({
   onCambiarFiltros,
   categoriasOcultas,
   onCambiarCategoriasOcultas,
+  rangoMeses,
+  onCambiarRangoMeses,
+  vistaTiempo,
+  onCambiarVistaTiempo,
   onActualizado,
 }: VistaResumenProps) {
   // Todas las categorías que existen, sin importar si están ocultas -- así
@@ -104,36 +159,122 @@ export function VistaResumen({
     [transacciones]
   );
 
-  // Categorías ocultas se quitan de raíz antes de todo lo demás -- a
-  // diferencia del cross-filter (que aísla UNA categoría a la vez sin
-  // tocar las demás gráficas), esto elimina varias categorías del dashboard
-  // entero, incluida su propia gráfica de origen.
-  const transaccionesVisibles = ocultarCategorias(transacciones, categoriasOcultas);
+  // Opciones del periodo: los meses con al menos una transacción, del más
+  // reciente al más antiguo.
+  const mesesConDatos = useMemo(
+    () => Array.from(new Set(transacciones.map((t) => t.fecha.slice(0, 7)))).sort().reverse(),
+    [transacciones]
+  );
+  const mesEnCurso = mesActual();
 
-  // Cross-filter estilo Power BI: cada gráfica se calcula excluyendo su
-  // propia dimensión (para poder seguir viendo/cambiando su selección) pero
-  // respetando las demás -- así un clic en una gráfica filtra a las otras.
-  const transaccionesFiltradas = aplicarFiltros(transaccionesVisibles, filtros);
-  const ingresosGastos = agruparIngresosGastosPorMes(
-    aplicarFiltros(transaccionesVisibles, filtros, "mes")
-  );
-  const gastoPorCategoria = agruparPorCategoria(
-    aplicarFiltros(transaccionesVisibles, filtros, "categoria")
-  );
-  const gastoPorComercio = agruparPorComercio(
-    aplicarFiltros(transaccionesVisibles, filtros, "comercio")
+  const periodo = useMemo(() => resolverPeriodo(rangoMeses), [rangoMeses]);
+  const ultimoMes = periodo.meses[periodo.meses.length - 1];
+  const hayPeriodoElegido = !periodo.porDefecto;
+  const unMes = periodo.meses.length === 1;
+  // "agosto 2026" / "jun 2026 – ago 2026"; sin filtro, "últimos 3 meses".
+  const nombreDelPeriodo = hayPeriodoElegido
+    ? nombrePeriodo(periodo.meses)
+    : `últimos ${MESES_PERIODO_POR_DEFECTO} meses`;
+  const nombreDelAnterior = unMes
+    ? nombreMes(periodo.anteriores[0])
+    : hayPeriodoElegido
+      ? nombrePeriodo(periodo.anteriores)
+      : `los ${MESES_PERIODO_POR_DEFECTO} meses anteriores`;
+
+  // 1) Ocultar categorías: se quitan de raíz, de todo el historial (las
+  //    comparaciones contra periodos anteriores también las ignoran).
+  const visibles = useMemo(
+    () => ocultarCategorias(transacciones, categoriasOcultas),
+    [transacciones, categoriasOcultas]
   );
 
-  // Los promedios responden a categoría/comercio como cualquier gráfica,
-  // pero excluyen su propio filtro de "mes" -- son agregados sobre una
-  // ventana móvil de 3/12 meses relativa a hoy, así que aplicarles ADEMÁS
-  // el filtro de un mes puntual (p. ej. al hacer clic en una barra de
-  // IngresosGastosChart) los reduciría a un solo mes de datos divididos
-  // entre 3 o 12, o a $0 si ese mes cae fuera de la ventana -- el mismo
-  // motivo por el que `ingresosGastos` arriba excluye "mes" de su propio
-  // cálculo.
-  const { ingresosPromedio3m, gastosPromedio3m, ingresosPromedio12m, gastosPromedio12m } =
-    calcularPromedios(aplicarFiltros(transaccionesVisibles, filtros, "mes"));
+  // 2) Salud financiera: periodo + categorías ocultas, SIN filtros por clic.
+  const indicadores = useMemo(
+    () => calcularIndicadores(visibles, saldoDisponible(transacciones, ultimoMes), periodo),
+    [visibles, transacciones, ultimoMes, periodo]
+  );
+
+  // 3) Detalle de gasto: además, filtros por clic. Cada gráfica excluye su
+  //    propia dimensión (cross-filter estilo Power BI) para poder seguir
+  //    viendo/cambiando su selección.
+  const conFiltros = useMemo(() => aplicarFiltros(visibles, filtros), [visibles, filtros]);
+  const delPeriodo = useMemo(() => enMeses(visibles, periodo.meses), [visibles, periodo]);
+  const transaccionesFiltradas = useMemo(
+    () => aplicarFiltros(delPeriodo, filtros),
+    [delPeriodo, filtros]
+  );
+  const gastoPorCategoria = agruparPorCategoria(aplicarFiltros(delPeriodo, filtros, "categoria"));
+  const gastoPorComercio = agruparPorComercio(aplicarFiltros(delPeriodo, filtros, "comercio"));
+  const flujoSankey = useMemo(
+    () => calcularFlujoSankey(conFiltros, periodo.meses),
+    [conFiltros, periodo]
+  );
+  const hormiga = useMemo(
+    () => calcularGastoHormiga(conFiltros, periodo.meses),
+    [conFiltros, periodo]
+  );
+  const enAlza = useMemo(() => categoriasEnAlza(conFiltros, periodo), [conFiltros, periodo]);
+  const categoriasAlzaVisibles = useMemo(() => enAlza.slice(0, 8), [enAlza]);
+  const mesesTendencia = useMemo(() => mesesHasta(ultimoMes, 12), [ultimoMes]);
+  const tendencias = useMemo(
+    () =>
+      gastoMensualPorCategoria(
+        conFiltros,
+        categoriasAlzaVisibles.map((c) => c.categoria),
+        mesesTendencia
+      ),
+    [conFiltros, categoriasAlzaVisibles, mesesTendencia]
+  );
+
+  // La gráfica de ingresos vs. gastos es la que ELIGE el periodo, así que
+  // muestra todo el historial (con los filtros por clic) y resalta el
+  // periodo elegido, en vez de recortarse a él.
+  const ingresosGastos =
+    vistaTiempo === "anios"
+      ? agruparIngresosGastosPorAnio(conFiltros)
+      : agruparIngresosGastosPorMes(conFiltros);
+  const mesesDelPeriodo = useMemo(() => new Set(periodo.meses), [periodo]);
+  const resaltadosTiempo = hayPeriodoElegido
+    ? vistaTiempo === "anios"
+      ? new Set(periodo.meses.map((m) => m.slice(0, 4)))
+      : mesesDelPeriodo
+    : undefined;
+
+  const {
+    tasaAhorro,
+    tasaAhorroAnterior,
+    tasaAhorro12m,
+    flujoNetoPromedio,
+    gastoPromedio,
+    gastoPromedioReferencia,
+    recurrentes,
+    totalRecurrenteMensual,
+    mesesDeCobertura,
+    saldoAlCierre: saldo,
+  } = indicadores;
+
+  const cambioAhorroPuntos =
+    tasaAhorro !== null && tasaAhorroAnterior !== null
+      ? (tasaAhorro - tasaAhorroAnterior) * 100
+      : null;
+  const variacionGasto =
+    gastoPromedioReferencia !== null && gastoPromedioReferencia > 0
+      ? (gastoPromedio - gastoPromedioReferencia) / gastoPromedioReferencia
+      : null;
+
+  function cambiarMes(campo: keyof RangoMeses, valor: string) {
+    onCambiarRangoMeses((anterior) => ({ ...anterior, [campo]: valor }));
+  }
+
+  // Clic en la gráfica de ingresos vs. gastos: ese mes (o ese año) pasa a
+  // ser el periodo; otro clic en el mismo lo quita.
+  function elegirPeriodoConClic(valor: string) {
+    const nuevo =
+      vistaTiempo === "anios" ? rangoDeAnio(valor, mesesConDatos) : { desde: valor, hasta: valor };
+    onCambiarRangoMeses((anterior) =>
+      anterior.desde === nuevo.desde && anterior.hasta === nuevo.hasta ? RANGO_MESES_VACIO : nuevo
+    );
+  }
 
   function alternarFiltro<K extends keyof Filtros>(campo: K, valor: string) {
     onCambiarFiltros((anterior) =>
@@ -172,6 +313,61 @@ export function VistaResumen({
 
   return (
     <>
+      <div className="flex flex-wrap items-end gap-3">
+        {(["desde", "hasta"] as const).map((campo) => (
+          <label key={campo} className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            {campo === "desde" ? "Desde" : "Hasta"}
+            <select
+              value={rangoMeses[campo]}
+              onChange={(e) => cambiarMes(campo, e.target.value)}
+              className="mt-1 block rounded-md px-3 py-2 text-sm"
+              style={{
+                background: "var(--page-plane)",
+                border: "1px solid var(--border)",
+                color: "var(--text-primary)",
+              }}
+            >
+              <option value="">—</option>
+              {mesesConDatos.map((mes) => (
+                <option key={mes} value={mes}>
+                  {nombreMes(mes)}
+                  {mes === mesEnCurso ? " (en curso)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
+        {hayPeriodoElegido && (
+          <button
+            onClick={() => onCambiarRangoMeses(() => RANGO_MESES_VACIO)}
+            className="text-xs underline"
+            style={{ color: "var(--text-muted)" }}
+          >
+            Volver a los últimos {MESES_PERIODO_POR_DEFECTO} meses
+          </button>
+        )}
+      </div>
+
+      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+        {hayPeriodoElegido ? (
+          <>
+            Periodo: <strong>{nombreDelPeriodo}</strong>. Todo cuenta solo esos meses; las
+            variaciones se comparan contra{" "}
+            {unMes ? "el mes anterior" : "el periodo anterior de la misma duración"} (
+            {nombreDelAnterior}).
+            {periodo.meses.includes(mesEnCurso) &&
+              " El mes en curso está incompleto porque sus estados de cuenta aún no llegan."}
+          </>
+        ) : (
+          <>
+            Periodo: <strong>últimos {MESES_PERIODO_POR_DEFECTO} meses completos</strong> (
+            {nombrePeriodo(periodo.meses)}); el mes en curso no se cuenta porque sus estados de
+            cuenta aún no llegan. Elige meses en "Desde"/"Hasta" o haz clic en un mes o año de
+            la gráfica de ingresos vs. gastos.
+          </>
+        )}
+      </p>
+
       {hayFiltrosActivos && (
         <div className="flex flex-wrap items-center gap-2">
           {(Object.keys(filtros) as (keyof Filtros)[])
@@ -195,7 +391,7 @@ export function VistaResumen({
             className="text-xs underline"
             style={{ color: "var(--text-muted)" }}
           >
-            Limpiar todos los filtros
+            Quitar filtros por clic
           </button>
         </div>
       )}
@@ -320,34 +516,123 @@ export function VistaResumen({
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile
-          label="Ingresos prom. (3 meses)"
-          value={ingresosPromedio3m}
-          tone="good"
+      {hayFiltrosActivos && (
+        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+          Los filtros por clic afectan el detalle de gasto (gráficas, Sankey, gasto hormiga,
+          categorías al alza y tabla). Tasa de ahorro, flujo neto, gasto promedio, meses
+          cubiertos y recurrentes siguen mostrando tus finanzas completas del periodo.
+        </p>
+      )}
+
+      <section
+        className="rounded-lg p-5"
+        style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
+      >
+        <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
+          Tasa de ahorro, {nombreDelPeriodo}
+        </div>
+        <div
+          className="mt-1 font-semibold"
+          style={{ fontSize: 48, lineHeight: 1.1, color: "var(--text-primary)" }}
+        >
+          {tasaAhorro === null ? "—" : porcentaje.format(tasaAhorro)}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+          {cambioAhorroPuntos !== null && (
+            <Delta
+              texto={`${cambioAhorroPuntos >= 0 ? "+" : ""}${decimal.format(cambioAhorroPuntos)} pts vs. ${nombreDelAnterior}`}
+              sube={cambioAhorroPuntos >= 0}
+              favorable={cambioAhorroPuntos >= 0}
+            />
+          )}
+          <span style={{ color: "var(--text-secondary)" }}>
+            12 meses hasta {nombreMes(ultimoMes, true)}:{" "}
+            {tasaAhorro12m === null ? "—" : porcentaje.format(tasaAhorro12m)}
+          </span>
+        </div>
+        <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
+          {tasaAhorro === null
+            ? "Sin ingresos en el periodo (normal en una tarjeta de crédito), así que no hay tasa de ahorro que calcular."
+            : "Qué parte de lo que entra te queda después de gastar. Una referencia común es ahorrar al menos 10–20% de tus ingresos."}
+        </p>
+      </section>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <Tile
+          etiqueta={
+            unMes
+              ? `Flujo neto de ${nombreDelPeriodo}`
+              : `Flujo neto promedio mensual (${nombreDelPeriodo})`
+          }
+          valor={moneda.format(flujoNetoPromedio)}
+          detalle={
+            unMes
+              ? "Lo que te sobró (o faltó) ese mes"
+              : "Lo que te sobra (o falta) en un mes típico del periodo"
+          }
         />
-        <StatTile
-          label="Gastos prom. (3 meses)"
-          value={gastosPromedio3m}
-          tone="critical"
+        <Tile
+          etiqueta={
+            unMes ? `Gasto de ${nombreDelPeriodo}` : `Gasto mensual promedio (${nombreDelPeriodo})`
+          }
+          valor={moneda.format(gastoPromedio)}
+          delta={
+            variacionGasto === null || gastoPromedioReferencia === null
+              ? undefined
+              : {
+                  texto: `${variacionGasto >= 0 ? "+" : ""}${porcentaje.format(variacionGasto)} vs. tu promedio mensual previo (${moneda.format(gastoPromedioReferencia)})`,
+                  sube: variacionGasto > 0,
+                  favorable: variacionGasto <= 0,
+                }
+          }
         />
-        <StatTile
-          label="Ingresos prom. (12 meses)"
-          value={ingresosPromedio12m}
-          tone="good"
+        <Tile
+          etiqueta="Meses cubiertos con tu saldo"
+          valor={mesesDeCobertura === null ? "—" : `${decimal.format(mesesDeCobertura)} meses`}
+          detalle={
+            saldo === null
+              ? "Sin cuentas de débito con saldo"
+              : `${moneda.format(saldo)} de saldo al cierre de ${nombreMes(ultimoMes, true)} ÷ ${moneda.format(gastoPromedio)} de gasto mensual. Referencia: 3–6 meses de fondo de emergencia`
+          }
         />
-        <StatTile
-          label="Gastos prom. (12 meses)"
-          value={gastosPromedio12m}
-          tone="critical"
+        <Tile
+          etiqueta="Gastos recurrentes (por mes)"
+          valor={moneda.format(totalRecurrenteMensual)}
+          detalle={
+            gastoPromedio > 0
+              ? `${recurrentes.length} comercio(s), ${porcentaje.format(totalRecurrenteMensual / gastoPromedio)} de tu gasto mensual`
+              : `${recurrentes.length} comercio(s)`
+          }
+        />
+        <Tile
+          etiqueta={`Gasto hormiga, ${nombreDelPeriodo}`}
+          valor={moneda.format(hormiga.total)}
+          detalle={`${hormiga.cantidad} compra(s) de menos de ${moneda.format(UMBRAL_GASTO_HORMIGA)}${
+            hormiga.proporcion === null
+              ? ""
+              : `, ${porcentaje.format(hormiga.proporcion)} del gasto ${unMes ? "del mes" : "del periodo"}`
+          }`}
+        />
+        <Tile
+          etiqueta="Categorías gastando más de lo normal"
+          valor={String(enAlza.length)}
+          detalle={
+            enAlza.length > 0
+              ? `En total, ${moneda.format(enAlza.reduce((s, c) => s + c.diferencia, 0))}${unMes ? "" : " al mes"} más que en ${nombreDelAnterior}`
+              : `Ninguna categoría gastó más que en ${nombreDelAnterior}`
+          }
         />
       </div>
 
       <IngresosGastosChart
         datos={ingresosGastos}
-        mesSeleccionado={filtros.mes}
-        onClickMes={(mes) => alternarFiltro("mes", mes)}
+        vista={vistaTiempo}
+        onCambiarVista={onCambiarVistaTiempo}
+        resaltados={resaltadosTiempo}
+        onClickPeriodo={elegirPeriodoConClic}
       />
+
+      <FlujoSankeyChart datos={flujoSankey} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <GastoPorCategoriaChart
@@ -359,6 +644,53 @@ export function VistaResumen({
           datos={gastoPorComercio}
           comercioSeleccionado={filtros.comercio}
           onClickComercio={(comercio) => alternarFiltro("comercio", comercio)}
+        />
+      </div>
+
+      <FlujoNetoChart
+        datos={indicadores.serie}
+        resaltados={hayPeriodoElegido ? mesesDelPeriodo : undefined}
+        titulo={
+          hayPeriodoElegido
+            ? `Flujo neto mensual (ingresos − gastos) hasta ${nombreMes(ultimoMes)}; resaltado: ${nombreDelPeriodo}`
+            : "Flujo neto mensual (ingresos − gastos), últimos 12 meses completos"
+        }
+      />
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Tabla
+          titulo={`Categorías al alza: ${nombreDelPeriodo} vs. ${nombreDelAnterior}${unMes ? "" : " (promedio mensual)"}`}
+          vacio={`Ninguna categoría gastó más que en ${nombreDelAnterior}.`}
+          encabezados={[
+            "Categoría",
+            unMes ? nombreMes(ultimoMes, true) : "Periodo",
+            unMes ? nombreMes(periodo.anteriores[0], true) : "Anterior",
+            "Diferencia",
+            "Tendencia 12 meses",
+          ]}
+          filas={categoriasAlzaVisibles.map((c) => [
+            c.categoria,
+            moneda.format(c.promedioPeriodo),
+            moneda.format(c.promedioAnterior),
+            `+${moneda.format(c.diferencia)}`,
+            <Sparkline
+              key="tendencia"
+              valores={tendencias.get(c.categoria) ?? []}
+              meses={mesesTendencia}
+              resaltados={mesesDelPeriodo}
+              etiqueta={c.categoria}
+            />,
+          ])}
+        />
+        <Tabla
+          titulo={`Gastos recurrentes (comercios con cargo en ${MESES_MINIMOS_RECURRENTE}+ de los ${VENTANA_RECURRENTES} meses hasta ${nombreMes(ultimoMes, true)})`}
+          vacio="No se detectaron gastos recurrentes. Solo se detectan comercios que tus reglas de categorización ya etiquetan."
+          encabezados={["Comercio", "Meses", "Promedio mensual"]}
+          filas={recurrentes.map((r) => [
+            r.comercio,
+            `${r.mesesPresente} de ${VENTANA_RECURRENTES}`,
+            moneda.format(r.montoMensual),
+          ])}
         />
       </div>
 

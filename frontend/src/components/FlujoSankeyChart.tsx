@@ -1,6 +1,6 @@
 import { ResponsiveContainer, Sankey, Tooltip } from "recharts";
 import type { SankeyLinkProps, SankeyNodeProps } from "recharts";
-import type { FlujoSankeyDatos } from "../lib/indicadores";
+import { nombrePeriodo, type FlujoSankeyDatos } from "../lib/indicadores";
 
 const formateadorMoneda = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -32,7 +32,8 @@ interface EnlaceSankey {
  * -> categorías de gasto. Si se gastó más de lo que entró (ahorro < 0), un
  * nodo "Déficit" aporta la diferencia directo a "Gastos totales" en vez de
  * dejar ese nodo con más salida que entrada -- un Sankey no tiene forma de
- * representar "de dónde salió" ese exceso más que nombrándolo.
+ * representar "de dónde salió" ese exceso más que nombrándolo. Sin ningún
+ * ingreso no se dibuja "Déficit" (todo sería déficit, sin información).
  */
 function construirDatosSankey(datos: FlujoSankeyDatos): { nodes: NodoSankey[]; links: EnlaceSankey[] } {
   const nodes: NodoSankey[] = [];
@@ -64,7 +65,10 @@ function construirDatosSankey(datos: FlujoSankeyDatos): { nodes: NodoSankey[]; l
         links.push({ source: idIngresosTotales, target: idGastosTotales, value: flujoDeIngresos });
       }
     }
-    if (deficit > 0) {
+    // Sin ningún ingreso (p. ej. la pestaña de una tarjeta de crédito, que se
+    // paga desde otra cuenta con "Pago TDC" oculto) no hay contra qué hablar
+    // de déficit: el diagrama arranca directo en "Gastos totales".
+    if (deficit > 0 && idIngresosTotales !== null) {
       const idDeficit = agregarNodo("Déficit", COLOR_GASTO);
       links.push({ source: idDeficit, target: idGastosTotales, value: deficit });
     }
@@ -158,11 +162,12 @@ export function FlujoSankeyChart({ datos }: { datos: FlujoSankeyDatos }) {
       style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
     >
       <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-        Flujo de ingresos y gastos ({datos.meses[0]} a {datos.meses[datos.meses.length - 1]})
+        Flujo de ingresos y gastos
+        {datos.meses.length > 0 ? ` (${nombrePeriodo(datos.meses)})` : ""}
       </h3>
       {sinDatos ? (
         <p className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>
-          No hay ingresos ni gastos en los últimos 3 meses completos.
+          No hay ingresos ni gastos en este periodo.
         </p>
       ) : (
         <div className="mt-3" style={{ height: 460 }}>
