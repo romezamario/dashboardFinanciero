@@ -32,6 +32,10 @@ interface IngresosGastosChartProps {
    * igual. */
   resaltados?: Set<string>;
   onClickPeriodo?: (periodo: string) => void;
+  /** "Ingresos vs. gastos" por defecto -- las pestañas de Categorías/
+   * Comercios lo cambian a "Tendencia de <nombre>" al explorar un elemento
+   * puntual. */
+  titulo?: string;
 }
 
 export function IngresosGastosChart({
@@ -40,6 +44,7 @@ export function IngresosGastosChart({
   onCambiarVista,
   resaltados,
   onClickPeriodo,
+  titulo = "Ingresos vs. gastos",
 }: IngresosGastosChartProps) {
   // Cuando hay una selección, lo no seleccionado se atenúa en vez de
   // desaparecer -- así se ve qué está filtrado sin perder el eje completo.
@@ -53,7 +58,7 @@ export function IngresosGastosChart({
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-          Ingresos vs. gastos por {unidad}
+          {titulo} por {unidad}
           {onClickPeriodo && (
             <span className="ml-2 font-normal" style={{ color: "var(--text-muted)" }}>
               (clic en un {unidad} para verlo como periodo)

@@ -301,6 +301,65 @@ export function gastoMensualPorCategoria(
   return series;
 }
 
+export interface ComercioEnAlza {
+  comercio: string;
+  /** Gasto mensual promedio del comercio en el periodo. */
+  promedioPeriodo: number;
+  /** Gasto mensual promedio en el periodo anterior de la misma duración. */
+  promedioAnterior: number;
+  diferencia: number;
+}
+
+/** Igual que `categoriasEnAlza`, por comercio -- las transacciones sin
+ * comercio no participan (es opcional por diseño, mismo criterio que el
+ * resto de las funciones por comercio). Se mantiene como función aparte en
+ * vez de generalizar `categoriasEnAlza`: son solo ~15 líneas y evita tocar
+ * el tipo/campo `categoria` que ya usa `VistaResumen`. */
+export function comerciosEnAlza(transacciones: Transaccion[], periodo: Periodo): ComercioEnAlza[] {
+  const actuales = new Set(periodo.meses);
+  const anteriores = new Set(periodo.anteriores);
+  const porComercio = new Map<string, { actual: number; anterior: number }>();
+
+  for (const t of transacciones) {
+    if (t.tipo !== "cargo" || !t.comercio) continue;
+    const mes = mesDe(t);
+    const enActual = actuales.has(mes);
+    if (!enActual && !anteriores.has(mes)) continue;
+    const acumulado = porComercio.get(t.comercio) ?? { actual: 0, anterior: 0 };
+    if (enActual) acumulado.actual += t.monto;
+    else acumulado.anterior += t.monto;
+    porComercio.set(t.comercio, acumulado);
+  }
+
+  const n = periodo.meses.length;
+  return Array.from(porComercio.entries())
+    .map(([comercio, a]) => {
+      const promedioPeriodo = a.actual / n;
+      const promedioAnterior = a.anterior / n;
+      return { comercio, promedioPeriodo, promedioAnterior, diferencia: promedioPeriodo - promedioAnterior };
+    })
+    .filter((c) => c.diferencia > 0)
+    .sort((a, b) => b.diferencia - a.diferencia);
+}
+
+/** Igual que `gastoMensualPorCategoria`, por comercio. */
+export function gastoMensualPorComercio(
+  transacciones: Transaccion[],
+  comercios: string[],
+  meses: string[]
+): Map<string, number[]> {
+  const indiceMes = new Map(meses.map((m, i) => [m, i]));
+  const series = new Map(comercios.map((c) => [c, meses.map(() => 0)]));
+  for (const t of transacciones) {
+    if (t.tipo !== "cargo" || !t.comercio) continue;
+    const i = indiceMes.get(mesDe(t));
+    const serie = series.get(t.comercio);
+    if (i === undefined || !serie) continue;
+    serie[i] += t.monto;
+  }
+  return series;
+}
+
 /** Saldo más reciente, al cierre de `hastaMes` (inclusive), de cada cuenta
  * que reporta saldo (las TDC no traen saldo por renglón, así que solo
  * cuentan cuentas de débito/cheques). null si ninguna cuenta tiene saldo. */
