@@ -483,6 +483,20 @@ export function calcularFlujoSankeyPorCuenta(transacciones: Transaccion[], meses
   return calcularFlujoSankeyGenerico(transacciones, meses, cuentaDe);
 }
 
+/** Mismo diagrama que `calcularFlujoSankey`, pero agrupado por evento en
+ * vez de por categoría -- para ver, entre los eventos ya asignados, cuál
+ * concentra más gasto (y de dónde vino el ingreso, si el evento tuvo
+ * alguno). A diferencia de las otras dos variantes, no recibe `meses`: la
+ * pestaña de Eventos no tiene selector de periodo propio, así que se
+ * calcula sobre TODOS los meses que ya trae `transacciones` (se espera que
+ * el llamador ya haya filtrado a transacciones con evento asignado --
+ * evento no tiene un fallback "Sin evento" como categoría, ver `eventoDe`,
+ * así que mezclarlo aquí produciría un nodo sin significado real). */
+export function calcularFlujoSankeyPorEvento(transacciones: Transaccion[]): FlujoSankeyDatos {
+  const meses = Array.from(new Set(transacciones.map(mesDe))).sort();
+  return calcularFlujoSankeyGenerico(transacciones, meses, (t) => eventoDe(t) ?? "Sin evento");
+}
+
 /** Mínimo de meses que muestra la gráfica de flujo neto: aunque el periodo
  * sea de un mes, se ve en contexto de los meses previos. */
 const MESES_GRAFICA_MINIMOS = 12;
