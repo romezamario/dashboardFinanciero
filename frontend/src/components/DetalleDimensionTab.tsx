@@ -145,18 +145,14 @@ export function DetalleDimensionTab({ transacciones, dimensionPrincipal }: Detal
     [transaccionesFiltradas]
   );
 
-  // La tendencia de gasto + promedio móvil solo tiene sentido para UN
-  // elemento puntual (categoría o comercio elegido) -- sin selección sería
-  // el gasto total, que ya muestra el Resumen. Reutiliza la misma ventana
-  // de 12 meses que las minigráficas de "en alza" arriba.
+  // Siempre visible: gasto total (sin selección) o de un elemento puntual
+  // (categoría/comercio elegido), con su promedio móvil de 3 meses.
+  // Reutiliza la misma ventana de 12 meses que las minigráficas de
+  // "en alza" arriba.
   const seleccionActual = filtros.categoria ?? filtros.comercio ?? null;
-  const transaccionesSeleccion = useMemo(
-    () => (seleccionActual ? transaccionesFiltradas : []),
-    [transaccionesFiltradas, seleccionActual]
-  );
   const tendenciaConPromedioMovil = useMemo(
-    () => gastoMensualConPromedioMovil(transaccionesSeleccion, mesesTendencia),
-    [transaccionesSeleccion, mesesTendencia]
+    () => gastoMensualConPromedioMovil(transaccionesFiltradas, mesesTendencia),
+    [transaccionesFiltradas, mesesTendencia]
   );
 
   const hayFiltrosActivos = Boolean(filtros.categoria || filtros.comercio);
@@ -224,6 +220,15 @@ export function DetalleDimensionTab({ transacciones, dimensionPrincipal }: Detal
         </div>
       )}
 
+      <GastoConPromedioMovilChart
+        datos={tendenciaConPromedioMovil}
+        titulo={
+          seleccionActual
+            ? `Gasto mensual y promedio móvil de "${seleccionActual}"`
+            : "Gasto mensual y promedio móvil"
+        }
+      />
+
       <Tabla
         titulo={`${dimensionPrincipal === "categoria" ? "Categorías" : "Comercios"} en alza (últimos 3 meses vs. los 3 anteriores)`}
         vacio="Nada subió respecto al periodo anterior."
@@ -245,13 +250,6 @@ export function DetalleDimensionTab({ transacciones, dimensionPrincipal }: Detal
 
       {dimensionPrincipal === "categoria" ? graficaCategoria : graficaComercio}
       {dimensionPrincipal === "categoria" ? graficaComercio : graficaCategoria}
-
-      {seleccionActual && (
-        <GastoConPromedioMovilChart
-          datos={tendenciaConPromedioMovil}
-          titulo={`Gasto mensual y promedio móvil de "${seleccionActual}"`}
-        />
-      )}
 
       <Tabla
         titulo="Gastos individuales más grandes (según lo filtrado arriba)"

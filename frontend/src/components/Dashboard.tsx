@@ -255,9 +255,17 @@ export function Dashboard() {
             {vistaActiva === PESTANA_EVENTOS ? (
               <EventosTab transacciones={transacciones} onActualizado={recargarTransacciones} />
             ) : vistaActiva === PESTANA_CATEGORIAS ? (
-              <DetalleDimensionTab transacciones={transacciones} dimensionPrincipal="categoria" />
+              <DetalleDimensionTab
+                key="categorias"
+                transacciones={transacciones}
+                dimensionPrincipal="categoria"
+              />
             ) : vistaActiva === PESTANA_COMERCIOS ? (
-              <DetalleDimensionTab transacciones={transacciones} dimensionPrincipal="comercio" />
+              <DetalleDimensionTab
+                key="comercios"
+                transacciones={transacciones}
+                dimensionPrincipal="comercio"
+              />
             ) : vistaActiva === PESTANA_RESUMEN ? (
               renderVistaResumen(PESTANA_RESUMEN, transacciones)
             ) : (
