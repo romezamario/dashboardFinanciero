@@ -182,6 +182,34 @@ export function resumenPorMes(transacciones: Transaccion[], meses: string[]): Re
   });
 }
 
+export interface PuntoGastoConPromedioMovil {
+  mes: string;
+  gastos: number;
+  /** Promedio de `gastos` de este mes y los `ventana - 1` anteriores; null
+   * si `meses` no trae suficiente historial previo todavía para completar
+   * la ventana (los primeros `ventana - 1` puntos de la serie). */
+  promedioMovil: number | null;
+}
+
+/** Gasto mensual y su promedio móvil (ventana de `ventana` meses, 3 por
+ * defecto) -- para ver la tendencia de un comercio/categoría puntual sin
+ * que el ruido mes a mes tape si en el fondo está subiendo o bajando. */
+export function gastoMensualConPromedioMovil(
+  transacciones: Transaccion[],
+  meses: string[],
+  ventana = 3
+): PuntoGastoConPromedioMovil[] {
+  const serie = resumenPorMes(transacciones, meses);
+  return serie.map((punto, i) => {
+    const inicioVentana = i - ventana + 1;
+    const promedioMovil =
+      inicioVentana >= 0
+        ? serie.slice(inicioVentana, i + 1).reduce((s, p) => s + p.gastos, 0) / ventana
+        : null;
+    return { mes: punto.mes, gastos: punto.gastos, promedioMovil };
+  });
+}
+
 function sumar(resumen: ResumenMes[]): { ingresos: number; gastos: number } {
   return resumen.reduce(
     (a, r) => ({ ingresos: a.ingresos + r.ingresos, gastos: a.gastos + r.gastos }),

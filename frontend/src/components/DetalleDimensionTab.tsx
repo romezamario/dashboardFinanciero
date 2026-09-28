@@ -1,15 +1,15 @@
 import { useMemo, useState } from "react";
 import {
-  agruparIngresosGastosPorAnio,
-  agruparIngresosGastosPorMes,
   agruparPorCategoria,
   agruparPorComercio,
   aplicarFiltros,
+  categoriaDe,
   type Filtros,
 } from "../lib/queries";
 import {
   categoriasEnAlza,
   comerciosEnAlza,
+  gastoMensualConPromedioMovil,
   gastoMensualPorCategoria,
   gastoMensualPorComercio,
   mesesHasta,
@@ -17,9 +17,9 @@ import {
   resolverPeriodo,
 } from "../lib/indicadores";
 import type { Transaccion } from "../lib/types";
+import { GastoConPromedioMovilChart } from "./GastoConPromedioMovilChart";
 import { GastoPorCategoriaChart } from "./GastoPorCategoriaChart";
 import { GastoPorComercioChart } from "./GastoPorComercioChart";
-import { IngresosGastosChart, type VistaTiempo } from "./IngresosGastosChart";
 import { Sparkline } from "./Sparkline";
 import { Tabla } from "./IndicadoresUI";
 import { TransaccionesTabla } from "./TransaccionesTabla";
@@ -74,13 +74,30 @@ interface DetalleDimensionTabProps {
  */
 export function DetalleDimensionTab({ transacciones, dimensionPrincipal }: DetalleDimensionTabProps) {
   const [filtros, setFiltros] = useState<Filtros>({});
-  const [vistaTendencia, setVistaTendencia] = useState<VistaTiempo>("meses");
 
   function alternarFiltro(campo: DimensionDetalle, valor: string) {
     setFiltros((anterior) =>
       anterior[campo] === valor ? { ...anterior, [campo]: undefined } : { ...anterior, [campo]: valor }
     );
   }
+
+  // El select de arriba fija el valor directo (a diferencia del clic en una
+  // barra, que alterna/quita) -- elegir "(todas)" limpia el filtro.
+  function elegirFiltroPrincipal(valor: string) {
+    setFiltros((anterior) => ({ ...anterior, [dimensionPrincipal]: valor || undefined }));
+  }
+
+  // Opciones del select "Filtrar por categoría/comercio" -- se derivan de
+  // TODAS las transacciones de la pestaña (no de `transaccionesFiltradas`),
+  // para que la lista de opciones no cambie según lo que ya esté filtrado.
+  const nombresConocidos = useMemo(() => {
+    if (dimensionPrincipal === "categoria") {
+      return Array.from(new Set(transacciones.map(categoriaDe))).sort();
+    }
+    return Array.from(
+      new Set(transacciones.map((t) => t.comercio).filter((c): c is string => !!c))
+    ).sort();
+  }, [transacciones, dimensionPrincipal]);
 
   // Periodo fijo (últimos 3 meses completos) para "en alza" -- a diferencia
   // del Resumen, esta pestaña no tiene su propio selector Desde/Hasta; si
@@ -128,20 +145,18 @@ export function DetalleDimensionTab({ transacciones, dimensionPrincipal }: Detal
     [transaccionesFiltradas]
   );
 
-  // La tendencia mensual/anual solo tiene sentido para UN elemento puntual
-  // (categoría o comercio elegido con clic) -- sin selección sería la
-  // misma serie de ingresos/gastos que ya muestra el Resumen.
+  // La tendencia de gasto + promedio móvil solo tiene sentido para UN
+  // elemento puntual (categoría o comercio elegido) -- sin selección sería
+  // el gasto total, que ya muestra el Resumen. Reutiliza la misma ventana
+  // de 12 meses que las minigráficas de "en alza" arriba.
   const seleccionActual = filtros.categoria ?? filtros.comercio ?? null;
   const transaccionesSeleccion = useMemo(
     () => (seleccionActual ? transaccionesFiltradas : []),
     [transaccionesFiltradas, seleccionActual]
   );
-  const tendenciaSeleccion = useMemo(
-    () =>
-      vistaTendencia === "anios"
-        ? agruparIngresosGastosPorAnio(transaccionesSeleccion)
-        : agruparIngresosGastosPorMes(transaccionesSeleccion),
-    [transaccionesSeleccion, vistaTendencia]
+  const tendenciaConPromedioMovil = useMemo(
+    () => gastoMensualConPromedioMovil(transaccionesSeleccion, mesesTendencia),
+    [transaccionesSeleccion, mesesTendencia]
   );
 
   const hayFiltrosActivos = Boolean(filtros.categoria || filtros.comercio);
@@ -163,6 +178,27 @@ export function DetalleDimensionTab({ transacciones, dimensionPrincipal }: Detal
 
   return (
     <div className="space-y-4">
+      <label className="w-full text-xs sm:w-auto" style={{ color: "var(--text-secondary)" }}>
+        Filtrar por {dimensionPrincipal === "categoria" ? "categoría" : "comercio"}
+        <select
+          value={filtros[dimensionPrincipal] ?? ""}
+          onChange={(e) => elegirFiltroPrincipal(e.target.value)}
+          className="mt-1 block w-full rounded-md px-3 py-2 text-sm sm:w-56"
+          style={{
+            background: "var(--page-plane)",
+            border: "1px solid var(--border)",
+            color: "var(--text-primary)",
+          }}
+        >
+          <option value="">(todas)</option>
+          {nombresConocidos.map((nombre) => (
+            <option key={nombre} value={nombre}>
+              {nombre}
+            </option>
+          ))}
+        </select>
+      </label>
+
       {hayFiltrosActivos && (
         <div className="flex flex-wrap items-center gap-2">
           {(Object.keys(ETIQUETAS_FILTRO) as DimensionDetalle[])
@@ -211,11 +247,9 @@ export function DetalleDimensionTab({ transacciones, dimensionPrincipal }: Detal
       {dimensionPrincipal === "categoria" ? graficaComercio : graficaCategoria}
 
       {seleccionActual && (
-        <IngresosGastosChart
-          datos={tendenciaSeleccion}
-          vista={vistaTendencia}
-          onCambiarVista={setVistaTendencia}
-          titulo={`Tendencia de "${seleccionActual}"`}
+        <GastoConPromedioMovilChart
+          datos={tendenciaConPromedioMovil}
+          titulo={`Gasto mensual y promedio móvil de "${seleccionActual}"`}
         />
       )}
 
