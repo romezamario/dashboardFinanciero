@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   Bar,
   CartesianGrid,
@@ -25,14 +26,37 @@ interface GastoConPromedioMovilChartProps {
   titulo: string;
 }
 
+/** Promedio plano de gasto sobre los últimos `n` meses visibles en `datos`
+ * (no una ventana móvil por mes, a diferencia de `promedioMovil`) -- una
+ * sola línea horizontal de referencia para comparar el nivel actual contra
+ * el corto y el largo plazo. */
+function promedioDeUltimosMeses(datos: PuntoGastoConPromedioMovil[], n: number): number | null {
+  if (datos.length === 0) return null;
+  const ventana = datos.slice(-n);
+  return ventana.reduce((suma, punto) => suma + punto.gastos, 0) / ventana.length;
+}
+
 /**
  * Barras de gasto mensual + línea del promedio móvil de 3 meses encima --
  * el gasto mes a mes puede subir/bajar por un cargo puntual, la línea
  * suaviza eso y deja ver si la tendencia de fondo va al alza o a la baja.
  * `connectNulls={false}` dado que `promedioMovil` viene en `null` para los
  * primeros meses de la ventana (sin suficiente historial detrás todavía).
+ *
+ * Además, dos líneas horizontales de referencia (promedio plano de los
+ * últimos 3 y de los últimos 12 meses) para comparar el nivel reciente
+ * contra el de más largo plazo -- se inyectan como campos constantes en
+ * cada punto para que Recharts las dibuje como líneas de ancho completo y
+ * aparezcan en la leyenda/tooltip igual que las demás series.
  */
 export function GastoConPromedioMovilChart({ datos, titulo }: GastoConPromedioMovilChartProps) {
+  const promedioUltimos3 = useMemo(() => promedioDeUltimosMeses(datos, 3), [datos]);
+  const promedioUltimos12 = useMemo(() => promedioDeUltimosMeses(datos, 12), [datos]);
+  const datosConPromedios = useMemo(
+    () => datos.map((punto) => ({ ...punto, promedioUltimos3, promedioUltimos12 })),
+    [datos, promedioUltimos3, promedioUltimos12]
+  );
+
   return (
     <div
       className="rounded-lg p-4"
@@ -43,7 +67,7 @@ export function GastoConPromedioMovilChart({ datos, titulo }: GastoConPromedioMo
       </h3>
       <div className="mt-3 h-72">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={datos}>
+          <ComposedChart data={datosConPromedios}>
             <CartesianGrid vertical={false} stroke="var(--gridline)" strokeWidth={1} />
             <XAxis
               dataKey="mes"
@@ -85,6 +109,22 @@ export function GastoConPromedioMovilChart({ datos, titulo }: GastoConPromedioMo
               strokeWidth={2}
               dot={false}
               connectNulls={false}
+            />
+            <Line
+              dataKey="promedioUltimos3"
+              name="Promedio últimos 3 meses"
+              stroke="var(--text-secondary)"
+              strokeWidth={1.5}
+              strokeDasharray="4 4"
+              dot={false}
+            />
+            <Line
+              dataKey="promedioUltimos12"
+              name="Promedio últimos 12 meses"
+              stroke="var(--text-muted)"
+              strokeWidth={1.5}
+              strokeDasharray="2 6"
+              dot={false}
             />
           </ComposedChart>
         </ResponsiveContainer>
