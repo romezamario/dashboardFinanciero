@@ -161,14 +161,34 @@ function EnlacePersonalizado(props: PropsEnlacePersonalizado) {
   );
 }
 
+/** Una opción del selector de dimensión (ver `opciones` abajo). `valor` es
+ * `string` genérico (no una unión fija) para que este componente sirva a
+ * cualquier conjunto de dimensiones que el llamador decida mostrar (en
+ * Resumen: categoría siempre, cuenta/tarjeta solo con más de una cuenta,
+ * evento solo si hay eventos asignados) -- el llamador hace el cast al
+ * tipo concreto en su propio `onCambiarVista`. */
+interface OpcionVistaSankey {
+  valor: string;
+  etiqueta: string;
+}
+
 interface FlujoSankeyChartProps {
   datos: FlujoSankeyDatos;
   titulo?: string;
+  /** Botones tipo "Meses/Años" de `IngresosGastosChart` para elegir qué
+   * dimensión agrupa el diagrama -- se omiten si el llamador solo tiene una
+   * dimensión que mostrar. */
+  opciones?: OpcionVistaSankey[];
+  vistaActual?: string;
+  onCambiarVista?: (valor: string) => void;
 }
 
 export function FlujoSankeyChart({
   datos,
   titulo = "Flujo de ingresos y gastos",
+  opciones,
+  vistaActual,
+  onCambiarVista,
 }: FlujoSankeyChartProps) {
   const { nodes, links } = construirDatosSankey(datos);
   const sinDatos = links.length === 0;
@@ -196,10 +216,35 @@ export function FlujoSankeyChart({
       className="rounded-lg p-4"
       style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
     >
-      <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-        {titulo}
-        {datos.meses.length > 0 ? ` (${nombrePeriodo(datos.meses)})` : ""}
-      </h3>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+          {titulo}
+          {datos.meses.length > 0 ? ` (${nombrePeriodo(datos.meses)})` : ""}
+        </h3>
+        {opciones && opciones.length > 1 && onCambiarVista && (
+          <div
+            className="flex rounded-md p-0.5 text-xs"
+            style={{ border: "1px solid var(--border)" }}
+            role="group"
+            aria-label="Agrupar por"
+          >
+            {opciones.map(({ valor, etiqueta }) => (
+              <button
+                key={valor}
+                onClick={() => onCambiarVista(valor)}
+                aria-pressed={vistaActual === valor}
+                className="rounded px-3 py-1 font-medium"
+                style={{
+                  background: vistaActual === valor ? "var(--series-1)" : "transparent",
+                  color: vistaActual === valor ? "#ffffff" : "var(--text-secondary)",
+                }}
+              >
+                {etiqueta}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       {sinDatos ? (
         <p className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>
           No hay ingresos ni gastos en este periodo.

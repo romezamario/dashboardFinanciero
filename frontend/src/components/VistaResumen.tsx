@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   agruparIngresosGastosPorAnio,
   agruparIngresosGastosPorMes,
@@ -14,6 +14,7 @@ import {
 import {
   calcularFlujoSankey,
   calcularFlujoSankeyPorCuenta,
+  calcularFlujoSankeyPorEvento,
   calcularGastoHormiga,
   calcularIndicadores,
   categoriasEnAlza,
@@ -214,6 +215,33 @@ export function VistaResumen({
     () => calcularFlujoSankeyPorCuenta(conFiltros, periodo.meses),
     [conFiltros, periodo]
   );
+  const flujoSankeyPorEvento = useMemo(
+    () => calcularFlujoSankeyPorEvento(conFiltros.filter((t) => eventoDe(t) !== null), periodo.meses),
+    [conFiltros, periodo]
+  );
+  // Selector de dimensión del Sankey (categoría/cuenta/tarjeta/evento) --
+  // antes se mostraban dos diagramas apilados; ahora es uno solo con
+  // botones, mismo patrón que "Meses/Años" en la gráfica de ingresos vs.
+  // gastos. Estado local (no viaja en `EstadoVista` como filtros/periodo):
+  // es solo una preferencia de visualización, no algo que deba sobrevivir
+  // al desmontar la pestaña.
+  const [vistaSankey, setVistaSankey] = useState<"categoria" | "cuenta" | "evento">("categoria");
+  const opcionesSankey = useMemo(() => {
+    const opciones: { valor: typeof vistaSankey; etiqueta: string }[] = [
+      { valor: "categoria", etiqueta: "Categoría" },
+    ];
+    if (cuentasConocidas.length > 1) opciones.push({ valor: "cuenta", etiqueta: "Cuenta/Tarjeta" });
+    if (eventosConocidos.length > 0) opciones.push({ valor: "evento", etiqueta: "Evento" });
+    return opciones;
+  }, [cuentasConocidas, eventosConocidos]);
+  const datosSankey =
+    vistaSankey === "cuenta" ? flujoSankeyPorCuenta : vistaSankey === "evento" ? flujoSankeyPorEvento : flujoSankey;
+  const tituloSankey =
+    vistaSankey === "cuenta"
+      ? "Flujo de ingresos y gastos por cuenta/tarjeta"
+      : vistaSankey === "evento"
+        ? "Flujo de ingresos y gastos por evento"
+        : "Flujo de ingresos y gastos por categoría";
   const hormiga = useMemo(
     () => calcularGastoHormiga(conFiltros, periodo.meses),
     [conFiltros, periodo]
@@ -637,18 +665,18 @@ export function VistaResumen({
         onClickPeriodo={elegirPeriodoConClic}
       />
 
-      <FlujoSankeyChart datos={flujoSankey} />
-
-      {/* Con una sola cuenta en la vista (pestaña de una tarjeta) esta
-          gráfica sería un Sankey degenerado: la misma cuenta como único
-          origen y único destino. Solo aporta algo cuando hay varias, como
-          en "Resumen". */}
-      {cuentasConocidas.length > 1 && (
-        <FlujoSankeyChart
-          datos={flujoSankeyPorCuenta}
-          titulo="Flujo de ingresos y gastos por cuenta/tarjeta"
-        />
-      )}
+      {/* Un solo diagrama con selector de dimensión en vez de varios
+          apilados -- "Cuenta/Tarjeta" se omite con una sola cuenta en la
+          vista (pestaña de una tarjeta, donde sería un Sankey degenerado:
+          la misma cuenta como único origen y destino) y "Evento" se omite
+          si no hay ningún evento asignado todavía. */}
+      <FlujoSankeyChart
+        datos={datosSankey}
+        titulo={tituloSankey}
+        opciones={opcionesSankey}
+        vistaActual={vistaSankey}
+        onCambiarVista={(valor) => setVistaSankey(valor as typeof vistaSankey)}
+      />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <GastoPorCategoriaChart

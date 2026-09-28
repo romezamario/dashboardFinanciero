@@ -10,9 +10,7 @@ import {
   eventoDe,
   type Filtros,
 } from "../lib/queries";
-import { calcularFlujoSankeyPorEvento } from "../lib/indicadores";
 import type { Transaccion } from "../lib/types";
-import { FlujoSankeyChart } from "./FlujoSankeyChart";
 import { GastoPorEventoChart } from "./GastoPorEventoChart";
 import { GastoPorCategoriaChart } from "./GastoPorCategoriaChart";
 import { GastoPorComercioChart } from "./GastoPorComercioChart";
@@ -127,10 +125,6 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
     () => aplicarFiltros(transaccionesConEvento, filtrosEvento),
     [transaccionesConEvento, filtrosEvento]
   );
-  const flujoSankeyPorEvento = useMemo(
-    () => calcularFlujoSankeyPorEvento(transaccionesFiltradasPorEvento),
-    [transaccionesFiltradasPorEvento]
-  );
 
   const hayFiltrosEventoActivos = Boolean(
     filtrosEvento.evento || filtrosEvento.categoria || filtrosEvento.comercio
@@ -230,11 +224,6 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
 
       {transaccionesConEvento.length > 0 && (
         <>
-          <FlujoSankeyChart
-            datos={flujoSankeyPorEvento}
-            titulo="Flujo de ingresos y gastos por evento"
-          />
-
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <GastoPorCategoriaChart
               datos={gastoPorCategoriaDelEvento}
