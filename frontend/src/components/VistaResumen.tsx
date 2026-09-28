@@ -331,6 +331,30 @@ export function VistaResumen({
     );
   }
 
+  // A diferencia de alternarFiltro (categoría/comercio/tarjeta), elegir un
+  // evento también ajusta el periodo a los meses de ese evento -- un evento
+  // es una fecha concreta (un viaje, una fiesta), a diferencia de una
+  // categoría o comercio que no tienen una ubicación temporal intrínseca,
+  // así que aquí SÍ tiene sentido que el filtro mueva el periodo (que de
+  // otro modo se queda en los últimos 3 meses por defecto y puede no
+  // coincidir con cuándo pasó el evento, mostrando "no hay ingresos ni
+  // gastos" aunque el evento sí tenga datos). Solo al SELECCIONAR: quitar
+  // el filtro (clic de nuevo sobre el mismo evento) no revierte el periodo,
+  // para no sacar al usuario del periodo en el que ya está mirando otra cosa.
+  function alternarFiltroEvento(evento: string) {
+    const yaSeleccionado = filtros.evento === evento;
+    alternarFiltro("evento", evento);
+    if (!yaSeleccionado) {
+      const meses = transacciones
+        .filter((t) => eventoDe(t) === evento)
+        .map((t) => t.fecha.slice(0, 7))
+        .sort();
+      if (meses.length > 0) {
+        onCambiarRangoMeses(() => ({ desde: meses[0], hasta: meses[meses.length - 1] }));
+      }
+    }
+  }
+
   function alternarCategoriaOculta(categoria: string) {
     onCambiarCategoriasOcultas((anterior) => {
       const siguiente = new Set(anterior);
@@ -545,7 +569,7 @@ export function VistaResumen({
             return (
               <button
                 key={evento}
-                onClick={() => alternarFiltro("evento", evento)}
+                onClick={() => alternarFiltroEvento(evento)}
                 className="rounded-full px-3 py-1 text-xs font-medium"
                 style={{
                   background: seleccionado ? "var(--series-1)" : "var(--surface-1)",
