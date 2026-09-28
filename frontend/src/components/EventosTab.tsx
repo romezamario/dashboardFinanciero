@@ -5,6 +5,7 @@ import {
   agruparPorComercio,
   agruparPorEvento,
   aplicarFiltros,
+  buscarPorDescripcion,
   cuentaDe,
   eventoDe,
   type Filtros,
@@ -39,15 +40,20 @@ interface EventosTabProps {
 }
 
 /**
- * A diferencia de "Editar en lote" (que busca por descripción), armar un
- * evento parte de "qué pasó en tal rango de fechas, en tal cuenta/tarjeta"
- * -- no hay una palabra clave común entre un Uber, un restaurante y un
- * hotel del mismo viaje. Por eso el filtro para ENCONTRAR transacciones
- * sin evento (abajo) es fecha/cuenta/tarjeta en vez de texto libre, y por
- * la misma razón que el buscador de texto libre (evitar listar todo por
- * accidente), no se muestra nada hasta que al menos uno esté activo.
+ * Armar un evento parte principalmente de "qué pasó en tal rango de fechas,
+ * en tal cuenta/tarjeta" -- no hay una palabra clave común entre un Uber, un
+ * restaurante y un hotel del mismo viaje, por eso ese sigue siendo el filtro
+ * principal (a diferencia de "Editar en lote", que busca solo por
+ * descripción). La búsqueda por descripción (`buscarPorDescripcion`, mismo
+ * helper que el editor en lote) se agrega como filtro adicional para el caso
+ * en que sí hay una palabra clave común (ej. todos los cargos de "AMAZON" de
+ * un viaje) -- se combina en Y lógico con fecha/cuenta/tarjeta, igual que el
+ * editor en lote combina texto y categoría/comercio. Igual que el buscador
+ * de texto libre en otras pestañas, no se muestra nada hasta que al menos un
+ * filtro esté activo (evitar listar todo por accidente).
  */
 export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
+  const [busqueda, setBusqueda] = useState("");
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
   const [cuenta, setCuenta] = useState("");
@@ -124,18 +130,19 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
     filtrosEvento.evento || filtrosEvento.categoria || filtrosEvento.comercio
   );
 
-  const hayFiltrosActivos = Boolean(fechaDesde || fechaHasta || cuenta || tarjeta);
+  const hayFiltrosActivos = Boolean(busqueda.trim() || fechaDesde || fechaHasta || cuenta || tarjeta);
 
   const coincidencias = useMemo(() => {
     if (!hayFiltrosActivos) return [];
-    return transacciones.filter((t) => {
+    const universo = busqueda.trim() ? buscarPorDescripcion(transacciones, busqueda) : transacciones;
+    return universo.filter((t) => {
       if (fechaDesde && t.fecha < fechaDesde) return false;
       if (fechaHasta && t.fecha > fechaHasta) return false;
       if (cuenta && cuentaDe(t) !== cuenta) return false;
       if (tarjeta && t.tarjeta !== tarjeta) return false;
       return true;
     });
-  }, [transacciones, hayFiltrosActivos, fechaDesde, fechaHasta, cuenta, tarjeta]);
+  }, [transacciones, hayFiltrosActivos, busqueda, fechaDesde, fechaHasta, cuenta, tarjeta]);
   const visibles = coincidencias.slice(0, TOPE_RESULTADOS);
 
   function alternarSeleccion(id: string) {
@@ -242,10 +249,26 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
           Asignar transacciones a un evento
         </h3>
         <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-          Filtra por fecha, cuenta y/o tarjeta para encontrar las transacciones de un
-          viaje, fiesta u otro evento, selecciónalas y asígnales un nombre de evento
-          (existente o nuevo).
+          Busca por descripción y/o filtra por fecha, cuenta y/o tarjeta para encontrar
+          las transacciones de un viaje, fiesta u otro evento, selecciónalas y asígnales
+          un nombre de evento (existente o nuevo).
         </p>
+
+        <input
+          type="text"
+          value={busqueda}
+          onChange={(e) => {
+            setBusqueda(e.target.value);
+            setSeleccionadas(new Set());
+          }}
+          placeholder="Buscar en la descripción, ej. AMAZON"
+          className="mt-3 w-full rounded-md px-3 py-2 text-sm"
+          style={{
+            background: "var(--page-plane)",
+            border: "1px solid var(--border)",
+            color: "var(--text-primary)",
+          }}
+        />
 
         <div className="mt-3 flex flex-wrap items-end gap-3">
           <label className="w-full text-xs sm:w-auto" style={{ color: "var(--text-secondary)" }}>
@@ -337,6 +360,7 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
           {hayFiltrosActivos && (
             <button
               onClick={() => {
+                setBusqueda("");
                 setFechaDesde("");
                 setFechaHasta("");
                 setCuenta("");
