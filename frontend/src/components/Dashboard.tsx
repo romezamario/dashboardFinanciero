@@ -3,6 +3,7 @@ import { categoriaDe, cuentaDe, obtenerTransacciones, type Filtros } from "../li
 import { categoriasExcluidasPorDefecto, RANGO_MESES_VACIO, type RangoMeses } from "../lib/indicadores";
 import type { Transaccion } from "../lib/types";
 import { supabase } from "../lib/supabase";
+import { DetalleDimensionTab } from "./DetalleDimensionTab";
 import { EventosTab } from "./EventosTab";
 import type { VistaTiempo } from "./IngresosGastosChart";
 import { VistaResumen } from "./VistaResumen";
@@ -32,6 +33,8 @@ const ESTADO_VACIO: EstadoVista = {
 
 const PESTANA_RESUMEN = "resumen";
 const PESTANA_EVENTOS = "eventos";
+const PESTANA_CATEGORIAS = "categorias";
+const PESTANA_COMERCIOS = "comercios";
 // Prefijo para no chocar con "resumen"/"eventos" si alguna cuenta tuviera
 // ese mismo alias.
 const PREFIJO_PESTANA_CUENTA = "cuenta:";
@@ -113,6 +116,8 @@ export function Dashboard() {
   const pestanas = [
     { id: PESTANA_RESUMEN, etiqueta: "Resumen" },
     { id: PESTANA_EVENTOS, etiqueta: "Eventos" },
+    { id: PESTANA_CATEGORIAS, etiqueta: "Categorías" },
+    { id: PESTANA_COMERCIOS, etiqueta: "Comercios" },
     ...cuentasConocidas.map((cuenta) => ({
       id: PREFIJO_PESTANA_CUENTA + cuenta,
       etiqueta: cuenta,
@@ -249,6 +254,10 @@ export function Dashboard() {
 
             {vistaActiva === PESTANA_EVENTOS ? (
               <EventosTab transacciones={transacciones} onActualizado={recargarTransacciones} />
+            ) : vistaActiva === PESTANA_CATEGORIAS ? (
+              <DetalleDimensionTab transacciones={transacciones} dimensionPrincipal="categoria" />
+            ) : vistaActiva === PESTANA_COMERCIOS ? (
+              <DetalleDimensionTab transacciones={transacciones} dimensionPrincipal="comercio" />
             ) : vistaActiva === PESTANA_RESUMEN ? (
               renderVistaResumen(PESTANA_RESUMEN, transacciones)
             ) : (
