@@ -215,9 +215,23 @@ export function VistaResumen({
     () => calcularFlujoSankeyPorCuenta(conFiltros, periodo.meses),
     [conFiltros, periodo]
   );
+  // A diferencia de categoría/cuenta (que usan `conFiltros` con TODAS las
+  // dimensiones aplicadas), evento ignora categoría/comercio/tarjeta -- la
+  // mayoría de las transacciones no tienen evento asignado, así que un
+  // filtro de categoría/comercio/tarjeta sin relación con el evento vaciaba
+  // este diagrama por completo ("no hay ingresos ni gastos en el periodo")
+  // en cuanto se aplicaba cualquier otro filtro, incluso con eventos reales
+  // en el periodo. Sigue respetando el propio filtro de evento (para poder
+  // aislar uno) y el periodo, igual que las otras dos variantes.
   const flujoSankeyPorEvento = useMemo(
-    () => calcularFlujoSankeyPorEvento(conFiltros.filter((t) => eventoDe(t) !== null), periodo.meses),
-    [conFiltros, periodo]
+    () =>
+      calcularFlujoSankeyPorEvento(
+        aplicarFiltros(visibles, filtros, ["categoria", "comercio", "tarjeta"]).filter(
+          (t) => eventoDe(t) !== null
+        ),
+        periodo.meses
+      ),
+    [visibles, filtros, periodo]
   );
   // Selector de dimensión del Sankey (categoría/cuenta/tarjeta/evento) --
   // antes se mostraban dos diagramas apilados; ahora es uno solo con
