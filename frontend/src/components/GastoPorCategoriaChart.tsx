@@ -11,6 +11,8 @@ import {
   YAxis,
 } from "recharts";
 import type { PuntoCategoria } from "../lib/queries";
+import { useEsMovil } from "../hooks/useEsMovil";
+import { truncar } from "../lib/texto";
 
 const formateadorMoneda = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -45,6 +47,15 @@ export function GastoPorCategoriaChart({
       : visibles;
 
   const alturaFila = 44;
+  // El eje Y (nombres) y el margen derecho (etiquetas de monto) son props
+  // numéricos de Recharts, no clases de Tailwind -- en un teléfono se
+  // encogen a mano para dejarle más ancho real a las barras.
+  const esMovil = useEsMovil();
+  const anchoEjeY = esMovil ? 84 : 140;
+  // Sin espacio para el monto al final de la barra en móvil (necesitaría
+  // ~45-50px y no queda margen), se oculta la etiqueta de valor y basta con
+  // tocar la barra para ver el monto exacto en el tooltip.
+  const margenDerecho = esMovil ? 8 : 48;
 
   const opacidad = (categoria: string) =>
     !categoriaSeleccionada || categoriaSeleccionada === categoria ? 1 : 0.3;
@@ -67,7 +78,7 @@ export function GastoPorCategoriaChart({
           <BarChart
             data={datosFinales}
             layout="vertical"
-            margin={{ left: 8, right: 48 }}
+            margin={{ left: 8, right: margenDerecho }}
           >
             <CartesianGrid horizontal={false} stroke="var(--gridline)" strokeWidth={1} />
             <XAxis type="number" hide />
@@ -77,7 +88,8 @@ export function GastoPorCategoriaChart({
               tick={{ fill: "var(--text-secondary)", fontSize: 12 }}
               axisLine={false}
               tickLine={false}
-              width={140}
+              width={anchoEjeY}
+              tickFormatter={(v: string) => (esMovil ? truncar(v, 11) : v)}
             />
             <Tooltip
               formatter={(value) => formateadorMoneda.format(Number(value))}
@@ -118,12 +130,14 @@ export function GastoPorCategoriaChart({
                   fillOpacity={d.categoria === OTROS ? 0.6 : opacidad(d.categoria)}
                 />
               ))}
-              <LabelList
-                dataKey="ingresos"
-                position="right"
-                formatter={(v: unknown) => formateadorMoneda.format(Number(v))}
-                style={{ fill: "var(--text-secondary)", fontSize: 12 }}
-              />
+              {!esMovil && (
+                <LabelList
+                  dataKey="ingresos"
+                  position="right"
+                  formatter={(v: unknown) => formateadorMoneda.format(Number(v))}
+                  style={{ fill: "var(--text-secondary)", fontSize: 12 }}
+                />
+              )}
             </Bar>
             <Bar
               dataKey="gastos"
@@ -148,12 +162,14 @@ export function GastoPorCategoriaChart({
                   fillOpacity={d.categoria === OTROS ? 0.6 : opacidad(d.categoria)}
                 />
               ))}
-              <LabelList
-                dataKey="gastos"
-                position="right"
-                formatter={(v: unknown) => formateadorMoneda.format(Number(v))}
-                style={{ fill: "var(--text-secondary)", fontSize: 12 }}
-              />
+              {!esMovil && (
+                <LabelList
+                  dataKey="gastos"
+                  position="right"
+                  formatter={(v: unknown) => formateadorMoneda.format(Number(v))}
+                  style={{ fill: "var(--text-secondary)", fontSize: 12 }}
+                />
+              )}
             </Bar>
           </BarChart>
         </ResponsiveContainer>

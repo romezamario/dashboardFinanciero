@@ -79,41 +79,77 @@ export function Tabla({
           {vacio}
         </p>
       ) : (
-        <div className="mt-3 max-h-80 overflow-auto">
-          <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ borderBottom: "1px solid var(--gridline)" }}>
-                {encabezados.map((e, i) => (
-                  <th
-                    key={e}
-                    className={`whitespace-nowrap py-2 font-medium ${i === 0 ? "text-left" : "pl-3 text-right"}`}
-                    style={{ color: "var(--text-muted)" }}
-                  >
-                    {e}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filas.map((fila) => (
-                <tr key={String(fila[0])} style={{ borderBottom: "1px solid var(--gridline)" }}>
-                  {fila.map((celda, i) => (
-                    <td
-                      key={i}
-                      className={`whitespace-nowrap py-2 ${i === 0 ? "text-left" : "pl-3 text-right"}`}
-                      style={{
-                        color: i === 0 ? "var(--text-primary)" : "var(--text-secondary)",
-                        fontVariantNumeric: i === 0 ? undefined : "tabular-nums",
-                      }}
+        <>
+          {/* Varias columnas no caben en un teléfono -- desde `sm` se ve la
+              tabla completa, debajo una tarjeta por fila (etiqueta: valor). */}
+          <div className="mt-3 hidden max-h-80 overflow-auto sm:block">
+            <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid var(--gridline)" }}>
+                  {encabezados.map((e, i) => (
+                    <th
+                      key={e}
+                      className={`whitespace-nowrap py-2 font-medium ${i === 0 ? "text-left" : "pl-3 text-right"}`}
+                      style={{ color: "var(--text-muted)" }}
                     >
-                      {celda}
-                    </td>
+                      {e}
+                    </th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {filas.map((fila) => (
+                  <tr key={String(fila[0])} style={{ borderBottom: "1px solid var(--gridline)" }}>
+                    {fila.map((celda, i) => (
+                      <td
+                        key={i}
+                        className={`whitespace-nowrap py-2 ${i === 0 ? "text-left" : "pl-3 text-right"}`}
+                        style={{
+                          color: i === 0 ? "var(--text-primary)" : "var(--text-secondary)",
+                          fontVariantNumeric: i === 0 ? undefined : "tabular-nums",
+                        }}
+                      >
+                        {celda}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-3 max-h-80 space-y-2 overflow-auto sm:hidden">
+            {filas.map((fila) => (
+              <div
+                key={String(fila[0])}
+                className="rounded-md p-3"
+                style={{ border: "1px solid var(--gridline)" }}
+              >
+                <div className="text-sm" style={{ color: "var(--text-primary)" }}>
+                  {fila[0]}
+                </div>
+                <div className="mt-1 space-y-0.5">
+                  {encabezados.slice(1).map((encabezado, i) => (
+                    <div
+                      key={encabezado}
+                      className="flex items-center justify-between gap-3 text-xs"
+                    >
+                      <span style={{ color: "var(--text-muted)" }}>{encabezado}</span>
+                      <span
+                        style={{
+                          color: "var(--text-secondary)",
+                          fontVariantNumeric: "tabular-nums",
+                        }}
+                      >
+                        {fila[i + 1]}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

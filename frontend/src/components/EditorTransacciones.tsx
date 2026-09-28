@@ -209,7 +209,7 @@ export function EditorTransacciones({
       />
 
       <div className="mt-3 flex flex-wrap items-end gap-3">
-        <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+        <label className="w-full text-xs sm:w-auto" style={{ color: "var(--text-secondary)" }}>
           Filtrar por categoría
           <select
             value={categoriaFiltro}
@@ -217,7 +217,7 @@ export function EditorTransacciones({
               setCategoriaFiltro(e.target.value);
               setSeleccionadas(new Set());
             }}
-            className="mt-1 block w-48 rounded-md px-3 py-2 text-sm"
+            className="mt-1 block w-full rounded-md px-3 py-2 text-sm sm:w-48"
             style={{
               background: "var(--page-plane)",
               border: "1px solid var(--border)",
@@ -233,7 +233,7 @@ export function EditorTransacciones({
           </select>
         </label>
 
-        <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+        <label className="w-full text-xs sm:w-auto" style={{ color: "var(--text-secondary)" }}>
           Filtrar por comercio
           <select
             value={comercioFiltro}
@@ -241,7 +241,7 @@ export function EditorTransacciones({
               setComercioFiltro(e.target.value);
               setSeleccionadas(new Set());
             }}
-            className="mt-1 block w-48 rounded-md px-3 py-2 text-sm"
+            className="mt-1 block w-full rounded-md px-3 py-2 text-sm sm:w-48"
             style={{
               background: "var(--page-plane)",
               border: "1px solid var(--border)",
@@ -274,7 +274,7 @@ export function EditorTransacciones({
 
       {hayFiltroActivo && (
         <>
-          <div className="mt-3 flex items-center justify-between">
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs" style={{ color: "var(--text-muted)" }}>
               {coincidencias.length} coincidencia(s)
               {coincidencias.length > TOPE_RESULTADOS &&
@@ -300,7 +300,13 @@ export function EditorTransacciones({
             </div>
           </div>
 
-          <div className="mt-2 max-h-64 overflow-auto rounded-md" style={{ border: "1px solid var(--border)" }}>
+          {/* 8 columnas no caben en un teléfono -- desde `sm` se ve la tabla
+              completa, debajo tarjetas tocables (toda la tarjeta selecciona,
+              igual que la fila de la tabla). */}
+          <div
+            className="mt-2 hidden max-h-64 overflow-auto rounded-md sm:block"
+            style={{ border: "1px solid var(--border)" }}
+          >
             <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
               <tbody>
                 {visibles.map((t) => (
@@ -359,8 +365,62 @@ export function EditorTransacciones({
             </table>
           </div>
 
+          <div
+            className="mt-2 max-h-64 space-y-2 overflow-auto rounded-md p-2 sm:hidden"
+            style={{ border: "1px solid var(--border)" }}
+          >
+            {visibles.map((t) => {
+              const seleccionada = seleccionadas.has(t.id);
+              return (
+                <div
+                  key={t.id}
+                  onClick={() => alternarSeleccion(t.id)}
+                  className="flex items-start gap-2 rounded-md p-2"
+                  style={{
+                    border: `1px solid ${seleccionada ? "var(--series-1)" : "var(--gridline)"}`,
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={seleccionada}
+                    onChange={() => alternarSeleccion(t.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="mt-1"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-sm" style={{ color: "var(--text-primary)" }}>
+                        {t.descripcion}
+                      </span>
+                      <span
+                        className="text-sm whitespace-nowrap"
+                        style={{ color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums" }}
+                      >
+                        {formateadorMoneda.format(t.monto)}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+                      {formateadorFecha.format(new Date(t.fecha + "T00:00:00"))} ·{" "}
+                      {t.documentos.cuentas.alias}
+                      {t.tarjeta ? ` · ${t.tarjeta}` : ""}
+                    </div>
+                    <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+                      {t.categorias?.nombre ?? "Sin categoría"}
+                      {t.comercio ? ` · ${t.comercio}` : ""}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {visibles.length === 0 && (
+              <p className="py-4 text-center text-xs" style={{ color: "var(--text-muted)" }}>
+                Sin coincidencias.
+              </p>
+            )}
+          </div>
+
           <div className="mt-3 flex flex-wrap items-end gap-3">
-            <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            <label className="w-full text-xs sm:w-auto" style={{ color: "var(--text-secondary)" }}>
               Nueva categoría
               <input
                 type="text"
@@ -368,7 +428,7 @@ export function EditorTransacciones({
                 value={nuevaCategoria}
                 onChange={(e) => setNuevaCategoria(e.target.value)}
                 placeholder="(sin cambio)"
-                className="mt-1 block w-48 rounded-md px-3 py-2 text-sm"
+                className="mt-1 block w-full rounded-md px-3 py-2 text-sm sm:w-48"
                 style={{
                   background: "var(--page-plane)",
                   border: "1px solid var(--border)",
@@ -382,7 +442,7 @@ export function EditorTransacciones({
               </datalist>
             </label>
 
-            <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            <label className="w-full text-xs sm:w-auto" style={{ color: "var(--text-secondary)" }}>
               Nuevo comercio
               <input
                 type="text"
@@ -390,7 +450,7 @@ export function EditorTransacciones({
                 value={nuevoComercio}
                 onChange={(e) => setNuevoComercio(e.target.value)}
                 placeholder="(sin cambio)"
-                className="mt-1 block w-48 rounded-md px-3 py-2 text-sm"
+                className="mt-1 block w-full rounded-md px-3 py-2 text-sm sm:w-48"
                 style={{
                   background: "var(--page-plane)",
                   border: "1px solid var(--border)",
@@ -404,12 +464,12 @@ export function EditorTransacciones({
               </datalist>
             </label>
 
-            <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            <label className="w-full text-xs sm:w-auto" style={{ color: "var(--text-secondary)" }}>
               Nueva cuenta
               <select
                 value={nuevaCuentaId}
                 onChange={(e) => setNuevaCuentaId(e.target.value)}
-                className="mt-1 block w-48 rounded-md px-3 py-2 text-sm"
+                className="mt-1 block w-full rounded-md px-3 py-2 text-sm sm:w-48"
                 style={{
                   background: "var(--page-plane)",
                   border: "1px solid var(--border)",
@@ -428,7 +488,7 @@ export function EditorTransacciones({
             <button
               onClick={aplicarCambios}
               disabled={!puedeAplicar}
-              className="rounded-md px-4 py-2 text-xs font-medium text-white disabled:opacity-50"
+              className="w-full rounded-md px-4 py-2 text-xs font-medium text-white disabled:opacity-50 sm:w-auto"
               style={{ background: "var(--series-1)" }}
             >
               {guardando

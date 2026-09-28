@@ -11,6 +11,8 @@ import {
   YAxis,
 } from "recharts";
 import type { PuntoEvento } from "../lib/queries";
+import { useEsMovil } from "../hooks/useEsMovil";
+import { truncar } from "../lib/texto";
 
 const formateadorMoneda = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -41,6 +43,9 @@ export function GastoPorEventoChart({
   const datosFinales = datos.slice(0, TOPE);
 
   const alturaFila = 44;
+  const esMovil = useEsMovil();
+  const anchoEjeY = esMovil ? 84 : 140;
+  const margenDerecho = esMovil ? 8 : 48;
 
   const opacidad = (evento: string) =>
     !eventoSeleccionado || eventoSeleccionado === evento ? 1 : 0.3;
@@ -69,7 +74,7 @@ export function GastoPorEventoChart({
             <BarChart
               data={datosFinales}
               layout="vertical"
-              margin={{ left: 8, right: 48 }}
+              margin={{ left: 8, right: margenDerecho }}
             >
               <CartesianGrid horizontal={false} stroke="var(--gridline)" strokeWidth={1} />
               <XAxis type="number" hide />
@@ -79,7 +84,8 @@ export function GastoPorEventoChart({
                 tick={{ fill: "var(--text-secondary)", fontSize: 12 }}
                 axisLine={false}
                 tickLine={false}
-                width={140}
+                width={anchoEjeY}
+                tickFormatter={(v: string) => (esMovil ? truncar(v, 11) : v)}
               />
               <Tooltip
                 formatter={(value) => formateadorMoneda.format(Number(value))}
@@ -107,12 +113,14 @@ export function GastoPorEventoChart({
                 {datosFinales.map((d) => (
                   <Cell key={d.evento} fillOpacity={opacidad(d.evento)} />
                 ))}
-                <LabelList
-                  dataKey="ingresos"
-                  position="right"
-                  formatter={(v: unknown) => formateadorMoneda.format(Number(v))}
-                  style={{ fill: "var(--text-secondary)", fontSize: 12 }}
-                />
+                {!esMovil && (
+                  <LabelList
+                    dataKey="ingresos"
+                    position="right"
+                    formatter={(v: unknown) => formateadorMoneda.format(Number(v))}
+                    style={{ fill: "var(--text-secondary)", fontSize: 12 }}
+                  />
+                )}
               </Bar>
               <Bar
                 dataKey="gastos"
@@ -126,12 +134,14 @@ export function GastoPorEventoChart({
                 {datosFinales.map((d) => (
                   <Cell key={d.evento} fillOpacity={opacidad(d.evento)} />
                 ))}
-                <LabelList
-                  dataKey="gastos"
-                  position="right"
-                  formatter={(v: unknown) => formateadorMoneda.format(Number(v))}
-                  style={{ fill: "var(--text-secondary)", fontSize: 12 }}
-                />
+                {!esMovil && (
+                  <LabelList
+                    dataKey="gastos"
+                    position="right"
+                    formatter={(v: unknown) => formateadorMoneda.format(Number(v))}
+                    style={{ fill: "var(--text-secondary)", fontSize: 12 }}
+                  />
+                )}
               </Bar>
             </BarChart>
           </ResponsiveContainer>

@@ -248,7 +248,7 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
         </p>
 
         <div className="mt-3 flex flex-wrap items-end gap-3">
-          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+          <label className="w-full text-xs sm:w-auto" style={{ color: "var(--text-secondary)" }}>
             Desde
             <input
               type="date"
@@ -257,7 +257,7 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
                 setFechaDesde(e.target.value);
                 setSeleccionadas(new Set());
               }}
-              className="mt-1 block rounded-md px-3 py-2 text-sm"
+              className="mt-1 block w-full rounded-md px-3 py-2 text-sm sm:w-auto"
               style={{
                 background: "var(--page-plane)",
                 border: "1px solid var(--border)",
@@ -266,7 +266,7 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
             />
           </label>
 
-          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+          <label className="w-full text-xs sm:w-auto" style={{ color: "var(--text-secondary)" }}>
             Hasta
             <input
               type="date"
@@ -275,7 +275,7 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
                 setFechaHasta(e.target.value);
                 setSeleccionadas(new Set());
               }}
-              className="mt-1 block rounded-md px-3 py-2 text-sm"
+              className="mt-1 block w-full rounded-md px-3 py-2 text-sm sm:w-auto"
               style={{
                 background: "var(--page-plane)",
                 border: "1px solid var(--border)",
@@ -284,7 +284,7 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
             />
           </label>
 
-          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+          <label className="w-full text-xs sm:w-auto" style={{ color: "var(--text-secondary)" }}>
             Cuenta
             <select
               value={cuenta}
@@ -292,7 +292,7 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
                 setCuenta(e.target.value);
                 setSeleccionadas(new Set());
               }}
-              className="mt-1 block w-48 rounded-md px-3 py-2 text-sm"
+              className="mt-1 block w-full rounded-md px-3 py-2 text-sm sm:w-48"
               style={{
                 background: "var(--page-plane)",
                 border: "1px solid var(--border)",
@@ -309,7 +309,7 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
           </label>
 
           {tarjetasExistentes.length > 0 && (
-            <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            <label className="w-full text-xs sm:w-auto" style={{ color: "var(--text-secondary)" }}>
               Tarjeta
               <select
                 value={tarjeta}
@@ -317,7 +317,7 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
                   setTarjeta(e.target.value);
                   setSeleccionadas(new Set());
                 }}
-                className="mt-1 block w-40 rounded-md px-3 py-2 text-sm"
+                className="mt-1 block w-full rounded-md px-3 py-2 text-sm sm:w-40"
                 style={{
                   background: "var(--page-plane)",
                   border: "1px solid var(--border)",
@@ -353,7 +353,7 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
 
         {hayFiltrosActivos && (
           <>
-            <div className="mt-4 flex items-center justify-between">
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs" style={{ color: "var(--text-muted)" }}>
                 {coincidencias.length} coincidencia(s)
                 {coincidencias.length > TOPE_RESULTADOS &&
@@ -379,8 +379,10 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
               </div>
             </div>
 
+            {/* Desde `sm` se ve la tabla completa; en un teléfono, tarjetas
+                tocables (toda la tarjeta selecciona, igual que la fila). */}
             <div
-              className="mt-2 max-h-96 overflow-auto rounded-md"
+              className="mt-2 hidden max-h-96 overflow-auto rounded-md sm:block"
               style={{ border: "1px solid var(--border)" }}
             >
               <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
@@ -441,8 +443,64 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
               </table>
             </div>
 
+            <div
+              className="mt-2 max-h-96 space-y-2 overflow-auto rounded-md p-2 sm:hidden"
+              style={{ border: "1px solid var(--border)" }}
+            >
+              {visibles.map((t) => {
+                const seleccionada = seleccionadas.has(t.id);
+                return (
+                  <div
+                    key={t.id}
+                    onClick={() => alternarSeleccion(t.id)}
+                    className="flex items-start gap-2 rounded-md p-2"
+                    style={{
+                      border: `1px solid ${seleccionada ? "var(--series-1)" : "var(--gridline)"}`,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={seleccionada}
+                      onChange={() => alternarSeleccion(t.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-1"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-sm" style={{ color: "var(--text-primary)" }}>
+                          {t.descripcion}
+                        </span>
+                        <span
+                          className="text-sm whitespace-nowrap"
+                          style={{
+                            color: "var(--text-secondary)",
+                            fontVariantNumeric: "tabular-nums",
+                          }}
+                        >
+                          {formateadorMoneda.format(t.monto)}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+                        {formateadorFecha.format(new Date(t.fecha + "T00:00:00"))} ·{" "}
+                        {t.documentos.cuentas.alias}
+                        {t.tarjeta ? ` · ${t.tarjeta}` : ""}
+                      </div>
+                      <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+                        {t.eventos?.nombre ?? "Sin evento"}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {visibles.length === 0 && (
+                <p className="py-4 text-center text-xs" style={{ color: "var(--text-muted)" }}>
+                  Sin coincidencias.
+                </p>
+              )}
+            </div>
+
             <div className="mt-3 flex flex-wrap items-end gap-3">
-              <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+              <label className="w-full text-xs sm:w-auto" style={{ color: "var(--text-secondary)" }}>
                 Evento
                 <input
                   type="text"
@@ -450,7 +508,7 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
                   value={nuevoEvento}
                   onChange={(e) => setNuevoEvento(e.target.value)}
                   placeholder="ej. Viaje a Cancún"
-                  className="mt-1 block w-56 rounded-md px-3 py-2 text-sm"
+                  className="mt-1 block w-full rounded-md px-3 py-2 text-sm sm:w-56"
                   style={{
                     background: "var(--page-plane)",
                     border: "1px solid var(--border)",
@@ -467,7 +525,7 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
               <button
                 onClick={aplicarEvento}
                 disabled={!puedeAplicar}
-                className="rounded-md px-4 py-2 text-xs font-medium text-white disabled:opacity-50"
+                className="w-full rounded-md px-4 py-2 text-xs font-medium text-white disabled:opacity-50 sm:w-auto"
                 style={{ background: "var(--series-1)" }}
               >
                 {guardando

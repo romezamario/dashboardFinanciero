@@ -1,6 +1,9 @@
+import { useCallback } from "react";
 import { ResponsiveContainer, Sankey, Tooltip } from "recharts";
 import type { SankeyLinkProps, SankeyNodeProps } from "recharts";
 import { nombrePeriodo, type FlujoSankeyDatos } from "../lib/indicadores";
+import { useEsMovil } from "../hooks/useEsMovil";
+import { truncar } from "../lib/texto";
 
 const formateadorMoneda = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -91,6 +94,7 @@ function construirDatosSankey(datos: FlujoSankeyDatos): { nodes: NodoSankey[]; l
 // compatible), a la vez que tipa lo que este componente de verdad usa.
 interface PropsNodoPersonalizado extends Omit<SankeyNodeProps, "payload"> {
   payload: SankeyNodeProps["payload"] & { color?: string };
+  esMovil: boolean;
 }
 
 interface PropsEnlacePersonalizado extends Omit<SankeyLinkProps, "payload"> {
@@ -100,12 +104,17 @@ interface PropsEnlacePersonalizado extends Omit<SankeyLinkProps, "payload"> {
 }
 
 function NodoPersonalizado(props: PropsNodoPersonalizado) {
-  const { x, y, width, height, payload } = props;
+  const { x, y, width, height, payload, esMovil } = props;
   // Un nodo sin enlaces de salida es una hoja del diagrama (Ahorro, o una
   // categoría de gasto) -- su etiqueta va a la izquierda del nodo en vez de
   // a la derecha, para no quedar pegada al borde del contenedor.
   const esHoja = payload.sourceLinks.length === 0;
   const etiquetaX = esHoja ? x - 8 : x + width + 8;
+  // En móvil el margen para las etiquetas se reduce bastante (ver el
+  // `margin` del <Sankey> más abajo) -- nombres largos ("Transferencia
+  // recibida") no caben, así que se truncan con "…" en vez de desbordar el
+  // contenedor.
+  const nombre = esMovil ? truncar(payload.name, 10) : payload.name;
 
   return (
     <g>
@@ -121,16 +130,16 @@ function NodoPersonalizado(props: PropsNodoPersonalizado) {
         x={etiquetaX}
         y={y + height / 2 - 7}
         textAnchor={esHoja ? "end" : "start"}
-        fontSize={12}
+        fontSize={esMovil ? 10 : 12}
         fill="var(--text-secondary)"
       >
-        {payload.name}
+        {nombre}
       </text>
       <text
         x={etiquetaX}
         y={y + height / 2 + 8}
         textAnchor={esHoja ? "end" : "start"}
-        fontSize={11}
+        fontSize={esMovil ? 9 : 11}
         fill="var(--text-muted)"
       >
         {formateadorMoneda.format(Number(payload.value))}
@@ -163,6 +172,24 @@ export function FlujoSankeyChart({
 }: FlujoSankeyChartProps) {
   const { nodes, links } = construirDatosSankey(datos);
   const sinDatos = links.length === 0;
+  const esMovil = useEsMovil();
+  // `left`/`right` reservan espacio para las etiquetas de nombre+monto que
+  // NodoPersonalizado dibuja fuera del propio nodo -- en escritorio hay
+  // margen de sobra para nombres largos sin truncar; en móvil se reduce
+  // bastante (y el nombre se trunca, ver NodoPersonalizado) o el diagrama
+  // completo no entra en un contenedor de ~310px de ancho.
+  const margenSankey = esMovil
+    ? { top: 16, right: 64, bottom: 16, left: 64 }
+    : { top: 20, right: 170, bottom: 20, left: 130 };
+  // Nueva identidad solo cuando cambia `esMovil` (no en cada render) --
+  // Recharts trata `node` como el tipo del componente, así que una función
+  // distinta en cada render forzaría un remount de la capa de nodos.
+  const renderNodo = useCallback(
+    (props: Omit<PropsNodoPersonalizado, "esMovil">) => (
+      <NodoPersonalizado {...props} esMovil={esMovil} />
+    ),
+    [esMovil]
+  );
 
   return (
     <div
@@ -185,8 +212,8 @@ export function FlujoSankeyChart({
               nodeWidth={12}
               nodePadding={16}
               linkCurvature={0.5}
-              margin={{ top: 20, right: 170, bottom: 20, left: 130 }}
-              node={NodoPersonalizado}
+              margin={margenSankey}
+              node={renderNodo}
               link={EnlacePersonalizado}
             >
               <Tooltip

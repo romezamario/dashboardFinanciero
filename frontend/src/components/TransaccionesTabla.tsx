@@ -27,7 +27,10 @@ export function TransaccionesTabla({
       <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
         Transacciones
       </h3>
-      <div className="mt-3 max-h-96 overflow-auto">
+
+      {/* 8 columnas no caben en un teléfono ni encogiendo la letra -- desde
+          `sm` se ve la tabla completa, debajo una tarjeta por transacción. */}
+      <div className="mt-3 hidden max-h-96 overflow-auto sm:block">
         <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ borderBottom: "1px solid var(--gridline)" }}>
@@ -122,12 +125,49 @@ export function TransaccionesTabla({
             ))}
           </tbody>
         </table>
-        {ordenadas.length === 0 && (
-          <p className="py-6 text-center" style={{ color: "var(--text-muted)" }}>
-            No hay transacciones sincronizadas todavía.
-          </p>
-        )}
       </div>
+
+      <div className="mt-3 max-h-96 space-y-2 overflow-auto sm:hidden">
+        {ordenadas.map((t) => (
+          <div
+            key={t.id}
+            className="rounded-md p-3"
+            style={{ border: "1px solid var(--gridline)" }}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <span className="text-sm" style={{ color: "var(--text-primary)" }}>
+                {t.descripcion}
+              </span>
+              <span
+                className="text-sm whitespace-nowrap"
+                style={{
+                  fontVariantNumeric: "tabular-nums",
+                  color: t.tipo === "abono" ? "var(--status-good)" : "var(--text-primary)",
+                }}
+              >
+                {t.tipo === "cargo" ? "-" : "+"}
+                {formateadorMoneda.format(t.monto)}
+              </span>
+            </div>
+            <div className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+              {formateadorFecha.format(new Date(t.fecha + "T00:00:00"))} ·{" "}
+              {t.documentos.cuentas.alias}
+              {t.tarjeta ? ` · ${t.tarjeta}` : ""}
+            </div>
+            <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+              {t.categorias?.nombre ?? "Sin categoría"}
+              {t.comercio ? ` · ${t.comercio}` : ""}
+              {t.eventos?.nombre ? ` · ${t.eventos.nombre}` : ""}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {ordenadas.length === 0 && (
+        <p className="py-6 text-center text-xs" style={{ color: "var(--text-muted)" }}>
+          No hay transacciones sincronizadas todavía.
+        </p>
+      )}
     </div>
   );
 }

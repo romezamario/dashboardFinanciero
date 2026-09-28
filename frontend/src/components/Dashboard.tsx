@@ -186,7 +186,7 @@ export function Dashboard() {
   return (
     <div style={{ background: "var(--page-plane)", minHeight: "100vh" }}>
       <header
-        className="flex items-center justify-between px-6 py-4"
+        className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 sm:px-6 sm:py-4"
         style={{ borderBottom: "1px solid var(--border)" }}
       >
         <h1
@@ -195,7 +195,7 @@ export function Dashboard() {
         >
           Dashboard Financiero
         </h1>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           <button
             onClick={alternarTema}
             className="rounded-full px-3 py-1 text-xs font-medium"
@@ -218,7 +218,7 @@ export function Dashboard() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl space-y-6 p-6">
+      <main className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6">
         {transacciones.length === 0 ? (
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
             No hay transacciones sincronizadas todavía — usa la app de
