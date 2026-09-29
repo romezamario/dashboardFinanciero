@@ -441,6 +441,23 @@ export async function actualizarCategoriaComercioYEvento(
   }
 }
 
+/**
+ * Vacía `evento_id` (a `null`) para los `id` dados -- el único caso donde sí
+ * hace falta "vaciar" en vez de reasignar (ver la nota de
+ * `actualizarCategoriaComercioYEvento`): un evento mal asignado por error no
+ * se puede corregir escribiendo otro nombre si en realidad esa transacción
+ * no pertenece a ningún evento. Solo evento, no categoría/comercio -- esos
+ * siempre tienen un valor real que corregir (una categoría equivocada se
+ * arregla asignando la correcta, nunca "ninguna").
+ */
+export async function quitarEventoDeTransacciones(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  for (const lote of enLotes(ids)) {
+    const { error } = await supabase.from("transacciones").update({ evento_id: null }).in("id", lote);
+    if (error) throw error;
+  }
+}
+
 /** `.in("id", ids)` viaja en la URL de la petición (?id=in.(...)): con
  * cientos de ids seleccionados ("Seleccionar todas las coincidencias" sobre
  * años de historial) la URL rebasaba el límite del servidor y la edición

@@ -8,6 +8,7 @@ import {
   buscarPorDescripcion,
   cuentaDe,
   eventoDe,
+  quitarEventoDeTransacciones,
   type Filtros,
 } from "../lib/queries";
 import type { Transaccion } from "../lib/types";
@@ -187,7 +188,35 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
     }
   }
 
+  // Sin texto de evento -- borra evento_id en vez de reasignarlo. Existe
+  // porque una transacción mal asignada por error (p. ej. al categorizar en
+  // lote sin darse cuenta) no tiene forma de corregirse escribiendo otro
+  // nombre si en realidad no pertenece a ningún evento.
+  async function quitarEvento() {
+    if (seleccionadas.size === 0) return;
+
+    setGuardando(true);
+    setMensaje(null);
+    try {
+      await quitarEventoDeTransacciones(Array.from(seleccionadas));
+      setMensaje({
+        tipo: "ok",
+        texto: `Se quitó el evento de ${seleccionadas.size} transacción(es).`,
+      });
+      setSeleccionadas(new Set());
+      await onActualizado();
+    } catch (e) {
+      setMensaje({
+        tipo: "error",
+        texto: e instanceof Error ? e.message : "No se pudo actualizar.",
+      });
+    } finally {
+      setGuardando(false);
+    }
+  }
+
   const puedeAplicar = seleccionadas.size > 0 && nuevoEvento.trim() && !guardando;
+  const puedeQuitar = seleccionadas.size > 0 && !guardando;
 
   return (
     <div className="space-y-4">
@@ -251,7 +280,8 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
         <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
           Busca por descripción y/o filtra por fecha, cuenta y/o tarjeta para encontrar
           las transacciones de un viaje, fiesta u otro evento, selecciónalas y asígnales
-          un nombre de evento (existente o nuevo).
+          un nombre de evento (existente o nuevo). También puedes buscar transacciones
+          que ya tienen un evento asignado por error y quitárselo.
         </p>
 
         <input
@@ -555,6 +585,20 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
                 {guardando
                   ? "Aplicando..."
                   : `Asignar a ${seleccionadas.size} seleccionada(s)`}
+              </button>
+
+              <button
+                onClick={quitarEvento}
+                disabled={!puedeQuitar}
+                className="w-full rounded-md px-4 py-2 text-xs font-medium disabled:opacity-50 sm:w-auto"
+                style={{
+                  background: "transparent",
+                  border: "1px solid var(--status-critical)",
+                  color: "var(--status-critical)",
+                }}
+                title="Vacía el evento de las transacciones seleccionadas (para corregir una asignación equivocada)"
+              >
+                {guardando ? "Quitando..." : "Quitar evento"}
               </button>
             </div>
 
