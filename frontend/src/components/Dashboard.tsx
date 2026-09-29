@@ -20,6 +20,9 @@ interface EstadoVista {
    * al crear el estado -- evita que el primer cambio de OTRO campo (p. ej.
    * el periodo) cree el estado desde vacío y vuelva a mostrar "Pago TDC". */
   categoriasOcultas: Set<string> | null;
+  /** A diferencia de categoriasOcultas, sin default -- ningún evento se
+   * descarta hasta que el usuario lo elige explícitamente. */
+  eventosOcultos: Set<string>;
   rangoMeses: RangoMeses;
   vistaTiempo: VistaTiempo;
 }
@@ -27,6 +30,7 @@ interface EstadoVista {
 const ESTADO_VACIO: EstadoVista = {
   filtros: {},
   categoriasOcultas: null,
+  eventosOcultos: new Set(),
   rangoMeses: RANGO_MESES_VACIO,
   vistaTiempo: "meses",
 };
@@ -174,6 +178,10 @@ export function Dashboard() {
             ...e,
             categoriasOcultas: cambio(e.categoriasOcultas ?? categoriasOcultasPorDefecto),
           }))
+        }
+        eventosOcultos={estado.eventosOcultos}
+        onCambiarEventosOcultos={(cambio) =>
+          actualizarEstado(pestana, (e) => ({ ...e, eventosOcultos: cambio(e.eventosOcultos) }))
         }
         rangoMeses={estado.rangoMeses}
         onCambiarRangoMeses={(cambio) =>

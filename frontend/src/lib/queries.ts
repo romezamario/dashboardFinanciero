@@ -119,6 +119,24 @@ export function ocultarCategorias(
 }
 
 /**
+ * Mismo mecanismo que `ocultarCategorias`, pero para eventos: descarta por
+ * completo las transacciones de los eventos elegidos (de TODO -- KPIs,
+ * gráficas, tabla, no solo del detalle), a diferencia de `aplicarFiltros`
+ * con `evento` (que AISLA un solo evento). Útil para un evento grande y
+ * puntual (una boda, un viaje) que se quiere excluir de los indicadores de
+ * salud financiera en vez de solo dejar de mirarlo. A diferencia de
+ * categoría, no hay un default de eventos ocultos -- ningún evento se
+ * descarta hasta que el usuario lo elige explícitamente.
+ */
+export function ocultarEventos(transacciones: Transaccion[], eventosOcultos: Set<string>): Transaccion[] {
+  if (eventosOcultos.size === 0) return transacciones;
+  return transacciones.filter((t) => {
+    const evento = eventoDe(t);
+    return evento === null || !eventosOcultos.has(evento);
+  });
+}
+
+/**
  * Filtra transacciones por cross-filter estilo Power BI: cada dimensión
  * activa en `filtros` se aplica, EXCEPTO la que esté en `excluir` — así una
  * gráfica puede seguir mostrando todas sus propias opciones (para poder

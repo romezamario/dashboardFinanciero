@@ -9,6 +9,7 @@ import {
   cuentaDe,
   eventoDe,
   ocultarCategorias,
+  ocultarEventos,
   type Filtros,
 } from "../lib/queries";
 import {
@@ -79,6 +80,8 @@ interface VistaResumenProps {
   onCambiarFiltros: (actualizar: Actualizador<Filtros>) => void;
   categoriasOcultas: Set<string>;
   onCambiarCategoriasOcultas: (actualizar: Actualizador<Set<string>>) => void;
+  eventosOcultos: Set<string>;
+  onCambiarEventosOcultos: (actualizar: Actualizador<Set<string>>) => void;
   rangoMeses: RangoMeses;
   onCambiarRangoMeses: (actualizar: Actualizador<RangoMeses>) => void;
   /** Agrupación de la gráfica de ingresos vs. gastos (por mes o por año). */
@@ -95,9 +98,11 @@ interface VistaResumenProps {
  * - **Periodo** (Desde/Hasta por mes, o clic en un mes/año de la gráfica de
  *   ingresos vs. gastos): aplica a TODO. Sin filtro, los últimos 3 meses
  *   completos.
- * - **Ocultar categorías**: aplica a TODO (por defecto oculta los
- *   movimientos entre cuentas propias, p. ej. "Pago TDC", que si no se
- *   contarían como gasto en una cuenta e ingreso en la otra).
+ * - **Ocultar categorías / descartar eventos**: aplica a TODO (por defecto
+ *   se ocultan los movimientos entre cuentas propias, p. ej. "Pago TDC", que
+ *   si no se contarían como gasto en una cuenta e ingreso en la otra;
+ *   eventos no tienen default -- ninguno se descarta hasta que el usuario
+ *   lo elige, ver `ocultarEventos`).
  * - **Filtros por clic** (categoría, comercio, cuenta, tarjeta, evento):
  *   solo al detalle de gasto (gráficas, tabla, Sankey, gasto hormiga,
  *   categorías al alza). Los indicadores de salud (tasa de ahorro, flujo
@@ -111,6 +116,8 @@ export function VistaResumen({
   onCambiarFiltros,
   categoriasOcultas,
   onCambiarCategoriasOcultas,
+  eventosOcultos,
+  onCambiarEventosOcultos,
   rangoMeses,
   onCambiarRangoMeses,
   vistaTiempo,
@@ -160,6 +167,15 @@ export function VistaResumen({
       ).sort(),
     [transacciones]
   );
+  // Solo los NO descartados pueden aislarse por clic -- mismo criterio que
+  // una categoría oculta, que tampoco puede filtrarse por clic porque su
+  // gráfica de origen ya no la muestra (aquí no hay gráfica, pero la regla
+  // es la misma). La lista completa (`eventosConocidos`) se sigue usando en
+  // el pill de "Descartar eventos" para poder volver a mostrar uno.
+  const eventosVisibles = useMemo(
+    () => eventosConocidos.filter((e) => !eventosOcultos.has(e)),
+    [eventosConocidos, eventosOcultos]
+  );
 
   // Opciones del periodo: los meses con al menos una transacción, del más
   // reciente al más antiguo.
@@ -183,11 +199,12 @@ export function VistaResumen({
       ? nombrePeriodo(periodo.anteriores)
       : `los ${MESES_PERIODO_POR_DEFECTO} meses anteriores`;
 
-  // 1) Ocultar categorías: se quitan de raíz, de todo el historial (las
-  //    comparaciones contra periodos anteriores también las ignoran).
+  // 1) Ocultar categorías / descartar eventos: se quitan de raíz, de todo
+  //    el historial (las comparaciones contra periodos anteriores también
+  //    las ignoran).
   const visibles = useMemo(
-    () => ocultarCategorias(transacciones, categoriasOcultas),
-    [transacciones, categoriasOcultas]
+    () => ocultarEventos(ocultarCategorias(transacciones, categoriasOcultas), eventosOcultos),
+    [transacciones, categoriasOcultas, eventosOcultos]
   );
 
   // 2) Salud financiera: periodo + categorías ocultas, SIN filtros por clic.
@@ -366,6 +383,20 @@ export function VistaResumen({
     // al mismo tiempo se acaba de ocultar (o viceversa).
     if (filtros.categoria === categoria) {
       onCambiarFiltros((anterior) => ({ ...anterior, categoria: undefined }));
+    }
+  }
+
+  function alternarEventoOculto(evento: string) {
+    onCambiarEventosOcultos((anterior) => {
+      const siguiente = new Set(anterior);
+      if (siguiente.has(evento)) siguiente.delete(evento);
+      else siguiente.add(evento);
+      return siguiente;
+    });
+    // Mismo motivo que alternarCategoriaOculta: evita quedarse con un
+    // filtro por clic aislando un evento que se acaba de descartar.
+    if (filtros.evento === evento) {
+      onCambiarFiltros((anterior) => ({ ...anterior, evento: undefined }));
     }
   }
 
@@ -559,12 +590,12 @@ export function VistaResumen({
         </div>
       )}
 
-      {eventosConocidos.length > 0 && (
+      {eventosVisibles.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs" style={{ color: "var(--text-muted)" }}>
             Evento:
           </span>
-          {eventosConocidos.map((evento) => {
+          {eventosVisibles.map((evento) => {
             const seleccionado = filtros.evento === evento;
             return (
               <button
@@ -584,6 +615,44 @@ export function VistaResumen({
               </button>
             );
           })}
+        </div>
+      )}
+
+      {eventosConocidos.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+            Descartar eventos:
+          </span>
+          {eventosConocidos.map((evento) => {
+            const descartado = eventosOcultos.has(evento);
+            return (
+              <button
+                key={evento}
+                onClick={() => alternarEventoOculto(evento)}
+                className="rounded-full px-3 py-1 text-xs font-medium"
+                style={{
+                  background: "var(--surface-1)",
+                  border: `1px solid ${
+                    descartado ? "var(--status-critical)" : "var(--border)"
+                  }`,
+                  color: descartado ? "var(--status-critical)" : "var(--text-secondary)",
+                  textDecoration: descartado ? "line-through" : "none",
+                }}
+                title={descartado ? "Mostrar de nuevo" : "Descartar este evento de todo el dashboard"}
+              >
+                {evento}
+              </button>
+            );
+          })}
+          {eventosOcultos.size > 0 && (
+            <button
+              onClick={() => onCambiarEventosOcultos(() => new Set())}
+              className="text-xs underline"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Mostrar todos
+            </button>
+          )}
         </div>
       )}
 
