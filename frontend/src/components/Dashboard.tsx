@@ -37,8 +37,7 @@ const ESTADO_VACIO: EstadoVista = {
 
 const PESTANA_RESUMEN = "resumen";
 const PESTANA_EVENTOS = "eventos";
-const PESTANA_CATEGORIAS = "categorias";
-const PESTANA_COMERCIOS = "comercios";
+const PESTANA_CATEGORIAS_COMERCIOS = "categorias-comercios";
 // Prefijo para no chocar con "resumen"/"eventos" si alguna cuenta tuviera
 // ese mismo alias.
 const PREFIJO_PESTANA_CUENTA = "cuenta:";
@@ -120,8 +119,7 @@ export function Dashboard() {
   const pestanas = [
     { id: PESTANA_RESUMEN, etiqueta: "Resumen" },
     { id: PESTANA_EVENTOS, etiqueta: "Eventos" },
-    { id: PESTANA_CATEGORIAS, etiqueta: "Categorías" },
-    { id: PESTANA_COMERCIOS, etiqueta: "Comercios" },
+    { id: PESTANA_CATEGORIAS_COMERCIOS, etiqueta: "Categorías y Comercios" },
     ...cuentasConocidas.map((cuenta) => ({
       id: PREFIJO_PESTANA_CUENTA + cuenta,
       etiqueta: cuenta,
@@ -262,18 +260,8 @@ export function Dashboard() {
 
             {vistaActiva === PESTANA_EVENTOS ? (
               <EventosTab transacciones={transacciones} onActualizado={recargarTransacciones} />
-            ) : vistaActiva === PESTANA_CATEGORIAS ? (
-              <DetalleDimensionTab
-                key="categorias"
-                transacciones={transacciones}
-                dimensionPrincipal="categoria"
-              />
-            ) : vistaActiva === PESTANA_COMERCIOS ? (
-              <DetalleDimensionTab
-                key="comercios"
-                transacciones={transacciones}
-                dimensionPrincipal="comercio"
-              />
+            ) : vistaActiva === PESTANA_CATEGORIAS_COMERCIOS ? (
+              <DetalleDimensionTab transacciones={transacciones} />
             ) : vistaActiva === PESTANA_RESUMEN ? (
               renderVistaResumen(PESTANA_RESUMEN, transacciones)
             ) : (
