@@ -222,8 +222,14 @@ export function VistaResumen({
     () => aplicarFiltros(delPeriodo, filtros),
     [delPeriodo, filtros]
   );
-  const gastoPorCategoria = agruparPorCategoria(aplicarFiltros(delPeriodo, filtros, "categoria"));
-  const gastoPorComercio = agruparPorComercio(aplicarFiltros(delPeriodo, filtros, "comercio"));
+  const gastoPorCategoria = useMemo(
+    () => agruparPorCategoria(aplicarFiltros(delPeriodo, filtros, "categoria")),
+    [delPeriodo, filtros]
+  );
+  const gastoPorComercio = useMemo(
+    () => agruparPorComercio(aplicarFiltros(delPeriodo, filtros, "comercio")),
+    [delPeriodo, filtros]
+  );
   const flujoSankey = useMemo(
     () => calcularFlujoSankey(conFiltros, periodo.meses),
     [conFiltros, periodo]

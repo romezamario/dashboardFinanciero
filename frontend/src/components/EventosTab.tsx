@@ -12,6 +12,7 @@ import {
   type Filtros,
 } from "../lib/queries";
 import type { Transaccion } from "../lib/types";
+import { useEsMovil } from "../hooks/useEsMovil";
 import { GastoPorEventoChart } from "./GastoPorEventoChart";
 import { GastoPorCategoriaChart } from "./GastoPorCategoriaChart";
 import { GastoPorComercioChart } from "./GastoPorComercioChart";
@@ -65,6 +66,9 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
   const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(
     null
   );
+  // En vez de montar la tabla Y las tarjetas a la vez y ocultar una por CSS,
+  // `useEsMovil` decide cuál de las dos se monta.
+  const esMovil = useEsMovil();
 
   // Cross-filter propio de esta pestaña (evento/categoría/comercio) --
   // estado local a EventosTab, completamente separado del `filtros` del
@@ -433,125 +437,128 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
               </div>
             </div>
 
-            {/* Desde `sm` se ve la tabla completa; en un teléfono, tarjetas
-                tocables (toda la tarjeta selecciona, igual que la fila). */}
-            <div
-              className="mt-2 hidden max-h-96 overflow-auto rounded-md sm:block"
-              style={{ border: "1px solid var(--border)" }}
-            >
-              <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
-                <tbody>
-                  {visibles.map((t) => (
-                    <tr
+            {/* En vez de montar la tabla Y las tarjetas a la vez y ocultar
+                una por CSS, `esMovil` decide cuál de las dos se monta (toda
+                la tarjeta selecciona, igual que la fila). */}
+            {esMovil ? (
+              <div
+                className="mt-2 max-h-96 space-y-2 overflow-auto rounded-md p-2"
+                style={{ border: "1px solid var(--border)" }}
+              >
+                {visibles.map((t) => {
+                  const seleccionada = seleccionadas.has(t.id);
+                  return (
+                    <div
                       key={t.id}
                       onClick={() => alternarSeleccion(t.id)}
-                      className="cursor-pointer"
-                      style={{ borderBottom: "1px solid var(--gridline)" }}
+                      className="flex items-start gap-2 rounded-md p-2"
+                      style={{
+                        border: `1px solid ${seleccionada ? "var(--series-1)" : "var(--gridline)"}`,
+                      }}
                     >
-                      <td className="w-8 py-2 pl-2">
-                        <input
-                          type="checkbox"
-                          checked={seleccionadas.has(t.id)}
-                          onChange={() => alternarSeleccion(t.id)}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </td>
-                      <td className="py-2 pr-2" style={{ color: "var(--text-secondary)" }}>
-                        {formateadorFecha.format(new Date(t.fecha + "T00:00:00"))}
-                      </td>
-                      <td className="py-2 pr-2" style={{ color: "var(--text-primary)" }}>
-                        {t.descripcion}
-                      </td>
-                      <td className="py-2 pr-2" style={{ color: "var(--text-secondary)" }}>
-                        {t.documentos.cuentas.alias}
-                      </td>
-                      <td className="py-2 pr-2" style={{ color: "var(--text-secondary)" }}>
-                        {t.tarjeta ?? "—"}
-                      </td>
-                      <td className="py-2 pr-2" style={{ color: "var(--text-secondary)" }}>
-                        {t.eventos?.nombre ?? "—"}
-                      </td>
-                      <td
-                        className="py-2 pr-2 text-right"
-                        style={{
-                          color: "var(--text-secondary)",
-                          fontVariantNumeric: "tabular-nums",
-                        }}
+                      <input
+                        type="checkbox"
+                        checked={seleccionada}
+                        onChange={() => alternarSeleccion(t.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-1"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-sm" style={{ color: "var(--text-primary)" }}>
+                            {t.descripcion}
+                          </span>
+                          <span
+                            className="text-sm whitespace-nowrap"
+                            style={{
+                              color: "var(--text-secondary)",
+                              fontVariantNumeric: "tabular-nums",
+                            }}
+                          >
+                            {formateadorMoneda.format(t.monto)}
+                          </span>
+                        </div>
+                        <div className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+                          {formateadorFecha.format(new Date(t.fecha + "T00:00:00"))} ·{" "}
+                          {t.documentos.cuentas.alias}
+                          {t.tarjeta ? ` · ${t.tarjeta}` : ""}
+                        </div>
+                        <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+                          {t.eventos?.nombre ?? "Sin evento"}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {visibles.length === 0 && (
+                  <p className="py-4 text-center text-xs" style={{ color: "var(--text-muted)" }}>
+                    Sin coincidencias.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div
+                className="mt-2 max-h-96 overflow-auto rounded-md"
+                style={{ border: "1px solid var(--border)" }}
+              >
+                <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+                  <tbody>
+                    {visibles.map((t) => (
+                      <tr
+                        key={t.id}
+                        onClick={() => alternarSeleccion(t.id)}
+                        className="cursor-pointer"
+                        style={{ borderBottom: "1px solid var(--gridline)" }}
                       >
-                        {formateadorMoneda.format(t.monto)}
-                      </td>
-                    </tr>
-                  ))}
-                  {visibles.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={7}
-                        className="py-4 text-center text-xs"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        Sin coincidencias.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div
-              className="mt-2 max-h-96 space-y-2 overflow-auto rounded-md p-2 sm:hidden"
-              style={{ border: "1px solid var(--border)" }}
-            >
-              {visibles.map((t) => {
-                const seleccionada = seleccionadas.has(t.id);
-                return (
-                  <div
-                    key={t.id}
-                    onClick={() => alternarSeleccion(t.id)}
-                    className="flex items-start gap-2 rounded-md p-2"
-                    style={{
-                      border: `1px solid ${seleccionada ? "var(--series-1)" : "var(--gridline)"}`,
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={seleccionada}
-                      onChange={() => alternarSeleccion(t.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      className="mt-1"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="text-sm" style={{ color: "var(--text-primary)" }}>
+                        <td className="w-8 py-2 pl-2">
+                          <input
+                            type="checkbox"
+                            checked={seleccionadas.has(t.id)}
+                            onChange={() => alternarSeleccion(t.id)}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </td>
+                        <td className="py-2 pr-2" style={{ color: "var(--text-secondary)" }}>
+                          {formateadorFecha.format(new Date(t.fecha + "T00:00:00"))}
+                        </td>
+                        <td className="py-2 pr-2" style={{ color: "var(--text-primary)" }}>
                           {t.descripcion}
-                        </span>
-                        <span
-                          className="text-sm whitespace-nowrap"
+                        </td>
+                        <td className="py-2 pr-2" style={{ color: "var(--text-secondary)" }}>
+                          {t.documentos.cuentas.alias}
+                        </td>
+                        <td className="py-2 pr-2" style={{ color: "var(--text-secondary)" }}>
+                          {t.tarjeta ?? "—"}
+                        </td>
+                        <td className="py-2 pr-2" style={{ color: "var(--text-secondary)" }}>
+                          {t.eventos?.nombre ?? "—"}
+                        </td>
+                        <td
+                          className="py-2 pr-2 text-right"
                           style={{
                             color: "var(--text-secondary)",
                             fontVariantNumeric: "tabular-nums",
                           }}
                         >
                           {formateadorMoneda.format(t.monto)}
-                        </span>
-                      </div>
-                      <div className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-                        {formateadorFecha.format(new Date(t.fecha + "T00:00:00"))} ·{" "}
-                        {t.documentos.cuentas.alias}
-                        {t.tarjeta ? ` · ${t.tarjeta}` : ""}
-                      </div>
-                      <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
-                        {t.eventos?.nombre ?? "Sin evento"}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-              {visibles.length === 0 && (
-                <p className="py-4 text-center text-xs" style={{ color: "var(--text-muted)" }}>
-                  Sin coincidencias.
-                </p>
-              )}
-            </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {visibles.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={7}
+                          className="py-4 text-center text-xs"
+                          style={{ color: "var(--text-muted)" }}
+                        >
+                          Sin coincidencias.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             <div className="mt-3 flex flex-wrap items-end gap-3">
               <label className="w-full text-xs sm:w-auto" style={{ color: "var(--text-secondary)" }}>

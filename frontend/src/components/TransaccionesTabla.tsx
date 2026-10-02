@@ -1,4 +1,5 @@
 import type { Transaccion } from "../lib/types";
+import { useEsMovil } from "../hooks/useEsMovil";
 
 const formateadorMoneda = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -18,6 +19,11 @@ export function TransaccionesTabla({
   const ordenadas = [...transacciones].sort((a, b) =>
     b.fecha.localeCompare(a.fecha)
   );
+  // 8 columnas no caben en un teléfono ni encogiendo la letra -- en vez de
+  // montar la tabla Y las tarjetas a la vez y ocultar una por CSS (el doble
+  // de nodos DOM, y cada fila se renderiza dos veces), `useEsMovil` decide
+  // cuál de las dos se monta.
+  const esMovil = useEsMovil();
 
   return (
     <div
@@ -28,140 +34,140 @@ export function TransaccionesTabla({
         Transacciones
       </h3>
 
-      {/* 8 columnas no caben en un teléfono ni encogiendo la letra -- desde
-          `sm` se ve la tabla completa, debajo una tarjeta por transacción. */}
-      <div className="mt-3 hidden max-h-96 overflow-auto sm:block">
-        <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ borderBottom: "1px solid var(--gridline)" }}>
-              <th
-                className="py-2 text-left font-medium"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Fecha
-              </th>
-              <th
-                className="py-2 text-left font-medium"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Descripción
-              </th>
-              <th
-                className="py-2 text-left font-medium"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Categoría
-              </th>
-              <th
-                className="py-2 text-left font-medium"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Comercio
-              </th>
-              <th
-                className="py-2 text-left font-medium"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Tarjeta
-              </th>
-              <th
-                className="py-2 text-left font-medium"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Cuenta
-              </th>
-              <th
-                className="py-2 text-left font-medium"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Evento
-              </th>
-              <th
-                className="py-2 text-right font-medium"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Monto
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {ordenadas.map((t) => (
-              <tr key={t.id} style={{ borderBottom: "1px solid var(--gridline)" }}>
-                <td className="py-2" style={{ color: "var(--text-secondary)" }}>
-                  {formateadorFecha.format(new Date(t.fecha + "T00:00:00"))}
-                </td>
-                <td className="py-2" style={{ color: "var(--text-primary)" }}>
+      {esMovil ? (
+        <div className="mt-3 max-h-96 space-y-2 overflow-auto">
+          {ordenadas.map((t) => (
+            <div
+              key={t.id}
+              className="rounded-md p-3"
+              style={{ border: "1px solid var(--gridline)" }}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-sm" style={{ color: "var(--text-primary)" }}>
                   {t.descripcion}
-                </td>
-                <td className="py-2" style={{ color: "var(--text-secondary)" }}>
-                  {t.categorias?.nombre ?? "—"}
-                </td>
-                <td className="py-2" style={{ color: "var(--text-secondary)" }}>
-                  {t.comercio ?? "—"}
-                </td>
-                <td className="py-2" style={{ color: "var(--text-secondary)" }}>
-                  {t.tarjeta ?? "—"}
-                </td>
-                <td className="py-2" style={{ color: "var(--text-secondary)" }}>
-                  {t.documentos.cuentas.alias}
-                </td>
-                <td className="py-2" style={{ color: "var(--text-secondary)" }}>
-                  {t.eventos?.nombre ?? "—"}
-                </td>
-                <td
-                  className="py-2 text-right"
+                </span>
+                <span
+                  className="text-sm whitespace-nowrap"
                   style={{
                     fontVariantNumeric: "tabular-nums",
-                    color:
-                      t.tipo === "abono"
-                        ? "var(--status-good)"
-                        : "var(--text-primary)",
+                    color: t.tipo === "abono" ? "var(--status-good)" : "var(--text-primary)",
                   }}
                 >
                   {t.tipo === "cargo" ? "-" : "+"}
                   {formateadorMoneda.format(t.monto)}
-                </td>
+                </span>
+              </div>
+              <div className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+                {formateadorFecha.format(new Date(t.fecha + "T00:00:00"))} ·{" "}
+                {t.documentos.cuentas.alias}
+                {t.tarjeta ? ` · ${t.tarjeta}` : ""}
+              </div>
+              <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+                {t.categorias?.nombre ?? "Sin categoría"}
+                {t.comercio ? ` · ${t.comercio}` : ""}
+                {t.eventos?.nombre ? ` · ${t.eventos.nombre}` : ""}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-3 max-h-96 overflow-auto">
+          <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ borderBottom: "1px solid var(--gridline)" }}>
+                <th
+                  className="py-2 text-left font-medium"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Fecha
+                </th>
+                <th
+                  className="py-2 text-left font-medium"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Descripción
+                </th>
+                <th
+                  className="py-2 text-left font-medium"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Categoría
+                </th>
+                <th
+                  className="py-2 text-left font-medium"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Comercio
+                </th>
+                <th
+                  className="py-2 text-left font-medium"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Tarjeta
+                </th>
+                <th
+                  className="py-2 text-left font-medium"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Cuenta
+                </th>
+                <th
+                  className="py-2 text-left font-medium"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Evento
+                </th>
+                <th
+                  className="py-2 text-right font-medium"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  Monto
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="mt-3 max-h-96 space-y-2 overflow-auto sm:hidden">
-        {ordenadas.map((t) => (
-          <div
-            key={t.id}
-            className="rounded-md p-3"
-            style={{ border: "1px solid var(--gridline)" }}
-          >
-            <div className="flex items-start justify-between gap-2">
-              <span className="text-sm" style={{ color: "var(--text-primary)" }}>
-                {t.descripcion}
-              </span>
-              <span
-                className="text-sm whitespace-nowrap"
-                style={{
-                  fontVariantNumeric: "tabular-nums",
-                  color: t.tipo === "abono" ? "var(--status-good)" : "var(--text-primary)",
-                }}
-              >
-                {t.tipo === "cargo" ? "-" : "+"}
-                {formateadorMoneda.format(t.monto)}
-              </span>
-            </div>
-            <div className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-              {formateadorFecha.format(new Date(t.fecha + "T00:00:00"))} ·{" "}
-              {t.documentos.cuentas.alias}
-              {t.tarjeta ? ` · ${t.tarjeta}` : ""}
-            </div>
-            <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
-              {t.categorias?.nombre ?? "Sin categoría"}
-              {t.comercio ? ` · ${t.comercio}` : ""}
-              {t.eventos?.nombre ? ` · ${t.eventos.nombre}` : ""}
-            </div>
-          </div>
-        ))}
-      </div>
+            </thead>
+            <tbody>
+              {ordenadas.map((t) => (
+                <tr key={t.id} style={{ borderBottom: "1px solid var(--gridline)" }}>
+                  <td className="py-2" style={{ color: "var(--text-secondary)" }}>
+                    {formateadorFecha.format(new Date(t.fecha + "T00:00:00"))}
+                  </td>
+                  <td className="py-2" style={{ color: "var(--text-primary)" }}>
+                    {t.descripcion}
+                  </td>
+                  <td className="py-2" style={{ color: "var(--text-secondary)" }}>
+                    {t.categorias?.nombre ?? "—"}
+                  </td>
+                  <td className="py-2" style={{ color: "var(--text-secondary)" }}>
+                    {t.comercio ?? "—"}
+                  </td>
+                  <td className="py-2" style={{ color: "var(--text-secondary)" }}>
+                    {t.tarjeta ?? "—"}
+                  </td>
+                  <td className="py-2" style={{ color: "var(--text-secondary)" }}>
+                    {t.documentos.cuentas.alias}
+                  </td>
+                  <td className="py-2" style={{ color: "var(--text-secondary)" }}>
+                    {t.eventos?.nombre ?? "—"}
+                  </td>
+                  <td
+                    className="py-2 text-right"
+                    style={{
+                      fontVariantNumeric: "tabular-nums",
+                      color:
+                        t.tipo === "abono"
+                          ? "var(--status-good)"
+                          : "var(--text-primary)",
+                    }}
+                  >
+                    {t.tipo === "cargo" ? "-" : "+"}
+                    {formateadorMoneda.format(t.monto)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {ordenadas.length === 0 && (
         <p className="py-6 text-center text-xs" style={{ color: "var(--text-muted)" }}>
