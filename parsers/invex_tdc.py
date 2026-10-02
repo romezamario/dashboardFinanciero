@@ -93,6 +93,25 @@ usuario elige "Invex TDC" a mano del dropdown) -- no hay riesgo de que
 tome el extractor equivocado. Pendiente: confirmar con la primera carga
 real si el banco se autodetecta solo o si hace falta ajustar el marcador
 (lección ya documentada para Banamex TDC en su propio módulo).
+
+RIESGO CONOCIDO en `PATRON_TRANSACCION_V2` (sin confirmar todavía contra un
+PDF real): a diferencia de V1 (exige DOS fechas) y de `banamex.py`'s
+`PATRON_DOS_MONTOS` (ancla un bloque ya abierto por una fecha previa), V2
+solo exige "una fecha + texto + $monto" en una sola línea -- cualquier
+línea de resumen que combine una fecha y un monto así (ej. una fecha
+límite de pago junto con el monto del pago mínimo) se capturaría como
+transacción real, sin ninguna advertencia. Se consideró agregar un filtro
+de palabras clave ("pago mínimo", "fecha límite", etc.) para excluir ese
+tipo de línea, pero se decidió NO adivinarlo: es exactamente el mismo
+dilema que `banamex.py` ya enfrentó y dejó sin resolver a propósito (ver
+el comentario sobre el warning de "balance changed with no open block"
+que se dejó fuera ahí) -- sin un PDF real que mostrar ese tipo de línea,
+cualquier palabra que se excluya aquí podría coincidir por accidente con
+el concepto real de una transacción legítima (ej. excluir "pago" rompería
+"SU PAGO POR SPEI_T", un concepto real ya confirmado). La validación
+manual del total contra el estado de cuenta (`validar_contra_total`, ya
+parte del flujo normal de la app) es la red de seguridad existente para
+este caso mientras no se confirme contra un documento real.
 """
 
 from __future__ import annotations

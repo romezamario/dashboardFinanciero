@@ -14,7 +14,7 @@ it's the source of truth for what to build next, **except** for the local pipeli
 which was deliberately redesigned away from that spec's automatic watcher — see Architecture below
 — and except for the frontend's dashboard chart set, where "tendencia de saldo" (mentioned in the
 spec) was later replaced by "gasto por comercio" at the user's explicit request — see the
-"Removed: `TendenciaSaldoChart`" bullet under Frontend below.
+"Removed, then reintroduced: filtering by `cuenta`" bullet under Frontend below.
 
 ## Non-negotiable constraints
 
@@ -560,15 +560,20 @@ context line in `--text-muted`, period months + last point in `--series-2`, each
 0→its own max (shape, not cross-category magnitude), native `<title>` tooltip per month, and an
 `aria-label` with every value.
 
-**Removed: `TendenciaSaldoChart` / filtering by `cuenta`** (2026-09-20, user's explicit request,
-no risk flagged — it was a straightforward swap, not a correction of a bug). It plotted one line
-per account's running `saldo` over time and was the *only* UI source of the `cuenta` filter
-dimension, so removing it made that whole dimension unreachable — `Filtros.cuenta` and its
-`aplicarFiltros` branch were removed too rather than left as dead code with no way to trigger it.
-(The `saldoActual` KPI tile mentioned in older notes no longer exists; balance now surfaces as
-"Meses cubiertos con tu saldo", computed from the latest `saldo` per account.) If per-account balance trend is wanted again
-later, it needs a new UI entry point (chart, toggle, whatever), not just restoring the deleted
-files — the underlying `saldo` data was never removed from the query/select.
+**Removed, then reintroduced: filtering by `cuenta`.** `TendenciaSaldoChart` (2026-09-20, user's
+explicit request, no risk flagged — a straightforward swap, not a correction of a bug) plotted one
+line per account's running `saldo` over time and was, at the time, the *only* UI source of the
+`cuenta` filter dimension — removing the chart made that whole dimension unreachable, so
+`Filtros.cuenta` and its `aplicarFiltros` branch were deleted too rather than left as dead code with
+no way to trigger it. (The `saldoActual` KPI tile mentioned in older notes no longer exists; balance
+surfaces as "Meses cubiertos con tu saldo", computed from the latest `saldo` per account.)
+**`Filtros.cuenta` came back on 2026-09-25**, alongside the "Per-card tabs" feature below: a "Cuenta:"
+pill row in `VistaResumen.tsx` (shown whenever `cuentasConocidas.length > 1`, i.e. in Resumen but not
+inside a single account's own tab) gives it a new UI entry point, letting Resumen cross-filter down
+to one account without switching tabs. This note was originally left stale after that change — if a
+future pass finds `Filtros.cuenta` "unreachable" again, check the "Cuenta:" pill row in
+`VistaResumen.tsx` before assuming it's dead code to remove. `TendenciaSaldoChart` itself is still
+gone; only the filter dimension returned, through a different UI surface.
 
 Chart colors/specs follow this repo's `dataviz` skill: the categorical palette (blue for ingresos
 and magnitude comparisons, orange for gastos) is validated with the skill's `validate_palette.js`

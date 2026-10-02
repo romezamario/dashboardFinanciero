@@ -65,8 +65,14 @@ MESES = {
 PATRON_FECHA_PREFIJO = re.compile(r"^(\d{2})\s+([A-ZÁÉÍÓÚ]{3})\s+(.*)$")
 
 # Una línea "cierra" un bloque si termina en dos montos: "<resto> <monto> <saldo>".
+# El final tolera puntos/espacios sueltos después del saldo (`[\s.]*$` en vez
+# de `\s*$`) por el mismo artefacto de pie de página pegado sin salto de
+# línea que ya se confirmó y corrigió en banamex_tdc.py/invex_tdc.py (una
+# línea totalmente legible -- fecha, concepto, monto y saldo -- fallaba el
+# match solo por un " .." sobrante al final) -- nunca se portó este fix a
+# este parser, el más viejo de los tres, pese a ser el mismo bug.
 PATRON_DOS_MONTOS = re.compile(
-    r"^(?P<resto>.*?)\s*(?P<monto>-?[\d,]+\.\d{2})\s+(?P<saldo>-?[\d,]+\.\d{2})\s*$"
+    r"^(?P<resto>.*?)\s*(?P<monto>-?[\d,]+\.\d{2})\s+(?P<saldo>-?[\d,]+\.\d{2})[\s.]*$"
 )
 
 # Portada (página 1): "Cuenta <Tipo>" (ej. "Cuenta Priority") — distinta de
