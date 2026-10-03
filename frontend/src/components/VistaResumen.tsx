@@ -42,7 +42,7 @@ import { GastoPorComercioChart } from "./GastoPorComercioChart";
 import { FlujoNetoChart } from "./FlujoNetoChart";
 import { FlujoSankeyChart } from "./FlujoSankeyChart";
 import { Sparkline } from "./Sparkline";
-import { Delta, Tabla, Tile } from "./IndicadoresUI";
+import { Delta, SelectorPeriodo, Tabla, Tile } from "./IndicadoresUI";
 import { TransaccionesTabla } from "./TransaccionesTabla";
 import { EditorTransacciones } from "./EditorTransacciones";
 
@@ -332,10 +332,6 @@ export function VistaResumen({
       ? (gastoPromedio - gastoPromedioReferencia) / gastoPromedioReferencia
       : null;
 
-  function cambiarMes(campo: keyof RangoMeses, valor: string) {
-    onCambiarRangoMeses((anterior) => ({ ...anterior, [campo]: valor }));
-  }
-
   // Clic en la gráfica de ingresos vs. gastos: ese mes (o ese año) pasa a
   // ser el periodo; otro clic en el mismo lo quita.
   function elegirPeriodoConClic(valor: string) {
@@ -421,40 +417,11 @@ export function VistaResumen({
 
   return (
     <>
-      <div className="flex flex-wrap items-end gap-3">
-        {(["desde", "hasta"] as const).map((campo) => (
-          <label key={campo} className="text-xs" style={{ color: "var(--text-secondary)" }}>
-            {campo === "desde" ? "Desde" : "Hasta"}
-            <select
-              value={rangoMeses[campo]}
-              onChange={(e) => cambiarMes(campo, e.target.value)}
-              className="mt-1 block rounded-md px-3 py-2 text-sm"
-              style={{
-                background: "var(--page-plane)",
-                border: "1px solid var(--border)",
-                color: "var(--text-primary)",
-              }}
-            >
-              <option value="">—</option>
-              {mesesConDatos.map((mes) => (
-                <option key={mes} value={mes}>
-                  {nombreMes(mes)}
-                  {mes === mesEnCurso ? " (en curso)" : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-        ))}
-        {hayPeriodoElegido && (
-          <button
-            onClick={() => onCambiarRangoMeses(() => RANGO_MESES_VACIO)}
-            className="text-xs underline"
-            style={{ color: "var(--text-muted)" }}
-          >
-            Volver a los últimos {MESES_PERIODO_POR_DEFECTO} meses
-          </button>
-        )}
-      </div>
+      <SelectorPeriodo
+        rangoMeses={rangoMeses}
+        onCambiarRangoMeses={onCambiarRangoMeses}
+        mesesConDatos={mesesConDatos}
+      />
 
       <p className="text-xs" style={{ color: "var(--text-muted)" }}>
         {hayPeriodoElegido ? (
