@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 from decimal import Decimal
 
 from parsers.base import RenglonCrudo
 from transform.transformador import (
     ErrorTransformacion,
+    descartar_ya_capturadas_a_mano,
     transformar_monto,
     transformar_renglones,
     validar_contra_total,
@@ -43,6 +45,16 @@ class TransformadorTest(unittest.TestCase):
         ok, _ = transformar_renglones([_renglon("A", "-100.00"), _renglon("B", "30.00")])
         self.assertTrue(validar_contra_total(ok, Decimal("-70.00")).ok)
         self.assertFalse(validar_contra_total(ok, Decimal("-69.99")).ok)
+
+    def test_extraida_ya_capturada_a_mano_se_descarta(self) -> None:
+        extraidas, _ = transformar_renglones(
+            [_renglon("SU ABONO", "500.00"), _renglon("SU ABONO 2", "500.00"), _renglon("OXXO", "-10.00")]
+        )
+        manual = replace(extraidas[0], linea_cruda="(manual) 2026-08-01 | PAGO | 500.00 | abono")
+        quedan, descartadas = descartar_ya_capturadas_a_mano(extraidas, [manual])
+        # Una a una: un solo manual cubre una sola de las dos filas iguales.
+        self.assertEqual(descartadas, 1)
+        self.assertEqual([t.linea_cruda for t in quedan], ["SU ABONO 2", "OXXO"])
 
 
 if __name__ == "__main__":

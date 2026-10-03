@@ -211,6 +211,29 @@ statement from a bank you already support will look anything like the first one:
   vanishing — `App.cargar_pdf` shows it in the resumen and a messagebox so the user knows to
   capture that row by hand before trusting the totals. This is the general escape
   hatch for "PDF renders this row as an image" cases in any future parser, not just this one.
+- **Image rows are now READ, not just flagged (2026-10-02, `parsers/glifos.py`)**: checked against
+  the user's 144 real PDFs, the "image" rows aren't one picture — each character is its own 1-bit
+  image mask placed where the letter goes, and the bank always uses the same bitmap for the same
+  character (7,585 glyph images in those rows = only 66 distinct bitmaps). So no OCR: `GLIFOS` maps
+  a bitmap fingerprint (`_huella`: sha1 of size + decoded data) to `(character, advance)`; spaces
+  aren't images, they're inferred when the next glyph starts farther than that glyph's normal
+  advance + `UMBRAL_ESPACIO` (advances measured from the same PDFs; positions are quantized to
+  0.3 pt). "I" and "l" share one bitmap (resolved by whether the previous letter is lowercase).
+  Some boxes ("$", ",", "-") sit a few pt lower and are merged back into the nearest row
+  (`_agrupar_en_renglones`) — without that, amounts came out as "$00 000.00" with no comma or sign.
+  `completar_lineas_con_imagenes` only touches a line that is *just the two dates*
+  (`PATRON_SOLO_FECHAS`) and the block it opens (until the next line starting at the same left
+  margin), rebuilding each row from its text words + glyphs by x position — there are blocks where
+  everything but the dates is an image ("SU ABONO...GRACIAS"), and PAGO INTERBANCARIO blocks where
+  labels and amount are images but values are text on the same row. Result on the real PDFs: all
+  113 previous warnings became rows (98%+ of decoded words also appear in the PDFs' normal text);
+  no previously-extracted row changed except one 2024-12 statement whose image-rendered "Tarjeta
+  adicional" header is now read, so 69 rows went from no `tarjeta` to "Adicional" (same upsert key,
+  no duplicates). A glyph not in `GLIFOS` leaves the row as before (warning + manual entry); to
+  add one, get its `_huella()` and label it. Reloading a PDF whose image rows the user had typed
+  by hand: `descartar_ya_capturadas_a_mano` (transformador) drops the newly-extracted row when a
+  recovered manual row has the same fecha/monto/tipo and **keeps the manual one** — it may already
+  be in Supabase under its own key, and the sync never deletes rows.
 - **Normalize known variant spellings instead of capturing verbatim, when the output feeds a
   stable identifier**: `extraer_info_cuenta`'s alias used to capture whatever word followed
   "Estado de Cuenta" on its own line (`PATRON_ALIAS`) and build `f"TDC {esa_palabra}"` verbatim —

@@ -40,6 +40,7 @@ from transform.categorizador import (
 )
 from transform.transformador import (
     TransaccionCanonica,
+    descartar_ya_capturadas_a_mano,
     transformar_renglones,
 )
 
@@ -989,6 +990,9 @@ class App(tk.Tk):
         transacciones = nuevas_transacciones
 
         manuales_recuperados = self._recuperar_renglones_manuales(ruta_pdf)
+        transacciones, ya_capturadas = descartar_ya_capturadas_a_mano(
+            transacciones, manuales_recuperados
+        )
         transacciones = [*transacciones, *manuales_recuperados]
 
         self.transacciones = transacciones
@@ -1010,6 +1014,11 @@ class App(tk.Tk):
             resumen += f" · año detectado del PDF: {anio_usado}"
         if manuales_recuperados:
             resumen += f" · {len(manuales_recuperados)} renglón(es) manual(es) recuperado(s) de la carga anterior"
+        if ya_capturadas:
+            resumen += (
+                f" ({ya_capturadas} fila(s) que ahora sí se leen del PDF ya estaban "
+                "capturadas a mano: se conserva el renglón manual)"
+            )
         if advertencias_extraccion:
             resumen += f" — {len(advertencias_extraccion)} posible(s) transacción(es) no capturada(s), revisa el PDF"
         self.etiqueta_resumen.config(text=resumen)

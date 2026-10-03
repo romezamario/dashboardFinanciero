@@ -124,22 +124,64 @@ def _huella(imagen: dict) -> str | None:
     return hashlib.sha1(f"{ancho}x{alto}".encode() + datos).hexdigest()[:16]
 
 
-def _decodificar_renglon(imagenes: list[dict]) -> str | None:
-    """Texto de un renglón de imágenes-letra (ya ordenadas por x), o None si
-    alguna no está en `GLIFOS`."""
-    texto: list[str] = []
-    anterior: tuple[float, float] | None = None  # (x0, avance)
+# Una pieza de un renglón, por posición: una letra-imagen o una palabra de
+# texto. (x0, x1, texto, avance) -- `avance` solo en las letras-imagen.
+_Pieza = tuple[float, float, str, float | None]
+
+
+def _piezas_de_imagenes(imagenes: list[dict]) -> list[_Pieza] | None:
+    """Una pieza por letra-imagen, o None si alguna no está en `GLIFOS`."""
+    piezas: list[_Pieza] = []
     for imagen in imagenes:
         clave = _huella(imagen)
         if clave not in GLIFOS:
             return None
         caracter, avance = GLIFOS[clave]
-        if anterior is not None and imagen["x0"] - anterior[0] > anterior[1] + UMBRAL_ESPACIO:
-            texto.append(" ")
-        if clave == _CLAVE_I_O_L and texto and texto[-1].islower():
-            caracter = "l"
-        texto.append(caracter)
-        anterior = (imagen["x0"], avance)
+        if clave == _CLAVE_I_O_L:
+            caracter = _CLAVE_I_O_L  # se resuelve a "I"/"l" al unir (ver `_unir`)
+        piezas.append((imagen["x0"], imagen["x0"] + avance, caracter, avance))
+    return piezas
+
+
+def _piezas_de_texto(linea: dict) -> list[_Pieza]:
+    """Las palabras de una línea de `extract_text_lines()`, con su posición
+    (sus `chars` no incluyen los espacios: una palabra termina donde hay
+    hueco entre un carácter y el siguiente)."""
+    piezas: list[_Pieza] = []
+    actual: list[dict] = []
+    for caracter in [*linea["chars"], None]:
+        if actual and (caracter is None or caracter["x0"] - actual[-1]["x1"] > 1.0):
+            if actual:
+                piezas.append(
+                    (actual[0]["x0"], actual[-1]["x1"], "".join(c["text"] for c in actual), None)
+                )
+            actual = []
+        if caracter is not None and caracter["text"].strip():
+            actual.append(caracter)
+    return piezas
+
+
+def _unir(piezas: list[_Pieza]) -> str:
+    """Texto de un renglón a partir de sus piezas, ordenadas por x. Entre dos
+    letras-imagen hay espacio si la segunda empieza más lejos que el avance
+    normal de la primera; junto a una palabra de texto, siempre (el banco no
+    parte una palabra entre texto e imagen, y el borde de la caja de una
+    imagen no coincide con el de su letra, así que no sirve medir el hueco)."""
+    texto: list[str] = []
+    anterior: _Pieza | None = None
+    for pieza in sorted(piezas, key=lambda p: p[0]):
+        x0, _x1, contenido, avance = pieza
+        if anterior is not None:
+            if avance is None or anterior[3] is None:
+                hay_espacio = True
+            else:
+                hay_espacio = x0 - anterior[0] > anterior[3] + UMBRAL_ESPACIO
+            if hay_espacio:
+                texto.append(" ")
+        if contenido == _CLAVE_I_O_L:
+            contenido = "l" if texto and texto[-1][-1:].islower() else "I"
+        texto.append(contenido)
+        anterior = pieza
     return "".join(texto)
 
 
@@ -174,60 +216,81 @@ def completar_lineas_con_imagenes(
     pagina, texto: str, es_incompleta: Callable[[str], bool]
 ) -> list[str]:
     """Las líneas de `texto` (el `extract_text()` de `pagina`), con cada línea
-    `es_incompleta` completada con el texto de las imágenes-letra de su mismo
-    renglón, y seguida de los renglones de imágenes que vienen justo debajo
-    (continuación de un bloque de varias líneas) hasta la siguiente línea de
-    texto. Si algo no cuadra, devuelve las líneas tal cual."""
+    `es_incompleta` -- y el bloque que abre -- reconstruido juntando por
+    posición sus palabras de texto y las letras-imagen de sus renglones.
+
+    El bloque va desde esa línea hasta la siguiente línea de texto que empiece
+    en el mismo margen izquierdo (la siguiente transacción); sus líneas de
+    detalle van más a la derecha. Hay bloques donde TODO es imagen menos las
+    fechas (un "SU ABONO...GRACIAS"), y otros donde las etiquetas y el monto
+    son imagen pero los valores son texto, en el mismo renglón (un PAGO
+    INTERBANCARIO: "CLAVE DE RASTREO:" imagen, la clave texto). Si el renglón
+    de las fechas no se puede leer completo, el bloque queda tal cual."""
     lineas = texto.splitlines()
     if not pagina.images or not any(es_incompleta(l.strip()) for l in lineas):
         return lineas
-
-    # extract_text_lines() da las mismas líneas que extract_text() pero con
-    # posición; se emparejan por texto y orden de aparición.
+    # Mismas líneas que extract_text(), pero con posición (verificado igual en
+    # las 1,215 páginas de los PDFs reales); si alguna vez no, no se toca nada.
     posiciones = pagina.extract_text_lines()
-    por_texto: dict[str, list[dict]] = {}
-    for posicion in posiciones:
-        por_texto.setdefault(posicion["text"].strip(), []).append(posicion)
+    if [p["text"] for p in posiciones] != lineas:
+        return lineas
 
     letras = [i for i in pagina.images if i.get("imagemask")]
     resultado: list[str] = []
-    for linea in lineas:
-        resultado.append(linea)
-        limpia = linea.strip()
-        if not es_incompleta(limpia) or not por_texto.get(limpia):
+    n = 0
+    while n < len(posiciones):
+        inicio = posiciones[n]
+        if not es_incompleta(inicio["text"].strip()):
+            resultado.append(inicio["text"])
+            n += 1
             continue
-        posicion = por_texto[limpia].pop(0)
-        siguientes = [p["top"] for p in posiciones if p["top"] > posicion["bottom"]]
-        limite = min(siguientes, default=pagina.height)
-        zona = [
-            i for i in letras
-            if i["bottom"] > posicion["top"] and i["top"] < limite
-        ]
-        renglones = _agrupar_en_renglones(zona)
-        if not renglones:
-            continue
-        # La caja de cada imagen es más alta que la letra, así que la zona
-        # puede incluir el renglón de imágenes de ARRIBA: el de las fechas es
-        # el de centro vertical más cercano al de la línea de texto.
-        centro = (posicion["top"] + posicion["bottom"]) / 2
-        indice = min(
-            range(len(renglones)),
-            key=lambda n: abs((renglones[n][0]["top"] + renglones[n][0]["bottom"]) / 2 - centro),
-        )
-        if not (renglones[indice][0]["top"] <= posicion["bottom"]
-                and renglones[indice][0]["bottom"] >= posicion["top"]):
-            continue
-        primero = _decodificar_renglon(renglones[indice])
-        if primero is None:
-            continue
-        resultado[-1] = f"{limpia} {primero}"
-        base_anterior = renglones[indice][0]["bottom"]
-        for renglon in renglones[indice + 1:]:
-            if renglon[0]["bottom"] - base_anterior > SEPARACION_MAXIMA_RENGLONES:
-                break
-            decodificado = _decodificar_renglon(renglon)
-            if decodificado is None:
-                break
-            resultado.append(decodificado)
-            base_anterior = renglon[0]["bottom"]
+        fin = n + 1
+        while fin < len(posiciones) and posiciones[fin]["x0"] > inicio["x0"] + 5:
+            fin += 1
+        limite = posiciones[fin]["top"] if fin < len(posiciones) else pagina.height
+        zona = [i for i in letras if i["bottom"] > inicio["top"] and i["top"] < limite]
+        reconstruido = _reconstruir_bloque(posiciones[n:fin], zona)
+        resultado.extend(reconstruido or [p["text"] for p in posiciones[n:fin]])
+        n = fin
     return resultado
+
+
+def _centro(caja: dict) -> float:
+    return (caja["top"] + caja["bottom"]) / 2
+
+
+def _reconstruir_bloque(lineas: list[dict], imagenes: list[dict]) -> list[str] | None:
+    """Renglones del bloque, de arriba abajo; None si el primero (el de las
+    fechas) no tiene letras-imagen legibles."""
+    # (centro vertical, piezas) por renglón; las líneas de texto primero.
+    renglones: list[tuple[float, list[_Pieza]]] = [
+        (_centro(l), _piezas_de_texto(l)) for l in lineas
+    ]
+    solo_imagenes: list[tuple[float, list[_Pieza]]] = []
+    for grupo in _agrupar_en_renglones(imagenes):
+        piezas = _piezas_de_imagenes(grupo)
+        centro = _centro(grupo[0])
+        # La caja de cada imagen es más alta que la letra: el renglón de
+        # texto que le corresponde es el de centro más cercano.
+        cercano = min(renglones, key=lambda r: abs(r[0] - centro))
+        if abs(cercano[0] - centro) <= 5:
+            if piezas is None:
+                if cercano is renglones[0]:
+                    return None
+                continue  # se queda solo con su texto
+            cercano[1].extend(piezas)
+        elif piezas is not None and centro > renglones[0][0]:
+            solo_imagenes.append((centro, piezas))
+
+    if len(renglones[0][1]) == len(_piezas_de_texto(lineas[0])):
+        return None  # el renglón de las fechas no ganó nada
+
+    # Renglones solo-imagen (sin texto): solo mientras sigan pegados al bloque,
+    # para no arrastrar el pie de página.
+    todos = sorted(renglones, key=lambda r: r[0])
+    for centro, piezas in sorted(solo_imagenes):
+        if centro - todos[-1][0] > SEPARACION_MAXIMA_RENGLONES and centro > todos[-1][0]:
+            break
+        todos.append((centro, piezas))
+        todos.sort(key=lambda r: r[0])
+    return [_unir(piezas) for _centro_renglon, piezas in todos if piezas]

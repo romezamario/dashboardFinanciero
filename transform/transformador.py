@@ -203,3 +203,29 @@ def validar_contra_total(
         diferencia=diferencia,
         ok=diferencia == 0,
     )
+
+
+def descartar_ya_capturadas_a_mano(
+    extraidas: list[TransaccionCanonica], manuales: list[TransaccionCanonica]
+) -> tuple[list[TransaccionCanonica], int]:
+    """Quita de `extraidas` las que ya cubre un renglón manual (misma fecha,
+    monto y tipo, emparejadas una a una) y dice cuántas quitó.
+
+    Para cuando el extractor empieza a leer una fila que antes había que
+    teclear (p. ej. las filas-imagen que lee `parsers/glifos.py` desde
+    2026-10-02): al recargar ese PDF vuelven tanto la fila extraída como el
+    renglón manual recuperado del JSON anterior. Se conserva el MANUAL, no el
+    extraído: si el documento ya estaba sincronizado, el manual ya está en
+    Supabase con su llave, y el sincronizador nunca borra filas -- quedarse
+    con el extraído (llave nueva) dejaría las dos allá."""
+    pendientes = [(t.fecha, t.monto, t.tipo) for t in manuales]
+    resultado: list[TransaccionCanonica] = []
+    descartadas = 0
+    for t in extraidas:
+        clave = (t.fecha, t.monto, t.tipo)
+        if clave in pendientes:
+            pendientes.remove(clave)
+            descartadas += 1
+        else:
+            resultado.append(t)
+    return resultado, descartadas
