@@ -73,7 +73,10 @@ export function MacroEeuu() {
       <p className="text-xs" style={{ color: "var(--text-muted)" }}>
         Cada dato corresponde al periodo indicado (no a su fecha de publicación) y FRED lo
         actualiza horas después de que sale el reporte oficial. Las series diarias se comparan
-        contra el cierre del mes anterior. Pasa el mouse sobre la minigráfica para ver cada valor.
+        contra el cierre del mes anterior. Verde/rojo = si el cambio suele ser buena o mala noticia
+        para el Nasdaq-100: menos inflación, tasas y volatilidad, y más crecimiento y empleo, en
+        verde (un dato de empleo muy fuerte puede leerse al revés si aleja los recortes de la Fed).
+        La curva 10a−2a va sin color. Pasa el mouse sobre la minigráfica para ver cada valor.
       </p>
     </div>
   );
@@ -95,7 +98,17 @@ function TileMacro({ lectura }: { lectura: LecturaMacro }) {
         {lectura.periodo}
       </div>
       {lectura.cambio && (
-        <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+        <div
+          className="mt-1 text-xs"
+          style={{
+            color:
+              lectura.tono === "favorable"
+                ? "var(--status-good)"
+                : lectura.tono === "desfavorable"
+                  ? "var(--status-critical)"
+                  : "var(--text-secondary)",
+          }}
+        >
           {lectura.cambio}
         </div>
       )}

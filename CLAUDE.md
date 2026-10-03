@@ -706,8 +706,12 @@ range + date of its last move, real rate (midpoint − core PCE YoY), 2y/10y yie
 PCE/CPI headline and core YoY, payrolls monthly change, unemployment, initial claims, wage growth,
 JOLTS, real GDP, retail sales MoM, Michigan sentiment, VIX. Each tile shows the reference period
 (not the release date), the change vs. the previous observation (daily series: vs. the previous
-month's close) in neutral color — a strong jobs number can be bad for the index, so there's no
-good/bad coloring — and a min-max scaled mini trend (~2 years) with a dashed reference (2% target,
+month's close) colored green/red **at the user's request (2026-10-02; the first version was
+deliberately neutral)** by whether that move is usually good news for the Nasdaq-100
+(`favorableSi` per definition: lower inflation/rates/yields/VIX/wage growth/claims/unemployment,
+higher payrolls/JOLTS/GDP/retail sales/sentiment; a Fed cut is green, a hike red; the 10y−2y curve
+stays uncolored; "sin cambio" when the change rounds to zero) — the footnote says a very strong
+jobs print can read the other way, and a min-max scaled mini trend (~2 years) with a dashed reference (2% target,
 0) when relevant. Not on FRED, so not included: ISM PMIs and the FOMC calendar.
 
 Per-tab view state (`filtros`, `categoriasOcultas`, `rangoMeses`, `vistaTiempo`) still lives in

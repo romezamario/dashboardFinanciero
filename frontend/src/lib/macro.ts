@@ -31,6 +31,9 @@ export interface LecturaMacro {
   /** "▲ 0.1 pts vs ago 2026". Neutro a propósito: un buen dato de empleo
    * puede ser "malo" para el índice (Fed más dura), así que no se colorea. */
   cambio: string | null;
+  /** Si el cambio es buena o mala noticia para el Nasdaq-100 (verde/rojo);
+   * null = sin cambio o indicador sin dirección clara (la curva). */
+  tono: "favorable" | "desfavorable" | null;
   detalle: string;
   /** Qué es y por qué le importa a la Fed / al mercado. */
   descripcion: string;
@@ -121,6 +124,10 @@ interface Definicion {
   /** Unidad del cambio vs. el dato anterior: puntos porcentuales o la misma
    * unidad del valor. */
   formatoCambio: (diferencia: number) => string;
+  /** Dirección que suele ser buena noticia para el índice: menos inflación,
+   * tasas y volatilidad; más crecimiento y empleo. Sin ella, sin color (la
+   * curva 10a−2a: que se empine puede ser por recortes o por miedo). */
+  favorableSi?: "sube" | "baja";
   detalle?: (ultimo: Observacion) => string;
   descripcion: string;
   referencia?: number;
@@ -142,6 +149,7 @@ const DEFINICIONES: Definicion[] = [
     frecuencia: "diaria",
     formato: porcentaje2,
     formatoCambio: pts,
+    favorableSi: "baja",
     descripcion:
       "Rendimiento a 2 años: refleja lo que el mercado espera de la tasa de la Fed en los próximos meses.",
     historia: 24,
@@ -154,6 +162,7 @@ const DEFINICIONES: Definicion[] = [
     frecuencia: "diaria",
     formato: porcentaje2,
     formatoCambio: pts,
+    favorableSi: "baja",
     descripcion:
       "Tasa de descuento de largo plazo: cuando sube, pesa sobre las valuaciones de tecnológicas (Nasdaq-100).",
     historia: 24,
@@ -181,6 +190,7 @@ const DEFINICIONES: Definicion[] = [
     transformar: variacionAnual,
     formato: porcentaje1,
     formatoCambio: pts1,
+    favorableSi: "baja",
     detalle: () => "La medida preferida de la Fed · meta 2%",
     descripcion:
       "Inflación del gasto de consumo sin alimentos ni energía. Es la que la Fed usa para su meta de 2%.",
@@ -196,6 +206,7 @@ const DEFINICIONES: Definicion[] = [
     transformar: variacionAnual,
     formato: porcentaje1,
     formatoCambio: pts1,
+    favorableSi: "baja",
     detalle: () => "Meta de la Fed: 2%",
     descripcion: "Inflación del gasto de consumo, incluyendo alimentos y energía.",
     referencia: 2,
@@ -210,6 +221,7 @@ const DEFINICIONES: Definicion[] = [
     transformar: variacionAnual,
     formato: porcentaje1,
     formatoCambio: pts1,
+    favorableSi: "baja",
     descripcion:
       "Precios al consumidor sin alimentos ni energía. Sale antes que el PCE y suele mover más al mercado el día del dato.",
     referencia: 2,
@@ -224,6 +236,7 @@ const DEFINICIONES: Definicion[] = [
     transformar: variacionAnual,
     formato: porcentaje1,
     formatoCambio: pts1,
+    favorableSi: "baja",
     descripcion: "Índice de precios al consumidor completo (la inflación \"de titular\").",
     referencia: 2,
     historia: 24,
@@ -237,6 +250,7 @@ const DEFINICIONES: Definicion[] = [
     transformar: diferencias,
     formato: (v) => conSigno(miles(Math.abs(v)), v),
     formatoCambio: (d) => miles(Math.abs(d)),
+    favorableSi: "sube",
     detalle: () => "Empleos creados en el mes",
     descripcion:
       "Empleos creados en el mes (reporte de empleo, primer viernes). Es el dato que más mueve al mercado en el mes.",
@@ -251,6 +265,7 @@ const DEFINICIONES: Definicion[] = [
     frecuencia: "mensual",
     formato: porcentaje1,
     formatoCambio: pts1,
+    favorableSi: "baja",
     descripcion: "La otra mitad del mandato dual de la Fed (máximo empleo).",
     historia: 24,
   },
@@ -262,6 +277,7 @@ const DEFINICIONES: Definicion[] = [
     frecuencia: "semanal",
     formato: (v) => miles(v / 1000),
     formatoCambio: (d) => miles(Math.abs(d) / 1000),
+    favorableSi: "baja",
     detalle: () => "Solicitudes iniciales, semanal",
     descripcion:
       "Nuevas solicitudes de seguro de desempleo cada semana: el termómetro más rápido del mercado laboral.",
@@ -276,6 +292,7 @@ const DEFINICIONES: Definicion[] = [
     transformar: variacionAnual,
     formato: porcentaje1,
     formatoCambio: pts1,
+    favorableSi: "baja",
     descripcion:
       "Crecimiento anual del salario promedio por hora. Salarios altos alimentan la inflación de servicios.",
     historia: 24,
@@ -288,6 +305,7 @@ const DEFINICIONES: Definicion[] = [
     frecuencia: "mensual",
     formato: millones,
     formatoCambio: (d) => miles(Math.abs(d)),
+    favorableSi: "sube",
     descripcion: "Puestos de trabajo abiertos. Menos vacantes = mercado laboral menos apretado.",
     historia: 24,
   },
@@ -299,6 +317,7 @@ const DEFINICIONES: Definicion[] = [
     frecuencia: "trimestral",
     formato: porcentaje1,
     formatoCambio: pts1,
+    favorableSi: "sube",
     descripcion: "Crecimiento de la economía, variación trimestral a tasa anual.",
     referencia: 0,
     historia: 12,
@@ -312,6 +331,7 @@ const DEFINICIONES: Definicion[] = [
     transformar: variacionPeriodo,
     formato: (v) => conSigno(porcentaje1(Math.abs(v)), v),
     formatoCambio: pts1,
+    favorableSi: "sube",
     descripcion: "Variación mensual de las ventas al menudeo: pulso del consumo, ~70% del PIB.",
     referencia: 0,
     historia: 24,
@@ -324,6 +344,7 @@ const DEFINICIONES: Definicion[] = [
     frecuencia: "mensual",
     formato: (v) => dec1.format(v),
     formatoCambio: (d) => dec1.format(Math.abs(d)),
+    favorableSi: "sube",
     detalle: () => "Universidad de Michigan",
     descripcion: "Encuesta de confianza del consumidor; incluye sus expectativas de inflación.",
     historia: 24,
@@ -336,11 +357,22 @@ const DEFINICIONES: Definicion[] = [
     frecuencia: "diaria",
     formato: (v) => dec2.format(v),
     formatoCambio: (d) => dec2.format(Math.abs(d)),
+    favorableSi: "baja",
     detalle: (u) => (u.valor >= 30 ? "Miedo alto (≥ 30)" : u.valor >= 20 ? "Nerviosismo (20–30)" : "Calma (< 20)"),
     descripcion: "Volatilidad implícita del S&P 500 a 30 días, el \"índice del miedo\".",
     historia: 24,
   },
 ];
+
+/** Si redondeado no se movió ("0.0 pts"), ni flecha ni color. */
+function sinCambio(def: Definicion, diferencia: number): boolean {
+  return Number(def.formatoCambio(diferencia).replace(/[^\d.]/g, "")) === 0;
+}
+
+function tonoDe(favorableSi: "sube" | "baja" | undefined, diferencia: number): LecturaMacro["tono"] {
+  if (!favorableSi || diferencia === 0) return null;
+  return (diferencia > 0) === (favorableSi === "sube") ? "favorable" : "desfavorable";
+}
 
 function textoCambio(def: Definicion, diferencia: number, base: Observacion): string {
   const contra =
@@ -348,8 +380,7 @@ function textoCambio(def: Definicion, diferencia: number, base: Observacion): st
       ? `cierre de ${nombrePeriodo(base.fecha, "mensual")}`
       : nombrePeriodo(base.fecha, def.frecuencia);
   const texto = def.formatoCambio(diferencia);
-  // Si redondeado no se movió ("0.0 pts"), una flecha mentiría.
-  if (Number(texto.replace(/[^\d.]/g, "")) === 0) return `= sin cambio vs ${contra}`;
+  if (sinCambio(def, diferencia)) return `= sin cambio vs ${contra}`;
   return `${flecha(diferencia)} ${texto} vs ${contra}`;
 }
 
@@ -374,6 +405,8 @@ function lecturaDeSerie(def: Definicion, crudas: Observacion[]): LecturaMacro | 
     valor: def.formato(ultimo.valor),
     periodo: nombrePeriodo(ultimo.fecha, def.frecuencia),
     cambio: base && diferencia != null ? textoCambio(def, diferencia, base) : null,
+    tono:
+      diferencia != null && !sinCambio(def, diferencia) ? tonoDe(def.favorableSi, diferencia) : null,
     detalle: def.detalle?.(ultimo) ?? "",
     descripcion: def.descripcion,
     historia,
@@ -401,6 +434,8 @@ function lecturasFed(datos: DatosMacro): LecturaMacro[] {
       cambio: cambio
         ? `Último movimiento: ${flecha(cambio.diferencia)} ${pts(cambio.diferencia)} el ${nombrePeriodo(cambio.fecha, "diaria")}`
         : "Sin cambios en los últimos 4 años",
+      // Un recorte (▼) es buena noticia para el índice; un alza, mala.
+      tono: cambio ? tonoDe("baja", cambio.diferencia) : null,
       detalle: "",
       descripcion:
         "Rango objetivo de la tasa de fondos federales que fija el FOMC. Recortes suelen favorecer al Nasdaq; alzas, presionarlo.",
@@ -426,6 +461,7 @@ function lecturasFed(datos: DatosMacro): LecturaMacro[] {
       valor: conSigno(porcentaje2(Math.abs(real)), real),
       periodo: `Punto medio de la Fed − PCE subyacente de ${nombrePeriodo(pceUltimo.fecha, "mensual")}`,
       cambio: null,
+      tono: null,
       detalle: real > 0 ? "Política restrictiva (positiva)" : "Política laxa (negativa)",
       descripcion:
         "Tasa de la Fed descontando la inflación. Mientras más positiva, más frena la economía.",
