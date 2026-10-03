@@ -586,6 +586,14 @@ differ on purpose** (user chose each one explicitly) — keep them this way:
   not its own, so it still shows the other options to click. Non-selected marks dim to ~0.3 via
   `<Cell fillOpacity>`. The "Otros" fold in `GastoPorCategoriaChart` is not clickable.
 
+**Filter layout (2026-10-03, user's request — "se ve amontonado")**: the Resumen's pill rows live in
+one card, `PanelFiltros.tsx` (presentational only; every click handler stays in `VistaResumen`):
+click filters (Cuenta/Tarjeta/Evento) as rows with an aligned label column (label above the pills on
+a phone), then, below a divider, a collapsed-by-default "Excluir del análisis" disclosure whose
+header lists what is currently excluded (hidden categories + discarded events, e.g. "· Pago TDC")
+and expands to the Categorías/Eventos exclusion pills. Same behavior as the old separate rows —
+only the layout changed. Active-filter chips stay above the card.
+
 **"Categorías y Comercios" tab handles income-only selections (2026-10-02)**: its first chart
 (`GastoConPromedioMovilChart`, monthly total + 3-month moving average) used to sum only cargos, so
 picking a category that is all abonos — e.g. "Transferencia recibida" — showed $0 every month.

@@ -46,6 +46,7 @@ import { Delta, SelectorPeriodo, Tabla, Tile } from "./IndicadoresUI";
 import { TransaccionesTabla } from "./TransaccionesTabla";
 import { EditorTransacciones } from "./EditorTransacciones";
 import { AlertasPanel } from "./AlertasPanel";
+import { PanelFiltros } from "./PanelFiltros";
 import { calcularAlertas } from "../lib/alertas";
 
 const ETIQUETAS_FILTRO: Record<keyof Filtros, string> = {
@@ -477,163 +478,22 @@ export function VistaResumen({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-          Ocultar categorías:
-        </span>
-        {categoriasConocidas.map((categoria) => {
-          const oculta = categoriasOcultas.has(categoria);
-          return (
-            <button
-              key={categoria}
-              onClick={() => alternarCategoriaOculta(categoria)}
-              className="rounded-full px-3 py-1 text-xs font-medium"
-              style={{
-                background: "var(--surface-1)",
-                border: `1px solid ${
-                  oculta ? "var(--status-critical)" : "var(--border)"
-                }`,
-                color: oculta ? "var(--status-critical)" : "var(--text-secondary)",
-                textDecoration: oculta ? "line-through" : "none",
-              }}
-              title={oculta ? "Mostrar de nuevo" : "Ocultar esta categoría"}
-            >
-              {categoria}
-            </button>
-          );
-        })}
-        {categoriasOcultas.size > 0 && (
-          <button
-            onClick={() => onCambiarCategoriasOcultas(() => new Set())}
-            className="text-xs underline"
-            style={{ color: "var(--text-muted)" }}
-          >
-            Mostrar todas
-          </button>
-        )}
-      </div>
-
-      {cuentasConocidas.length > 1 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-            Cuenta:
-          </span>
-          {cuentasConocidas.map((cuenta) => {
-            const seleccionada = filtros.cuenta === cuenta;
-            return (
-              <button
-                key={cuenta}
-                onClick={() => alternarFiltro("cuenta", cuenta)}
-                className="rounded-full px-3 py-1 text-xs font-medium"
-                style={{
-                  background: seleccionada ? "var(--series-1)" : "var(--surface-1)",
-                  border: `1px solid ${
-                    seleccionada ? "var(--series-1)" : "var(--border)"
-                  }`,
-                  color: seleccionada ? "#ffffff" : "var(--text-secondary)",
-                }}
-                title={seleccionada ? "Quitar este filtro" : "Filtrar por esta cuenta"}
-              >
-                {cuenta}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {tarjetasConocidas.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-            Tarjeta:
-          </span>
-          {tarjetasConocidas.map((tarjeta) => {
-            const seleccionada = filtros.tarjeta === tarjeta;
-            return (
-              <button
-                key={tarjeta}
-                onClick={() => alternarFiltro("tarjeta", tarjeta)}
-                className="rounded-full px-3 py-1 text-xs font-medium"
-                style={{
-                  background: seleccionada ? "var(--series-1)" : "var(--surface-1)",
-                  border: `1px solid ${
-                    seleccionada ? "var(--series-1)" : "var(--border)"
-                  }`,
-                  color: seleccionada ? "#ffffff" : "var(--text-secondary)",
-                }}
-                title={seleccionada ? "Quitar este filtro" : "Filtrar por esta tarjeta"}
-              >
-                {tarjeta}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {eventosVisibles.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-            Evento:
-          </span>
-          {eventosVisibles.map((evento) => {
-            const seleccionado = filtros.evento === evento;
-            return (
-              <button
-                key={evento}
-                onClick={() => alternarFiltroEvento(evento)}
-                className="rounded-full px-3 py-1 text-xs font-medium"
-                style={{
-                  background: seleccionado ? "var(--series-1)" : "var(--surface-1)",
-                  border: `1px solid ${
-                    seleccionado ? "var(--series-1)" : "var(--border)"
-                  }`,
-                  color: seleccionado ? "#ffffff" : "var(--text-secondary)",
-                }}
-                title={seleccionado ? "Quitar este filtro" : "Filtrar por este evento"}
-              >
-                {evento}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {eventosConocidos.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-            Descartar eventos:
-          </span>
-          {eventosConocidos.map((evento) => {
-            const descartado = eventosOcultos.has(evento);
-            return (
-              <button
-                key={evento}
-                onClick={() => alternarEventoOculto(evento)}
-                className="rounded-full px-3 py-1 text-xs font-medium"
-                style={{
-                  background: "var(--surface-1)",
-                  border: `1px solid ${
-                    descartado ? "var(--status-critical)" : "var(--border)"
-                  }`,
-                  color: descartado ? "var(--status-critical)" : "var(--text-secondary)",
-                  textDecoration: descartado ? "line-through" : "none",
-                }}
-                title={descartado ? "Mostrar de nuevo" : "Descartar este evento de todo el dashboard"}
-              >
-                {evento}
-              </button>
-            );
-          })}
-          {eventosOcultos.size > 0 && (
-            <button
-              onClick={() => onCambiarEventosOcultos(() => new Set())}
-              className="text-xs underline"
-              style={{ color: "var(--text-muted)" }}
-            >
-              Mostrar todos
-            </button>
-          )}
-        </div>
-      )}
+      <PanelFiltros
+        filtros={filtros}
+        cuentas={cuentasConocidas}
+        tarjetas={tarjetasConocidas}
+        eventosVisibles={eventosVisibles}
+        onFiltrar={alternarFiltro}
+        onFiltrarEvento={alternarFiltroEvento}
+        categorias={categoriasConocidas}
+        categoriasOcultas={categoriasOcultas}
+        onAlternarCategoria={alternarCategoriaOculta}
+        onMostrarCategorias={() => onCambiarCategoriasOcultas(() => new Set())}
+        eventos={eventosConocidos}
+        eventosOcultos={eventosOcultos}
+        onAlternarEvento={alternarEventoOculto}
+        onMostrarEventos={() => onCambiarEventosOcultos(() => new Set())}
+      />
 
       {hayFiltrosActivos && (
         <p className="text-xs" style={{ color: "var(--text-muted)" }}>
