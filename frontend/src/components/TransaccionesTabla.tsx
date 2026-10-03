@@ -13,8 +13,13 @@ const formateadorFecha = new Intl.DateTimeFormat("es-MX", {
 
 export function TransaccionesTabla({
   transacciones,
+  vacio = "No hay transacciones sincronizadas todavía.",
 }: {
   transacciones: Transaccion[];
+  /** Mensaje cuando no hay filas -- la pestaña de tarjetas lo cambia, porque
+   * ahí una tabla vacía casi siempre significa "nada coincide con los
+   * filtros", no "aún no hay datos". */
+  vacio?: string;
 }) {
   const ordenadas = [...transacciones].sort((a, b) =>
     b.fecha.localeCompare(a.fecha)
@@ -171,7 +176,7 @@ export function TransaccionesTabla({
 
       {ordenadas.length === 0 && (
         <p className="py-6 text-center text-xs" style={{ color: "var(--text-muted)" }}>
-          No hay transacciones sincronizadas todavía.
+          {vacio}
         </p>
       )}
     </div>
