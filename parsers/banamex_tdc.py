@@ -39,7 +39,7 @@ from pathlib import Path
 
 import pdfplumber
 
-from parsers.base import BaseParser, RenglonCrudo
+from parsers.base import BaseParser, RenglonCrudo, SugerenciaRenglonManual
 
 MESES = {
     "ene": "01", "feb": "02", "mar": "03", "abr": "04",
@@ -199,10 +199,12 @@ class BanamexTdcParser(BaseParser):
 
     def __init__(self) -> None:
         self._advertencias: list[str] = []
+        self._sugerencias: list[SugerenciaRenglonManual] = []
 
     def extraer(self, ruta_pdf: Path) -> list[RenglonCrudo]:
         renglones: list[RenglonCrudo] = []
         self._advertencias = []
+        self._sugerencias = []
         # Estado del documento completo, no por página -- una sección de
         # tarjeta (o un bloque de PAGO INTERBANCARIO sin cerrar) puede
         # seguir vigente a través de un salto de página, igual que
@@ -221,6 +223,13 @@ class BanamexTdcParser(BaseParser):
                 f"Página {bloque_interbancario['pagina']}: bloque de PAGO "
                 f"INTERBANCARIO sin cerrar ({motivo}) -- revísalo a mano: "
                 f"{' | '.join(bloque_interbancario['lineas_crudas'])!r}"
+            )
+            self._sugerencias.append(
+                SugerenciaRenglonManual(
+                    fecha_texto=bloque_interbancario["fecha_texto"],
+                    pagina=bloque_interbancario["pagina"],
+                    tarjeta=tarjeta_actual,
+                )
             )
             bloque_interbancario = None
 
@@ -321,6 +330,13 @@ class BanamexTdcParser(BaseParser):
                                 f"(probablemente texto renderizado como imagen "
                                 f"en el PDF) — revísala a mano: {linea!r}"
                             )
+                            self._sugerencias.append(
+                                SugerenciaRenglonManual(
+                                    fecha_texto=self._normalizar_fecha(linea.split()[0]),
+                                    pagina=numero_pagina,
+                                    tarjeta=tarjeta_actual,
+                                )
+                            )
                         continue
 
                     try:
@@ -363,6 +379,9 @@ class BanamexTdcParser(BaseParser):
 
     def advertencias(self) -> list[str]:
         return list(self._advertencias)
+
+    def sugerencias_renglon_manual(self) -> list[SugerenciaRenglonManual]:
+        return list(self._sugerencias)
 
     def _normalizar_fecha(self, fecha_dd_mon_aaaa: str) -> str | None:
         partes = fecha_dd_mon_aaaa.split("-")

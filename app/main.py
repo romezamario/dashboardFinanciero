@@ -31,7 +31,13 @@ from parsers.ejemplo import EjemploParser
 from parsers.banamex import BanamexParser
 from parsers.banamex_tdc import BanamexTdcParser
 from parsers.invex_tdc import InvexTdcParser
-from transform.categorizador import Regla, cargar_reglas, categorizar, guardar_reglas
+from transform.categorizador import (
+    Regla,
+    cargar_reglas,
+    categorizar,
+    guardar_reglas,
+    inferir_categoria_comercio,
+)
 from transform.transformador import (
     TransaccionCanonica,
     transformar_renglones,
@@ -291,23 +297,36 @@ class VentanaRenglonManual(tk.Toplevel):
     auditoría (`origen`) y de a qué se sincroniza en Supabase.
     """
 
+    OPCIONES_TARJETA = ("Titular", "Adicional", "Digital")
+
     def __init__(self, master: "App") -> None:
         super().__init__(master)
         self.title("Agregar renglón manual")
-        self.geometry("380x290")
+        self.geometry("430x400")
         self.master_app = master
+        # Copia: al agregar un renglón se consume su sugerencia sin tocar la
+        # lista de la App (que sigue reflejando lo que detectó la carga).
+        self.sugerencias = list(master.sugerencias_renglon_manual)
+        # Mientras el usuario no toque categoría/comercio a mano, se siguen
+        # re-infiriendo al cambiar la descripción; en cuanto los edita, se
+        # respeta lo que puso.
+        self._categoria_editada = False
+        self._comercio_editado = False
 
         marco = ttk.Frame(self)
         marco.pack(fill="both", expand=True, padx=8, pady=8)
 
         ttk.Label(marco, text="Fecha (AAAA-MM-DD):").grid(row=0, column=0, sticky="w", pady=2)
-        self.entrada_fecha = ttk.Entry(marco)
-        self.entrada_fecha.insert(0, date.today().isoformat())
-        self.entrada_fecha.grid(row=0, column=1, sticky="ew", padx=4)
+        # Combo editable: las fechas donde el extractor detectó una línea
+        # faltante van como opciones; sigue pudiendo teclearse cualquier otra.
+        self.combo_fecha = ttk.Combobox(marco, values=self._fechas_sugeridas())
+        self.combo_fecha.grid(row=0, column=1, sticky="ew", padx=4)
+        self.combo_fecha.bind("<<ComboboxSelected>>", lambda _e: self._aplicar_sugerencia())
 
         ttk.Label(marco, text="Descripción:").grid(row=1, column=0, sticky="w", pady=2)
         self.entrada_descripcion = ttk.Entry(marco)
         self.entrada_descripcion.grid(row=1, column=1, sticky="ew", padx=4)
+        self.entrada_descripcion.bind("<KeyRelease>", lambda _e: self._inferir_categoria())
 
         ttk.Label(marco, text="Monto (sin signo):").grid(row=2, column=0, sticky="w", pady=2)
         self.entrada_monto = ttk.Entry(marco)
@@ -326,23 +345,45 @@ class VentanaRenglonManual(tk.Toplevel):
         self.entrada_pagina = ttk.Entry(marco)
         self.entrada_pagina.grid(row=4, column=1, sticky="ew", padx=4)
 
-        ttk.Label(marco, text="Tarjeta (opcional, ej. Titular):").grid(
-            row=5, column=0, sticky="w", pady=2
+        ttk.Label(marco, text="Tarjeta (opcional):").grid(row=5, column=0, sticky="w", pady=2)
+        # Combo editable: Titular/Adicional/Digital son lo que imprimen las
+        # TDC de Banamex; un documento de Invex V2 sin rol conocido usa los
+        # últimos 4 dígitos como `tarjeta`, así que se suman los valores que
+        # ya traen las transacciones cargadas (y la sugerencia) y se deja
+        # teclear otro.
+        self.combo_tarjeta = ttk.Combobox(marco, values=self._opciones_tarjeta())
+        self.combo_tarjeta.grid(row=5, column=1, sticky="ew", padx=4)
+
+        ttk.Label(marco, text="Categoría:").grid(row=6, column=0, sticky="w", pady=2)
+        self.combo_categoria = ttk.Combobox(marco, values=self._opciones_categoria())
+        self.combo_categoria.grid(row=6, column=1, sticky="ew", padx=4)
+        self.combo_categoria.bind("<KeyRelease>", lambda _e: self._marcar_categoria_editada())
+        self.combo_categoria.bind(
+            "<<ComboboxSelected>>", lambda _e: self._marcar_categoria_editada()
         )
-        self.entrada_tarjeta = ttk.Entry(marco)
-        self.entrada_tarjeta.grid(row=5, column=1, sticky="ew", padx=4)
+
+        ttk.Label(marco, text="Comercio (opcional):").grid(row=7, column=0, sticky="w", pady=2)
+        self.combo_comercio = ttk.Combobox(marco, values=self._opciones_comercio())
+        self.combo_comercio.grid(row=7, column=1, sticky="ew", padx=4)
+        self.combo_comercio.bind("<KeyRelease>", lambda _e: self._marcar_comercio_editado())
+        self.combo_comercio.bind(
+            "<<ComboboxSelected>>", lambda _e: self._marcar_comercio_editado()
+        )
 
         marco.columnconfigure(1, weight=1)
 
         ttk.Label(
             marco,
             text=(
-                "Categoría/comercio se asignan solo con las reglas actuales, "
-                "igual que una fila extraída del PDF."
+                "Categoría y comercio se infieren al escribir la descripción (primero "
+                "las reglas actuales, luego transacciones ya cargadas parecidas); "
+                "puedes cambiarlos. Si los dejas vacíos, el renglón queda sin categoría."
             ),
             foreground="#666",
-            wraplength=340,
-        ).grid(row=6, column=0, columnspan=2, sticky="w", pady=(8, 0))
+            wraplength=390,
+        ).grid(row=8, column=0, columnspan=2, sticky="w", pady=(8, 0))
+
+        self._aplicar_sugerencia(primera=True)
 
         marco_botones = ttk.Frame(self)
         marco_botones.pack(fill="x", padx=8, pady=8)
@@ -353,13 +394,86 @@ class VentanaRenglonManual(tk.Toplevel):
             side="right"
         )
 
+    SIN_TARJETA = "(sin tarjeta)"
+
+    def _fechas_sugeridas(self) -> list[str]:
+        # dict.fromkeys: únicas, en el orden en que el extractor las encontró.
+        return list(dict.fromkeys(fecha for fecha, _pagina, _tarjeta in self.sugerencias))
+
+    def _opciones_tarjeta(self) -> list[str]:
+        cargadas = (t.tarjeta for t in self.master_app.transacciones)
+        sugeridas = (tarjeta for _fecha, _pagina, tarjeta in self.sugerencias)
+        extras = [t for t in (*cargadas, *sugeridas) if t]
+        return list(dict.fromkeys([self.SIN_TARJETA, *self.OPCIONES_TARJETA, *extras]))
+
+    def _opciones_categoria(self) -> list[str]:
+        nombres = {t.categoria for t in self.master_app.transacciones if t.categoria}
+        nombres |= {r.categoria for r in self.master_app.reglas}
+        return sorted(nombres)
+
+    def _opciones_comercio(self) -> list[str]:
+        nombres = {t.comercio for t in self.master_app.transacciones if t.comercio}
+        nombres |= {r.comercio for r in self.master_app.reglas if r.comercio}
+        return sorted(nombres)
+
+    def _aplicar_sugerencia(self, primera: bool = False) -> None:
+        """Precarga página y tarjeta de la línea detectada en la fecha
+        elegida. Con `primera=True` (al abrir) también elige la primera fecha
+        detectada, o la de hoy si el extractor no detectó nada."""
+        if primera:
+            self.combo_fecha.set(
+                self.sugerencias[0][0] if self.sugerencias else date.today().isoformat()
+            )
+        fecha = self.combo_fecha.get().strip()
+        sugerencia = next((s for s in self.sugerencias if s[0] == fecha), None)
+        if sugerencia is None:
+            return
+        _fecha, pagina, tarjeta = sugerencia
+        self.entrada_pagina.delete(0, "end")
+        if pagina is not None:
+            self.entrada_pagina.insert(0, str(pagina))
+        self.combo_tarjeta.set(tarjeta or self.SIN_TARJETA)
+
+    def _inferir_categoria(self) -> None:
+        categoria, comercio = inferir_categoria_comercio(
+            self.entrada_descripcion.get(),
+            self.master_app.reglas,
+            self.master_app.transacciones,
+        )
+        if not self._categoria_editada:
+            self._categoria_inferida = categoria or ""
+            self.combo_categoria.set(self._categoria_inferida)
+        if not self._comercio_editado:
+            self._comercio_inferido = comercio or ""
+            self.combo_comercio.set(self._comercio_inferido)
+
+    # Se compara contra lo último que escribió la inferencia (y no se marca
+    # "editado" a ciegas en cada KeyRelease) porque soltar la tecla Tab al
+    # pasar de Descripción a estos combos también dispara KeyRelease ahí.
+    _categoria_inferida = ""
+    _comercio_inferido = ""
+
+    def _marcar_categoria_editada(self) -> None:
+        if self.combo_categoria.get() != self._categoria_inferida:
+            self._categoria_editada = True
+
+    def _marcar_comercio_editado(self) -> None:
+        if self.combo_comercio.get() != self._comercio_inferido:
+            self._comercio_editado = True
+
     def _agregar(self) -> None:
-        fecha_texto = self.entrada_fecha.get().strip()
+        # Por si la descripción se pegó con el mouse (no dispara KeyRelease).
+        self._inferir_categoria()
+
+        fecha_texto = self.combo_fecha.get().strip()
         descripcion = self.entrada_descripcion.get().strip()
         monto_texto = self.entrada_monto.get().strip().replace(",", "")
         tipo = self.combo_tipo.get()
         pagina_texto = self.entrada_pagina.get().strip()
-        tarjeta = self.entrada_tarjeta.get().strip() or None
+        tarjeta_texto = self.combo_tarjeta.get().strip()
+        tarjeta = None if tarjeta_texto in ("", self.SIN_TARJETA) else tarjeta_texto
+        categoria = self.combo_categoria.get().strip() or None
+        comercio = self.combo_comercio.get().strip() or None
 
         try:
             fecha = date.fromisoformat(fecha_texto)
@@ -413,7 +527,6 @@ class VentanaRenglonManual(tk.Toplevel):
                 ocurrencia += 1
             linea_cruda = f"{linea_cruda} ({ocurrencia})"
 
-        categoria, comercio = categorizar(descripcion, self.master_app.reglas)
         origen = self.master_app.ruta_pdf_actual.name if self.master_app.ruta_pdf_actual else None
 
         nueva = TransaccionCanonica(
@@ -437,7 +550,29 @@ class VentanaRenglonManual(tk.Toplevel):
         self.entrada_descripcion.delete(0, "end")
         self.entrada_monto.delete(0, "end")
         self.entrada_pagina.delete(0, "end")
-        self.entrada_tarjeta.delete(0, "end")
+        self.combo_tarjeta.set(self.SIN_TARJETA)
+        self.combo_categoria.set("")
+        self.combo_comercio.set("")
+        self._categoria_editada = False
+        self._comercio_editado = False
+        self._categoria_inferida = ""
+        self._comercio_inferido = ""
+
+        # La línea faltante que este renglón cubre ya no está pendiente:
+        # se quita de las sugerencias y el diálogo salta a la siguiente
+        # fecha detectada (con su página/tarjeta), si queda alguna.
+        indice = next(
+            (i for i, s in enumerate(self.sugerencias) if s[0] == fecha.isoformat()), None
+        )
+        if indice is not None:
+            del self.sugerencias[indice]
+        self.combo_fecha.configure(values=self._fechas_sugeridas())
+        self.combo_tarjeta.configure(values=self._opciones_tarjeta())
+        self.combo_categoria.configure(values=self._opciones_categoria())
+        self.combo_comercio.configure(values=self._opciones_comercio())
+        if self.sugerencias:
+            self._aplicar_sugerencia(primera=True)
+
         messagebox.showinfo(
             "Renglón agregado",
             f"Se agregó: {fecha.isoformat()} · {descripcion} · {tipo} {monto} "
@@ -455,6 +590,10 @@ class App(tk.Tk):
         self.transacciones: list[TransaccionCanonica] = []
         self.ruta_pdf_actual: Path | None = None
         self.banco_actual: str | None = None
+        # (fecha ISO, página, tarjeta) de cada línea que el extractor detectó
+        # como faltante en la última carga -- valores por defecto de
+        # VentanaRenglonManual.
+        self.sugerencias_renglon_manual: list[tuple[str, int | None, str | None]] = []
 
         self._construir_ui()
 
@@ -687,6 +826,23 @@ class App(tk.Tk):
         except Exception:  # noqa: BLE001 — nunca debe tumbar la carga de transacciones
             advertencias_extraccion = []
 
+        sugerencias_manuales: list[tuple[str, int | None, str | None]] = []
+        try:
+            for sugerencia in parser.sugerencias_renglon_manual():
+                if sugerencia.fecha_texto is None:
+                    continue
+                try:
+                    fecha_iso = (
+                        datetime.strptime(sugerencia.fecha_texto, formato_fecha)
+                        .date()
+                        .isoformat()
+                    )
+                except ValueError:
+                    continue
+                sugerencias_manuales.append((fecha_iso, sugerencia.pagina, sugerencia.tarjeta))
+        except Exception:  # noqa: BLE001 — nunca debe tumbar la carga de transacciones
+            sugerencias_manuales = []
+
         # Siempre se limpian primero: si este PDF no trae la cuenta
         # detectable, dejar los valores del PDF cargado ANTES haría que "Guardar"
         # atribuyera este estado de cuenta a la cuenta equivocada sin aviso
@@ -722,6 +878,7 @@ class App(tk.Tk):
         self.transacciones = transacciones
         self.ruta_pdf_actual = ruta_pdf
         self.banco_actual = banco
+        self.sugerencias_renglon_manual = sugerencias_manuales
         self._refrescar_tabla()
         self._actualizar_totales()
 
@@ -786,6 +943,10 @@ class App(tk.Tk):
                 if not str(t.get("linea_cruda", "")).startswith(PREFIJO_RENGLON_MANUAL):
                     continue
                 categoria, comercio = categorizar(t["descripcion"], self.reglas)
+                if categoria is None:
+                    # Ninguna regla aplica: se conserva lo que el usuario
+                    # eligió/infirió en el diálogo (ya no es solo por reglas).
+                    categoria, comercio = t.get("categoria"), t.get("comercio")
                 recuperados.append(
                     TransaccionCanonica(
                         fecha=date.fromisoformat(t["fecha"]),
@@ -809,6 +970,10 @@ class App(tk.Tk):
         nuevas_transacciones = []
         for t in self.transacciones:
             categoria, comercio = categorizar(t.descripcion, self.reglas)
+            if categoria is None and t.linea_cruda.startswith(PREFIJO_RENGLON_MANUAL):
+                # Un renglón manual puede traer categoría elegida a mano en el
+                # diálogo; si ya ninguna regla lo cubre, no se le borra.
+                categoria, comercio = t.categoria, t.comercio
             nuevas_transacciones.append(replace(t, categoria=categoria, comercio=comercio))
         self.transacciones = nuevas_transacciones
         self._refrescar_tabla()

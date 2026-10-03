@@ -39,6 +39,22 @@ class RenglonCrudo:
     tarjeta: str | None = None
 
 
+@dataclass(frozen=True)
+class SugerenciaRenglonManual:
+    """Dónde detectó un extractor que falta una línea, para precargar el
+    diálogo "Agregar renglón manual" en vez de que el usuario teclee fecha,
+    página y tarjeta desde cero (ver `BaseParser.sugerencias_renglon_manual`).
+
+    `fecha_texto` va en el mismo formato que `RenglonCrudo.fecha_texto`
+    (`BaseParser.formato_fecha`); cualquiera de los tres campos puede ser
+    None si el extractor no lo pudo determinar para esa advertencia.
+    """
+
+    fecha_texto: str | None
+    pagina: int | None
+    tarjeta: str | None = None
+
+
 class BaseParser(ABC):
     """Interfaz común para los extractores de estados de cuenta.
 
@@ -107,5 +123,14 @@ class BaseParser(ABC):
         pudo leer — es una pista para que el usuario la revise a mano contra
         el PDF antes de confiar en la validación de totales. Implementación
         por defecto: ninguna advertencia.
+        """
+        return []
+
+    def sugerencias_renglon_manual(self) -> list[SugerenciaRenglonManual]:
+        """Versión estructurada de `advertencias()` para las que apuntan a
+        una transacción que falta: fecha/página/tarjeta de cada línea
+        detectada, que el diálogo de renglón manual usa como valores por
+        defecto. Una entrada por cada advertencia de ese tipo, en el mismo
+        orden. Implementación por defecto: ninguna.
         """
         return []

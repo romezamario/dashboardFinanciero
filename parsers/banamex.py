@@ -51,7 +51,7 @@ from pathlib import Path
 
 import pdfplumber
 
-from parsers.base import BaseParser, RenglonCrudo
+from parsers.base import BaseParser, RenglonCrudo, SugerenciaRenglonManual
 
 MESES = {
     "ENE": "01", "FEB": "02", "MAR": "03", "ABR": "04",
@@ -107,6 +107,10 @@ class BanamexParser(BaseParser):
         # El PDF no trae el año en cada renglón — ver docstring del módulo.
         self.ano_estado_de_cuenta = ano_estado_de_cuenta
         self._advertencias: list[str] = []
+        self._sugerencias: list[SugerenciaRenglonManual] = []
+
+    def sugerencias_renglon_manual(self) -> list[SugerenciaRenglonManual]:
+        return list(self._sugerencias)
 
     def advertencias(self) -> list[str]:
         """Bloques que se descartaron en la última llamada a `extraer()` en
@@ -198,10 +202,16 @@ class BanamexParser(BaseParser):
     ) -> list[RenglonCrudo]:
         renglones: list[RenglonCrudo] = []
         self._advertencias = []
+        self._sugerencias = []
 
-        def advertir(motivo: str, pagina: int | None, concepto: list[str]) -> None:
+        def advertir(
+            motivo: str, pagina: int | None, concepto: list[str], fecha: str | None
+        ) -> None:
             texto = " ".join(concepto).strip() or "(sin concepto)"
             self._advertencias.append(f"Página {pagina or '?'}: {motivo} -- {texto[:120]}")
+            self._sugerencias.append(
+                SugerenciaRenglonManual(fecha_texto=fecha, pagina=pagina)
+            )
 
         saldo_actual: Decimal | None = None
         bloque_fecha: str | None = None
@@ -219,6 +229,7 @@ class BanamexParser(BaseParser):
                     "un movimiento empezó pero nunca cerró con monto y saldo (se descartó)",
                     bloque_pagina,
                     bloque_concepto,
+                    bloque_fecha,
                 )
             mes = MESES.get(mes_abrev, "01")
             bloque_fecha = f"{dia}/{mes}/{self.ano_estado_de_cuenta}"
@@ -236,6 +247,7 @@ class BanamexParser(BaseParser):
                     "su monto (se descartó)",
                     bloque_pagina,
                     bloque_concepto,
+                    bloque_fecha,
                 )
             if bloque_fecha is not None and saldo_actual is not None:
                 delta = saldo_nuevo - saldo_actual
@@ -298,5 +310,6 @@ class BanamexParser(BaseParser):
                 "el documento terminó con un movimiento sin cerrar (se descartó)",
                 bloque_pagina,
                 bloque_concepto,
+                bloque_fecha,
             )
         return renglones

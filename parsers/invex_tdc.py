@@ -122,7 +122,7 @@ from pathlib import Path
 
 import pdfplumber
 
-from parsers.base import BaseParser, RenglonCrudo
+from parsers.base import BaseParser, RenglonCrudo, SugerenciaRenglonManual
 
 MESES = {
     "ene": "01", "feb": "02", "mar": "03", "abr": "04",
@@ -245,10 +245,12 @@ class InvexTdcParser(BaseParser):
 
     def __init__(self) -> None:
         self._advertencias: list[str] = []
+        self._sugerencias: list[SugerenciaRenglonManual] = []
 
     def extraer(self, ruta_pdf: Path) -> list[RenglonCrudo]:
         renglones: list[RenglonCrudo] = []
         self._advertencias = []
+        self._sugerencias = []
         # Estado del documento completo, no por página -- una sección de
         # tarjeta sigue vigente a través de un salto de página, igual que
         # en banamex_tdc.py.
@@ -338,11 +340,28 @@ class InvexTdcParser(BaseParser):
                             f"(probablemente texto renderizado como imagen "
                             f"en el PDF) — revísala a mano: {linea!r}"
                         )
+                        primera_fecha = linea.split()[0]
+                        self._sugerencias.append(
+                            SugerenciaRenglonManual(
+                                # V1 trae "DD-Mon-AAAA" (hay que normalizarla);
+                                # V2 ya viene como DD/MM/AAAA.
+                                fecha_texto=(
+                                    self._normalizar_fecha_v1(primera_fecha)
+                                    if "-" in primera_fecha
+                                    else primera_fecha
+                                ),
+                                pagina=numero_pagina,
+                                tarjeta=tarjeta_actual,
+                            )
+                        )
 
         return renglones
 
     def advertencias(self) -> list[str]:
         return list(self._advertencias)
+
+    def sugerencias_renglon_manual(self) -> list[SugerenciaRenglonManual]:
+        return list(self._sugerencias)
 
     def _normalizar_fecha_v1(self, fecha_dd_mon_aaaa: str) -> str | None:
         partes = fecha_dd_mon_aaaa.split("-")

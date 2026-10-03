@@ -24,6 +24,22 @@ class BanamexAdvertenciasTest(unittest.TestCase):
         self.assertIn("MOVIMIENTO ROTO", advertencias[0])
         self.assertIn("SIN CIERRE", advertencias[1])
 
+    def test_sugerencias_traen_fecha_y_pagina_de_cada_descarte(self) -> None:
+        parser = BanamexParser("2026")
+        parser._procesar_documento(
+            [
+                (1, "01 AGO SALDO ANTERIOR 1,000.00"),
+                (1, "03 AGO MOVIMIENTO ROTO"),
+                (2, "04 AGO PAGO C 50.00 950.00"),
+                (2, "05 AGO SIN CIERRE"),
+            ]
+        )
+        self.assertEqual(
+            [(s.fecha_texto, s.pagina) for s in parser.sugerencias_renglon_manual()],
+            [("03/08/2026", 1), ("05/08/2026", 2)],
+        )
+        self.assertEqual(len(parser.sugerencias_renglon_manual()), len(parser.advertencias()))
+
     def test_sin_advertencias_en_documento_limpio(self) -> None:
         parser = BanamexParser("2026")
         parser._procesar_documento(

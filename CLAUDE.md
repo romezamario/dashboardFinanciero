@@ -431,9 +431,25 @@ PDF...") lets the user type one in by hand: fecha, descripción, monto sin signo
 optional página (fill it in from the `advertencias()` message if you know which page it was on;
 defaults to `0` otherwise). Requires a PDF already loaded — `App.ruta_pdf_actual` — because a
 manual row still needs to belong to a document for `origen`/sync purposes; it does *not* require
-that the extractor found any real transactions first. Categoría/comercio are auto-assigned by
-the same `categorizar()` call as any extracted row (no separate manual-override field — if you
-need different categorization, add/edit a rule instead, same as for extracted rows). `pagina`
+that the extractor found any real transactions first. **Defaults come from the parser
+(2026-10-02, user's request):** `BaseParser.sugerencias_renglon_manual()` (optional hook, default
+`[]`, parallel to `advertencias()` — one `SugerenciaRenglonManual(fecha_texto, pagina, tarjeta)`
+per warning that points at a missing transaction; `banamex.py`, `banamex_tdc.py` and `invex_tdc.py`
+fill it next to each `_advertencias.append`) feeds `App.sugerencias_renglon_manual` (dates
+converted to ISO with the parser's `formato_fecha`). The dialog's *Fecha* is an editable combo
+listing those dates (first one preselected; today if the parser flagged nothing), choosing one
+prefills *Página* and *Tarjeta*, and saving a row consumes its suggestion and jumps to the next.
+*Tarjeta* is an editable combo (`(sin tarjeta)`, Titular, Adicional, Digital, plus any `tarjeta`
+already in the load, e.g. Invex V2's last-4 fallback). **Categoría/comercio** are editable combos
+(options from the load + the rules) pre-filled by `inferir_categoria_comercio()`
+(`transform/categorizador.py`) every time the description changes: current rules first, then loaded
+transactions with the same description, then loaded ones that *contain* the typed text (≥3 chars),
+most frequent `(categoria, comercio)` pair winning; once the user edits either combo by hand it stops
+being re-inferred, and leaving them empty saves the row uncategorized. Because the category of a
+manual row is no longer purely rule-derived, `App.recategorizar()` and `_recuperar_renglones_manuales`
+keep a manual row's existing categoría/comercio when no rule matches it (a matching rule still wins;
+extracted rows are unaffected and still go uncategorized when their rule disappears). (Before this,
+the dialog only ever applied `categorizar()` with no way to choose — "add/edit a rule instead".) `pagina`
 defaults to `0` and `linea_cruda` is built as `f"(manual) {fecha} | {descripcion} | {monto} |
 {tipo}"` — distinct per entry so it can't collide with a real extracted line, and unique enough
 across manual entries in the same document to not collide with each other on the sync upsert's
