@@ -182,31 +182,56 @@ export function resumenPorMes(transacciones: Transaccion[], meses: string[]): Re
   });
 }
 
+/** Qué lado del flujo se está graficando: cargos ("gasto") o abonos
+ * ("ingreso"). */
+export type LadoMovimiento = "gasto" | "ingreso";
+
+/**
+ * "ingreso" solo si la selección tiene abonos y NINGÚN cargo (ej. la
+ * categoría "Transferencia recibida"); en cualquier otro caso -- sin
+ * filtro, o una selección con cargos, aunque también traiga abonos -- se
+ * mantiene "gasto", que es lo que esta gráfica siempre mostró. Antes no
+ * existía esta distinción y una categoría de puros abonos salía en $0 todos
+ * los meses (la gráfica solo sumaba cargos).
+ */
+export function ladoDominante(transacciones: Transaccion[]): LadoMovimiento {
+  let hayAbonos = false;
+  for (const t of transacciones) {
+    if (t.tipo === "cargo") return "gasto";
+    if (t.tipo === "abono") hayAbonos = true;
+  }
+  return hayAbonos ? "ingreso" : "gasto";
+}
+
 export interface PuntoGastoConPromedioMovil {
   mes: string;
-  gastos: number;
-  /** Promedio de `gastos` de este mes y los `ventana - 1` anteriores; null
+  /** Total del mes del lado graficado (gastos o ingresos, según `lado`). */
+  monto: number;
+  /** Promedio de `monto` de este mes y los `ventana - 1` anteriores; null
    * si `meses` no trae suficiente historial previo todavía para completar
    * la ventana (los primeros `ventana - 1` puntos de la serie). */
   promedioMovil: number | null;
 }
 
-/** Gasto mensual y su promedio móvil (ventana de `ventana` meses, 3 por
- * defecto) -- para ver la tendencia de un comercio/categoría puntual sin
- * que el ruido mes a mes tape si en el fondo está subiendo o bajando. */
+/** Total mensual (de gastos o de ingresos, según `lado`) y su promedio móvil
+ * (ventana de `ventana` meses, 3 por defecto) -- para ver la tendencia de un
+ * comercio/categoría puntual sin que el ruido mes a mes tape si en el fondo
+ * está subiendo o bajando. */
 export function gastoMensualConPromedioMovil(
   transacciones: Transaccion[],
   meses: string[],
-  ventana = 3
+  ventana = 3,
+  lado: LadoMovimiento = "gasto"
 ): PuntoGastoConPromedioMovil[] {
+  const montoDe = (p: ResumenMes) => (lado === "ingreso" ? p.ingresos : p.gastos);
   const serie = resumenPorMes(transacciones, meses);
   return serie.map((punto, i) => {
     const inicioVentana = i - ventana + 1;
     const promedioMovil =
       inicioVentana >= 0
-        ? serie.slice(inicioVentana, i + 1).reduce((s, p) => s + p.gastos, 0) / ventana
+        ? serie.slice(inicioVentana, i + 1).reduce((s, p) => s + montoDe(p), 0) / ventana
         : null;
-    return { mes: punto.mes, gastos: punto.gastos, promedioMovil };
+    return { mes: punto.mes, monto: montoDe(punto), promedioMovil };
   });
 }
 

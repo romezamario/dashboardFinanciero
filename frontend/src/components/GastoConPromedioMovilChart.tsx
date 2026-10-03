@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { PuntoGastoConPromedioMovil } from "../lib/indicadores";
+import type { LadoMovimiento, PuntoGastoConPromedioMovil } from "../lib/indicadores";
 
 const formateadorEje = new Intl.NumberFormat("es-MX", {
   notation: "compact",
@@ -24,16 +24,20 @@ const formateadorTooltip = new Intl.NumberFormat("es-MX", {
 interface GastoConPromedioMovilChartProps {
   datos: PuntoGastoConPromedioMovil[];
   titulo: string;
+  /** "ingreso" para selecciones de puros abonos: cambia la etiqueta de las
+   * barras y los colores (azul = ingresos, naranja = gastos, igual que el
+   * resto del dashboard). */
+  lado?: LadoMovimiento;
 }
 
-/** Promedio plano de gasto sobre los últimos `n` meses visibles en `datos`
+/** Promedio plano del monto sobre los últimos `n` meses visibles en `datos`
  * (no una ventana móvil por mes, a diferencia de `promedioMovil`) -- una
  * sola línea horizontal de referencia para comparar el nivel actual contra
  * el corto y el largo plazo. */
 function promedioDeUltimosMeses(datos: PuntoGastoConPromedioMovil[], n: number): number | null {
   if (datos.length === 0) return null;
   const ventana = datos.slice(-n);
-  return ventana.reduce((suma, punto) => suma + punto.gastos, 0) / ventana.length;
+  return ventana.reduce((suma, punto) => suma + punto.monto, 0) / ventana.length;
 }
 
 /**
@@ -49,7 +53,14 @@ function promedioDeUltimosMeses(datos: PuntoGastoConPromedioMovil[], n: number):
  * cada punto para que Recharts las dibuje como líneas de ancho completo y
  * aparezcan en la leyenda/tooltip igual que las demás series.
  */
-export function GastoConPromedioMovilChart({ datos, titulo }: GastoConPromedioMovilChartProps) {
+export function GastoConPromedioMovilChart({
+  datos,
+  titulo,
+  lado = "gasto",
+}: GastoConPromedioMovilChartProps) {
+  const esIngreso = lado === "ingreso";
+  const colorBarras = esIngreso ? "var(--series-1)" : "var(--series-2)";
+  const colorPromedioMovil = esIngreso ? "var(--series-2)" : "var(--series-1)";
   const promedioUltimos3 = useMemo(() => promedioDeUltimosMeses(datos, 3), [datos]);
   const promedioUltimos12 = useMemo(() => promedioDeUltimosMeses(datos, 12), [datos]);
   const datosConPromedios = useMemo(
@@ -96,16 +107,16 @@ export function GastoConPromedioMovilChart({ datos, titulo }: GastoConPromedioMo
               )}
             />
             <Bar
-              dataKey="gastos"
-              name="Gasto mensual"
-              fill="var(--series-2)"
+              dataKey="monto"
+              name={esIngreso ? "Ingreso mensual" : "Gasto mensual"}
+              fill={colorBarras}
               radius={[4, 4, 0, 0]}
               maxBarSize={24}
             />
             <Line
               dataKey="promedioMovil"
               name="Promedio móvil (3 meses)"
-              stroke="var(--series-1)"
+              stroke={colorPromedioMovil}
               strokeWidth={2}
               dot={false}
               connectNulls={false}

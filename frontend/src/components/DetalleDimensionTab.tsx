@@ -8,6 +8,7 @@ import {
 } from "../lib/queries";
 import {
   gastoMensualConPromedioMovil,
+  ladoDominante,
   mesesHasta,
   RANGO_MESES_VACIO,
   resolverPeriodo,
@@ -107,13 +108,17 @@ export function DetalleDimensionTab({ transacciones }: DetalleDimensionTabProps)
     () => aplicarFiltros(transacciones, filtros),
     [transacciones, filtros]
   );
+  // Una selección de puros abonos (ej. "Transferencia recibida") se grafica y
+  // lista como ingreso -- ver ladoDominante.
+  const lado = useMemo(() => ladoDominante(transaccionesFiltradas), [transaccionesFiltradas]);
+  const esIngreso = lado === "ingreso";
   const topGastos = useMemo(
     () =>
       transaccionesFiltradas
-        .filter((t) => t.tipo === "cargo")
+        .filter((t) => t.tipo === (esIngreso ? "abono" : "cargo"))
         .sort((a, b) => b.monto - a.monto)
         .slice(0, TOPE_TOP_GASTOS),
-    [transaccionesFiltradas]
+    [transaccionesFiltradas, esIngreso]
   );
 
   // Siempre visible: gasto total (sin selección), de un elemento puntual, o
@@ -124,8 +129,8 @@ export function DetalleDimensionTab({ transacciones }: DetalleDimensionTabProps)
       ? `${filtros.categoria} en ${filtros.comercio}`
       : (filtros.categoria ?? filtros.comercio ?? null);
   const tendenciaConPromedioMovil = useMemo(
-    () => gastoMensualConPromedioMovil(transaccionesFiltradas, mesesTendencia),
-    [transaccionesFiltradas, mesesTendencia]
+    () => gastoMensualConPromedioMovil(transaccionesFiltradas, mesesTendencia, 3, lado),
+    [transaccionesFiltradas, mesesTendencia, lado]
   );
 
   const hayFiltrosActivos = Boolean(filtros.categoria || filtros.comercio);
@@ -203,11 +208,10 @@ export function DetalleDimensionTab({ transacciones }: DetalleDimensionTabProps)
 
       <GastoConPromedioMovilChart
         datos={tendenciaConPromedioMovil}
-        titulo={
-          seleccionActual
-            ? `Gasto mensual y promedio móvil de "${seleccionActual}"`
-            : "Gasto mensual y promedio móvil"
-        }
+        lado={lado}
+        titulo={`${esIngreso ? "Ingreso" : "Gasto"} mensual y promedio móvil${
+          seleccionActual ? ` de "${seleccionActual}"` : ""
+        }`}
       />
 
       <GastoPorCategoriaChart
@@ -222,8 +226,8 @@ export function DetalleDimensionTab({ transacciones }: DetalleDimensionTabProps)
       />
 
       <Tabla
-        titulo="Gastos individuales más grandes (según lo filtrado arriba)"
-        vacio="No hay gastos en la selección actual."
+        titulo={`${esIngreso ? "Ingresos" : "Gastos"} individuales más grandes (según lo filtrado arriba)`}
+        vacio={`No hay ${esIngreso ? "ingresos" : "gastos"} en la selección actual.`}
         encabezados={["Descripción", "Fecha", "Monto"]}
         filas={topGastos.map((t) => [
           t.descripcion,

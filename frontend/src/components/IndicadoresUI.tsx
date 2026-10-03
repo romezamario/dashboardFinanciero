@@ -96,9 +96,9 @@ export function Tabla({
         </p>
       ) : esMovil ? (
         <div className="mt-3 max-h-80 space-y-2 overflow-auto">
-          {filas.map((fila) => (
+          {filas.map((fila, indice) => (
             <div
-              key={String(fila[0])}
+              key={`${indice}-${String(fila[0])}`}
               className="rounded-md p-3"
               style={{ border: "1px solid var(--gridline)" }}
             >
@@ -143,8 +143,11 @@ export function Tabla({
               </tr>
             </thead>
             <tbody>
-              {filas.map((fila) => (
-                <tr key={String(fila[0])} style={{ borderBottom: "1px solid var(--gridline)" }}>
+              {filas.map((fila, indice) => (
+                <tr
+                  key={`${indice}-${String(fila[0])}`}
+                  style={{ borderBottom: "1px solid var(--gridline)" }}
+                >
                   {fila.map((celda, i) => (
                     <td
                       key={i}

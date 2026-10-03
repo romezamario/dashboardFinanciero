@@ -585,6 +585,20 @@ differ on purpose** (user chose each one explicitly) — keep them this way:
   not its own, so it still shows the other options to click. Non-selected marks dim to ~0.3 via
   `<Cell fillOpacity>`. The "Otros" fold in `GastoPorCategoriaChart` is not clickable.
 
+**"Categorías y Comercios" tab handles income-only selections (2026-10-02)**: its first chart
+(`GastoConPromedioMovilChart`, monthly total + 3-month moving average) used to sum only cargos, so
+picking a category that is all abonos — e.g. "Transferencia recibida" — showed $0 every month.
+`ladoDominante(transacciones)` (in `indicadores.ts`) returns `"ingreso"` only when the filtered
+selection has abonos and **no** cargo at all, otherwise `"gasto"` (so a mixed category, or no
+filter, behaves exactly as before); that `lado` flips the series to ingresos (blue bars, "Ingreso
+mensual", title "Ingreso mensual y promedio móvil de …") and also makes the "mayores" table list
+the largest abonos instead of cargos. `PuntoGastoConPromedioMovil.gastos` was renamed `monto`
+since it now holds either side. Not touched: the two "Ingresos y gastos por categoría/comercio"
+charts, which already plot both series. Related latent bug fixed in the same pass: `Tabla`
+(`IndicadoresUI.tsx`) keyed its rows by the first cell (the description), but this tab's top-10
+list routinely repeats descriptions (several "UBER…"), so React logged duplicate-key errors and
+left stale rows in the DOM when the filter changed — keys now include the row index.
+
 **"Tarjetas de crédito" tab (2026-10-03, user's request — replaced the per-card tabs)**: the
 credit cards (Invex TDC, TDC Beyond, TDC Conquista, TDC Platino) no longer get one tab each; they
 share a single comparison tab, `TarjetasCreditoTab.tsx` (calculations in `src/lib/tarjetas.ts`,
