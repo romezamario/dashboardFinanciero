@@ -27,6 +27,10 @@ class _Consulta:
         self._accion = ("insert", fila)
         return self
 
+    def update(self, valores) -> "_Consulta":
+        self._accion = ("update", valores)
+        return self
+
     def upsert(self, filas, on_conflict: str) -> "_Consulta":
         self._accion = ("upsert", filas, on_conflict.split(","))
         return self
@@ -40,6 +44,10 @@ class _Consulta:
             nueva = {**self._accion[1], "id": f"{self.tabla}-{len(filas) + 1}"}
             filas.append(nueva)
             data = [nueva]
+        elif tipo == "update":
+            data = [f for f in filas if all(f.get(k) == v for k, v in self.filtros.items())]
+            for fila in data:
+                fila.update(self._accion[1])
         else:
             _, nuevas, claves = self._accion
             vistas = set()
@@ -108,6 +116,20 @@ class SincronizarTodosTest(unittest.TestCase):
         cliente = ClienteFalso()
         self.assertEqual(len(sincronizar_todos(cliente, self.carpeta)), 1)
         self.assertEqual(sincronizar_todos(cliente, self.carpeta), [])
+
+    def test_cuenta_existente_toma_el_alias_nuevo_sin_duplicarse(self) -> None:
+        viejo = _documento("a", ["L1"])
+        viejo["cuenta_alias"] = "TDC Mensual"
+        nuevo = _documento("b", ["L2"])
+        nuevo["cuenta_alias"] = "TDC Platino"  # mismo banco y últimos 4
+        self._escribir("a.json", json.dumps(viejo))
+        cliente = ClienteFalso()
+        sincronizar_todos(cliente, self.carpeta)
+        self.assertEqual([c["alias"] for c in cliente.tablas["cuentas"]], ["TDC Mensual"])
+
+        self._escribir("b.json", json.dumps(nuevo))
+        sincronizar_todos(cliente, self.carpeta)
+        self.assertEqual([c["alias"] for c in cliente.tablas["cuentas"]], ["TDC Platino"])
 
     def test_resincronizar_es_idempotente(self) -> None:
         self._escribir("a.json", json.dumps(_documento("a", ["L1", "L2"])))

@@ -85,6 +85,39 @@ def _buscar_o_crear(
     return insertado.data[0]["id"]
 
 
+def _buscar_o_crear_cuenta(
+    client: ClienteSupabase, banco_id: str, ultimos_4: str, alias: str
+) -> str:
+    """Find-or-create de `cuentas` por (banco, últimos 4), como las demás
+    tablas, con una diferencia: si la cuenta ya existe pero con OTRO alias, se
+    le pone el del documento que se está sincronizando. El alias es lo que
+    agrupa las pestañas por tarjeta del dashboard (varios números pueden
+    compartir alias -- una tarjeta reexpedida), así que corregir cómo se
+    detecta un tipo de tarjeta (ej. "TDC Mensual" -> "TDC Platino") tiene que
+    poder renombrar las cuentas ya creadas con el alias viejo; antes solo se
+    insertaba en la primera vez y no había forma de corregirlo salvo a mano en
+    Supabase. Gana el último documento sincronizado."""
+    resultado = (
+        client.table("cuentas")
+        .select("id, alias")
+        .eq("banco_id", banco_id)
+        .eq("ultimos_4_digitos", ultimos_4)
+        .execute()
+    )
+    if resultado.data:
+        fila = resultado.data[0]
+        if fila.get("alias") != alias:
+            client.table("cuentas").update({"alias": alias}).eq("id", fila["id"]).execute()
+        return fila["id"]
+
+    insertado = (
+        client.table("cuentas")
+        .insert({"banco_id": banco_id, "alias": alias, "ultimos_4_digitos": ultimos_4})
+        .execute()
+    )
+    return insertado.data[0]["id"]
+
+
 def sincronizar_documento(client: ClienteSupabase, datos: dict[str, Any]) -> ResultadoSincronizacion:
     """Sincroniza un único documento (el contenido de un data/procesados/*.json)."""
 
@@ -94,17 +127,8 @@ def sincronizar_documento(client: ClienteSupabase, datos: dict[str, Any]) -> Res
         {"nombre": datos["banco"]},
     )
 
-    cuenta_id = _buscar_o_crear(
-        client, "cuentas",
-        {
-            "banco_id": banco_id,
-            "ultimos_4_digitos": datos["cuenta_ultimos_4_digitos"],
-        },
-        {
-            "banco_id": banco_id,
-            "alias": datos["cuenta_alias"],
-            "ultimos_4_digitos": datos["cuenta_ultimos_4_digitos"],
-        },
+    cuenta_id = _buscar_o_crear_cuenta(
+        client, banco_id, datos["cuenta_ultimos_4_digitos"], datos["cuenta_alias"]
     )
 
     documento_id = _buscar_o_crear(

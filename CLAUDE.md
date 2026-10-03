@@ -341,9 +341,12 @@ statement from a bank you already support will look anything like the first one:
   can't be read before the tier is known; (3) `descripcion_para_categorizar` (manual-row dialog) uses
   the stored `_tipo_tarjeta_documento`. **A card not in `TIPOS_POR_ULTIMOS_4` still falls through to the old
   behavior** (alias `"TDC Mensual"`, courtesy line uncategorized) — add its last 4 when its tier
-  is known. Already-synced `cuentas` named "TDC Mensual" are *not* renamed by
-  re-syncing (find-or-create never updates an existing row's alias), so those accounts stay as they
-  are in Supabase until renamed by hand.
+  is known. Cards can share an alias across card numbers (Conquista has three, Platino three) —
+  that's how the dashboard's per-card tabs group them (`cuentaDe` = alias), and each number still
+  gets its own `cuentas` row. Accounts already synced as "TDC Mensual" get renamed the next time a
+  document of that card is synced (see `_buscar_o_crear_cuenta` under Sincronizador); on 2026-10-02
+  the six local JSONs for 6599/2989 were re-aliased to "TDC Platino" with a one-off script (their
+  `SU ABONO...GRACIAS` rows included), so a "Sincronizar a Supabase..." renames those two accounts.
 - **A fully-legible transaction line can still fail to match if a stray page-footer artifact
   lands on the same physical line, with no newline in between** — confirmed on a real Beyond
   statement (2026-09-20): the last transaction row on a page's movements table came through
@@ -805,6 +808,13 @@ user over the simpler alternative — don't silently change these:
 - **Idempotency**: `bancos`/`cuentas`/`documentos`/`categorias` use a manual find-or-create
   (`_buscar_o_crear`: select by unique key, insert only if missing) rather than relying on
   `.upsert()`'s return-row semantics, which vary across supabase-py/PostgREST versions.
+  **`cuentas` is the one exception to "insert only if missing" (2026-10-02,
+  `_buscar_o_crear_cuenta`)**: it finds by `(banco, últimos 4)`, but if the row exists with a
+  *different* `alias` it updates the alias to the document's (last synced wins). The alias is what
+  groups the dashboard's per-card tabs, so fixing how a card type is detected (e.g. "TDC Mensual"
+  → "TDC Platino") must be able to rename accounts that already exist — before, the only way was
+  editing Supabase by hand. Side effect to know: re-syncing an old document with a *different*
+  alias typed in the app renames that account too.
   `transacciones` uses real `.upsert(..., on_conflict="documento_id,pagina,linea_cruda")` since
   that's a bulk operation where per-row select-then-insert would be wasteful — the `on_conflict`
   columns match the table's actual unique constraint exactly. **This assumes `(pagina,
