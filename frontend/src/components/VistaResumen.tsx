@@ -643,12 +643,6 @@ export function VistaResumen({
         </p>
       )}
 
-      <AlertasPanel
-        alertas={alertas}
-        titulo={`Alertas, ${nombreDelPeriodo}`}
-        onVerDetalle={({ campo, valor }) => onCambiarFiltros((a) => ({ ...a, [campo]: valor }))}
-      />
-
       <section
         className="rounded-lg p-5"
         style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
@@ -836,6 +830,12 @@ export function VistaResumen({
         transacciones={transacciones}
         catalogo={catalogo}
         onActualizado={onActualizado}
+      />
+
+      <AlertasPanel
+        alertas={alertas}
+        titulo={`Alertas, ${nombreDelPeriodo}`}
+        onVerDetalle={({ campo, valor }) => onCambiarFiltros((a) => ({ ...a, [campo]: valor }))}
       />
     </>
   );

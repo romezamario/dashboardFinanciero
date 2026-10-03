@@ -650,8 +650,9 @@ use `valueAccessor` to receive their row's `etiqueta` and look the row up by nam
 category end-label hangs off the last card *with an amount* in that row (the last card in the list
 may be $0 there and not drawn at all).
 
-**Alertas automáticas (2026-10-03, user's request)**: `AlertasPanel.tsx` sits above the hero savings
-rate in `VistaResumen` (so the Resumen and every non-TDC account tab get it); calculations are pure
+**Alertas automáticas (2026-10-03, user's request)**: `AlertasPanel.tsx` sits at the very end of
+`VistaResumen`, after the bulk editor (moved there from above the hero savings rate at the user's
+request, 2026-10-03) (so the Resumen and every non-TDC account tab get it); calculations are pure
 functions in `src/lib/alertas.ts` (`calcularAlertas(visibles, periodo)`). Same scope as the health
 indicators: period + hidden categories/discarded events, **never the click filters**. Five kinds,
 phrased as sentences: (1) savings rate changed ≥2 pts vs. the previous period, explained by
