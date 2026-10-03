@@ -51,7 +51,7 @@ cargo) → `transform/transformador.py` (bank-agnostic: dates to ISO, amounts to
 split into `(monto, tipo)`, builds `TransaccionCanonica` with audit fields `pagina`/`linea_cruda`)
 → `transform/categorizador.py` (keyword rules loaded from `transform/reglas_categorizacion.json`,
 gitignored — editable live from the app's "Reglas de categorización..." dialog, `VentanaReglas`)
-→ user validates the sum against the statement's own declared total (`validar_contra_total`) →
+→ user reviews the table and the "Totales de la tabla cargada" panel (the "Validación de totales" box — type the statement's total, compare via `validar_contra_total` — was removed from the UI 2026-10-02 at the user's request, they didn't use it; the function stays in `transform/transformador.py`, tested) →
 
 Each `Regla` maps a `patron` to both a `categoria` (required) and an optional `comercio` (e.g.
 pattern `"TELEVIA"` → categoria `"Transporte"`, comercio `"Televia"`) — `comercio` was added after
@@ -209,7 +209,7 @@ statement from a bank you already support will look anything like the first one:
   best-effort pattern as `puede_procesar`/`extraer_info_cuenta`) so a line matching the two-date
   prefix but not the full transaction pattern gets surfaced as a warning instead of silently
   vanishing — `App.cargar_pdf` shows it in the resumen and a messagebox so the user knows to
-  capture that row by hand before trusting `validar_contra_total`. This is the general escape
+  capture that row by hand before trusting the totals. This is the general escape
   hatch for "PDF renders this row as an image" cases in any future parser, not just this one.
 - **Normalize known variant spellings instead of capturing verbatim, when the output feeds a
   stable identifier**: `extraer_info_cuenta`'s alias used to capture whatever word followed

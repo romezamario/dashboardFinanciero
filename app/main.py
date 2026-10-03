@@ -41,7 +41,6 @@ from transform.categorizador import (
 from transform.transformador import (
     TransaccionCanonica,
     transformar_renglones,
-    validar_contra_total,
 )
 
 RAIZ = Path(__file__).parent.parent
@@ -854,21 +853,6 @@ class App(tk.Tk):
         )
         self.etiqueta_totales.pack(fill="x", padx=8, pady=6)
 
-        marco_validacion = ttk.LabelFrame(self, text="Validación de totales")
-        marco_validacion.pack(fill="x", padx=8, pady=8)
-
-        ttk.Label(
-            marco_validacion,
-            text="Total esperado (neto del periodo, según el estado de cuenta):",
-        ).pack(side="left", padx=4, pady=6)
-        self.entrada_total_esperado = ttk.Entry(marco_validacion, width=14)
-        self.entrada_total_esperado.pack(side="left", padx=4)
-        ttk.Button(marco_validacion, text="Validar", command=self.validar).pack(
-            side="left", padx=8
-        )
-        self.etiqueta_validacion = ttk.Label(marco_validacion, text="")
-        self.etiqueta_validacion.pack(side="left", padx=8)
-
         marco_acciones_finales = ttk.Frame(self)
         marco_acciones_finales.pack(fill="x", padx=8, pady=8)
 
@@ -1029,7 +1013,6 @@ class App(tk.Tk):
         if advertencias_extraccion:
             resumen += f" — {len(advertencias_extraccion)} posible(s) transacción(es) no capturada(s), revisa el PDF"
         self.etiqueta_resumen.config(text=resumen)
-        self.etiqueta_validacion.config(text="")
         self.boton_guardar.config(state="normal")
 
         if fallidas:
@@ -1050,7 +1033,7 @@ class App(tk.Tk):
                 "banco imprime una fila destacada, como un pago recibido, usando una "
                 "imagen en vez de texto seleccionable). No se pueden agregar "
                 "automáticamente: revísalas contra el PDF impreso y, si corresponde, "
-                "captúralas a mano antes de validar el total.\n\n"
+                "captúralas a mano con \"Agregar renglón manual...\".\n\n"
                 f"{detalle_advertencias}",
             )
 
@@ -1188,34 +1171,6 @@ class App(tk.Tk):
                 f"Abonos: {total_abonos:,.2f} ({len(abonos)})"
             )
         )
-
-    def validar(self) -> None:
-        if not self.transacciones:
-            return
-        texto = self.entrada_total_esperado.get().strip().replace(",", "")
-        try:
-            total_esperado = Decimal(texto)
-        except InvalidOperation:
-            messagebox.showwarning(
-                "Total inválido", "Escribe el total esperado como un número, ej. 1215.50"
-            )
-            return
-
-        resultado = validar_contra_total(self.transacciones, total_esperado)
-        if resultado.ok:
-            self.etiqueta_validacion.config(
-                text=f"✓ Cuadra (calculado {resultado.total_calculado})",
-                foreground="green",
-            )
-        else:
-            self.etiqueta_validacion.config(
-                text=(
-                    f"✗ No cuadra: calculado {resultado.total_calculado}, "
-                    f"esperado {resultado.total_esperado}, "
-                    f"diferencia {resultado.diferencia}"
-                ),
-                foreground="red",
-            )
 
     def abrir_reglas(self) -> None:
         VentanaReglas(self)
