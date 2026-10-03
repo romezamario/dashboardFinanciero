@@ -39,4 +39,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy frontend/dist --project-name=dashboard-financiero
+          # Desde frontend/ para que wrangler encuentre functions/ (la Pages
+          # Function de /api/cotizaciones) junto a dist/.
+          workingDirectory: frontend
+          command: pages deploy dist --project-name=dashboard-financiero

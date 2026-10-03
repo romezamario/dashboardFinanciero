@@ -4,6 +4,7 @@ import { categoriasExcluidasPorDefecto, RANGO_MESES_VACIO, type RangoMeses } fro
 import type { Transaccion } from "../lib/types";
 import { supabase } from "../lib/supabase";
 import { esTarjetaCredito } from "../lib/tarjetas";
+import { AnalisisTecnicoTab } from "./AnalisisTecnicoTab";
 import { DetalleDimensionTab } from "./DetalleDimensionTab";
 import { EventosTab } from "./EventosTab";
 import { TarjetasCreditoTab } from "./TarjetasCreditoTab";
@@ -41,6 +42,9 @@ const PESTANA_RESUMEN = "resumen";
 const PESTANA_EVENTOS = "eventos";
 const PESTANA_CATEGORIAS_COMERCIOS = "categorias-comercios";
 const PESTANA_TARJETAS_CREDITO = "tarjetas-credito";
+// Análisis técnico de QQQ/TQQQ: no usa las transacciones (cotizaciones de
+// /api/cotizaciones), solo vive aquí para tener todo en un mismo lugar.
+const PESTANA_TECNICO = "tecnico";
 // Prefijo para no chocar con "resumen"/"eventos" si alguna cuenta tuviera
 // ese mismo alias.
 const PREFIJO_PESTANA_CUENTA = "cuenta:";
@@ -136,6 +140,7 @@ export function Dashboard() {
       id: PREFIJO_PESTANA_CUENTA + cuenta,
       etiqueta: cuenta,
     })),
+    { id: PESTANA_TECNICO, etiqueta: "QQQ / TQQQ" },
   ];
 
   // Si la pestaña activa desaparece (p. ej. tras reasignar todos los
@@ -242,62 +247,60 @@ export function Dashboard() {
       </header>
 
       <main className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6">
-        {transacciones.length === 0 ? (
+        <div
+          className="flex gap-1 overflow-x-auto"
+          style={{ borderBottom: "1px solid var(--border)" }}
+        >
+          {pestanas.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setVista(tab.id)}
+              className="whitespace-nowrap px-4 py-2 text-xs font-medium"
+              style={{
+                color: vistaActiva === tab.id ? "var(--series-1)" : "var(--text-secondary)",
+                borderBottom: `2px solid ${
+                  vistaActiva === tab.id ? "var(--series-1)" : "transparent"
+                }`,
+              }}
+            >
+              {tab.etiqueta}
+            </button>
+          ))}
+        </div>
+
+        {vistaActiva === PESTANA_TECNICO ? (
+          <AnalisisTecnicoTab />
+        ) : transacciones.length === 0 ? (
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
             No hay transacciones sincronizadas todavía — usa la app de
             escritorio para procesar un estado de cuenta y sincronizarlo.
           </p>
+        ) : vistaActiva === PESTANA_EVENTOS ? (
+          <EventosTab transacciones={transacciones} onActualizado={recargarTransacciones} />
+        ) : vistaActiva === PESTANA_TARJETAS_CREDITO ? (
+          <TarjetasCreditoTab
+            transacciones={transaccionesTarjetas}
+            rangoMeses={(estadosPorPestana[PESTANA_TARJETAS_CREDITO] ?? ESTADO_VACIO).rangoMeses}
+            onCambiarRangoMeses={(cambio) =>
+              actualizarEstado(PESTANA_TARJETAS_CREDITO, (e) => ({
+                ...e,
+                rangoMeses: cambio(e.rangoMeses),
+              }))
+            }
+            filtros={(estadosPorPestana[PESTANA_TARJETAS_CREDITO] ?? ESTADO_VACIO).filtros}
+            onCambiarFiltros={(cambio) =>
+              actualizarEstado(PESTANA_TARJETAS_CREDITO, (e) => ({
+                ...e,
+                filtros: cambio(e.filtros),
+              }))
+            }
+          />
+        ) : vistaActiva === PESTANA_CATEGORIAS_COMERCIOS ? (
+          <DetalleDimensionTab transacciones={transacciones} />
+        ) : vistaActiva === PESTANA_RESUMEN ? (
+          renderVistaResumen(PESTANA_RESUMEN, transacciones)
         ) : (
-          <>
-            <div
-              className="flex gap-1 overflow-x-auto"
-              style={{ borderBottom: "1px solid var(--border)" }}
-            >
-              {pestanas.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setVista(tab.id)}
-                  className="whitespace-nowrap px-4 py-2 text-xs font-medium"
-                  style={{
-                    color: vistaActiva === tab.id ? "var(--series-1)" : "var(--text-secondary)",
-                    borderBottom: `2px solid ${
-                      vistaActiva === tab.id ? "var(--series-1)" : "transparent"
-                    }`,
-                  }}
-                >
-                  {tab.etiqueta}
-                </button>
-              ))}
-            </div>
-
-            {vistaActiva === PESTANA_EVENTOS ? (
-              <EventosTab transacciones={transacciones} onActualizado={recargarTransacciones} />
-            ) : vistaActiva === PESTANA_TARJETAS_CREDITO ? (
-              <TarjetasCreditoTab
-                transacciones={transaccionesTarjetas}
-                rangoMeses={(estadosPorPestana[PESTANA_TARJETAS_CREDITO] ?? ESTADO_VACIO).rangoMeses}
-                onCambiarRangoMeses={(cambio) =>
-                  actualizarEstado(PESTANA_TARJETAS_CREDITO, (e) => ({
-                    ...e,
-                    rangoMeses: cambio(e.rangoMeses),
-                  }))
-                }
-                filtros={(estadosPorPestana[PESTANA_TARJETAS_CREDITO] ?? ESTADO_VACIO).filtros}
-                onCambiarFiltros={(cambio) =>
-                  actualizarEstado(PESTANA_TARJETAS_CREDITO, (e) => ({
-                    ...e,
-                    filtros: cambio(e.filtros),
-                  }))
-                }
-              />
-            ) : vistaActiva === PESTANA_CATEGORIAS_COMERCIOS ? (
-              <DetalleDimensionTab transacciones={transacciones} />
-            ) : vistaActiva === PESTANA_RESUMEN ? (
-              renderVistaResumen(PESTANA_RESUMEN, transacciones)
-            ) : (
-              renderVistaResumen(vistaActiva, transaccionesPorCuenta.get(vistaActiva) ?? [])
-            )}
-          </>
+          renderVistaResumen(vistaActiva, transaccionesPorCuenta.get(vistaActiva) ?? [])
         )}
       </main>
     </div>

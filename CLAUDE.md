@@ -669,6 +669,24 @@ pesos at stake; 4 shown, "Ver N más". Tones carry icon + text label (⚠ Revisa
 Para saber), never color alone. "Ver movimientos" sets the alert's comercio/categoría click filter.
 Subscriptions/price changes only see what the rules tag with `comercio`, same as recurrentes.
 
+**"QQQ / TQQQ" tab (2026-10-02, user's request)** — technical analysis for trading, unrelated to
+the personal finances; it only lives in this dashboard to keep everything in one place, so it
+doesn't touch Supabase or the transactions and shows even with no synced data. Daily candles (10
+years) come from `frontend/functions/api/cotizaciones.ts`, a **Cloudflare Pages Function** (free,
+same domain → behind the same Cloudflare Access, no CORS problem) that proxies Yahoo Finance's
+public, unofficial chart endpoint — no API key; whitelisted to `SIMBOLOS_PERMITIDOS` so it isn't an
+open proxy. For it to deploy, `deploy.yml` runs `wrangler pages deploy dist` with
+`workingDirectory: frontend` (wrangler picks up `functions/` from its cwd); in `npm run dev`,
+`vite.config.ts` mounts the same handler as middleware. If Yahoo ever changes/blocks it, only this
+tab shows an error. Indicators are pure functions in `src/lib/tecnico.ts` (SMA 50/200, Bollinger
+20/2, Wilder RSI 14 and ATR 14, MACD 12/26/9, drawdown, QQQ-vs-TQQQ base-100 comparison with beta
+and "3× QQQ vs real" leverage decay), computed over the full 10 years and then trimmed to the
+visible range so the SMA 200 has history from the first visible day. UI in `AnalisisTecnicoTab.tsx`
+(price/volume/RSI/MACD charts synced with `syncId`; candles only up to 1 year — beyond that they're
+1–2 px wide). Colors reuse palette slots 1–4: up/down polarity = series-1/2 (like
+`FlujoNetoChart`), SMA 50 = series-3, SMA 200 = series-4, QQQ/TQQQ = series-1/2. Readings are
+phrased as indicator states, never as buy/sell recommendations.
+
 Per-tab view state (`filtros`, `categoriasOcultas`, `rangoMeses`, `vistaTiempo`) still lives in
 `Dashboard`'s `estadosPorPestana: Record<tabId, EstadoVista>`, passed to each view as controlled
 props, so filtering in one tab never touches another and a tab keeps its selection when you switch
