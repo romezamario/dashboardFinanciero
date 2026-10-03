@@ -519,10 +519,11 @@ way `categoriaDe()`'s `SIN_CATEGORIA` fallback does for categories (categorizati
 eventually cover everything; comercio tagging isn't and that's fine).
 
 **Resumen tab = former Resumen + former Indicadores, merged (2026-09-26, user's request)**:
-`VistaResumen.tsx` is the single view for the "Resumen" tab *and* every per-card tab; the separate
+`VistaResumen.tsx` is the single view for the "Resumen" tab *and* every non-credit-card account tab; the separate
 "Indicadores" tab/`IndicadoresTab.tsx` is gone (its presentational pieces live in
 `IndicadoresUI.tsx`: `Tile`, `Delta`, `Tabla`; calculations stay in `src/lib/indicadores.ts`).
-Tabs: Resumen, Eventos, then one per account. The merge unified three controls whose **scopes
+Tabs: Resumen, Eventos, Categorías y Comercios, Tarjetas de crédito (all TDCs in one comparison
+tab), then one per remaining account (e.g. Priority). The merge unified three controls whose **scopes
 differ on purpose** (user chose each one explicitly) — keep them this way:
 
 - **Period (applies to everything)**: `rangoMeses` "Desde/Hasta" month `<select>`s over months with
@@ -564,17 +565,48 @@ differ on purpose** (user chose each one explicitly) — keep them this way:
   not its own, so it still shows the other options to click. Non-selected marks dim to ~0.3 via
   `<Cell fillOpacity>`. The "Otros" fold in `GastoPorCategoriaChart` is not clickable.
 
-**Per-card tabs (added 2026-09-25, user's request)**: one tab per account (`cuentaDe` =
-`cuentas.alias`, e.g. "TDC Beyond", "Invex TDC") — "tarjeta" here means the account/card product,
-*not* `transacciones.tarjeta` (Titular/Adicional/Digital, whose values repeat across accounts; it
-stays available as a pill filter inside each tab). Each is the full merged `VistaResumen` fed only
-that account's transactions. On a credit card with "Pago TDC" hidden there is no income, so the
-savings rate shows "—" with an explanatory note, months-covered shows "—" (TDCs carry no `saldo`),
-and the Sankey starts at "Gastos totales" instead of labeling all spending "Déficit". All view state
-(`filtros`, `categoriasOcultas`, `rangoMeses`, `vistaTiempo`) is **per tab**: `Dashboard` keeps
-`estadosPorPestana: Record<tabId, EstadoVista>` and passes each `VistaResumen` its slice as
-controlled props, so filtering in one tab never touches another and a tab keeps its selection when
-you switch away and back. The bulk editor inside a card tab only *searches* that card's
+**"Tarjetas de crédito" tab (2026-10-03, user's request — replaced the per-card tabs)**: the
+credit cards (Invex TDC, TDC Beyond, TDC Conquista, TDC Platino) no longer get one tab each; they
+share a single comparison tab, `TarjetasCreditoTab.tsx` (calculations in `src/lib/tarjetas.ts`,
+charts in `ComparativoTarjetasCharts.tsx`). A card is an account whose bank name or alias contains
+"TDC" (`esTarjetaCredito` — bank names come from the desktop app's `PARSERS` keys, "Banamex TDC"/
+"Invex TDC"); the user explicitly asked to keep the checking account out ("no incluyas la
+Priority"), so every non-TDC account still gets its own tab with the full `VistaResumen`. "Card"
+here means the account/card product (`cuentas.alias`), *not* `transacciones.tarjeta`
+(Titular/Adicional/Digital). Contents, all over the same period control as the Resumen
+(`SelectorPeriodo`, now shared in `IndicadoresUI.tsx`; default last 3 complete months; stored in
+`estadosPorPestana["tarjetas-credito"].rangoMeses`): a 100% bar of how spending splits across cards
+with direct labels; a per-card table (spend, purchases, average ticket, change vs. the previous
+period of the same length, payments/refunds, top category, 12-month sparkline in the card's color);
+monthly spend stacked by card over 12 months with the period highlighted; and spend per category
+stacked by card ("para qué usas cada tarjeta", top 8 + "Otras"). **"Gasto" = cargos only**; abonos
+(card payments, refunds) are reported separately as "Pagos y abonos" — netting them would cancel
+the spending. `$0.00` cargos are excluded from purchase counts (Invex V2 echo lines, see the Invex
+parser notes). No category hiding or click-filters in this tab, by design: it's for comparison;
+for one card's full detail use the Resumen's "Cuenta" pill filter. **Card colors**: categorical
+slots 1–4 of the dataviz palette (`--series-1..4`, `colorTarjeta` in `lib/tarjetas.ts`), assigned
+by fixed alphabetical order of *all* cards so a card keeps its color across periods; validated with
+`validate_palette.js` in both modes (passes adjacent-pair CVD/normal-vision; light-mode aqua/yellow
+are below 3:1 contrast, hence the mandatory direct labels + table). A 5th card would fall back to
+`--text-muted` — add and validate a `--series-5` rather than cycling hues. **Percentages (2026-10-03, user's
+request)**: both bar charts' tooltips list each card's amount *and* its share of that row (month or
+category) plus the row total (`TooltipPorTarjeta`); the monthly chart labels each segment's share of
+its month *only* inside the highlighted period months and only when the segment is ≥12% and big
+enough to fit (selective labels, per the dataviz skill — not a number on every bar; on a phone the
+bars are too narrow, so the tooltip carries it); the category chart puts one "amount · % of the
+period's card spend" label at the end of each bar. In-segment label text is near-black on every
+fill — measured ≥4.5:1 against all four card colors in both modes, white dropped to 2.2:1 on light
+yellow. **Recharts gotcha**: `<Bar>` drops zero-size bars *before* handing them to `<LabelList>`, so
+the `index` a custom label `content` receives is the position in that filtered list, not in the
+data array — one card at $0 in some month shifted every later label to the wrong row. Labels here
+use `valueAccessor` to receive their row's `etiqueta` and look the row up by name; and the
+category end-label hangs off the last card *with an amount* in that row (the last card in the list
+may be $0 there and not drawn at all).
+
+Per-tab view state (`filtros`, `categoriasOcultas`, `rangoMeses`, `vistaTiempo`) still lives in
+`Dashboard`'s `estadosPorPestana: Record<tabId, EstadoVista>`, passed to each view as controlled
+props, so filtering in one tab never touches another and a tab keeps its selection when you switch
+away and back. The bulk editor inside a per-account tab only *searches* that account's
 transactions, but gets the full list via `EditorTransacciones.catalogo` for suggestions, the
 destination-account list and the account-change impact count.
 
@@ -603,10 +635,10 @@ Chart colors/specs follow this repo's `dataviz` skill: the categorical palette (
 and magnitude comparisons, orange for gastos) is validated with the skill's `validate_palette.js`
 script against CVD and contrast in both light and dark mode before use; category-magnitude
 comparisons (gasto por categoría, gasto por comercio) deliberately use a single hue, not
-categorical colors, since the axis labels already carry identity. A third categorical color
-(`--series-3`, only ever used for a 3rd+ account line in the now-removed `TendenciaSaldoChart`)
-was removed from `src/index.css` along with it — don't reintroduce an unused palette entry
-speculatively; add it back (and re-validate) only alongside whatever chart actually needs it.
+categorical colors, since the axis labels already carry identity. `--series-3`/`--series-4`
+(aqua/yellow, palette slots 3–4) were re-added 2026-10-03 for the "Tarjetas de crédito" tab, where
+the cards *are* the series — don't add further palette entries speculatively; add (and validate)
+them only alongside a chart that needs them.
 CSS custom properties for the palette live in `src/index.css`, keyed by role (`--series-1`,
 `--text-secondary`, etc.) and redefined for dark via both `prefers-color-scheme` and a
 `[data-theme]` override — same pattern artifacts use. If you add a chart, re-run the dataviz

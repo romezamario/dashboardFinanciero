@@ -3,8 +3,10 @@ import { categoriaDe, cuentaDe, obtenerTransacciones, type Filtros } from "../li
 import { categoriasExcluidasPorDefecto, RANGO_MESES_VACIO, type RangoMeses } from "../lib/indicadores";
 import type { Transaccion } from "../lib/types";
 import { supabase } from "../lib/supabase";
+import { esTarjetaCredito } from "../lib/tarjetas";
 import { DetalleDimensionTab } from "./DetalleDimensionTab";
 import { EventosTab } from "./EventosTab";
+import { TarjetasCreditoTab } from "./TarjetasCreditoTab";
 import type { VistaTiempo } from "./IngresosGastosChart";
 import { VistaResumen } from "./VistaResumen";
 
@@ -38,6 +40,7 @@ const ESTADO_VACIO: EstadoVista = {
 const PESTANA_RESUMEN = "resumen";
 const PESTANA_EVENTOS = "eventos";
 const PESTANA_CATEGORIAS_COMERCIOS = "categorias-comercios";
+const PESTANA_TARJETAS_CREDITO = "tarjetas-credito";
 // Prefijo para no chocar con "resumen"/"eventos" si alguna cuenta tuviera
 // ese mismo alias.
 const PREFIJO_PESTANA_CUENTA = "cuenta:";
@@ -86,14 +89,20 @@ export function Dashboard() {
     recargarTransacciones().finally(() => setCargando(false));
   }, []);
 
-  // Una pestaña por tarjeta = una por cuenta (`cuentas.alias`, p. ej.
-  // "TDC Beyond", "Invex TDC") -- no por `transacciones.tarjeta`
-  // (Titular/Adicional/Digital), que se repite entre cuentas distintas y
-  // sigue disponible como filtro dentro de cada pestaña.
-  const cuentasConocidas = useMemo(
-    () => Array.from(new Set(transacciones.map(cuentaDe))).sort(),
+  // Las tarjetas de crédito comparten UNA pestaña de comparación
+  // ("Tarjetas de crédito", ver TarjetasCreditoTab); solo las cuentas que no
+  // son TDC (p. ej. la de cheques, "Priority") conservan su propia pestaña
+  // con la vista completa del Resumen.
+  const transaccionesTarjetas = useMemo(
+    () => transacciones.filter(esTarjetaCredito),
     [transacciones]
   );
+  const cuentasSinTarjeta = useMemo(() => {
+    const tarjetas = new Set(transaccionesTarjetas.map(cuentaDe));
+    return Array.from(new Set(transacciones.map(cuentaDe)))
+      .filter((cuenta) => !tarjetas.has(cuenta))
+      .sort();
+  }, [transacciones, transaccionesTarjetas]);
 
   // Por defecto se ocultan los movimientos entre cuentas propias (p. ej.
   // pagar la TDC desde la cuenta de cheques): contarían como gasto en una
@@ -120,7 +129,10 @@ export function Dashboard() {
     { id: PESTANA_RESUMEN, etiqueta: "Resumen" },
     { id: PESTANA_EVENTOS, etiqueta: "Eventos" },
     { id: PESTANA_CATEGORIAS_COMERCIOS, etiqueta: "Categorías y Comercios" },
-    ...cuentasConocidas.map((cuenta) => ({
+    ...(transaccionesTarjetas.length > 0
+      ? [{ id: PESTANA_TARJETAS_CREDITO, etiqueta: "Tarjetas de crédito" }]
+      : []),
+    ...cuentasSinTarjeta.map((cuenta) => ({
       id: PREFIJO_PESTANA_CUENTA + cuenta,
       etiqueta: cuenta,
     })),
@@ -260,6 +272,17 @@ export function Dashboard() {
 
             {vistaActiva === PESTANA_EVENTOS ? (
               <EventosTab transacciones={transacciones} onActualizado={recargarTransacciones} />
+            ) : vistaActiva === PESTANA_TARJETAS_CREDITO ? (
+              <TarjetasCreditoTab
+                transacciones={transaccionesTarjetas}
+                rangoMeses={(estadosPorPestana[PESTANA_TARJETAS_CREDITO] ?? ESTADO_VACIO).rangoMeses}
+                onCambiarRangoMeses={(cambio) =>
+                  actualizarEstado(PESTANA_TARJETAS_CREDITO, (e) => ({
+                    ...e,
+                    rangoMeses: cambio(e.rangoMeses),
+                  }))
+                }
+              />
             ) : vistaActiva === PESTANA_CATEGORIAS_COMERCIOS ? (
               <DetalleDimensionTab transacciones={transacciones} />
             ) : vistaActiva === PESTANA_RESUMEN ? (

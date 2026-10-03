@@ -3,6 +3,14 @@
 
 import { useEsMovil } from "../hooks/useEsMovil";
 
+import {
+  mesActual,
+  MESES_PERIODO_POR_DEFECTO,
+  nombreMes,
+  RANGO_MESES_VACIO,
+  type RangoMeses,
+} from "../lib/indicadores";
+
 export interface PropsDelta {
   texto: string;
   /** Dirección del cambio (flecha), independiente de si es bueno o malo:
@@ -154,6 +162,60 @@ export function Tabla({
             </tbody>
           </table>
         </div>
+      )}
+    </div>
+  );
+}
+
+/** Selector de periodo por meses (Desde/Hasta), compartido por el Resumen y
+ * la pestaña de tarjetas de crédito. Las opciones son los meses con datos,
+ * del más reciente al más antiguo; vacío en ambos = periodo por defecto. */
+export function SelectorPeriodo({
+  rangoMeses,
+  onCambiarRangoMeses,
+  mesesConDatos,
+}: {
+  rangoMeses: RangoMeses;
+  onCambiarRangoMeses: (actualizar: (anterior: RangoMeses) => RangoMeses) => void;
+  mesesConDatos: string[];
+}) {
+  const mesEnCurso = mesActual();
+  const hayPeriodoElegido = Boolean(rangoMeses.desde || rangoMeses.hasta);
+  return (
+    <div className="flex flex-wrap items-end gap-3">
+      {(["desde", "hasta"] as const).map((campo) => (
+        <label key={campo} className="text-xs" style={{ color: "var(--text-secondary)" }}>
+          {campo === "desde" ? "Desde" : "Hasta"}
+          <select
+            value={rangoMeses[campo]}
+            onChange={(e) =>
+              onCambiarRangoMeses((anterior) => ({ ...anterior, [campo]: e.target.value }))
+            }
+            className="mt-1 block rounded-md px-3 py-2 text-sm"
+            style={{
+              background: "var(--page-plane)",
+              border: "1px solid var(--border)",
+              color: "var(--text-primary)",
+            }}
+          >
+            <option value="">—</option>
+            {mesesConDatos.map((mes) => (
+              <option key={mes} value={mes}>
+                {nombreMes(mes)}
+                {mes === mesEnCurso ? " (en curso)" : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+      ))}
+      {hayPeriodoElegido && (
+        <button
+          onClick={() => onCambiarRangoMeses(() => RANGO_MESES_VACIO)}
+          className="text-xs underline"
+          style={{ color: "var(--text-muted)" }}
+        >
+          Volver a los últimos {MESES_PERIODO_POR_DEFECTO} meses
+        </button>
       )}
     </div>
   );

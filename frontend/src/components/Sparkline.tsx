@@ -19,6 +19,9 @@ interface SparklineProps {
   resaltados: Set<string>;
   /** Nombre de la serie para el lector de pantalla. */
   etiqueta: string;
+  /** Color de acento (tramo del periodo y último punto). Por defecto el de
+   * gastos; la pestaña de tarjetas pasa el color de cada tarjeta. */
+  color?: string;
 }
 
 /**
@@ -29,7 +32,7 @@ interface SparklineProps {
  * entre categorías (para eso están las columnas de montos). Al pasar el
  * mouse por cada mes se ve su monto (tooltip nativo del SVG).
  */
-export function Sparkline({ valores, meses, resaltados, etiqueta }: SparklineProps) {
+export function Sparkline({ valores, meses, resaltados, etiqueta, color = "var(--series-2)" }: SparklineProps) {
   const maximo = Math.max(...valores, 1);
   const paso = (ANCHO - MARGEN * 2) / Math.max(valores.length - 1, 1);
   const puntos = valores.map((v, i) => ({
@@ -58,7 +61,7 @@ export function Sparkline({ valores, meses, resaltados, etiqueta }: SparklinePro
     >
       <polygon
         points={`${MARGEN},${base} ${linea(puntos)} ${ultimo.x},${base}`}
-        fill="var(--series-2)"
+        fill={color}
         fillOpacity={0.1}
       />
       <polyline
@@ -73,7 +76,7 @@ export function Sparkline({ valores, meses, resaltados, etiqueta }: SparklinePro
         <polyline
           points={linea(tramo)}
           fill="none"
-          stroke="var(--series-2)"
+          stroke={color}
           strokeWidth={2}
           strokeLinejoin="round"
           strokeLinecap="round"
@@ -83,7 +86,7 @@ export function Sparkline({ valores, meses, resaltados, etiqueta }: SparklinePro
         cx={ultimo.x}
         cy={ultimo.y}
         r={2.5}
-        fill="var(--series-2)"
+        fill={color}
         stroke="var(--surface-1)"
         strokeWidth={1.5}
       />
