@@ -282,6 +282,13 @@ export function Dashboard() {
                     rangoMeses: cambio(e.rangoMeses),
                   }))
                 }
+                filtros={(estadosPorPestana[PESTANA_TARJETAS_CREDITO] ?? ESTADO_VACIO).filtros}
+                onCambiarFiltros={(cambio) =>
+                  actualizarEstado(PESTANA_TARJETAS_CREDITO, (e) => ({
+                    ...e,
+                    filtros: cambio(e.filtros),
+                  }))
+                }
               />
             ) : vistaActiva === PESTANA_CATEGORIAS_COMERCIOS ? (
               <DetalleDimensionTab transacciones={transacciones} />

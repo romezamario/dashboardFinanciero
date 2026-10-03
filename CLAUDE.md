@@ -602,8 +602,20 @@ monthly spend stacked by card over 12 months with the period highlighted; and sp
 stacked by card ("para qué usas cada tarjeta", top 8 + "Otras"). **"Gasto" = cargos only**; abonos
 (card payments, refunds) are reported separately as "Pagos y abonos" — netting them would cancel
 the spending. `$0.00` cargos are excluded from purchase counts (Invex V2 echo lines, see the Invex
-parser notes). No category hiding or click-filters in this tab, by design: it's for comparison;
-for one card's full detail use the Resumen's "Cuenta" pill filter. **Card colors**: categorical
+parser notes). **Click-filters (added 2026-10-03, user's request —
+the first version left them out)**, same Power BI cross-filter as the Resumen and stored the same
+way (`estadosPorPestana["tarjetas-credito"].filtros`): clicking a card (distribution bar, table
+row, either chart's legend) sets `filtros.cuenta`; clicking a category bar sets
+`filtros.categoria` ("Otras" isn't clickable); clicking a monthly bar makes that month the period
+(again = back to default), exactly like the Resumen's `IngresosGastosChart`; chips above clear
+them. Each view excludes its own dimension (`aplicarFiltros(..., "cuenta" | "categoria")`): the
+per-card views (distribution, table, monthly chart) are computed with the category filter but
+not the card filter — so with "Comida" picked they compare the cards *on Comida only* — and dim
+the non-selected cards; the category chart uses the card filter but not its own, so with a card
+picked it shows only that card's categories, with the selected category dimming the rest. A
+`TransaccionesTabla` at the bottom lists the period's movements with every filter applied (its
+empty message says "nothing matches", not "nothing synced"). Still no category hiding here; for a
+card's Sankey/indicators/bulk editor use the Resumen's "Cuenta" pill filter. **Card colors**: categorical
 slots 1–4 of the dataviz palette (`--series-1..4`, `colorTarjeta` in `lib/tarjetas.ts`), assigned
 by fixed alphabetical order of *all* cards so a card keeps its color across periods; validated with
 `validate_palette.js` in both modes (passes adjacent-pair CVD/normal-vision; light-mode aqua/yellow
