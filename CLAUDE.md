@@ -687,6 +687,19 @@ visible range so the SMA 200 has history from the first visible day. UI in `Anal
 1–2 px wide). Colors reuse palette slots 1–4: up/down polarity = series-1/2 (like
 `FlujoNetoChart`), SMA 50 = series-3, SMA 200 = series-4. Readings are
 phrased as indicator states, never as buy/sell recommendations.
+**Macro EE.UU. section (2026-10-02, user's request)**: a "Análisis técnico | Macro EE.UU." switch at
+the top of the same tab. `frontend/functions/api/macro.ts` (second Pages Function) downloads the
+fixed `SERIES_MACRO` list from FRED's public `fredgraph.csv` endpoint — no API key (the JSON API
+needs one) — **with its own User-Agent: FRED hangs requests that fake a browser UA** (confirmed
+while building it). A series that fails arrives empty with its error in `errores` instead of
+failing the whole response. `src/lib/macro.ts` turns them into tiles (`MacroEeuu.tsx`): Fed target
+range + date of its last move, real rate (midpoint − core PCE YoY), 2y/10y yields, 10y−2y curve,
+PCE/CPI headline and core YoY, payrolls monthly change, unemployment, initial claims, wage growth,
+JOLTS, real GDP, retail sales MoM, Michigan sentiment, VIX. Each tile shows the reference period
+(not the release date), the change vs. the previous observation (daily series: vs. the previous
+month's close) in neutral color — a strong jobs number can be bad for the index, so there's no
+good/bad coloring — and a min-max scaled mini trend (~2 years) with a dashed reference (2% target,
+0) when relevant. Not on FRED, so not included: ISM PMIs and the FOMC calendar.
 
 Per-tab view state (`filtros`, `categoriasOcultas`, `rangoMeses`, `vistaTiempo`) still lives in
 `Dashboard`'s `estadosPorPestana: Record<tabId, EstadoVista>`, passed to each view as controlled

@@ -32,6 +32,7 @@ import {
   type Simbolo,
 } from "../lib/tecnico";
 import { Tabla, Tile } from "./IndicadoresUI";
+import { MacroEeuu } from "./MacroEeuu";
 
 // Colores: los mismos 4 slots de la paleta categórica ya validada (dataviz).
 // Velas, volumen e histograma del MACD son polaridad (sube/baja): azul/naranja,
@@ -77,7 +78,26 @@ function nombreFecha(fecha: string, conDia = true): string {
 const estiloTarjeta = { background: "var(--surface-1)", border: "1px solid var(--border)" };
 const estiloTooltip = { ...estiloTarjeta, color: "var(--text-primary)" };
 
+/** Pestaña "QQQ / TQQQ": análisis técnico de los dos ETFs y, aparte, los
+ * indicadores macro de EE.UU. que sigue la Fed (MacroEeuu). */
 export function AnalisisTecnicoTab() {
+  const [seccion, setSeccion] = useState<"tecnico" | "macro">("tecnico");
+  return (
+    <div className="space-y-6">
+      <Segmentado
+        opciones={[
+          { id: "tecnico", etiqueta: "Análisis técnico" },
+          { id: "macro", etiqueta: "Macro EE.UU." },
+        ]}
+        valor={seccion}
+        onCambiar={setSeccion}
+      />
+      {seccion === "tecnico" ? <VistaTecnica /> : <MacroEeuu />}
+    </div>
+  );
+}
+
+function VistaTecnica() {
   const [series, setSeries] = useState<Partial<Record<Simbolo, SerieCotizaciones>>>({});
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(true);
