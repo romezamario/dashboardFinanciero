@@ -109,6 +109,12 @@ UMBRAL_ESPACIO = 1.1
 # bloque van cada ~12 pt; el pie de página queda mucho más lejos).
 SEPARACION_MAXIMA_RENGLONES = 20.0
 
+# Un grupo de hasta tantas imágenes con su propia base es puntuación
+# desplazada, no un renglón (ver `_agrupar_en_renglones`); se une al renglón
+# cuya base esté a lo más a esta distancia (los renglones van cada ~12 pt).
+MAXIMO_GLIFOS_SUELTOS = 3
+DISTANCIA_MAXIMA_SUELTOS = 6.0
+
 
 def _huella(imagen: dict) -> str | None:
     if not imagen.get("imagemask"):
@@ -138,15 +144,30 @@ def _decodificar_renglon(imagenes: list[dict]) -> str | None:
 
 
 def _agrupar_en_renglones(imagenes: list[dict]) -> list[list[dict]]:
-    """Agrupa por la base de la caja de cada imagen (todas las letras de un
-    renglón comparten `bottom`, con ±1 pt de diferencia)."""
-    renglones: list[list[dict]] = []
+    """Agrupa por la base de la caja de cada imagen (las letras de un renglón
+    comparten `bottom`, con ±1 pt de diferencia). La caja de algunos signos
+    ("$", ",", "-") puede quedar unos puntos más abajo y formar un grupito
+    propio; esos grupos chicos se unen al renglón más cercano -- si no, un
+    monto salía como "$00 000.00" sin coma, o sin su signo."""
+    grupos: list[list[dict]] = []
     for imagen in sorted(imagenes, key=lambda i: i["bottom"]):
-        if renglones and abs(imagen["bottom"] - renglones[-1][0]["bottom"]) <= 3:
-            renglones[-1].append(imagen)
+        if grupos and abs(imagen["bottom"] - grupos[-1][0]["bottom"]) <= 3:
+            grupos[-1].append(imagen)
         else:
-            renglones.append([imagen])
-    return [sorted(r, key=lambda i: i["x0"]) for r in renglones]
+            grupos.append([imagen])
+
+    grandes = [g for g in grupos if len(g) > MAXIMO_GLIFOS_SUELTOS]
+    if grandes:
+        for grupo in grupos:
+            if len(grupo) > MAXIMO_GLIFOS_SUELTOS:
+                continue
+            destino = min(grandes, key=lambda g: abs(g[0]["bottom"] - grupo[0]["bottom"]))
+            if abs(destino[0]["bottom"] - grupo[0]["bottom"]) <= DISTANCIA_MAXIMA_SUELTOS:
+                destino.extend(grupo)
+            else:
+                grandes.append(grupo)
+        grupos = sorted(grandes, key=lambda g: g[0]["bottom"])
+    return [sorted(g, key=lambda i: i["x0"]) for g in grupos]
 
 
 def completar_lineas_con_imagenes(

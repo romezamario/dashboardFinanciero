@@ -49,6 +49,9 @@ export interface LecturaMacro {
   /** Texto del tooltip de la gráfica completa, si no basta con
    * `formatoHistoria(valor)` (la Fed muestra su rango). */
   formatoPunto?: (o: Observacion) => string;
+  /** Cuándo sale el siguiente dato (o la siguiente decisión, para la Fed);
+   * null en series diarias o si no se pudo leer el calendario. */
+  proxima: ProximaPublicacion | null;
   /** Nivel de referencia que se dibuja en la minigráfica (meta de 2%, 0...). */
   referencia?: number;
   formatoHistoria: (v: number) => string;
@@ -429,6 +432,7 @@ function lecturaDeSerie(def: Definicion, crudas: Observacion[]): LecturaMacro | 
     serieCompleta: obs,
     frecuencia: def.frecuencia,
     grafica: def.grafica ?? "linea",
+    proxima: null,
   };
 }
 
@@ -462,6 +466,7 @@ function lecturasFed(datos: DatosMacro): LecturaMacro[] {
       serieCompleta: superior,
       frecuencia: "diaria",
       grafica: "escalon",
+      proxima: null,
       formatoPunto: (o) => {
         const inf = inferiorPorFecha.get(o.fecha);
         return inf == null ? porcentaje2(o.valor) : `${dec2.format(inf)}–${porcentaje2(o.valor)}`;
@@ -496,18 +501,79 @@ function lecturasFed(datos: DatosMacro): LecturaMacro[] {
       serieCompleta: historia,
       frecuencia: "mensual",
       grafica: "linea",
+      proxima: null,
     });
   }
   return salida;
 }
 
-export function calcularLecturasMacro(datos: DatosMacro): LecturaMacro[] {
+export function calcularLecturasMacro(datos: DatosMacro, hoy = fechaLocalHoy()): LecturaMacro[] {
   const lecturas = [...lecturasFed(datos)];
   for (const def of DEFINICIONES) {
     const lectura = lecturaDeSerie(def, observaciones(datos, def.serie));
     if (lectura) lecturas.push(lectura);
   }
+  const publicaciones = datos.proximasPublicaciones ?? {};
+  const reunion = (datos.reunionesFomc ?? []).find((f) => f >= hoy);
+  for (const l of lecturas) {
+    // La tasa real se mueve con el dato de PCE subyacente (o con la Fed, que
+    // ya tiene su propio recuadro).
+    const serie = l.id === "REAL" ? "PCEPILFE" : (l.id as SerieMacro);
+    const fecha = l.id === "FED" ? reunion : publicaciones[serie];
+    l.proxima = fecha ? proximaPublicacion(fecha, hoy, l.id === "FED" ? "Próxima decisión" : "Próximo dato") : null;
+  }
   return lecturas;
+}
+
+// ------------------------------------------------------------ calendario
+
+export interface ProximaPublicacion {
+  /** YYYY-MM-DD (fecha de EE.UU.; los datos salen a las 8:30 ET, la Fed a
+   * las 14:00 ET). */
+  fecha: string;
+  etiqueta: "Próximo dato" | "Próxima decisión";
+  /** Días naturales desde hoy; negativo si la fecha ya pasó y el archivo
+   * aún no trae el dato nuevo (se refresca dos veces al día). */
+  dias: number;
+  /** Faltan menos de 5 días: se resalta. */
+  cercana: boolean;
+}
+
+export const DIAS_PUBLICACION_CERCANA = 5;
+
+/** Fecha local de hoy (YYYY-MM-DD), no la UTC: de noche en México, UTC ya va
+ * en el día siguiente. */
+export function fechaLocalHoy(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function proximaPublicacion(
+  fecha: string,
+  hoy: string,
+  etiqueta: ProximaPublicacion["etiqueta"]
+): ProximaPublicacion {
+  const dias = Math.round(
+    (Date.parse(`${fecha}T00:00:00Z`) - Date.parse(`${hoy}T00:00:00Z`)) / 86_400_000
+  );
+  return { fecha, etiqueta, dias, cercana: dias >= 0 && dias < DIAS_PUBLICACION_CERCANA };
+}
+
+const DIAS_SEMANA = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+
+/** "jue 8 oct" (sin año si es este año). */
+export function nombreFechaPublicacion(fecha: string, hoy: string): string {
+  const [anio, mes, dia] = fecha.split("-").map(Number);
+  const semana = DIAS_SEMANA[new Date(Date.UTC(anio, mes - 1, dia)).getUTCDay()];
+  const base = `${semana} ${dia} ${MESES_CORTOS[mes - 1]}`;
+  return fecha.slice(0, 4) === hoy.slice(0, 4) ? base : `${base} ${anio}`;
+}
+
+export function textoFaltan(dias: number): string {
+  if (dias < 0) return "ya salió, se refleja en la próxima descarga";
+  if (dias === 0) return "hoy";
+  if (dias === 1) return "mañana";
+  return `en ${dias} días`;
 }
 
 // ---------------------------------------------------------------- datos

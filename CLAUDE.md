@@ -729,7 +729,16 @@ jobs print can read the other way, and a min-max scaled mini trend (~2 years) wi
 download is 10 years, ~0.4 MB / ~70 KB gzip), bars with blue/orange polarity for changes around 0
 (payrolls, GDP, retail sales), a step line for the Fed (tooltip shows the range), a line for the
 rest; the 2% target / 0 reference uses `ifOverflow="extendDomain"` (otherwise Recharts silently
-drops a reference line outside the data's range). Not on FRED, so not included: ISM PMIs and the FOMC calendar.
+drops a reference line outside the data's range). **Next-release dates (2026-10-02, user's request)**: `fred.ts` also
+scrapes "Next Release Date" from each non-daily series' FRED HTML page (`SERIES_CON_CALENDARIO`; there's
+no keyless CSV for it) and the FOMC decision days (last day of each meeting, current + next year) from
+federalreserve.gov's `fomccalendars.htm`; both are best-effort (missing → the tile just shows no
+date) and go into `macro.json` as `proximasPublicaciones` / `reunionesFomc`. Each tile shows "Próximo
+dato" (the Fed tile "Próxima decisión"; the real-rate tile follows core PCE; daily series say "Se
+actualiza cada día hábil"), and when fewer than `DIAS_PUBLICACION_CERCANA` = 5 days remain it's
+highlighted with a yellow (`--series-4`) badge plus "hoy / mañana / en N días" text; a box at the top
+lists the releases within 5 days grouped by date. Days are counted from the browser's *local* date
+(`fechaLocalHoy`, not UTC). Not on FRED, so not included: ISM PMIs and the FOMC calendar.
 
 Per-tab view state (`filtros`, `categoriasOcultas`, `rangoMeses`, `vistaTiempo`) still lives in
 `Dashboard`'s `estadosPorPestana: Record<tabId, EstadoVista>`, passed to each view as controlled

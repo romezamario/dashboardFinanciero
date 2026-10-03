@@ -15,8 +15,13 @@ import {
 import {
   calcularLecturasMacro,
   GRUPOS,
+  DIAS_PUBLICACION_CERCANA,
+  fechaLocalHoy,
+  nombreFechaPublicacion,
   nombrePeriodo,
   obtenerDatosMacro,
+  textoFaltan,
+  type ProximaPublicacion,
   type DatosMacro,
   type LecturaMacro,
   type Observacion,
@@ -39,7 +44,18 @@ export function MacroEeuu() {
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
   }, []);
 
-  const lecturas = useMemo(() => (datos ? calcularLecturasMacro(datos) : []), [datos]);
+  const hoy = fechaLocalHoy();
+  const lecturas = useMemo(() => (datos ? calcularLecturasMacro(datos, hoy) : []), [datos, hoy]);
+  // Varias series salen en el mismo reporte (empleo, desempleo y salarios el
+  // mismo viernes): en el resumen van juntas bajo una sola fecha.
+  const cercanas = useMemo(() => {
+    const porFecha = new Map<string, string[]>();
+    for (const l of lecturas) {
+      if (!l.proxima?.cercana) continue;
+      porFecha.set(l.proxima.fecha, [...(porFecha.get(l.proxima.fecha) ?? []), l.titulo]);
+    }
+    return Array.from(porFecha.entries()).sort(([a], [b]) => a.localeCompare(b));
+  }, [lecturas]);
   const fallidas = datos ? Object.keys(datos.errores) : [];
 
   if (!datos) {
@@ -68,6 +84,29 @@ export function MacroEeuu() {
           No se pudieron descargar: {fallidas.join(", ")}.
         </p>
       )}
+
+      <div className="rounded-lg p-4" style={estiloTarjeta}>
+        <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+          Publicaciones en los próximos {DIAS_PUBLICACION_CERCANA} días
+        </h3>
+        {cercanas.length === 0 ? (
+          <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
+            Ninguna. Cada recuadro indica cuándo sale su siguiente dato.
+          </p>
+        ) : (
+          <ul className="mt-2 space-y-1.5">
+            {cercanas.map(([fecha, titulos]) => {
+              const dias = lecturas.find((l) => l.proxima?.fecha === fecha)!.proxima!.dias;
+              return (
+                <li key={fecha} className="flex flex-wrap items-baseline gap-x-2 text-sm">
+                  <InsigniaFecha fecha={fecha} dias={dias} hoy={hoy} />
+                  <span style={{ color: "var(--text-primary)" }}>{titulos.join(" · ")}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
 
       {GRUPOS.map((grupo) => {
         const delGrupo = lecturas.filter((l) => l.grupo === grupo);
@@ -165,6 +204,7 @@ function TileMacro({
           {lectura.detalle}
         </div>
       )}
+      <LineaProxima proxima={lectura.proxima} diaria={lectura.frecuencia === "diaria" && lectura.id !== "FED"} />
       <div className="mt-auto pt-3">
         <MiniTendencia
           historia={lectura.historia}
@@ -174,6 +214,49 @@ function TileMacro({
         />
       </div>
     </button>
+  );
+}
+
+// ------------------------------------------------------------ calendario
+
+/** Fecha de publicación + cuánto falta. Si faltan menos de 5 días se resalta
+ * con fondo amarillo (slot 4 de la paleta, ya validado) y texto en tinta
+ * primaria: el color no va solo, el "hoy / mañana / en N días" lo dice. */
+function InsigniaFecha({ fecha, dias, hoy }: { fecha: string; dias: number; hoy: string }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium"
+      style={{
+        background: "color-mix(in srgb, var(--series-4) 22%, transparent)",
+        border: "1px solid var(--series-4)",
+        color: "var(--text-primary)",
+      }}
+    >
+      ⏰ {nombreFechaPublicacion(fecha, hoy)} · {textoFaltan(dias)}
+    </span>
+  );
+}
+
+function LineaProxima({ proxima, diaria }: { proxima: ProximaPublicacion | null; diaria: boolean }) {
+  const hoy = fechaLocalHoy();
+  if (!proxima) {
+    return diaria ? (
+      <div className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
+        Se actualiza cada día hábil
+      </div>
+    ) : null;
+  }
+  return (
+    <div className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
+      <div>{proxima.etiqueta}:</div>
+      {proxima.cercana ? (
+        <InsigniaFecha fecha={proxima.fecha} dias={proxima.dias} hoy={hoy} />
+      ) : (
+        <span style={{ color: "var(--text-secondary)" }}>
+          {nombreFechaPublicacion(proxima.fecha, hoy)} · {textoFaltan(proxima.dias)}
+        </span>
+      )}
+    </div>
   );
 }
 
