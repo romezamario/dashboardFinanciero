@@ -3,6 +3,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Legend,
   ResponsiveContainer,
   Tooltip,
@@ -40,6 +41,105 @@ function Tarjeta({ titulo, children }: { titulo: string; children: React.ReactNo
       {children}
     </div>
   );
+}
+
+/** Suma de las columnas de tarjeta de una fila (mes o categoría). */
+function totalFila(fila: FilaPorTarjeta, tarjetas: string[]): number {
+  return tarjetas.reduce((s, t) => s + Number(fila[t] ?? 0), 0);
+}
+
+/** Tooltip con monto y porcentaje de cada tarjeta dentro de la fila (el
+ * mes o la categoría), más el total -- el porcentaje responde "qué parte
+ * de esto fue con cada tarjeta". */
+function TooltipPorTarjeta({
+  active,
+  payload,
+  tarjetas,
+}: {
+  active?: boolean;
+  payload?: { payload: FilaPorTarjeta }[];
+  tarjetas: string[];
+}) {
+  if (!active || !payload?.length) return null;
+  const fila = payload[0].payload;
+  const total = totalFila(fila, tarjetas);
+  return (
+    <div className="rounded-lg px-3 py-2 text-xs" style={estiloTooltip}>
+      <div className="mb-1 font-medium">{fila.etiqueta}</div>
+      {tarjetas.map((tarjeta, i) => {
+        const monto = Number(fila[tarjeta] ?? 0);
+        if (monto === 0) return null;
+        return (
+          <div key={tarjeta} className="flex items-center gap-1.5">
+            <span className="inline-block h-2 w-2 rounded-sm" style={{ background: colorTarjeta(i) }} />
+            <span>{tarjeta}:</span>
+            <span style={{ color: "var(--text-secondary)" }}>
+              {moneda.format(monto)} ({porcentaje.format(total > 0 ? monto / total : 0)})
+            </span>
+          </div>
+        );
+      })}
+      <div className="mt-1 font-medium">Total: {moneda.format(total)}</div>
+    </div>
+  );
+}
+
+// Etiqueta de porcentaje dentro de un tramo apilado. Solo se pinta si el
+// tramo es lo bastante grande para que el texto quepa y se lea (umbral en
+// píxeles y en % del total), así no hay un número encimado en cada barra.
+// Texto casi negro en todos los tramos: medido contra los 4 rellenos en
+// ambos modos, da >= 4.5:1 en todos (el blanco bajaba hasta 2.2:1 sobre el
+// amarillo claro). El color del texto lo decide el contraste con el relleno,
+// no la identidad de la serie.
+const TEXTO_SOBRE_TRAMO = "#0b0b0b";
+const PROPORCION_MINIMA_ETIQUETA = 0.12;
+
+function etiquetaPorcentajeEnTramo(
+  indiceTarjeta: number,
+  datos: FilaPorTarjeta[],
+  tarjetas: string[],
+  resaltados: Set<string>
+) {
+  const porEtiqueta = new Map(datos.map((fila) => [fila.etiqueta, fila]));
+  return function Etiqueta(props: PropsEtiqueta) {
+    const fila = porEtiqueta.get(String(props.value));
+    const x = Number(props.x ?? 0), y = Number(props.y ?? 0);
+    const ancho = Number(props.width ?? 0), alto = Number(props.height ?? 0);
+    if (!fila || !resaltados.has(fila.etiqueta) || alto < 14 || ancho < 22) return null;
+    const total = totalFila(fila, tarjetas);
+    const proporcion = total > 0 ? Number(fila[tarjetas[indiceTarjeta]] ?? 0) / total : 0;
+    if (proporcion < PROPORCION_MINIMA_ETIQUETA) return null;
+    return (
+      <text
+        x={x + ancho / 2}
+        y={y + alto / 2}
+        textAnchor="middle"
+        dominantBaseline="central"
+        fontSize={10}
+        fontWeight={600}
+        fill={TEXTO_SOBRE_TRAMO}
+      >
+        {porcentaje.format(proporcion)}
+      </text>
+    );
+  };
+}
+
+// Recharts descarta las barras de tamaño cero ANTES de pasarlas a
+// <LabelList>, así que el `index` que llega al `content` es la posición en esa
+// lista filtrada, no en `datos` -- una tarjeta con $0 en algún mes corría todas
+// las etiquetas siguientes a la fila equivocada (o las perdía). En vez de
+// confiar en el índice, cada etiqueta recibe como `value` la `etiqueta` de su
+// propia fila (mes o categoría) y la busca por nombre.
+const etiquetaDeFila = (entrada: unknown) =>
+  (entrada as { payload?: FilaPorTarjeta }).payload?.etiqueta ?? "";
+
+interface PropsEtiqueta {
+  x?: number | string;
+  y?: number | string;
+  width?: number | string;
+  height?: number | string;
+  value?: unknown;
 }
 
 const leyenda = (value: string) => (
@@ -107,7 +207,7 @@ export function GastoMensualPorTarjetaChart({
   resaltados: Set<string>;
 }) {
   return (
-    <Tarjeta titulo="Gasto mensual por tarjeta, últimos 12 meses (periodo resaltado)">
+    <Tarjeta titulo="Gasto mensual por tarjeta, últimos 12 meses (periodo resaltado; % = parte de cada tarjeta en el mes)">
       <div className="mt-3 h-72">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={datos}>
@@ -126,8 +226,7 @@ export function GastoMensualPorTarjetaChart({
             />
             <Tooltip
               cursor={{ fill: "var(--gridline)", opacity: 0.4 }}
-              formatter={(value) => moneda.format(Number(value))}
-              contentStyle={estiloTooltip}
+              content={<TooltipPorTarjeta tarjetas={tarjetas} />}
             />
             <Legend formatter={leyenda} />
             {tarjetas.map((tarjeta, i) => (
@@ -146,6 +245,10 @@ export function GastoMensualPorTarjetaChart({
                 {datos.map((d) => (
                   <Cell key={d.etiqueta} fillOpacity={resaltados.has(d.etiqueta) ? 1 : 0.3} />
                 ))}
+                <LabelList
+                  valueAccessor={etiquetaDeFila}
+                  content={etiquetaPorcentajeEnTramo(i, datos, tarjetas, resaltados)}
+                />
               </Bar>
             ))}
           </BarChart>
@@ -165,8 +268,37 @@ export function CategoriaPorTarjetaChart({
   tarjetas: string[];
 }) {
   const esMovil = useEsMovil();
+  const totalPeriodo = datos.reduce((s, fila) => s + totalFila(fila, tarjetas), 0);
+  // Al final de cada barra: monto de la categoría y qué parte es del gasto
+  // con tarjeta del periodo. Una sola etiqueta por barra, colgada del ÚLTIMO
+  // tramo con monto de esa fila (donde termina la pila) -- no del último de
+  // la lista, que puede ser $0 en esa categoría y entonces no se dibuja.
+  const porEtiqueta = new Map(datos.map((fila) => [fila.etiqueta, fila]));
+  const etiquetaTotal = (indiceTarjeta: number) => (props: PropsEtiqueta) => {
+    const fila = porEtiqueta.get(String(props.value));
+    if (!fila || totalPeriodo === 0) return null;
+    const ultimaConMonto = tarjetas.reduce(
+      (ultima, t, i) => (Number(fila[t] ?? 0) > 0 ? i : ultima),
+      -1
+    );
+    if (ultimaConMonto !== indiceTarjeta) return null;
+    const total = totalFila(fila, tarjetas);
+    return (
+      <text
+        x={Number(props.x ?? 0) + Number(props.width ?? 0) + 6}
+        y={Number(props.y ?? 0) + Number(props.height ?? 0) / 2}
+        dominantBaseline="central"
+        fontSize={11}
+        fill="var(--text-secondary)"
+      >
+        {esMovil
+          ? porcentaje.format(total / totalPeriodo)
+          : `${compacto.format(total)} · ${porcentaje.format(total / totalPeriodo)}`}
+      </text>
+    );
+  };
   return (
-    <Tarjeta titulo="Para qué usas cada tarjeta (gasto del periodo por categoría)">
+    <Tarjeta titulo="Para qué usas cada tarjeta (gasto del periodo por categoría; % del gasto con tarjeta)">
       {datos.length === 0 ? (
         <p className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>
           Sin gasto con tarjeta en el periodo.
@@ -174,7 +306,7 @@ export function CategoriaPorTarjetaChart({
       ) : (
         <div className="mt-3" style={{ height: Math.max(datos.length * 40, 120) + 60 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={datos} layout="vertical" margin={{ left: 0, right: esMovil ? 8 : 24 }}>
+            <BarChart data={datos} layout="vertical" margin={{ left: 0, right: esMovil ? 40 : 88 }}>
               <CartesianGrid horizontal={false} stroke="var(--gridline)" strokeWidth={1} />
               <XAxis
                 type="number"
@@ -194,8 +326,7 @@ export function CategoriaPorTarjetaChart({
               />
               <Tooltip
                 cursor={{ fill: "var(--gridline)", opacity: 0.4 }}
-                formatter={(value) => moneda.format(Number(value))}
-                contentStyle={estiloTooltip}
+                content={<TooltipPorTarjeta tarjetas={tarjetas} />}
               />
               <Legend formatter={leyenda} />
               {tarjetas.map((tarjeta, i) => (
@@ -208,7 +339,9 @@ export function CategoriaPorTarjetaChart({
                   strokeWidth={1}
                   radius={i === tarjetas.length - 1 ? [0, 4, 4, 0] : 0}
                   maxBarSize={22}
-                />
+                >
+                  <LabelList valueAccessor={etiquetaDeFila} content={etiquetaTotal(i)} />
+                </Bar>
               ))}
             </BarChart>
           </ResponsiveContainer>

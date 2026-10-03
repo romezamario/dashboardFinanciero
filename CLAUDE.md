@@ -580,7 +580,20 @@ slots 1–4 of the dataviz palette (`--series-1..4`, `colorTarjeta` in `lib/tarj
 by fixed alphabetical order of *all* cards so a card keeps its color across periods; validated with
 `validate_palette.js` in both modes (passes adjacent-pair CVD/normal-vision; light-mode aqua/yellow
 are below 3:1 contrast, hence the mandatory direct labels + table). A 5th card would fall back to
-`--text-muted` — add and validate a `--series-5` rather than cycling hues.
+`--text-muted` — add and validate a `--series-5` rather than cycling hues. **Percentages (2026-10-03, user's
+request)**: both bar charts' tooltips list each card's amount *and* its share of that row (month or
+category) plus the row total (`TooltipPorTarjeta`); the monthly chart labels each segment's share of
+its month *only* inside the highlighted period months and only when the segment is ≥12% and big
+enough to fit (selective labels, per the dataviz skill — not a number on every bar; on a phone the
+bars are too narrow, so the tooltip carries it); the category chart puts one "amount · % of the
+period's card spend" label at the end of each bar. In-segment label text is near-black on every
+fill — measured ≥4.5:1 against all four card colors in both modes, white dropped to 2.2:1 on light
+yellow. **Recharts gotcha**: `<Bar>` drops zero-size bars *before* handing them to `<LabelList>`, so
+the `index` a custom label `content` receives is the position in that filtered list, not in the
+data array — one card at $0 in some month shifted every later label to the wrong row. Labels here
+use `valueAccessor` to receive their row's `etiqueta` and look the row up by name; and the
+category end-label hangs off the last card *with an amount* in that row (the last card in the list
+may be $0 there and not drawn at all).
 
 Per-tab view state (`filtros`, `categoriasOcultas`, `rangoMeses`, `vistaTiempo`) still lives in
 `Dashboard`'s `estadosPorPestana: Record<tabId, EstadoVista>`, passed to each view as controlled
