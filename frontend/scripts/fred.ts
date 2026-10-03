@@ -48,13 +48,30 @@ export interface DatosMacro {
 // de JSON, ~70 KB comprimido.
 const ANIOS_HISTORIA = 10;
 
+const INTENTOS = 3;
+
+/** FRED a veces responde 502 a una serie suelta (pasó en el deploy con la
+ * tasa de la Fed): se reintenta con espera creciente antes de darla por
+ * perdida. */
+async function descargarCsv(url: string): Promise<string> {
+  let ultimoError: Error | null = null;
+  for (let intento = 1; intento <= INTENTOS; intento++) {
+    try {
+      const respuesta = await fetch(url, { headers: { "User-Agent": "DashboardFinanciero/1.0" } });
+      if (respuesta.ok) return await respuesta.text();
+      ultimoError = new Error(`FRED respondió ${respuesta.status}`);
+    } catch (e) {
+      ultimoError = e instanceof Error ? e : new Error(String(e));
+    }
+    if (intento < INTENTOS) await new Promise((r) => setTimeout(r, 2000 * intento));
+  }
+  throw ultimoError!;
+}
+
 async function descargarSerie(id: SerieMacro, desde: string): Promise<[string, number][]> {
-  const respuesta = await fetch(
-    `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${id}&cosd=${desde}`,
-    { headers: { "User-Agent": "DashboardFinanciero/1.0" } }
+  const texto = await descargarCsv(
+    `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${id}&cosd=${desde}`
   );
-  if (!respuesta.ok) throw new Error(`FRED respondió ${respuesta.status}`);
-  const texto = await respuesta.text();
   const observaciones: [string, number][] = [];
   for (const linea of texto.trim().split("\n").slice(1)) {
     const [fecha, valor] = linea.trim().split(",");
