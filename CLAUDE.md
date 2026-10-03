@@ -553,8 +553,11 @@ differ on purpose** (user chose each one explicitly) — keep them this way:
   `IngresosGastosChart` sets the period to that month, clicking a year (Meses/Años toggle,
   `VistaTiempo`) sets it to that year's first..last month *with data* (`rangoDeAnio`, so missing
   months don't average in as $0); clicking the same bar again resets to the default. That chart is
-  the one that *chooses* the period, so it shows the whole history and highlights the period
-  (`resaltados`, others dimmed) instead of being trimmed to it. Indicators count only the period's
+  the one that *chooses* the period, so it highlights the period (`resaltados`, others dimmed)
+  instead of being trimmed to it. Its toggle is "13 meses | Todo | Años" (`VistaTiempo` =
+  `"recientes" | "meses" | "anios"`); **the default is "13 meses"** (2026-10-03, user's request):
+  the current month plus the 12 before it, widened back to the period's first month if the chosen
+  period starts earlier so the highlight never falls off the chart; "Todo" is the whole history. Indicators count only the period's
   months, average over the period's month count, and compare against the immediately preceding
   period of the same length (Aug vs. Jul). Deliberate exceptions that look outside the period:
   recurring expenses (6 months ending at the period's last month — needs history; charges with an
@@ -585,6 +588,14 @@ differ on purpose** (user chose each one explicitly) — keep them this way:
   array) is the cross-filter trick: each chart is computed with every *other* active dimension but
   not its own, so it still shows the other options to click. Non-selected marks dim to ~0.3 via
   `<Cell fillOpacity>`. The "Otros" fold in `GastoPorCategoriaChart` is not clickable.
+
+**Filter layout (2026-10-03, user's request — "se ve amontonado")**: the Resumen's pill rows live in
+one card, `PanelFiltros.tsx` (presentational only; every click handler stays in `VistaResumen`):
+click filters (Cuenta/Tarjeta/Evento) as rows with an aligned label column (label above the pills on
+a phone), then, below a divider, a collapsed-by-default "Excluir del análisis" disclosure whose
+header lists what is currently excluded (hidden categories + discarded events, e.g. "· Pago TDC")
+and expands to the Categorías/Eventos exclusion pills. Same behavior as the old separate rows —
+only the layout changed. Active-filter chips stay above the card.
 
 **"Categorías y Comercios" tab handles income-only selections (2026-10-02)**: its first chart
 (`GastoConPromedioMovilChart`, monthly total + 3-month moving average) used to sum only cargos, so
