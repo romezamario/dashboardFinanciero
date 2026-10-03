@@ -36,14 +36,11 @@ import { Tabla, Tile } from "./IndicadoresUI";
 // Colores: los mismos 4 slots de la paleta categórica ya validada (dataviz).
 // Velas, volumen e histograma del MACD son polaridad (sube/baja): azul/naranja,
 // como el FlujoNetoChart. Las medias tienen identidad fija en toda la pestaña:
-// SMA 50 = aqua, SMA 200 = amarillo. En el comparativo, QQQ = azul y TQQQ =
-// naranja.
+// SMA 50 = aqua, SMA 200 = amarillo.
 const COLOR_SUBE = "var(--series-1)";
 const COLOR_BAJA = "var(--series-2)";
 const COLOR_SMA50 = "var(--series-3)";
 const COLOR_SMA200 = "var(--series-4)";
-const COLOR_QQQ = "var(--series-1)";
-const COLOR_TQQQ = "var(--series-2)";
 
 const SIMBOLOS: Simbolo[] = ["QQQ", "TQQQ"];
 const ANCHO_EJE = 52;
@@ -835,116 +832,6 @@ function Comparativo({
   const porc = (v: number | null) => (v == null ? "—" : pctSinSigno.format(v));
   return (
     <div className="space-y-6">
-      <div className="rounded-lg p-4" style={estiloTarjeta}>
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-            QQQ vs TQQQ desde el {nombreFecha(puntos[0].fecha)} (base 100)
-          </h3>
-          <div className="flex gap-3 text-xs" style={{ color: "var(--text-secondary)" }}>
-            <Leyenda color={COLOR_QQQ} texto="QQQ" />
-            <Leyenda color={COLOR_TQQQ} texto="TQQQ" />
-          </div>
-        </div>
-        <div className="mt-3 h-64">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={puntos} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-              <CartesianGrid vertical={false} stroke="var(--gridline)" />
-              {ejeX(puntos)}
-              <YAxis
-                orientation="right"
-                width={ANCHO_EJE}
-                domain={["auto", "auto"]}
-                tick={{ fill: "var(--text-muted)", fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v: number) => decimal.format(Math.round(v))}
-              />
-              <ReferenceLine y={100} stroke="var(--baseline)" />
-              <Tooltip
-                cursor={{ stroke: "var(--baseline)" }}
-                content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null;
-                  const p = payload[0].payload as PuntoComparativo;
-                  return (
-                    <div className="rounded-lg px-3 py-2 text-xs" style={estiloTooltip}>
-                      <div className="font-medium">{nombreFecha(p.fecha)}</div>
-                      <div style={{ color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums" }}>
-                        <div>QQQ {pct.format(p.qqq / 100 - 1)} · caída {pctSinSigno.format(-p.ddQqq)}</div>
-                        <div>TQQQ {pct.format(p.tqqq / 100 - 1)} · caída {pctSinSigno.format(-p.ddTqqq)}</div>
-                      </div>
-                    </div>
-                  );
-                }}
-              />
-              <Line
-                dataKey="qqq"
-                stroke={COLOR_QQQ}
-                strokeWidth={2}
-                dot={false}
-                isAnimationActive={false}
-                label={etiquetaFinal(puntos.length, "QQQ")}
-              />
-              <Line
-                dataKey="tqqq"
-                stroke={COLOR_TQQQ}
-                strokeWidth={2}
-                dot={false}
-                isAnimationActive={false}
-                label={etiquetaFinal(puntos.length, "TQQQ")}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div className="rounded-lg p-4" style={estiloTarjeta}>
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-            Caída desde el máximo (drawdown) en el rango
-          </h3>
-          <div className="flex gap-3 text-xs" style={{ color: "var(--text-secondary)" }}>
-            <Leyenda color={COLOR_QQQ} texto="QQQ" />
-            <Leyenda color={COLOR_TQQQ} texto="TQQQ" />
-          </div>
-        </div>
-        <div className="mt-3 h-48">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={puntos} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
-              <CartesianGrid vertical={false} stroke="var(--gridline)" />
-              {ejeX(puntos)}
-              <YAxis
-                orientation="right"
-                width={ANCHO_EJE}
-                domain={["auto", 0]}
-                tick={{ fill: "var(--text-muted)", fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v: number) => pctSinSigno.format(v)}
-              />
-              <ReferenceLine y={0} stroke="var(--baseline)" />
-              <Tooltip
-                cursor={{ stroke: "var(--baseline)" }}
-                content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null;
-                  const p = payload[0].payload as PuntoComparativo;
-                  return (
-                    <div className="rounded-lg px-3 py-2 text-xs" style={estiloTooltip}>
-                      <div className="font-medium">{nombreFecha(p.fecha)}</div>
-                      <div style={{ color: "var(--text-secondary)" }}>
-                        <div>QQQ {pctSinSigno.format(p.ddQqq)}</div>
-                        <div>TQQQ {pctSinSigno.format(p.ddTqqq)}</div>
-                      </div>
-                    </div>
-                  );
-                }}
-              />
-              <Line dataKey="ddQqq" stroke={COLOR_QQQ} strokeWidth={1.5} dot={false} isAnimationActive={false} />
-              <Line dataKey="ddTqqq" stroke={COLOR_TQQQ} strokeWidth={1.5} dot={false} isAnimationActive={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
       <Tabla
         titulo={`Apalancamiento en el rango (desde ${nombreFecha(desde)}, ${puntos.length} sesiones)`}
         vacio="Sin datos."
@@ -985,20 +872,4 @@ function Comparativo({
 function puntosPct(diferencia: number): string {
   const pts = decimal.format(Math.abs(diferencia * 100));
   return `${diferencia >= 0 ? "+" : "−"}${pts} pts ${diferencia >= 0 ? "arriba" : "abajo"}`;
-}
-
-/** Etiqueta directa al final de cada línea (solo en el último punto). */
-function etiquetaFinal(total: number, texto: string) {
-  return ({ x, y, index }: { x?: number | string; y?: number | string; index?: number }) =>
-    index === total - 1 ? (
-      <text
-        x={Number(x) - 4}
-        y={Number(y) - 8}
-        textAnchor="end"
-        fontSize={11}
-        fill="var(--text-secondary)"
-      >
-        {texto}
-      </text>
-    ) : null;
 }
