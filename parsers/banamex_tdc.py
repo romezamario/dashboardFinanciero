@@ -99,17 +99,60 @@ TIPOS_TARJETA_CONOCIDOS: list[tuple[re.Pattern[str], str]] = [
 ]
 
 
+# Respaldo para los estados de cuenta que NO imprimen el nombre del tipo en
+# ninguna página (confirmado 2026-10-02 contra los PDFs reales: de 2024-11 en
+# adelante, y el de 2024-10 de Conquista, la portada solo dice "Estado de
+# Cuenta Mensual" -- ninguna página menciona Platino/Beyond/Conquista, y el
+# tipo solo vive en el nombre que el usuario le puso al archivo). Antes
+# quedaban sin tipo: alias "TDC Mensual" (de ahí la cuenta "TDC Mensual" en el
+# dashboard) y el "SU ABONO...GRACIAS" sin categorizar. Lo único estable que sí
+# imprimen es el número de tarjeta, así que se traduce por sus últimos 4
+# dígitos -- mismo patrón "lista conocida, con fallback si no está" que
+# `ROLES_TARJETA_CONOCIDOS` en invex_tdc.py, y específico de las tarjetas de
+# este usuario (el PDF nunca dice qué número es de qué tipo). Cada tarjeta se
+# reexpidió con otro número más de una vez, por eso hay varios por tipo; las
+# entradas salen de los alias ya procesados (5482, 1236, 8423 -> Conquista;
+# 4391 -> Beyond; 5491 -> Platino) y de los nombres de archivo del usuario
+# (4904 -> Beyond; 6599 -> Platino). Una tarjeta nueva no listada aquí
+# simplemente sigue como antes (sin tipo) hasta agregar su entrada.
+TIPOS_POR_ULTIMOS_4: dict[str, str] = {
+    "5482": "TDC Conquista",
+    "1236": "TDC Conquista",
+    "8423": "TDC Conquista",
+    "4391": "TDC Beyond",
+    "4904": "TDC Beyond",
+    "5491": "TDC Platino",
+    "6599": "TDC Platino",
+}
+
+
+def _ultimos_4_de_texto(texto: str) -> str | None:
+    """Últimos 4 dígitos del "Número de tarjeta: ..." de `texto` (el run de
+    dígitos más largo de esa línea), o None. Regla dura del repo: el número
+    completo nunca sale de aquí -- solo el `[-4:]`."""
+    for linea in texto.splitlines():
+        if PATRON_LINEA_TARJETA.search(linea):
+            digitos = re.findall(r"\d+", linea)
+            if digitos:
+                numero_completo = max(digitos, key=len)
+                if len(numero_completo) >= 4:
+                    return numero_completo[-4:]
+    return None
+
+
 def _detectar_tipo_tarjeta(texto_pagina: str) -> str | None:
     """Busca en `texto_pagina` cualquiera de los tipos de tarjeta conocidos
     y devuelve su alias normalizado, o None si ninguno aparece. Usado tanto
     por `extraer()` (para distinguir mensajes de cortesía específicos de un
     tier, ver `PATRON_ABONO_CORTESIA`) como por `extraer_info_cuenta()`
     (para el alias de la cuenta) -- una sola fuente de verdad para "qué
-    tier de tarjeta es este documento"."""
+    tier de tarjeta es este documento". Primero por nombre en el texto; si
+    la página no lo trae, por los últimos 4 dígitos (`TIPOS_POR_ULTIMOS_4`)."""
     for patron_tipo, alias_normalizado in TIPOS_TARJETA_CONOCIDOS:
         if patron_tipo.search(texto_pagina):
             return alias_normalizado
-    return None
+    ultimos_4 = _ultimos_4_de_texto(texto_pagina)
+    return TIPOS_POR_ULTIMOS_4.get(ultimos_4) if ultimos_4 else None
 
 # Respaldo si el PDF trae un tipo de tarjeta que no está en
 # TIPOS_TARJETA_CONOCIDOS: portada "Estado de Cuenta <Tipo>" sola en su línea.
@@ -236,6 +279,14 @@ class BanamexTdcParser(BaseParser):
             bloque_interbancario = None
 
         with pdfplumber.open(ruta_pdf) as pdf:
+            # Antes de leer renglones: el tipo (por nombre o por los últimos 4
+            # dígitos del número de tarjeta, que puede estar en otra página que
+            # la primera con transacciones) debe conocerse ya cuando aparezca
+            # un "SU ABONO...GRACIAS" que hay que reescribir.
+            for pagina in pdf.pages[:3]:
+                if tipo_tarjeta_documento is None:
+                    tipo_tarjeta_documento = _detectar_tipo_tarjeta(pagina.extract_text() or "")
+
             for numero_pagina, pagina in enumerate(pdf.pages, start=1):
                 texto = pagina.extract_text() or ""
 
@@ -409,6 +460,12 @@ class BanamexTdcParser(BaseParser):
     def extraer_info_cuenta(self, ruta_pdf: Path) -> tuple[str | None, str | None]:
         alias: str | None = None
         ultimos_4: str | None = None
+        # "Estado de Cuenta <Palabra>" es solo el último recurso: si se
+        # aceptara en cuanto aparece (portada, página 1), taparía un tipo que
+        # la página con el número de tarjeta (otra de las primeras 3) sí sabe
+        # resolver por `TIPOS_POR_ULTIMOS_4` -- justo lo que dejaba a los
+        # estados de 2024-11 en adelante con alias "TDC Mensual".
+        alias_respaldo: str | None = None
 
         with pdfplumber.open(ruta_pdf) as pdf:
             for pagina in pdf.pages[:3]:
@@ -417,27 +474,20 @@ class BanamexTdcParser(BaseParser):
                 if alias is None:
                     alias = _detectar_tipo_tarjeta(texto)
 
-                for linea in texto.splitlines():
-                    linea = linea.strip()
+                if ultimos_4 is None:
+                    ultimos_4 = _ultimos_4_de_texto(texto)
 
-                    if alias is None:
-                        coincidencia = PATRON_ALIAS.match(linea)
+                if alias_respaldo is None:
+                    for linea in texto.splitlines():
+                        coincidencia = PATRON_ALIAS.match(linea.strip())
                         if coincidencia:
-                            alias = f"TDC {coincidencia.group(1)}"
-
-                    if ultimos_4 is None and PATRON_LINEA_TARJETA.search(linea):
-                        digitos = re.findall(r"\d+", linea)
-                        if digitos:
-                            numero_completo = max(digitos, key=len)
-                            if len(numero_completo) >= 4:
-                                ultimos_4 = numero_completo[-4:]
-                            # numero_completo no se guarda en ningún otro
-                            # lado ni se propaga fuera de este bloque.
+                            alias_respaldo = f"TDC {coincidencia.group(1)}"
+                            break
 
                 if alias is not None and ultimos_4 is not None:
                     return alias, ultimos_4
 
-        return alias, ultimos_4
+        return alias or alias_respaldo, ultimos_4
 
     def puede_procesar(self, ruta_pdf: Path) -> bool:
         # OJO: "Número de tarjeta" NO sirve como marcador -- la cuenta de
