@@ -332,16 +332,16 @@ statement from a bank you already support will look anything like the first one:
   `"Número de tarjeta: ..."` line, `[-4:]` only) looked up in `TIPOS_POR_ULTIMOS_4` — same "known
   list, falls through if not listed" shape as `ROLES_TARJETA_CONOCIDOS` in `invex_tdc.py`, and just
   as specific to this user's cards (each tier was reissued under a new number more than once: Conquista
-  5482/1236/8423, Beyond 4391/4904, Platino 5491/6599). A name in the text still wins over the
-  number. Three ordering details that mattered: (1) `extraer_info_cuenta` keeps the
+  5482/1236/8423, Beyond 4391/4904, Platino 5491/6599/2989 — the last one confirmed by the user).
+  A name in the text still wins over the number. Three ordering details that mattered: (1) `extraer_info_cuenta` keeps the
   `"Estado de Cuenta <Palabra>"` alias (`PATRON_ALIAS`) as a *last-resort* (`alias_respaldo`) applied
   only after the first 3 pages found no tier — accepting it on sight (cover = page 1) hid the page
   that carries the card number, which is what produced the `"TDC Mensual"` alias/account; (2)
   `extraer()` resolves the tier from the first 3 pages *before* reading any row, so a courtesy line
   can't be read before the tier is known; (3) `descripcion_para_categorizar` (manual-row dialog) uses
-  the stored `_tipo_tarjeta_documento`. **A card not in `TIPOS_POR_ULTIMOS_4` (e.g. the `2989`
-  document already synced as "TDC Mensual") still falls through to the old behavior** — add its
-  last 4 when its tier is known. Already-synced `cuentas` named "TDC Mensual" are *not* renamed by
+  the stored `_tipo_tarjeta_documento`. **A card not in `TIPOS_POR_ULTIMOS_4` still falls through to the old
+  behavior** (alias `"TDC Mensual"`, courtesy line uncategorized) — add its last 4 when its tier
+  is known. Already-synced `cuentas` named "TDC Mensual" are *not* renamed by
   re-syncing (find-or-create never updates an existing row's alias), so those accounts stay as they
   are in Supabase until renamed by hand.
 - **A fully-legible transaction line can still fail to match if a stray page-footer artifact

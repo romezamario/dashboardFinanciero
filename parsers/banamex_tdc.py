@@ -112,8 +112,9 @@ TIPOS_TARJETA_CONOCIDOS: list[tuple[re.Pattern[str], str]] = [
 # este usuario (el PDF nunca dice qué número es de qué tipo). Cada tarjeta se
 # reexpidió con otro número más de una vez, por eso hay varios por tipo; las
 # entradas salen de los alias ya procesados (5482, 1236, 8423 -> Conquista;
-# 4391 -> Beyond; 5491 -> Platino) y de los nombres de archivo del usuario
-# (4904 -> Beyond; 6599 -> Platino). Una tarjeta nueva no listada aquí
+# 4391 -> Beyond; 5491 -> Platino), de los nombres de archivo del usuario
+# (4904 -> Beyond; 6599 -> Platino) y de su confirmación directa
+# (2989 -> Platino, 2026-10-02). Una tarjeta nueva no listada aquí
 # simplemente sigue como antes (sin tipo) hasta agregar su entrada.
 TIPOS_POR_ULTIMOS_4: dict[str, str] = {
     "5482": "TDC Conquista",
@@ -123,6 +124,7 @@ TIPOS_POR_ULTIMOS_4: dict[str, str] = {
     "4904": "TDC Beyond",
     "5491": "TDC Platino",
     "6599": "TDC Platino",
+    "2989": "TDC Platino",
 }
 
 
