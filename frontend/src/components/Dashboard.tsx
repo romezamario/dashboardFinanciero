@@ -35,7 +35,7 @@ const ESTADO_VACIO: EstadoVista = {
   categoriasOcultas: null,
   eventosOcultos: new Set(),
   rangoMeses: RANGO_MESES_VACIO,
-  vistaTiempo: "meses",
+  vistaTiempo: "recientes",
 };
 
 const PESTANA_RESUMEN = "resumen";

@@ -20,7 +20,9 @@ const formateadorTooltip = new Intl.NumberFormat("es-MX", {
   currency: "MXN",
 });
 
-export type VistaTiempo = "meses" | "anios";
+/** "recientes" = los últimos 13 meses (mes en curso incluido), la vista por
+ * defecto; "meses" = todo el historial mes a mes; "anios" = por año. */
+export type VistaTiempo = "recientes" | "meses" | "anios";
 
 interface IngresosGastosChartProps {
   /** Un punto por mes o por año, según `vista`. */
@@ -74,7 +76,8 @@ export function IngresosGastosChart({
           >
             {(
               [
-                ["meses", "Meses"],
+                ["recientes", "13 meses"],
+                ["meses", "Todo"],
                 ["anios", "Años"],
               ] as const
             ).map(([valor, texto]) => (

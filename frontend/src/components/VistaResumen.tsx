@@ -49,6 +49,15 @@ import { AlertasPanel } from "./AlertasPanel";
 import { PanelFiltros } from "./PanelFiltros";
 import { calcularAlertas } from "../lib/alertas";
 
+/** Meses de la vista por defecto de "Ingresos vs. gastos" (mes en curso incluido). */
+const MESES_GRAFICA_RECIENTES = 13;
+
+/** Todos los meses de `desde` a `hasta`, ambos incluidos. */
+function mesesEntre(desde: string, hasta: string): string[] {
+  const indice = (m: string) => Number(m.slice(0, 4)) * 12 + Number(m.slice(5, 7)) - 1;
+  return mesesHasta(hasta, indice(hasta) - indice(desde) + 1);
+}
+
 const ETIQUETAS_FILTRO: Record<keyof Filtros, string> = {
   categoria: "Categoría",
   comercio: "Comercio",
@@ -306,10 +315,19 @@ export function VistaResumen({
   // La gráfica de ingresos vs. gastos es la que ELIGE el periodo, así que
   // muestra todo el historial (con los filtros por clic) y resalta el
   // periodo elegido, en vez de recortarse a él.
-  const ingresosGastos =
-    vistaTiempo === "anios"
-      ? agruparIngresosGastosPorAnio(conFiltros)
-      : agruparIngresosGastosPorMes(conFiltros);
+  // Vista por defecto ("13 meses"): del mes en curso hacia atrás 13 meses;
+  // si el periodo elegido empieza antes, la ventana se alarga hasta él para
+  // que no quede fuera de la gráfica. "Todo" muestra el historial completo.
+  const ingresosGastos = useMemo(() => {
+    if (vistaTiempo === "anios") return agruparIngresosGastosPorAnio(conFiltros);
+    const porMes = agruparIngresosGastosPorMes(conFiltros);
+    if (vistaTiempo === "meses") return porMes;
+    const porPeriodo = new Map(porMes.map((p) => [p.periodo, p]));
+    const recientes = mesesHasta(mesEnCurso, MESES_GRAFICA_RECIENTES);
+    const desde = periodo.meses[0] < recientes[0] ? periodo.meses[0] : recientes[0];
+    const meses = recientes[0] === desde ? recientes : mesesEntre(desde, mesEnCurso);
+    return meses.map((m) => porPeriodo.get(m) ?? { periodo: m, ingresos: 0, gastos: 0 });
+  }, [vistaTiempo, conFiltros, mesEnCurso, periodo]);
   const mesesDelPeriodo = useMemo(() => new Set(periodo.meses), [periodo]);
   const resaltadosTiempo = hayPeriodoElegido
     ? vistaTiempo === "anios"
