@@ -1,7 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Line,
+  LineChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
   calcularLecturasMacro,
   GRUPOS,
+  nombrePeriodo,
   obtenerDatosMacro,
   type DatosMacro,
   type LecturaMacro,
@@ -16,6 +30,8 @@ const estiloTarjeta = { background: "var(--surface-1)", border: "1px solid var(-
 export function MacroEeuu() {
   const [datos, setDatos] = useState<DatosMacro | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Indicador cuyo histórico está abierto (clic en su recuadro). */
+  const [seleccion, setSeleccion] = useState<string | null>(null);
 
   useEffect(() => {
     obtenerDatosMacro()
@@ -63,9 +79,22 @@ export function MacroEeuu() {
             </h3>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
               {delGrupo.map((l) => (
-                <TileMacro key={l.id} lectura={l} />
+                <TileMacro
+                  key={l.id}
+                  lectura={l}
+                  seleccionado={seleccion === l.id}
+                  onClick={() => setSeleccion((actual) => (actual === l.id ? null : l.id))}
+                />
               ))}
             </div>
+            {/* El histórico se abre debajo del grupo de su recuadro, no al final
+             * de la página, para que quede a la vista sin desplazarse. */}
+            {delGrupo.map(
+              (l) =>
+                l.id === seleccion && (
+                  <DetalleIndicador key={l.id} lectura={l} onCerrar={() => setSeleccion(null)} />
+                )
+            )}
           </section>
         );
       })}
@@ -76,15 +105,34 @@ export function MacroEeuu() {
         contra el cierre del mes anterior. Verde/rojo = si el cambio suele ser buena o mala noticia
         para el Nasdaq-100: menos inflación, tasas y volatilidad, y más crecimiento y empleo, en
         verde (un dato de empleo muy fuerte puede leerse al revés si aleja los recortes de la Fed).
-        La curva 10a−2a va sin color. Pasa el mouse sobre la minigráfica para ver cada valor.
+        La curva 10a−2a va sin color. Da clic en un recuadro para ver su histórico.
       </p>
     </div>
   );
 }
 
-function TileMacro({ lectura }: { lectura: LecturaMacro }) {
+function TileMacro({
+  lectura,
+  seleccionado,
+  onClick,
+}: {
+  lectura: LecturaMacro;
+  seleccionado: boolean;
+  onClick: () => void;
+}) {
   return (
-    <div className="flex flex-col rounded-lg p-4" style={estiloTarjeta} title={lectura.descripcion}>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-expanded={seleccionado}
+      className="flex flex-col rounded-lg p-4 text-left"
+      style={{
+        ...estiloTarjeta,
+        borderColor: seleccionado ? "var(--series-1)" : "var(--border)",
+        boxShadow: seleccionado ? "0 0 0 1px var(--series-1)" : undefined,
+      }}
+      title={`${lectura.descripcion} Clic para ver el histórico.`}
+    >
       <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
         {lectura.titulo}
       </div>
@@ -125,9 +173,216 @@ function TileMacro({ lectura }: { lectura: LecturaMacro }) {
           etiqueta={lectura.titulo}
         />
       </div>
+    </button>
+  );
+}
+
+// ------------------------------------------------------------ histórico
+
+const RANGOS = [
+  { id: "1A", anios: 1 },
+  { id: "2A", anios: 2 },
+  { id: "5A", anios: 5 },
+  { id: "10A", anios: 10 },
+] as const;
+type Rango = (typeof RANGOS)[number]["id"];
+
+const MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+/** Gráfica con todo el histórico descargado de un indicador (hasta 10 años),
+ * con selector de rango. Se abre al dar clic en su recuadro. */
+function DetalleIndicador({ lectura, onCerrar }: { lectura: LecturaMacro; onCerrar: () => void }) {
+  const [rango, setRango] = useState<Rango>("5A");
+  const serie = lectura.serieCompleta;
+  const ultimaFecha = serie[serie.length - 1]?.fecha ?? "";
+  const datos = useMemo(() => {
+    const fecha = new Date(`${ultimaFecha}T00:00:00Z`);
+    fecha.setUTCFullYear(fecha.getUTCFullYear() - RANGOS.find((r) => r.id === rango)!.anios);
+    const desde = fecha.toISOString().slice(0, 10);
+    return serie.filter((o) => o.fecha >= desde);
+  }, [serie, ultimaFecha, rango]);
+  const formatoPunto = lectura.formatoPunto ?? ((o: Observacion) => lectura.formatoHistoria(o.valor));
+  const valores = datos.map((o) => o.valor);
+  const minimo = Math.min(...valores);
+  const maximo = Math.max(...valores);
+  // La referencia (meta de 2%, 0) solo se dibuja si queda cerca del rango
+  // visible; si no, aplastaría la serie contra un borde.
+  const holgura = (maximo - minimo || 1) * 0.5;
+  const referencia =
+    lectura.referencia != null &&
+    lectura.referencia >= minimo - holgura &&
+    lectura.referencia <= maximo + holgura
+      ? lectura.referencia
+      : undefined;
+  const esBarras = lectura.grafica === "barras";
+  // Una marca por año (o por mes en 1A), en el primer dato de cada uno; los
+  // ticks automáticos repetían el año varias veces.
+  const ticks = useMemo(() => {
+    const largo = rango === "1A" ? 7 : 4;
+    return datos
+      .filter((o, i) => i > 0 && o.fecha.slice(0, largo) !== datos[i - 1].fecha.slice(0, largo))
+      .map((o) => o.fecha);
+  }, [datos, rango]);
+
+  const ejeX = (
+    <XAxis
+      dataKey="fecha"
+      ticks={ticks}
+      tick={{ fill: "var(--text-muted)", fontSize: 11 }}
+      axisLine={false}
+      tickLine={false}
+      minTickGap={24}
+      tickFormatter={(f: string) => {
+        const [anio, mes] = f.split("-").map(Number);
+        return rango === "1A" ? `${MESES_CORTOS[mes - 1]} ${String(anio).slice(2)}` : String(anio);
+      }}
+    />
+  );
+  const ejeY = (
+    <YAxis
+      orientation="right"
+      width={64}
+      // Con barras el dominio debe incluir el 0 aunque todo sea positivo.
+      domain={
+        esBarras
+          ? [(min: number) => Math.min(0, min), (max: number) => Math.max(0, max)]
+          : lectura.grafica === "escalon"
+            ? // La tasa de la Fed desde 0; con "auto" el eje llegaba hasta 8%.
+              [0, (max: number) => Math.ceil(max + 0.25)]
+            : ["auto", "auto"]
+      }
+      tick={{ fill: "var(--text-muted)", fontSize: 11 }}
+      axisLine={false}
+      tickLine={false}
+      tickFormatter={(v: number) => lectura.formatoHistoria(v)}
+    />
+  );
+  const tooltip = (
+    <Tooltip
+      cursor={esBarras ? { fill: "var(--gridline)", opacity: 0.4 } : { stroke: "var(--baseline)" }}
+      content={({ active, payload }) => {
+        if (!active || !payload?.length) return null;
+        const o = payload[0].payload as Observacion;
+        return (
+          <div className="rounded-lg px-3 py-2 text-xs" style={{ ...estiloTarjeta, color: "var(--text-primary)" }}>
+            <div className="font-medium">{nombrePeriodo(o.fecha, lectura.frecuencia)}</div>
+            <div style={{ color: "var(--text-secondary)" }}>{formatoPunto(o)}</div>
+          </div>
+        );
+      }}
+    />
+  );
+  const lineaReferencia =
+    referencia == null ? null : (
+      <ReferenceLine
+        y={referencia}
+        // Sin esto Recharts no la dibuja si cae fuera del rango de los datos
+        // (p. ej. la meta de 2% cuando la inflación lleva años arriba).
+        ifOverflow="extendDomain"
+        stroke="var(--baseline)"
+        strokeDasharray={referencia === 0 ? undefined : "4 3"}
+        label={
+          referencia === 0
+            ? undefined
+            : {
+                value: `Meta ${lectura.formatoHistoria(referencia)}`,
+                position: "insideTopLeft",
+                fill: "var(--text-muted)",
+                fontSize: 11,
+              }
+        }
+      />
+    );
+
+  return (
+    <div className="rounded-lg p-4" style={estiloTarjeta}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h4 className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+            {lectura.titulo}: histórico
+          </h4>
+          <p className="mt-1 max-w-xl text-xs" style={{ color: "var(--text-muted)" }}>
+            {lectura.descripcion}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div
+            className="inline-flex rounded-md p-0.5"
+            style={{ background: "var(--page-plane)", border: "1px solid var(--border)" }}
+          >
+            {RANGOS.map((r) => (
+              <button
+                key={r.id}
+                onClick={() => setRango(r.id)}
+                className="rounded px-2 py-0.5 text-xs font-medium"
+                style={{
+                  background: rango === r.id ? "var(--surface-1)" : "transparent",
+                  color: rango === r.id ? "var(--text-primary)" : "var(--text-secondary)",
+                  boxShadow: rango === r.id ? "0 0 0 1px var(--border)" : undefined,
+                }}
+              >
+                {r.id}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={onCerrar}
+            aria-label="Cerrar histórico"
+            className="rounded px-2 py-0.5 text-sm"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+      <div className="mt-3 h-72">
+        <ResponsiveContainer width="100%" height="100%">
+          {esBarras ? (
+            <BarChart data={datos} margin={{ top: 8, right: 0, bottom: 0, left: 0 }}>
+              <CartesianGrid vertical={false} stroke="var(--gridline)" />
+              {ejeX}
+              {ejeY}
+              <ReferenceLine y={0} stroke="var(--baseline)" />
+              {tooltip}
+              {/* Polaridad sobre 0 con los dos tonos ya validados (azul arriba,
+               * naranja abajo), igual que el FlujoNetoChart. */}
+              <Bar dataKey="valor" isAnimationActive={false} radius={[2, 2, 0, 0]}>
+                {datos.map((o) => (
+                  <Cell key={o.fecha} fill={o.valor >= 0 ? "var(--series-1)" : "var(--series-2)"} />
+                ))}
+              </Bar>
+            </BarChart>
+          ) : (
+            <LineChart data={datos} margin={{ top: 8, right: 0, bottom: 0, left: 0 }}>
+              <CartesianGrid vertical={false} stroke="var(--gridline)" />
+              {ejeX}
+              {ejeY}
+              {lineaReferencia}
+              {tooltip}
+              <Line
+                dataKey="valor"
+                type={lectura.grafica === "escalon" ? "stepAfter" : "linear"}
+                stroke="var(--series-1)"
+                strokeWidth={2}
+                dot={false}
+                isAnimationActive={false}
+              />
+            </LineChart>
+          )}
+        </ResponsiveContainer>
+      </div>
+      {datos.length > 0 && (
+        <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
+          Desde {nombrePeriodo(datos[0].fecha, lectura.frecuencia)} · mínimo{" "}
+          {formatoPunto(datos[valores.indexOf(minimo)])} · máximo{" "}
+          {formatoPunto(datos[valores.indexOf(maximo)])}
+        </p>
+      )}
     </div>
   );
 }
+
+// ---------------------------------------------------------- minigráfica
 
 const ANCHO = 160;
 const ALTO = 36;

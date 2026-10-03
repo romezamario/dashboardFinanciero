@@ -713,7 +713,12 @@ deliberately neutral)** by whether that move is usually good news for the Nasdaq
 higher payrolls/JOLTS/GDP/retail sales/sentiment; a Fed cut is green, a hike red; the 10y−2y curve
 stays uncolored; "sin cambio" when the change rounds to zero) — the footnote says a very strong
 jobs print can read the other way, and a min-max scaled mini trend (~2 years) with a dashed reference (2% target,
-0) when relevant. Not on FRED, so not included: ISM PMIs and the FOMC calendar.
+0) when relevant. **Clicking a tile (2026-10-02, user's request) opens its history chart**
+(`DetalleIndicador` in `MacroEeuu.tsx`) below that group: 1A/2A/5A/10A over `serieCompleta` (FRED
+download is 10 years, ~0.4 MB / ~70 KB gzip), bars with blue/orange polarity for changes around 0
+(payrolls, GDP, retail sales), a step line for the Fed (tooltip shows the range), a line for the
+rest; the 2% target / 0 reference uses `ifOverflow="extendDomain"` (otherwise Recharts silently
+drops a reference line outside the data's range). Not on FRED, so not included: ISM PMIs and the FOMC calendar.
 
 Per-tab view state (`filtros`, `categoriasOcultas`, `rangoMeses`, `vistaTiempo`) still lives in
 `Dashboard`'s `estadosPorPestana: Record<tabId, EstadoVista>`, passed to each view as controlled

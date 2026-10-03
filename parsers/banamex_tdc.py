@@ -40,6 +40,7 @@ from pathlib import Path
 import pdfplumber
 
 from parsers.base import BaseParser, RenglonCrudo, SugerenciaRenglonManual
+from parsers.glifos import completar_lineas_con_imagenes
 
 MESES = {
     "ene": "01", "feb": "02", "mar": "03", "abr": "04",
@@ -74,6 +75,15 @@ PATRON_TRANSACCION = re.compile(
 # desde extract_text() en ese caso; ver `advertencias()`.
 PATRON_PREFIJO_FECHAS = re.compile(
     r"^\d{2}-[a-zA-Z]{3}-\d{4}\s+\d{2}-[a-zA-Z]{3}-\d{4}"
+)
+
+# Una línea que es SOLO las dos fechas: el resto de esa fila son imágenes de
+# letras, que `parsers/glifos.py` traduce a texto antes de procesarla (2026-10-02;
+# antes esas filas terminaban como advertencia y había que capturarlas a mano).
+# Si alguna letra no está en su tabla, la línea sigue llegando sola y cae en
+# la advertencia de siempre.
+PATRON_SOLO_FECHAS = re.compile(
+    r"^\d{2}-[a-zA-Z]{3}-\d{4}\s+\d{2}-[a-zA-Z]{3}-\d{4}$"
 )
 
 # La portada dice "Estado de Cuenta <Tipo>" (Platino, o a veces "Platinum"
@@ -295,7 +305,9 @@ class BanamexTdcParser(BaseParser):
                 if tipo_tarjeta_documento is None:
                     tipo_tarjeta_documento = _detectar_tipo_tarjeta(texto)
 
-                for linea in texto.splitlines():
+                for linea in completar_lineas_con_imagenes(
+                    pagina, texto, lambda l: bool(PATRON_SOLO_FECHAS.match(l))
+                ):
                     linea = linea.strip()
                     if not linea:
                         continue

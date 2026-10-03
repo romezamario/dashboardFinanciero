@@ -43,10 +43,10 @@ export interface DatosMacro {
   errores: Partial<Record<SerieMacro, string>>;
 }
 
-// 4 años: las variaciones anuales necesitan 12 meses previos y las
-// minigráficas muestran 2 años; el resto es margen (p. ej. para encontrar el
-// último cambio de tasa de la Fed).
-const ANIOS_HISTORIA = 4;
+// 10 años: lo que alcanza a ver la gráfica histórica al dar clic en un
+// indicador (las variaciones anuales "gastan" los primeros 12 meses). ~0.4 MB
+// de JSON, ~70 KB comprimido.
+const ANIOS_HISTORIA = 10;
 
 async function descargarSerie(id: SerieMacro, desde: string): Promise<[string, number][]> {
   const respuesta = await fetch(

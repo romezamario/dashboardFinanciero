@@ -39,6 +39,16 @@ export interface LecturaMacro {
   descripcion: string;
   /** Últimos ~2 años, para la minigráfica. */
   historia: Observacion[];
+  /** Todo lo descargado (hasta 10 años), para la gráfica al dar clic. Las
+   * series diarias van con su dato diario. */
+  serieCompleta: Observacion[];
+  frecuencia: Frecuencia;
+  /** Barras para cambios que oscilan alrededor de 0 (empleos creados, PIB,
+   * ventas); escalón para la tasa de la Fed; línea para el resto. */
+  grafica: "linea" | "barras" | "escalon";
+  /** Texto del tooltip de la gráfica completa, si no basta con
+   * `formatoHistoria(valor)` (la Fed muestra su rango). */
+  formatoPunto?: (o: Observacion) => string;
   /** Nivel de referencia que se dibuja en la minigráfica (meta de 2%, 0...). */
   referencia?: number;
   formatoHistoria: (v: number) => string;
@@ -133,6 +143,7 @@ interface Definicion {
   referencia?: number;
   /** Cuántas observaciones se ven en la minigráfica. */
   historia: number;
+  grafica?: "barras";
 }
 
 const pts = (d: number) => `${dec2.format(Math.abs(d))} pts`;
@@ -256,6 +267,7 @@ const DEFINICIONES: Definicion[] = [
       "Empleos creados en el mes (reporte de empleo, primer viernes). Es el dato que más mueve al mercado en el mes.",
     referencia: 0,
     historia: 24,
+    grafica: "barras",
   },
   {
     id: "UNRATE",
@@ -321,6 +333,7 @@ const DEFINICIONES: Definicion[] = [
     descripcion: "Crecimiento de la economía, variación trimestral a tasa anual.",
     referencia: 0,
     historia: 12,
+    grafica: "barras",
   },
   {
     id: "RSAFS",
@@ -335,6 +348,7 @@ const DEFINICIONES: Definicion[] = [
     descripcion: "Variación mensual de las ventas al menudeo: pulso del consumo, ~70% del PIB.",
     referencia: 0,
     historia: 24,
+    grafica: "barras",
   },
   {
     id: "UMCSENT",
@@ -412,6 +426,9 @@ function lecturaDeSerie(def: Definicion, crudas: Observacion[]): LecturaMacro | 
     historia,
     referencia: def.referencia,
     formatoHistoria: def.formato,
+    serieCompleta: obs,
+    frecuencia: def.frecuencia,
+    grafica: def.grafica ?? "linea",
   };
 }
 
@@ -424,6 +441,7 @@ function lecturasFed(datos: DatosMacro): LecturaMacro[] {
   const l = inferior[inferior.length - 1];
   if (!u || !l) return [];
   const cambio = ultimoCambio(superior);
+  const inferiorPorFecha = new Map(inferior.map((o) => [o.fecha, o.valor]));
   const salida: LecturaMacro[] = [
     {
       id: "FED",
@@ -433,7 +451,7 @@ function lecturasFed(datos: DatosMacro): LecturaMacro[] {
       periodo: `Rango objetivo al ${nombrePeriodo(u.fecha, "diaria")}`,
       cambio: cambio
         ? `Último movimiento: ${flecha(cambio.diferencia)} ${pts(cambio.diferencia)} el ${nombrePeriodo(cambio.fecha, "diaria")}`
-        : "Sin cambios en los últimos 4 años",
+        : "Sin cambios en los últimos 10 años",
       // Un recorte (▼) es buena noticia para el índice; un alza, mala.
       tono: cambio ? tonoDe("baja", cambio.diferencia) : null,
       detalle: "",
@@ -441,6 +459,13 @@ function lecturasFed(datos: DatosMacro): LecturaMacro[] {
         "Rango objetivo de la tasa de fondos federales que fija el FOMC. Recortes suelen favorecer al Nasdaq; alzas, presionarlo.",
       historia: finDeMes(superior).slice(-24),
       formatoHistoria: porcentaje2,
+      serieCompleta: superior,
+      frecuencia: "diaria",
+      grafica: "escalon",
+      formatoPunto: (o) => {
+        const inf = inferiorPorFecha.get(o.fecha);
+        return inf == null ? porcentaje2(o.valor) : `${dec2.format(inf)}–${porcentaje2(o.valor)}`;
+      },
     },
   ];
   const pce = variacionAnual(observaciones(datos, "PCEPILFE"));
@@ -468,6 +493,9 @@ function lecturasFed(datos: DatosMacro): LecturaMacro[] {
       historia: historia.slice(-24),
       referencia: 0,
       formatoHistoria: porcentaje2,
+      serieCompleta: historia,
+      frecuencia: "mensual",
+      grafica: "linea",
     });
   }
   return salida;
