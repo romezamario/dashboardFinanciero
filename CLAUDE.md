@@ -635,6 +635,25 @@ use `valueAccessor` to receive their row's `etiqueta` and look the row up by nam
 category end-label hangs off the last card *with an amount* in that row (the last card in the list
 may be $0 there and not drawn at all).
 
+**Alertas automáticas (2026-10-03, user's request)**: `AlertasPanel.tsx` sits above the hero savings
+rate in `VistaResumen` (so the Resumen and every non-TDC account tab get it); calculations are pure
+functions in `src/lib/alertas.ts` (`calcularAlertas(visibles, periodo)`). Same scope as the health
+indicators: period + hidden categories/discarded events, **never the click filters**. Five kinds,
+phrased as sentences: (1) savings rate changed ≥2 pts vs. the previous period, explained by
+whichever moved more — spending (naming the category with the biggest change) or income — always
+listed first; (2) *possible* duplicate charge: same account + comercio (or description) + amount +
+day — "possible" on purpose, identical Televia tolls are legitimate; (3) subscription price change:
+per comercio, only months with exactly one charge (a supermarket with several charges a month has no
+"price"), two equal previous charges (±2%) then one in the period that differs by ≥3% and ≥$10 but
+≤50% (a bigger jump is a different purchase, not a price change); (4) new subscription: comercio
+first seen in the last 3 months, ≥2 single monthly charges of the same amount; (5) unusual charge:
+≥$1,000, ≥3× the category's median **and** above its max over the 12 months before the period, with
+≥6 historical charges (top 3). Charges with an `evento` are skipped by 3–5 (one-offs by definition);
+$0 cargos (Invex V2 echo lines) never alert. Rest sorted "revisar" → "favorable" → "info", then by
+pesos at stake; 4 shown, "Ver N más". Tones carry icon + text label (⚠ Revisar / ✓ Buena noticia / ℹ
+Para saber), never color alone. "Ver movimientos" sets the alert's comercio/categoría click filter.
+Subscriptions/price changes only see what the rules tag with `comercio`, same as recurrentes.
+
 Per-tab view state (`filtros`, `categoriasOcultas`, `rangoMeses`, `vistaTiempo`) still lives in
 `Dashboard`'s `estadosPorPestana: Record<tabId, EstadoVista>`, passed to each view as controlled
 props, so filtering in one tab never touches another and a tab keeps its selection when you switch
