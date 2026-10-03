@@ -2,14 +2,15 @@ import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig, type Plugin } from 'vite'
 import { onRequestGet as cotizaciones } from './functions/api/cotizaciones.ts'
-import { onRequestGet as macro } from './functions/api/macro.ts'
+import { obtenerDatosMacro } from './scripts/fred.ts'
 
-// En producción /api/* son Cloudflare Pages Functions (functions/api/). En
-// `npm run dev` no hay runtime de Cloudflare, así que se montan los mismos
-// handlers como middleware de Vite.
+// En producción /api/cotizaciones es una Cloudflare Pages Function
+// (functions/api/) y /macro.json un archivo estático que genera el deploy
+// (scripts/descargar-macro.ts). En `npm run dev` no hay runtime de Cloudflare
+// ni deploy, así que se sirven con middleware de Vite.
 const RUTAS_API: Record<string, (contexto: { request: Request }) => Promise<Response>> = {
   '/api/cotizaciones': cotizaciones,
-  '/api/macro': macro,
+  '/macro.json': async () => Response.json(await obtenerDatosMacro()),
 }
 
 function apiLocal(): Plugin {

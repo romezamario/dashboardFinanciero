@@ -1,11 +1,15 @@
-// Cloudflare Pages Function: GET /api/macro
+// Descarga de los indicadores macro de EE.UU. (Fed, inflación, empleo,
+// crecimiento) desde FRED, la base de datos de la Fed de St. Louis. Usa la
+// descarga CSV pública de las gráficas de FRED, que no pide llave (la API
+// "oficial" sí). Ojo: FRED cuelga peticiones con User-Agent de navegador
+// falso, por eso se identifica con uno propio.
 //
-// Indicadores macro de EE.UU. (Fed, inflación, empleo, crecimiento) desde
-// FRED, la base de datos de la Fed de St. Louis. Usa la descarga CSV pública
-// de las gráficas de FRED, que no pide llave (la API "oficial" sí). Ojo: FRED
-// rechaza/cuelga peticiones con User-Agent de navegador falso, por eso se
-// identifica con uno propio. Igual que /api/cotizaciones: mismo dominio,
-// detrás de Cloudflare Access, y solo baja las series de SERIES_MACRO.
+// NO corre en Cloudflare: FRED responde 520 a las peticiones que salen de
+// Cloudflare (se probó como Pages Function y falló en producción), y no
+// permite CORS para llamarlo desde el navegador. Por eso lo ejecuta GitHub
+// Actions (scripts/descargar-macro.ts) antes del build y el resultado se
+// publica como archivo estático, /macro.json. En `npm run dev`,
+// vite.config.ts sirve /macro.json descargándolo en vivo con esta función.
 
 export const SERIES_MACRO = [
   "DFEDTARU", // rango objetivo de la Fed, límite superior (diario)
@@ -78,16 +82,4 @@ export async function obtenerDatosMacro(): Promise<DatosMacro> {
     }
   });
   return { actualizado: new Date().toISOString(), series, errores };
-}
-
-export async function onRequestGet(): Promise<Response> {
-  const datos = await obtenerDatosMacro();
-  if (Object.keys(datos.errores).length === SERIES_MACRO.length) {
-    return Response.json(
-      { error: `No se pudo descargar ninguna serie de FRED (${Object.values(datos.errores)[0]})` },
-      { status: 502 }
-    );
-  }
-  // Las series cambian como mucho una vez al día.
-  return Response.json(datos, { headers: { "Cache-Control": "private, max-age=3600" } });
 }

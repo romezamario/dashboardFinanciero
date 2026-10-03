@@ -28,6 +28,8 @@ dist/
 # Node / frontend
 node_modules/
 frontend/dist/
+# Lo genera el deploy desde FRED (frontend/scripts/descargar-macro.ts)
+frontend/public/macro.json
 frontend/.vite/
 
 # Editor / OS

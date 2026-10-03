@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   calcularLecturasMacro,
   GRUPOS,
@@ -12,27 +12,16 @@ const estiloTarjeta = { background: "var(--surface-1)", border: "1px solid var(-
 
 /** Indicadores macro de EE.UU. que sigue la Fed (y que mueven al Nasdaq-100),
  * agrupados como recuadros con su último dato, el cambio vs. el anterior y una
- * minigráfica de ~2 años. Datos de FRED vía /api/macro. */
+ * minigráfica de ~2 años. Datos de FRED vía /macro.json (generado en el deploy). */
 export function MacroEeuu() {
   const [datos, setDatos] = useState<DatosMacro | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [cargando, setCargando] = useState(true);
-
-  const cargar = useCallback(async (forzar: boolean) => {
-    setCargando(true);
-    setError(null);
-    try {
-      setDatos(await obtenerDatosMacro(forzar));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setCargando(false);
-    }
-  }, []);
 
   useEffect(() => {
-    void cargar(false);
-  }, [cargar]);
+    obtenerDatosMacro()
+      .then(setDatos)
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+  }, []);
 
   const lecturas = useMemo(() => (datos ? calcularLecturasMacro(datos) : []), [datos]);
   const fallidas = datos ? Object.keys(datos.errores) : [];
@@ -50,30 +39,17 @@ export function MacroEeuu() {
 
   return (
     <div className="space-y-6">
-      <div
-        className="flex flex-wrap items-center justify-between gap-3 text-xs"
-        style={{ color: "var(--text-muted)" }}
-      >
-        <span>
-          Fuente: FRED (Fed de St. Louis) · descargado el{" "}
-          {new Date(datos.actualizado).toLocaleString("es-MX", {
-            dateStyle: "medium",
-            timeStyle: "short",
-          })}
-        </span>
-        <button
-          onClick={() => void cargar(true)}
-          disabled={cargando}
-          className="underline disabled:opacity-50"
-        >
-          {cargando ? "Actualizando…" : "Actualizar"}
-        </button>
-      </div>
-      {(error || fallidas.length > 0) && (
+      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+        Fuente: FRED (Fed de St. Louis) · descargado el{" "}
+        {new Date(datos.actualizado).toLocaleString("es-MX", {
+          dateStyle: "medium",
+          timeStyle: "short",
+        })}{" "}
+        · se actualiza solo dos veces al día, de lunes a viernes
+      </p>
+      {fallidas.length > 0 && (
         <p className="text-xs" style={{ color: "var(--status-critical)" }}>
-          {error
-            ? `No se pudo actualizar: ${error} (se muestran los últimos datos descargados).`
-            : `No se pudieron descargar: ${fallidas.join(", ")}.`}
+          No se pudieron descargar: {fallidas.join(", ")}.
         </p>
       )}
 

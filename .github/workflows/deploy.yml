@@ -8,6 +8,17 @@ on:
     paths:
       - "frontend/**"
       - ".github/workflows/deploy.yml"
+  # Para refrescar /macro.json (indicadores de FRED) aunque no cambie el
+  # código: de lunes a viernes, después de los reportes de las 8:30 ET y al
+  # cierre del mercado.
+  schedule:
+    - cron: "0 15 * * 1-5"
+    - cron: "0 23 * * 1-5"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-pages
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -26,6 +37,15 @@ jobs:
       - name: Instalar dependencias
         working-directory: frontend
         run: npm ci
+
+      # FRED no responde a Cloudflare ni permite CORS, así que los datos macro
+      # se bajan aquí y se publican como archivo estático. En la corrida
+      # programada un fallo detiene el deploy (sigue en línea la versión
+      # anterior); en un push no debe bloquear el resto de cambios.
+      - name: Descargar indicadores macro (FRED)
+        working-directory: frontend
+        run: node scripts/descargar-macro.ts
+        continue-on-error: ${{ github.event_name != 'schedule' }}
 
       - name: Build
         working-directory: frontend

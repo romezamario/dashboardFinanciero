@@ -1,8 +1,8 @@
 // Indicadores macro de EE.UU. para la pestaña QQQ / TQQQ: transforma las
-// series crudas de FRED (/api/macro) en lecturas listas para mostrar. Funciones
+// series crudas de FRED (/macro.json, generado en el deploy) en lecturas listas para mostrar. Funciones
 // puras, sin React, igual que tecnico.ts.
 
-import type { DatosMacro, SerieMacro } from "../../functions/api/macro";
+import type { DatosMacro, SerieMacro } from "../../scripts/fred";
 
 export type { DatosMacro, SerieMacro };
 
@@ -448,16 +448,22 @@ export function calcularLecturasMacro(datos: DatosMacro): LecturaMacro[] {
 
 // ---------------------------------------------------------------- datos
 
-let cache: { cuando: number; datos: DatosMacro } | null = null;
-const VIGENCIA_MS = 30 * 60 * 1000;
+let cache: DatosMacro | null = null;
 
-export async function obtenerDatosMacro(forzar = false): Promise<DatosMacro> {
-  if (!forzar && cache && Date.now() - cache.cuando < VIGENCIA_MS) return cache.datos;
-  const respuesta = await fetch("/api/macro");
-  const cuerpo = (await respuesta.json().catch(() => null)) as (DatosMacro & { error?: string }) | null;
-  if (!respuesta.ok || !cuerpo || cuerpo.error) {
-    throw new Error(cuerpo?.error ?? `Error ${respuesta.status} al traer los indicadores`);
+/** Lee /macro.json, que el workflow de deploy genera desde FRED (al publicar y
+ * dos veces al día en días hábiles). Cambia solo con un deploy, así que basta
+ * con bajarlo una vez por sesión. */
+export async function obtenerDatosMacro(): Promise<DatosMacro> {
+  if (cache) return cache;
+  const respuesta = await fetch("/macro.json", { cache: "no-cache" });
+  const cuerpo = (await respuesta.json().catch(() => null)) as DatosMacro | null;
+  if (!respuesta.ok || !cuerpo?.series) {
+    throw new Error(
+      respuesta.status === 404
+        ? "todavía no se han generado (el deploy no pudo descargar FRED)"
+        : `error ${respuesta.status} al leer /macro.json`
+    );
   }
-  cache = { cuando: Date.now(), datos: cuerpo };
+  cache = cuerpo;
   return cuerpo;
 }

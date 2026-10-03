@@ -688,11 +688,20 @@ visible range so the SMA 200 has history from the first visible day. UI in `Anal
 `FlujoNetoChart`), SMA 50 = series-3, SMA 200 = series-4. Readings are
 phrased as indicator states, never as buy/sell recommendations.
 **Macro EE.UU. section (2026-10-02, user's request)**: a "Análisis técnico | Macro EE.UU." switch at
-the top of the same tab. `frontend/functions/api/macro.ts` (second Pages Function) downloads the
-fixed `SERIES_MACRO` list from FRED's public `fredgraph.csv` endpoint — no API key (the JSON API
-needs one) — **with its own User-Agent: FRED hangs requests that fake a browser UA** (confirmed
-while building it). A series that fails arrives empty with its error in `errores` instead of
-failing the whole response. `src/lib/macro.ts` turns them into tiles (`MacroEeuu.tsx`): Fed target
+the top of the same tab. `frontend/scripts/fred.ts` downloads the fixed `SERIES_MACRO` list from
+FRED's public `fredgraph.csv` endpoint — no API key (the JSON API needs one) — **with its own
+User-Agent: FRED hangs requests that fake a browser UA**. **It can't run on Cloudflare**: first
+shipped as a Pages Function (`/api/macro`) and FRED answered **520** to every request from
+Cloudflare in production (it works from a laptop or GitHub runner), and FRED sends no CORS headers,
+so the browser can't call it either. So `deploy.yml` runs `node scripts/descargar-macro.ts` (Node's
+built-in TS type stripping, no extra dependency) before the build, which writes
+`public/macro.json` (gitignored) and ships it as a static file; the workflow also runs on a
+`schedule` (weekdays 15:00 and 23:00 UTC) and `workflow_dispatch` just to refresh it. On a
+scheduled run a total download failure fails the job, so the previous deploy (with yesterday's
+data) stays live; on a push it's `continue-on-error` so FRED being down never blocks a code
+deploy (the section then shows "todavía no se han generado" until the next run). In `npm run dev`,
+`vite.config.ts` serves `/macro.json` by downloading live. A series that fails arrives empty with
+its error in `errores` instead of failing the whole file. `src/lib/macro.ts` turns them into tiles (`MacroEeuu.tsx`): Fed target
 range + date of its last move, real rate (midpoint − core PCE YoY), 2y/10y yields, 10y−2y curve,
 PCE/CPI headline and core YoY, payrolls monthly change, unemployment, initial claims, wage growth,
 JOLTS, real GDP, retail sales MoM, Michigan sentiment, VIX. Each tile shows the reference period
