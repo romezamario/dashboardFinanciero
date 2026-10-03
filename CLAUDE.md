@@ -443,8 +443,16 @@ prefills *Página* and *Tarjeta*, and saving a row consumes its suggestion and j
 already in the load, e.g. Invex V2's last-4 fallback). **Categoría/comercio** are editable combos
 (options from the load + the rules) pre-filled by `inferir_categoria_comercio()`
 (`transform/categorizador.py`) every time the description changes: current rules first, then loaded
-transactions with the same description, then loaded ones that *contain* the typed text (≥3 chars),
-most frequent `(categoria, comercio)` pair winning; once the user edits either combo by hand it stops
+transactions with the same description, then loaded ones whose description *or `linea_cruda`*
+contains the typed text (≥3 chars, case- and whitespace-insensitive), most frequent
+`(categoria, comercio)` pair winning. The text first goes through the parser's
+`descripcion_para_categorizar()` (optional `BaseParser` hook, identity by default): parsers that
+rewrite a description *before* categorizing must do the same for typed rows, or what the PDF prints
+never matches the rules — `BanamexTdcParser` maps the `"SU ABONO...GRACIAS"` courtesy line to
+`"PAGO TDC <TIER>"` (tier stored in `_tipo_tarjeta_documento` by `extraer()`), which is exactly the
+unreadable-image row this dialog exists for (typing it used to infer nothing, since the readable
+equivalents in the load only carry the original text in `linea_cruda`); the dialog reaches the
+parser through `App.parser_actual`; once the user edits either combo by hand it stops
 being re-inferred, and leaving them empty saves the row uncategorized. Because the category of a
 manual row is no longer purely rule-derived, `App.recategorizar()` and `_recuperar_renglones_manuales`
 keep a manual row's existing categoría/comercio when no rule matches it (a matching rule still wins;

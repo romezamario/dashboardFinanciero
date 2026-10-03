@@ -126,6 +126,17 @@ class BaseParser(ABC):
         """
         return []
 
+    def descripcion_para_categorizar(self, descripcion: str) -> str:
+        """Texto que se le pasa a `categorizar` para un renglón tecleado a
+        mano. Hay parsers que reescriben la descripción de ciertas filas
+        extraídas ANTES de categorizar (ej. el "SU ABONO...GRACIAS" de Banamex
+        TDC pasa a "PAGO TDC <TIER>", ver `banamex_tdc.py`), y las reglas se
+        escribieron contra ese texto reescrito -- sin esto, teclear lo que
+        imprime el PDF nunca matchearía. Implementación por defecto: sin
+        reescritura.
+        """
+        return descripcion
+
     def sugerencias_renglon_manual(self) -> list[SugerenciaRenglonManual]:
         """Versión estructurada de `advertencias()` para las que apuntan a
         una transacción que falta: fecha/página/tarjeta de cada línea

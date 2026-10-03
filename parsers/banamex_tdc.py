@@ -200,11 +200,13 @@ class BanamexTdcParser(BaseParser):
     def __init__(self) -> None:
         self._advertencias: list[str] = []
         self._sugerencias: list[SugerenciaRenglonManual] = []
+        self._tipo_tarjeta_documento: str | None = None
 
     def extraer(self, ruta_pdf: Path) -> list[RenglonCrudo]:
         renglones: list[RenglonCrudo] = []
         self._advertencias = []
         self._sugerencias = []
+        self._tipo_tarjeta_documento = None
         # Estado del documento completo, no por página -- una sección de
         # tarjeta (o un bloque de PAGO INTERBANCARIO sin cerrar) puede
         # seguir vigente a través de un salto de página, igual que
@@ -375,7 +377,18 @@ class BanamexTdcParser(BaseParser):
         if bloque_interbancario is not None:
             abandonar_bloque_interbancario("fin del documento")
 
+        self._tipo_tarjeta_documento = tipo_tarjeta_documento
         return renglones
+
+    def descripcion_para_categorizar(self, descripcion: str) -> str:
+        # Mismo reemplazo que hace `extraer()` con la línea de cortesía de un
+        # abono legible: un renglón manual que cubre justo la fila que el PDF
+        # renderizó como imagen ("SU ABONO...GRACIAS") debe categorizar igual.
+        if self._tipo_tarjeta_documento is not None and PATRON_ABONO_CORTESIA.match(
+            descripcion.strip()
+        ):
+            return f"PAGO TDC {self._tipo_tarjeta_documento.removeprefix('TDC ').upper()}"
+        return descripcion
 
     def advertencias(self) -> list[str]:
         return list(self._advertencias)

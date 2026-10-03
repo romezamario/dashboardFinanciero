@@ -435,8 +435,12 @@ class VentanaRenglonManual(tk.Toplevel):
         self.combo_tarjeta.set(tarjeta or self.SIN_TARJETA)
 
     def _inferir_categoria(self) -> None:
+        descripcion = self.entrada_descripcion.get()
+        parser = self.master_app.parser_actual
+        if parser is not None:
+            descripcion = parser.descripcion_para_categorizar(descripcion)
         categoria, comercio = inferir_categoria_comercio(
-            self.entrada_descripcion.get(),
+            descripcion,
             self.master_app.reglas,
             self.master_app.transacciones,
         )
@@ -590,6 +594,9 @@ class App(tk.Tk):
         self.transacciones: list[TransaccionCanonica] = []
         self.ruta_pdf_actual: Path | None = None
         self.banco_actual: str | None = None
+        # El extractor de la última carga: VentanaRenglonManual le pregunta
+        # cómo reescribe descripciones antes de categorizar.
+        self.parser_actual: BaseParser | None = None
         # (fecha ISO, página, tarjeta) de cada línea que el extractor detectó
         # como faltante en la última carga -- valores por defecto de
         # VentanaRenglonManual.
@@ -878,6 +885,7 @@ class App(tk.Tk):
         self.transacciones = transacciones
         self.ruta_pdf_actual = ruta_pdf
         self.banco_actual = banco
+        self.parser_actual = parser
         self.sugerencias_renglon_manual = sugerencias_manuales
         self._refrescar_tabla()
         self._actualizar_totales()

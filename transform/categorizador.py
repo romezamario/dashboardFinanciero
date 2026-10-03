@@ -84,9 +84,9 @@ def inferir_categoria_comercio(
 
     1. Reglas actuales (`categorizar`) -- la fuente de verdad, igual que una
        fila extraída del PDF.
-    2. Cargadas con la MISMA descripción (sin importar mayúsculas).
-    3. Cargadas cuya descripción CONTIENE el texto tecleado (mínimo
-       `MINIMO_CARACTERES_COINCIDENCIA_PARCIAL` caracteres).
+    2. Cargadas con la MISMA descripción (sin importar mayúsculas ni espacios).
+    3. Cargadas cuya descripción o `linea_cruda` CONTIENE el texto tecleado
+       (mínimo `MINIMO_CARACTERES_COINCIDENCIA_PARCIAL` caracteres).
 
     En 2 y 3, si varias coinciden se elige el par (categoria, comercio) más
     frecuente; solo cuentan las que ya tienen categoría. Sin nada, (None, None).
@@ -95,7 +95,7 @@ def inferir_categoria_comercio(
     if categoria is not None:
         return categoria, comercio
 
-    texto = descripcion.strip().upper()
+    texto = _sin_espacios(descripcion)
     if not texto:
         return None, None
 
@@ -107,10 +107,28 @@ def inferir_categoria_comercio(
         pares = Counter((t.categoria, t.comercio) for t in coincidencias)
         return pares.most_common(1)[0][0]
 
-    exactas = [t for t in con_categoria if t.descripcion.strip().upper() == texto]
+    exactas = [t for t in con_categoria if _sin_espacios(t.descripcion) == texto]
     if exactas:
         return mas_frecuente(exactas)
 
     if len(texto) >= MINIMO_CARACTERES_COINCIDENCIA_PARCIAL:
-        return mas_frecuente([t for t in con_categoria if texto in t.descripcion.upper()])
+        # También contra `linea_cruda` (el texto tal cual lo imprimió el PDF):
+        # un parser puede haber reescrito `descripcion` antes de categorizar
+        # (ej. "SU ABONO...GRACIAS" -> "PAGO TDC BEYOND"), así que lo que el
+        # usuario teclea de memoria del PDF solo aparece ahí.
+        return mas_frecuente(
+            [
+                t
+                for t in con_categoria
+                if texto in _sin_espacios(t.descripcion)
+                or texto in _sin_espacios(getattr(t, "linea_cruda", ""))
+            ]
+        )
     return None, None
+
+
+def _sin_espacios(texto: str) -> str:
+    """Mayúsculas y sin espacios: el PDF imprime "SU ABONO...GRACIAS" y a
+    mano se teclea "SU ABONO... GRACIAS" -- la diferencia de espacios no
+    debería impedir que coincidan."""
+    return "".join(texto.upper().split())
