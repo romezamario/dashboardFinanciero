@@ -45,6 +45,8 @@ import { Sparkline } from "./Sparkline";
 import { Delta, SelectorPeriodo, Tabla, Tile } from "./IndicadoresUI";
 import { TransaccionesTabla } from "./TransaccionesTabla";
 import { EditorTransacciones } from "./EditorTransacciones";
+import { AlertasPanel } from "./AlertasPanel";
+import { calcularAlertas } from "../lib/alertas";
 
 const ETIQUETAS_FILTRO: Record<keyof Filtros, string> = {
   categoria: "Categoría",
@@ -212,6 +214,10 @@ export function VistaResumen({
     () => calcularIndicadores(visibles, saldoDisponible(transacciones, ultimoMes), periodo),
     [visibles, transacciones, ultimoMes, periodo]
   );
+
+  // Alertas automáticas: mismo alcance que los indicadores de salud
+  // (periodo + categorías ocultas, sin filtros por clic).
+  const alertas = useMemo(() => calcularAlertas(visibles, periodo), [visibles, periodo]);
 
   // 3) Detalle de gasto: además, filtros por clic. Cada gráfica excluye su
   //    propia dimensión (cross-filter estilo Power BI) para poder seguir
@@ -636,6 +642,12 @@ export function VistaResumen({
           cubiertos y recurrentes siguen mostrando tus finanzas completas del periodo.
         </p>
       )}
+
+      <AlertasPanel
+        alertas={alertas}
+        titulo={`Alertas, ${nombreDelPeriodo}`}
+        onVerDetalle={({ campo, valor }) => onCambiarFiltros((a) => ({ ...a, [campo]: valor }))}
+      />
 
       <section
         className="rounded-lg p-5"
