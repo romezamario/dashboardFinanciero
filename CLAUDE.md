@@ -493,9 +493,7 @@ for extracted rows — otherwise the upsert rejects the whole document; (2) relo
 its manual rows from its previous `data/procesados/<hash>.json` (`App._recuperar_renglones_manuales`,
 recognized by the `PREFIJO_RENGLON_MANUAL = "(manual) "` prefix, re-categorized with the current
 rules) — before, reloading to recategorize and re-saving silently dropped every row the user had
-typed in. There is still no UI to *delete* a row from the table: if a parser fix later starts
-extracting a row that was previously added by hand, the recovered manual copy has to be removed by
-editing the JSON.
+typed in. **Editing/deleting manual rows (2026-10-02, user's request)**: manual rows show in yellow in the table (`manual` tag); double-click or "Editar renglón manual..." reopens `VentanaRenglonManual` with `editando=` (prefilled, "Guardar cambios" replaces the row in place, found by identity), and "Eliminar renglón manual" removes it after a confirmation. Extracted rows are refused (they come from the PDF — fix the rule instead). An edit **keeps the original `linea_cruda`** on purpose: with `pagina` it's the upsert key, so re-syncing updates the already-synced row instead of leaving the wrong one plus a new one (stale rows are never deleted); changing `pagina` does change the key, so that case warns. Deleting an already-synced manual row leaves it in Supabase — the confirmation says to remove it by hand there. Changes persist only after "Guardar archivo procesado".
 
 **"Sin categorizar" tab (added 2026-09-26)** — the transaction table area is now a `ttk.Notebook`
 with two tabs: "Transacciones" (the `Treeview` that always existed) and "Sin categorizar", a

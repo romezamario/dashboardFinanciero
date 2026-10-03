@@ -295,23 +295,31 @@ class VentanaRenglonManual(tk.Toplevel):
     Requiere un PDF ya cargado (`master.ruta_pdf_actual`): un renglón
     manual todavía pertenece a un documento concreto para efectos de
     auditoría (`origen`) y de a qué se sincroniza en Supabase.
+
+    Con `editando` (un renglón manual ya agregado) el mismo formulario sirve
+    para corregirlo: llega precargado y "Guardar cambios" lo reemplaza en su
+    lugar en vez de agregar uno nuevo.
     """
 
     OPCIONES_TARJETA = ("Titular", "Adicional", "Digital")
 
-    def __init__(self, master: "App") -> None:
+    def __init__(
+        self, master: "App", editando: TransaccionCanonica | None = None
+    ) -> None:
         super().__init__(master)
-        self.title("Agregar renglón manual")
+        self.editando = editando
+        self.title("Editar renglón manual" if editando else "Agregar renglón manual")
         self.geometry("430x400")
         self.master_app = master
         # Copia: al agregar un renglón se consume su sugerencia sin tocar la
         # lista de la App (que sigue reflejando lo que detectó la carga).
-        self.sugerencias = list(master.sugerencias_renglon_manual)
+        self.sugerencias = [] if editando else list(master.sugerencias_renglon_manual)
         # Mientras el usuario no toque categoría/comercio a mano, se siguen
         # re-infiriendo al cambiar la descripción; en cuanto los edita, se
-        # respeta lo que puso.
-        self._categoria_editada = False
-        self._comercio_editado = False
+        # respeta lo que puso. Al editar se respeta desde el inicio lo que ya
+        # tenía el renglón.
+        self._categoria_editada = editando is not None
+        self._comercio_editado = editando is not None
 
         marco = ttk.Frame(self)
         marco.pack(fill="both", expand=True, padx=8, pady=8)
@@ -383,13 +391,18 @@ class VentanaRenglonManual(tk.Toplevel):
             wraplength=390,
         ).grid(row=8, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
-        self._aplicar_sugerencia(primera=True)
+        if editando is None:
+            self._aplicar_sugerencia(primera=True)
+        else:
+            self._precargar(editando)
 
         marco_botones = ttk.Frame(self)
         marco_botones.pack(fill="x", padx=8, pady=8)
-        ttk.Button(marco_botones, text="Agregar", command=self._agregar).pack(
-            side="left"
-        )
+        ttk.Button(
+            marco_botones,
+            text="Guardar cambios" if editando else "Agregar",
+            command=self._guardar_edicion if editando else self._agregar,
+        ).pack(side="left")
         ttk.Button(marco_botones, text="Cerrar", command=self.destroy).pack(
             side="right"
         )
@@ -465,7 +478,19 @@ class VentanaRenglonManual(tk.Toplevel):
         if self.combo_comercio.get() != self._comercio_inferido:
             self._comercio_editado = True
 
-    def _agregar(self) -> None:
+    def _precargar(self, t: TransaccionCanonica) -> None:
+        self.combo_fecha.set(t.fecha.isoformat())
+        self.entrada_descripcion.insert(0, t.descripcion)
+        self.entrada_monto.insert(0, f"{t.monto:.2f}")
+        self.combo_tipo.set(t.tipo)
+        self.entrada_pagina.insert(0, str(t.pagina))
+        self.combo_tarjeta.set(t.tarjeta or self.SIN_TARJETA)
+        self.combo_categoria.set(t.categoria or "")
+        self.combo_comercio.set(t.comercio or "")
+
+    def _leer_formulario(self) -> dict | None:
+        """Valida el formulario y devuelve sus valores ya convertidos, o
+        `None` (tras avisar al usuario) si algo no es válido."""
         # Por si la descripción se pegó con el mouse (no dispara KeyRelease).
         self._inferir_categoria()
 
@@ -485,11 +510,11 @@ class VentanaRenglonManual(tk.Toplevel):
             messagebox.showwarning(
                 "Fecha inválida", "Escribe la fecha como AAAA-MM-DD, ej. 2025-06-13."
             )
-            return
+            return None
 
         if not descripcion:
             messagebox.showwarning("Falta descripción", "Escribe una descripción.")
-            return
+            return None
 
         try:
             monto = Decimal(monto_texto)
@@ -500,7 +525,7 @@ class VentanaRenglonManual(tk.Toplevel):
                 "Monto inválido",
                 "Escribe el monto como un número positivo, sin signo, ej. 199.00.",
             )
-            return
+            return None
 
         pagina = 0
         if pagina_texto:
@@ -510,7 +535,80 @@ class VentanaRenglonManual(tk.Toplevel):
                 messagebox.showwarning(
                     "Página inválida", "La página debe ser un número entero."
                 )
-                return
+                return None
+
+        return {
+            "fecha": fecha,
+            "descripcion": descripcion,
+            "monto": monto,
+            "tipo": tipo,
+            "pagina": pagina,
+            "tarjeta": tarjeta,
+            "categoria": categoria,
+            "comercio": comercio,
+        }
+
+    def _guardar_edicion(self) -> None:
+        original = self.editando
+        assert original is not None
+        transacciones = self.master_app.transacciones
+        # Por identidad, no por índice ni igualdad: si mientras esta ventana
+        # estaba abierta se recargó el PDF o se borró otro renglón, el índice
+        # ya no apuntaría al mismo renglón.
+        indice = next((i for i, t in enumerate(transacciones) if t is original), None)
+        if indice is None:
+            messagebox.showwarning(
+                "Renglón no encontrado",
+                "Ese renglón ya no está en la tabla (¿recargaste el PDF?). "
+                "Cierra esta ventana y vuelve a abrirlo desde la tabla.",
+            )
+            return
+        valores = self._leer_formulario()
+        if valores is None:
+            return
+
+        # `linea_cruda` NO se reconstruye con los valores corregidos: junto con
+        # `pagina` es la llave del upsert en Supabase, así que conservarla hace
+        # que re-sincronizar ACTUALICE el renglón ya subido en vez de dejar el
+        # equivocado y crear otro (el sincronizador nunca borra filas viejas).
+        linea_cruda = original.linea_cruda
+        if valores["pagina"] != original.pagina:
+            existentes = {
+                t.linea_cruda
+                for t in transacciones
+                if t is not original and t.pagina == valores["pagina"]
+            }
+            base = linea_cruda
+            ocurrencia = 2
+            while linea_cruda in existentes:
+                linea_cruda = f"{base} ({ocurrencia})"
+                ocurrencia += 1
+            messagebox.showwarning(
+                "Cambiaste la página",
+                "La página es parte de la llave con la que se sincroniza a Supabase. "
+                "Si este documento ya estaba sincronizado, el renglón con la página "
+                "anterior se quedará allá además del corregido; bórralo a mano en "
+                "Supabase (Table Editor, tabla transacciones).",
+            )
+
+        transacciones[indice] = replace(original, linea_cruda=linea_cruda, **valores)
+        self.master_app._refrescar_tabla()
+        self.master_app._actualizar_totales()
+        self.master_app.boton_guardar.config(state="normal")
+        self.destroy()
+
+    def _agregar(self) -> None:
+        valores = self._leer_formulario()
+        if valores is None:
+            return
+        fecha = valores["fecha"]
+        descripcion = valores["descripcion"]
+        monto = valores["monto"]
+        tipo = valores["tipo"]
+        pagina = valores["pagina"]
+        categoria = valores["categoria"]
+        comercio = valores["comercio"]
+        tarjeta = valores["tarjeta"]
 
         # linea_cruda deja explícito que este renglón no vino del PDF -- y
         # lo hace único por (fecha, descripción, monto, tipo) para no
@@ -687,6 +785,33 @@ class App(tk.Tk):
         for col in COLUMNAS:
             self.tabla.heading(col, text=encabezados[col])
             self.tabla.column(col, width=anchos[col], anchor="w")
+        # Los renglones manuales se distinguen a simple vista: son los únicos
+        # que se pueden editar/eliminar (los extraídos vienen del PDF).
+        self.tabla.tag_configure("manual", background="#fff4cc")
+        # Solo si el doble clic cae sobre un renglón (no en los encabezados).
+        self.tabla.bind(
+            "<Double-1>",
+            lambda e: self.tabla.identify_row(e.y) and self.editar_renglon_manual(),
+        )
+
+        marco_acciones_tabla = ttk.Frame(pestana_transacciones)
+        marco_acciones_tabla.pack(side="bottom", fill="x", pady=(4, 0))
+        ttk.Button(
+            marco_acciones_tabla,
+            text="Editar renglón manual...",
+            command=self.editar_renglon_manual,
+        ).pack(side="left")
+        ttk.Button(
+            marco_acciones_tabla,
+            text="Eliminar renglón manual",
+            command=self.eliminar_renglon_manual,
+        ).pack(side="left", padx=(4, 0))
+        ttk.Label(
+            marco_acciones_tabla,
+            text="Renglones manuales en amarillo · doble clic para editar",
+            foreground="#666",
+        ).pack(side="left", padx=8)
+
         self.tabla.pack(fill="both", expand=True)
 
         # Pestaña separada (no solo un filtro de la tabla) para que las
@@ -989,11 +1114,15 @@ class App(tk.Tk):
 
     def _refrescar_tabla(self) -> None:
         self.tabla.delete(*self.tabla.get_children())
-        for t in self.transacciones:
+        for indice, t in enumerate(self.transacciones):
             categoria = t.categoria or "(sin categoría)"
             self.tabla.insert(
                 "",
                 "end",
+                # iid = posición en self.transacciones, para saber qué renglón
+                # se seleccionó (_renglon_manual_seleccionado).
+                iid=str(indice),
+                tags=("manual",) if t.linea_cruda.startswith(PREFIJO_RENGLON_MANUAL) else (),
                 values=(
                     t.pagina,
                     t.fecha.isoformat(),
@@ -1104,6 +1233,49 @@ class App(tk.Tk):
             )
             return
         VentanaRenglonManual(self)
+
+    def _renglon_manual_seleccionado(self) -> TransaccionCanonica | None:
+        """El renglón manual seleccionado en la tabla, o `None` (tras avisar)
+        si no hay selección o lo seleccionado se extrajo del PDF."""
+        seleccion = self.tabla.selection()
+        if not seleccion:
+            messagebox.showinfo(
+                "Selecciona un renglón", "Selecciona en la tabla el renglón manual."
+            )
+            return None
+        t = self.transacciones[int(seleccion[0])]
+        if not t.linea_cruda.startswith(PREFIJO_RENGLON_MANUAL):
+            messagebox.showinfo(
+                "No es un renglón manual",
+                "Solo los renglones agregados a mano (en amarillo) se pueden editar o "
+                "eliminar. Los demás vienen del PDF: si su categoría está mal, "
+                "corrige la regla en \"Reglas de categorización...\".",
+            )
+            return None
+        return t
+
+    def editar_renglon_manual(self) -> None:
+        t = self._renglon_manual_seleccionado()
+        if t is not None:
+            VentanaRenglonManual(self, editando=t)
+
+    def eliminar_renglon_manual(self) -> None:
+        t = self._renglon_manual_seleccionado()
+        if t is None:
+            return
+        if not messagebox.askyesno(
+            "Eliminar renglón manual",
+            f"¿Eliminar {t.fecha.isoformat()} · {t.descripcion} · {t.tipo} {t.monto:.2f}?\n\n"
+            "Se quita de esta tabla y del archivo al volver a guardar. Si este "
+            "documento ya estaba sincronizado, el renglón seguirá en Supabase "
+            "(el sincronizador no borra filas): elimínalo a mano allá "
+            "(Table Editor, tabla transacciones).",
+        ):
+            return
+        self.transacciones = [x for x in self.transacciones if x is not t]
+        self._refrescar_tabla()
+        self._actualizar_totales()
+        self.boton_guardar.config(state="normal")
 
     def guardar_procesado(self) -> None:
         if not self.transacciones or self.ruta_pdf_actual is None:
