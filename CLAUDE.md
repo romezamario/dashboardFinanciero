@@ -197,8 +197,8 @@ compared) — the actual "Guardar como" was not exercised.
 
 **Main window layout (2026-10-04, user's request to improve look & usability)**: `_construir_ui`
 packs the header (`_construir_encabezado`: bank → "Cargar PDF..." → "Inspeccionar PDF...", rules on
-the right; account row below) and the footer (`_construir_pie`: summary, totals as four "cards" —
-cargos, efectivo, abonos, neto — and the Guardar/Sincronizar buttons) **before** the notebook, which
+the right; account row below) and the footer (`_construir_pie`: summary, totals as three "cards" —
+cargos, efectivo, abonos; "neto" was removed 2026-10-05, unused — and the Guardar/Sincronizar buttons) **before** the notebook, which
 gets `expand=True`. Keep that order: when the notebook was packed first, a small window squeezed the
 Guardar/Sincronizar buttons to empty slivers. The table has scrollbars, right-aligned amounts with
 thousands separators, zebra rows (`_rayar_tabla`, recomputed after sorting), red text for
@@ -206,6 +206,8 @@ uncategorized rows, yellow background for manual rows, click-to-sort headers (`_
 reorders the view; iids stay = index in `self.transacciones`), an empty-state label, and
 "Agregar renglón manual..." next to Editar/Eliminar (enabled only when a manual row is selected).
 Colors live in the `COLOR_*` constants at the top of `app/main.py`; the native "vista" theme is kept.
+Compact sizing (2026-10-05, user's request): Segoe UI 9, row height 22. The "Estado de cuenta"
+(`origen`) column is no longer shown (still saved in the JSON and synced) — the user doesn't use it.
 Scripts that open `App()` for testing must patch `RUTA_PREFERENCIAS_GMAIL`/`CARPETA_GASTOS_CORREO`,
 or the user's real "revisar al abrir" preference starts a real Gmail check.
 

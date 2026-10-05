@@ -71,7 +71,9 @@ COLOR_FONDO_MANUAL = "#fff4cc"
 COLOR_FONDO_MANUAL_TEXTO = "#b38600"  # el mismo amarillo, legible como texto
 COLOR_SIN_CATEGORIA = "#b3261e"
 
-COLUMNAS = ("pagina", "fecha", "descripcion", "monto", "tipo", "categoria", "comercio", "tarjeta", "origen")
+# "origen" (estado de cuenta) se sigue guardando en el JSON, pero no se muestra:
+# el usuario no lo usa (2026-10-05).
+COLUMNAS = ("pagina", "fecha", "descripcion", "monto", "tipo", "categoria", "comercio", "tarjeta")
 
 # Debe coincidir exactamente con la categoría de esa regla en
 # transform/reglas_categorizacion.json — así el panel de totales puede
@@ -1182,18 +1184,18 @@ class App(tk.Tk):
         Windows ("vista"); solo ajusta tamaños, pesos y colores de apoyo."""
         for nombre in ("TkDefaultFont", "TkTextFont", "TkMenuFont", "TkHeadingFont"):
             try:
-                tkfont.nametofont(nombre).configure(family="Segoe UI", size=10)
+                tkfont.nametofont(nombre).configure(family="Segoe UI", size=9)
             except tk.TclError:
                 pass
         estilo = ttk.Style(self)
-        estilo.configure("Treeview", rowheight=26)
-        estilo.configure("Treeview.Heading", font=("Segoe UI", 10, "bold"))
-        estilo.configure("Primario.TButton", font=("Segoe UI", 10, "bold"), padding=(12, 4))
+        estilo.configure("Treeview", rowheight=22)
+        estilo.configure("Treeview.Heading", font=("Segoe UI", 9, "bold"))
+        estilo.configure("Primario.TButton", font=("Segoe UI", 9, "bold"), padding=(10, 3))
         estilo.configure("Ayuda.TLabel", foreground=COLOR_TEXTO_SECUNDARIO)
-        estilo.configure("Seccion.TLabel", font=("Segoe UI", 10, "bold"))
-        estilo.configure("TotalTitulo.TLabel", foreground=COLOR_TEXTO_SECUNDARIO, font=("Segoe UI", 9))
-        estilo.configure("TotalValor.TLabel", font=("Segoe UI", 13, "bold"))
-        estilo.configure("Vacio.TLabel", foreground=COLOR_TEXTO_SECUNDARIO, font=("Segoe UI", 11))
+        estilo.configure("Seccion.TLabel", font=("Segoe UI", 9, "bold"))
+        estilo.configure("TotalTitulo.TLabel", foreground=COLOR_TEXTO_SECUNDARIO, font=("Segoe UI", 8))
+        estilo.configure("TotalValor.TLabel", font=("Segoe UI", 11, "bold"))
+        estilo.configure("Vacio.TLabel", foreground=COLOR_TEXTO_SECUNDARIO, font=("Segoe UI", 10))
 
     def _construir_ui(self) -> None:
         self._configurar_estilos()
@@ -1237,7 +1239,7 @@ class App(tk.Tk):
 
         self.texto_sin_categorizar = tk.Text(
             self.pestana_sin_categorizar, wrap="none", height=10, state="disabled",
-            font=("Consolas", 10), relief="flat", borderwidth=1,
+            font=("Consolas", 9), relief="flat", borderwidth=1,
         )
         self.texto_sin_categorizar.pack(fill="both", expand=True, padx=8, pady=(0, 8))
 
@@ -1340,7 +1342,6 @@ class App(tk.Tk):
             "categoria": "Categoría",
             "comercio": "Comercio",
             "tarjeta": "Tarjeta",
-            "origen": "Estado de cuenta",
         }
         # (ancho, alineación, ¿crece con la ventana?)
         columnas = {
@@ -1352,7 +1353,6 @@ class App(tk.Tk):
             "categoria": (150, "w", False),
             "comercio": (140, "w", False),
             "tarjeta": (80, "w", False),
-            "origen": (170, "w", False),
         }
         for col in COLUMNAS:
             ancho, alineacion, crece = columnas[col]
@@ -1415,7 +1415,6 @@ class App(tk.Tk):
             ("cargos", "Cargos"),
             ("efectivo", "Disposición de efectivo"),
             ("abonos", "Abonos"),
-            ("neto", "Neto (abonos − cargos)"),
         ):
             tarjeta = ttk.Frame(fila, padding=(0, 0, 28, 0))
             tarjeta.pack(side="left")
@@ -1454,7 +1453,6 @@ class App(tk.Tk):
                 "pagina": t.pagina, "fecha": t.fecha, "descripcion": t.descripcion.upper(),
                 "monto": t.monto, "tipo": t.tipo, "categoria": (t.categoria or "").upper(),
                 "comercio": (t.comercio or "").upper(), "tarjeta": t.tarjeta or "",
-                "origen": t.origen or "",
             }[columna]
             return (valor, int(iid))
 
@@ -1805,7 +1803,6 @@ class App(tk.Tk):
                     categoria,
                     t.comercio or "",
                     t.tarjeta or "",
-                    t.origen or "",
                 ),
             )
         # Recién cargada, la tabla va en el orden del PDF (sin flecha de orden).
@@ -1868,7 +1865,6 @@ class App(tk.Tk):
         total_otros_cargos = sum((t.monto for t in otros_cargos), start=Decimal("0"))
         total_abonos = sum((t.monto for t in abonos), start=Decimal("0"))
 
-        neto = total_abonos - total_otros_cargos - total_efectivo
         for clave, valor, cuantos in (
             ("cargos", total_otros_cargos, len(otros_cargos)),
             ("efectivo", total_efectivo, len(cargos_efectivo)),
@@ -1877,11 +1873,6 @@ class App(tk.Tk):
             etiqueta_valor, etiqueta_detalle = self.etiquetas_totales[clave]
             etiqueta_valor.config(text=f"${valor:,.2f}" if self.transacciones else "—")
             etiqueta_detalle.config(text=f"{cuantos} movimiento(s)" if self.transacciones else "")
-        etiqueta_valor, etiqueta_detalle = self.etiquetas_totales["neto"]
-        etiqueta_valor.config(
-            text=(f"{'−' if neto < 0 else ''}${abs(neto):,.2f}" if self.transacciones else "—")
-        )
-        etiqueta_detalle.config(text=f"{len(self.transacciones)} en total" if self.transacciones else "")
 
     def abrir_reglas(self) -> None:
         VentanaReglas(self)
