@@ -377,3 +377,48 @@ Esto se configura fuera del código, en el dashboard de Cloudflare Zero Trust:
 3. En la política de acceso, restringe por tu email (o el método de login que prefieras: One-Time PIN, Google, etc.).
 4. Guarda. A partir de ahí, cualquier visita al sitio pide login de Cloudflare Access antes de llegar
    siquiera a la pantalla de login de Supabase Auth.
+
+## Gastos recientes (avisos de compra de Banamex)
+
+La pestaña **Gastos recientes** muestra los cargos que Banamex avisa por correo, un día por
+sección, con ciudad y subtotales. Vive en su propia tabla (`gastos_correo`, migración
+`20261004210000_add_gastos_correo.sql`), aparte de `transacciones`: el aviso llega el mismo día y
+el estado de cuenta semanas después, y mezclarlos duplicaría cargos.
+
+Todo el flujo corre en tu computadora (la nube nunca ve tu Gmail ni tus reglas). Se usa desde la
+app de escritorio, pestaña **Gastos recientes (Gmail)**:
+
+- **Revisar Gmail y subir** lee los avisos de los últimos N días (campo "Días hacia atrás", 3 por
+  defecto), los guarda en `data/gastos_correo/` y los sube a Supabase. Corre en segundo plano con
+  barra de progreso; al terminar dice cuántos avisos leyó, cuántos eran nuevos y cuántos gastos subió.
+- Los problemas quedan escritos en la pestaña (botón **Copiar avisos**): comercios "Sin categoría"
+  (con el texto completo del establecimiento, para escribir la regla), códigos de ciudad sin
+  confirmar, correos que no se pudieron leer y errores al subir. Si falta `data/gmail/credentials.json`,
+  `INGESTA_CORREO_SECRETO` o `SUPABASE_URL`/`SUPABASE_KEY`, o faltan las librerías de Google, lo dice
+  en español.
+- **Reautorizar Gmail...** abre el navegador para dar de nuevo el permiso de solo lectura (cuando
+  vence o se revoca; la app también lo ofrece sola si detecta un permiso vencido).
+- La tabla muestra los 200 gastos más recientes de `data/gastos_correo/*.json` (fecha, hora, tarjeta,
+  comercio, ciudad, categoría, monto); en amarillo los que quedaron sin categoría.
+- **Revisar automáticamente al abrir la app** (apagada por defecto) hace la misma revisión al
+  arrancar, solo si ya autorizaste Gmail antes: nunca abre el navegador por su cuenta. Esta casilla
+  y el número de días se guardan en `data/gastos_correo/preferencias.json`.
+
+Equivale, desde la terminal, a:
+
+```
+python -m sync.gmail_gastos --dias 3 --subir
+```
+
+1. `sync/gmail_gastos.py` lee los avisos con la API de Gmail (solo lectura), los categoriza con tu
+   `transform/reglas_categorizacion.json` y escribe `data/gastos_correo/AAAA-MM-DD.json`. Imprime
+   los comercios "Sin categoría", los códigos de ciudad sin confirmar y los correos que no pudo leer.
+2. `sync/gastos_correo.py` (con `--subir`) los sube llamando a la función `ingestar_gastos_correo`
+   de Supabase con la clave anon y el secreto `INGESTA_CORREO_SECRETO` de tu `.env`. Ese secreto
+   solo permite insertar en `gastos_correo`; su hash se da de alta en `ingesta_correo` (instrucciones
+   al final de la migración) y se puede cambiar o revocar cuando quieras.
+
+Es idempotente: se puede correr todos los días (o varias veces al día) sin duplicar nada.
+La configuración de Gmail (OAuth de escritorio) está explicada al inicio de `sync/gmail_gastos.py`.
+Las ciudades confirmadas están en ese mismo archivo; agrega más en `data/gastos_correo/ciudades.json`,
+por ejemplo `{"CIU": "Ciudad Apodaca"}`.

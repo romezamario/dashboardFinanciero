@@ -10,6 +10,11 @@ data/errores/*
 !data/nuevos/.gitkeep
 !data/procesados/.gitkeep
 !data/errores/.gitkeep
+# Gastos de correo (revelan dónde gastas)
+data/gastos_correo/*
+!data/gastos_correo/.gitkeep
+# Credenciales/permiso OAuth de Gmail (sync/gmail_gastos.py)
+data/gmail/*
 
 # Reglas de categorización reales (revelan patrones de gasto personales)
 transform/reglas_categorizacion.json

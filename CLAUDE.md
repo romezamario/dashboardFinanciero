@@ -146,6 +146,16 @@ All three hooks are best-effort: on no match/exception they return the "unsuppor
 sentinel and the app silently falls back to whatever the user already has in the manual fields —
 never a hard failure, never a silently wrong guess presented as certain.
 
+**"Gastos recientes (Gmail)" tab (2026-10-04)**: `PestanaGastosGmail` in `app/main.py` drives
+`sync.gmail_gastos.revisar_gmail()` (the CLI `main()` is now a thin wrapper over it; expected
+problems are `ErrorGastosGmail` subclasses with Spanish messages). It is the app's **only
+background thread**: the worker never touches widgets, it posts `("progreso"|"fin"|"error", ...)`
+to a `queue.Queue` that the UI drains with `after(100)` (Tkinter isn't thread-safe) — follow the
+same pattern for any future long task. Google libraries are imported lazily inside
+`crear_servicio_gmail`, so the app opens without them. "Revisar automáticamente al abrir" (off by
+default, stored in `data/gastos_correo/preferencias.json`) passes `permitir_autorizar=False`: it
+never opens a browser on startup, and shows problems in the tab instead of popups.
+
 **"Recargar reglas" button (2026-10-04, user's request)**: `App.recargar_reglas` re-reads `reglas_categorizacion.json` (e.g. after Claude or the user edits it outside the app) and, if a statement is loaded, runs `recategorizar()` and reports how many rows changed and the uncategorized count before → after — no restart needed. Refuses while `VentanaReglas` is open (that window works on its own copy and "Guardar y cerrar" would overwrite the reloaded file); an unreadable JSON keeps the previous rules.
 
 **Categorization rule order matters — first match wins** (`categorizar()`): a more specific pattern

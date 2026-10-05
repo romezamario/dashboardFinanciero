@@ -8,3 +8,9 @@ pdfplumber==0.11.10
 # Fase 4: subir data/procesados/*.json a Supabase
 supabase==2.31.0
 python-dotenv==1.2.3
+
+# Gastos de correo (sync/gmail_gastos.py): leer avisos de compra de Banamex en Gmail
+# (OAuth de solo lectura, corre en tu computadora)
+google-api-python-client==2.201.0
+google-auth-oauthlib==1.5.0
+google-auth-httplib2==0.4.4
