@@ -94,6 +94,10 @@ class FaltanCredencialesGmail(ErrorGastosGmail):
     pass
 
 
+class LimiteDeGmail(ErrorGastosGmail):
+    """Gmail limitó las consultas por minuto aun después de reintentar."""
+
+
 class PermisoGmailInvalido(ErrorGastosGmail):
     """El permiso guardado venció, se revocó o no existe: hay que reautorizar."""
 
@@ -321,31 +325,59 @@ def html_del_mensaje(mensaje: dict[str, Any]) -> str | None:
     return buscar(mensaje.get("payload", {}))
 
 
-def leer_avisos(
-    servicio: ServicioGmail,
-    dias: int,
-    progreso: Callable[[int, int], None] | None = None,
-) -> tuple[list[dict[str, Any]], list[str]]:
-    """Devuelve (avisos leídos, ids que no se pudieron leer). Los ids que no
-    son un cargo exitoso legible se reportan para que no se pierdan en silencio.
-    `progreso(leidos, total)` se llama tras cada correo (para la barra de la app)."""
+# Reintentos de cada llamada a Gmail ante 429/403 "rateLimitExceeded" y 5xx:
+# googleapiclient espera al azar hasta 2^n s entre intentos (en total hasta
+# ~2 min), suficiente para que se libere la cuota "por minuto por usuario".
+REINTENTOS_GMAIL = 6
+
+
+class LecturaInterrumpida(Exception):
+    """Falló Gmail a media lectura: trae lo que sí se leyó, para no perderlo."""
+
+    def __init__(self, error: Exception, avisos: list[dict[str, Any]], ilegibles: list[str]) -> None:
+        super().__init__(str(error))
+        self.error, self.avisos, self.ilegibles = error, avisos, ilegibles
+
+
+def listar_ids(servicio: ServicioGmail, dias: int) -> list[str]:
+    """Ids de los avisos de compra de los últimos `dias` (sin descargarlos)."""
     mensajes = servicio.users().messages()
     ids: list[str] = []
     pagina = None
     while True:
         resp = mensajes.list(
             userId="me", q=CONSULTA_GMAIL.format(dias=dias), maxResults=500, pageToken=pagina
-        ).execute()
+        ).execute(num_retries=REINTENTOS_GMAIL)
         ids += [m["id"] for m in resp.get("messages", [])]
         pagina = resp.get("nextPageToken")
         if not pagina:
             break
+    return ids
 
-    avisos, ilegibles = [], []
+
+def leer_mensajes(
+    servicio: ServicioGmail,
+    ids: list[str],
+    progreso: Callable[[int, int], None] | None = None,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Descarga y lee cada id: (avisos leídos, ids que no se pudieron leer como
+    cargo exitoso -- se reportan para que no se pierdan en silencio).
+    `progreso(leidos, total)` se llama tras cada correo (para la barra de la
+    app). Si Gmail falla a media lectura, lanza `LecturaInterrumpida` con lo
+    ya leído."""
+    mensajes = servicio.users().messages()
+    avisos: list[dict[str, Any]] = []
+    ilegibles: list[str] = []
     if progreso:
         progreso(0, len(ids))
     for n, mid in enumerate(ids, start=1):
-        html = html_del_mensaje(mensajes.get(userId="me", id=mid, format="full").execute())
+        try:
+            mensaje = mensajes.get(userId="me", id=mid, format="full").execute(
+                num_retries=REINTENTOS_GMAIL
+            )
+        except Exception as error:  # noqa: BLE001
+            raise LecturaInterrumpida(error, avisos, ilegibles) from error
+        html = html_del_mensaje(mensaje)
         aviso = parsear_aviso(html, mid) if html else None
         if aviso:
             avisos.append(aviso)
@@ -354,6 +386,52 @@ def leer_avisos(
         if progreso:
             progreso(n, len(ids))
     return avisos, ilegibles
+
+
+def leer_avisos(
+    servicio: ServicioGmail,
+    dias: int,
+    progreso: Callable[[int, int], None] | None = None,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Lista y lee TODOS los avisos de los últimos `dias` (sin saltarse los ya
+    guardados; `revisar_gmail` sí se los salta)."""
+    return leer_mensajes(servicio, listar_ids(servicio, dias), progreso)
+
+
+def recategorizar_guardados(
+    reglas: list[Regla],
+    ciudades_extra: dict[str, str] | None = None,
+    carpeta: Path = CARPETA_GASTOS_CORREO,
+) -> int:
+    """Vuelve a calcular categoría, comercio y ciudad de TODOS los gastos ya
+    guardados con las reglas actuales, sin pedirle nada a Gmail (todo sale del
+    `establecimiento` guardado). Así, tras agregar una regla, la siguiente
+    revisión corrige los gastos viejos sin volver a descargarlos. Devuelve
+    cuántos gastos cambiaron; un archivo ilegible se deja como está."""
+    cambiados = 0
+    for ruta in sorted(carpeta.glob(PATRON_ARCHIVO_DIA)):
+        try:
+            datos = json.loads(ruta.read_text(encoding="utf-8"))
+            gastos = datos.get("transacciones", [])
+            nuevos = []
+            for g in gastos:
+                aviso = {
+                    "id": g["id"], "fecha": datos["fecha"], "hora": g["hora"], "tarjeta": g["tarjeta"],
+                    "establecimiento": g["establecimiento"], "monto": Decimal(str(g["monto"])),
+                }
+                calculado = a_gasto(aviso, reglas, ciudades_extra)
+                nuevo = {**g, **calculado}
+                if "ciudad" not in calculado:  # p. ej. se quitó de ciudades.json
+                    nuevo.pop("ciudad", None)
+                nuevos.append(nuevo)
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            continue
+        cambio = sum(1 for viejo, nuevo in zip(gastos, nuevos) if viejo != nuevo)
+        if cambio:
+            datos["transacciones"] = nuevos
+            ruta.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
+            cambiados += cambio
+    return cambiados
 
 
 def _rutas_gmail() -> tuple[Path, Path]:
@@ -378,6 +456,20 @@ def _es_permiso_invalido(error: Exception) -> bool:
         pass
     respuesta = getattr(error, "resp", None)
     return getattr(respuesta, "status", None) == 401
+
+
+def _es_limite_de_cuota(error: Exception) -> bool:
+    """429, o 403 de "rateLimitExceeded"/"quota" (el que reportó el usuario)."""
+    estado = getattr(getattr(error, "resp", None), "status", None)
+    texto = str(error).lower()
+    return estado == 429 or (estado == 403 and ("ratelimit" in texto or "quota" in texto))
+
+
+MENSAJE_LIMITE_GMAIL = (
+    "Gmail limitó las consultas por minuto de tu cuenta y no se liberó tras varios "
+    "reintentos. Lo que alcanzó a leerse ya quedó guardado (y no se vuelve a pedir): "
+    "espera un par de minutos y vuelve a revisar."
+)
 
 
 MENSAJE_PERMISO_INVALIDO = (
@@ -453,8 +545,12 @@ class ResultadoRevision:
     """Lo que pasó en una revisión, para que la app (o el CLI) lo muestre."""
 
     dias: int
+    # Avisos de compra que hay en Gmail en la ventana (guardados o nuevos).
     avisos_leidos: int = 0
+    # Los que no estaban guardados y se descargaron en esta revisión.
     nuevos: int = 0
+    # Gastos ya guardados cuya categoría/comercio/ciudad cambió con las reglas actuales.
+    recategorizados: int = 0
     por_dia: list[ResumenDia] = field(default_factory=list)
     ilegibles: list[str] = field(default_factory=list)
     sin_categoria: list[str] = field(default_factory=list)
@@ -537,29 +633,57 @@ def revisar_gmail(
         avisar("Conectando con Gmail…")
         servicio = crear_servicio_gmail(permitir_autorizar=permitir_autorizar)
     avisar("Buscando avisos de compra en Gmail…")
-    try:
-        avisos, ilegibles = leer_avisos(
-            servicio, dias, lambda n, total: avisar(f"Leyendo correo {n} de {total}…", n, total)
-        )
-    except Exception as error:  # noqa: BLE001
-        if _es_permiso_invalido(error):
-            raise PermisoGmailInvalido(MENSAJE_PERMISO_INVALIDO) from error
-        raise
-
+    ciudades = cargar_ciudades_extra(carpeta)
     previos = ids_guardados(carpeta)
-    por_dia = agrupar_por_dia(avisos, reglas, cargar_ciudades_extra(carpeta))
-    escribir_dias(por_dia, carpeta)
+    error_lectura: Exception | None = None
+    try:
+        ids = listar_ids(servicio, dias)
+        # Solo se descargan los que no están guardados: volver a pedir cada
+        # correo de la ventana en cada revisión agotaba la cuota por minuto de
+        # Gmail (con 90 días son cientos). Los ya guardados se recategorizan
+        # abajo, sin red.
+        por_descargar = [i for i in ids if i not in previos]
+        avisos, ilegibles = leer_mensajes(
+            servicio,
+            por_descargar,
+            lambda n, total: avisar(f"Leyendo correo nuevo {n} de {total}…", n, total),
+        )
+    except LecturaInterrumpida as interrumpida:
+        # Se guarda lo leído antes de reportar el error: la próxima revisión
+        # ya no lo vuelve a pedir.
+        avisos, ilegibles, error_lectura = interrumpida.avisos, interrumpida.ilegibles, interrumpida.error
+        ids = None
+    except Exception as error:  # noqa: BLE001 -- falló el listado
+        avisos, ilegibles, error_lectura, ids = [], [], error, None
 
-    gastos = [g for gs in por_dia.values() for g in gs]
-    resultado.avisos_leidos = len(avisos)
-    resultado.nuevos = sum(1 for g in gastos if g["id"] not in previos)
+    escribir_dias(agrupar_por_dia(avisos, reglas, ciudades), carpeta)
+
+    if error_lectura is not None:
+        if _es_permiso_invalido(error_lectura):
+            raise PermisoGmailInvalido(MENSAJE_PERMISO_INVALIDO) from error_lectura
+        if _es_limite_de_cuota(error_lectura):
+            raise LimiteDeGmail(MENSAJE_LIMITE_GMAIL) from error_lectura
+        raise error_lectura
+
+    avisar("Recategorizando con las reglas actuales…")
+    resultado.recategorizados = recategorizar_guardados(reglas, ciudades, carpeta)
+
+    # Resumen sobre TODO lo que hay en la ventana (lo nuevo y lo ya guardado).
+    en_ventana = set(ids or [])
+    guardados, _ilegibles_archivo = cargar_gastos_recientes(carpeta, limite=10**9)
+    gastos = [g for g in guardados if g.get("id") in en_ventana]
+    resultado.avisos_leidos = len(gastos)
+    resultado.nuevos = len(avisos)
     resultado.ilegibles = ilegibles
+    por_dia: dict[str, list[dict[str, Any]]] = {}
+    for g in gastos:
+        por_dia.setdefault(g["fecha"], []).append(g)
     resultado.por_dia = [
         ResumenDia(fecha, len(gs), sum((Decimal(str(g["monto"])) for g in gs), Decimal("0")))
         for fecha, gs in sorted(por_dia.items())
     ]
-    resultado.sin_categoria = sorted({g["establecimiento"] for g in gastos if g["categoria"] == "Sin categoría"})
-    resultado.codigos_sin_confirmar = sorted({g["ciudad_cod"] for g in gastos if "ciudad" not in g})
+    resultado.sin_categoria = sorted({g["establecimiento"] for g in gastos if g.get("categoria") == "Sin categoría"})
+    resultado.codigos_sin_confirmar = sorted({g["ciudad_cod"] for g in gastos if "ciudad" not in g and g.get("ciudad_cod")})
 
     if subir:
         from sync.gastos_correo import subir_todos
@@ -574,7 +698,9 @@ def revisar_gmail(
 
 def resumen_revision(r: ResultadoRevision) -> str:
     """Una línea con los conteos, para la barra de estado de la app."""
-    texto = f"{r.avisos_leidos} aviso(s) leído(s) en los últimos {r.dias} día(s), {r.nuevos} nuevo(s)"
+    texto = f"{r.avisos_leidos} aviso(s) en los últimos {r.dias} día(s), {r.nuevos} nuevo(s) descargado(s)"
+    if r.recategorizados:
+        texto += f", {r.recategorizados} recategorizado(s)"
     if r.subidas is not None:
         texto += f", {r.gastos_subidos} gasto(s) subido(s) a Supabase"
     return texto + "."

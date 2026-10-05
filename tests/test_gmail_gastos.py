@@ -19,7 +19,9 @@ from sync.gmail_gastos import (
     FaltaConfiguracionSupabase,
     FaltanCredencialesGmail,
     FaltanLibreriasGoogle,
+    LimiteDeGmail,
     PermisoGmailInvalido,
+    REINTENTOS_GMAIL,
     a_gasto,
     agrupar_por_dia,
     avisos_para_mostrar,
@@ -164,16 +166,22 @@ def _codificar(html: str) -> str:
 
 
 class _Ejecutable:
-    def __init__(self, valor) -> None:
-        self.valor = valor
+    def __init__(self, valor, reintentos: list | None = None) -> None:
+        self.valor, self.reintentos = valor, reintentos
 
-    def execute(self):
+    def execute(self, num_retries=0):
+        if self.reintentos is not None:
+            self.reintentos.append(num_retries)
+        if isinstance(self.valor, Exception):
+            raise self.valor
         return self.valor
 
 
 class _Mensajes:
     def __init__(self, paginas: list[list[str]], cuerpos: dict[str, dict]) -> None:
         self.paginas, self.cuerpos, self.consultas = paginas, cuerpos, []
+        self.descargados: list[str] = []
+        self.reintentos: list[int] = []
 
     def list(self, userId, q, maxResults, pageToken):  # noqa: N803 (nombres de la API de Google)
         self.consultas.append(q)
@@ -181,11 +189,12 @@ class _Mensajes:
         resp = {"messages": [{"id": m} for m in self.paginas[i]]}
         if i + 1 < len(self.paginas):
             resp["nextPageToken"] = str(i + 1)
-        return _Ejecutable(resp)
+        return _Ejecutable(resp, self.reintentos)
 
     def get(self, userId, id, format):  # noqa: N803, A002
         assert format == "full"
-        return _Ejecutable(self.cuerpos[id])
+        self.descargados.append(id)
+        return _Ejecutable(self.cuerpos[id], self.reintentos)
 
 
 class _ServicioFalso:
@@ -247,6 +256,14 @@ class _Error401(Exception):
         self.resp = type("Resp", (), {"status": 401})()
 
 
+class _Error403Cuota(Exception):
+    """Como el HttpError 403 "rateLimitExceeded" que reportó el usuario."""
+
+    def __init__(self) -> None:
+        super().__init__("Quota exceeded for quota metric 'Total Query Cost' (rateLimitExceeded)")
+        self.resp = type("Resp", (), {"status": 403})()
+
+
 class _MensajesQueFallan(_Mensajes):
     def list(self, **_):  # noqa: A003
         raise _Error401()
@@ -260,27 +277,31 @@ class RevisarGmailTest(unittest.TestCase):
     def tearDown(self) -> None:
         self._tmp.cleanup()
 
+    def mensajes(self, falla_en: str | None = None) -> _Mensajes:
+        cuerpos = {
+            "a": _msg(aviso_html()),
+            "b": _msg(aviso_html(estatus="Rechazado")),
+            "c": _msg(aviso_html(establecimiento="TIENDA RARA CIU", fecha="04 Octubre 2026 / 08:00:00")),
+        }
+        mensajes = _Mensajes(paginas=[["a", "b", "c"]], cuerpos=cuerpos)
+        if falla_en:
+            mensajes.cuerpos[falla_en] = _Error403Cuota()
+        return mensajes
+
     def servicio(self) -> _ServicioFalso:
-        return _ServicioFalso(_Mensajes(
-            paginas=[["a", "b", "c"]],
-            cuerpos={
-                "a": _msg(aviso_html()),
-                "b": _msg(aviso_html(estatus="Rechazado")),
-                "c": _msg(aviso_html(establecimiento="TIENDA RARA CIU", fecha="04 Octubre 2026 / 08:00:00")),
-            },
-        ))
+        return _ServicioFalso(self.mensajes())
 
     def test_cuenta_leidos_nuevos_y_reporta_problemas(self) -> None:
-        # "a" ya estaba guardado de una corrida anterior: no cuenta como nuevo.
-        (self.carpeta / "2026-10-03.json").write_text(
-            json.dumps({"fecha": "2026-10-03", "transacciones": [{"id": "a", "hora": "13:22"}]}),
-            encoding="utf-8",
-        )
+        # "a" ya estaba guardado de una corrida anterior: no se vuelve a
+        # descargar ni cuenta como nuevo, pero sí como aviso de la ventana.
+        escribir_dias(agrupar_por_dia([parsear_aviso(aviso_html(), "a")], REGLAS), self.carpeta)
+        mensajes = self.mensajes()
         pasos: list[tuple] = []
         r = revisar_gmail(
-            3, servicio=self.servicio(), reglas=REGLAS, carpeta=self.carpeta,
+            3, servicio=_ServicioFalso(mensajes), reglas=REGLAS, carpeta=self.carpeta,
             progreso=lambda *p: pasos.append(p),
         )
+        self.assertEqual(mensajes.descargados, ["b", "c"])
         self.assertEqual((r.avisos_leidos, r.nuevos), (2, 1))
         self.assertEqual(r.ilegibles, ["b"])
         self.assertEqual(r.sin_categoria, ["TIENDA RARA CIU"])
@@ -288,8 +309,8 @@ class RevisarGmailTest(unittest.TestCase):
         self.assertIsNone(r.subidas)
         self.assertEqual([(d.fecha, d.gastos) for d in r.por_dia], [("2026-10-03", 1), ("2026-10-04", 1)])
         self.assertTrue((self.carpeta / "2026-10-04.json").exists())
-        # La barra recibe cada correo leído (0..3 de 3).
-        self.assertEqual([p[1:] for p in pasos if p[2] == 3], [(0, 3), (1, 3), (2, 3), (3, 3)])
+        # La barra recibe cada correo descargado (0..2 de 2).
+        self.assertEqual([p[1:] for p in pasos if p[2] == 2], [(0, 2), (1, 2), (2, 2)])
 
     def test_subir_sin_configuracion_falla_antes_de_leer_gmail(self) -> None:
         sin_supabase = {k: v for k, v in os.environ.items() if not k.startswith("SUPABASE_")}
@@ -339,6 +360,39 @@ class RevisarGmailTest(unittest.TestCase):
                 3, servicio=_ServicioFalso(_MensajesQueFallan([[]], {})), reglas=REGLAS,
                 carpeta=self.carpeta,
             )
+
+    def test_lo_ya_guardado_no_se_vuelve_a_descargar(self) -> None:
+        revisar_gmail(3, servicio=self.servicio(), reglas=REGLAS, carpeta=self.carpeta)
+        mensajes = self.mensajes()
+        r = revisar_gmail(3, servicio=_ServicioFalso(mensajes), reglas=REGLAS, carpeta=self.carpeta)
+        # Solo "b" (no es un cargo legible, así que nunca se guarda).
+        self.assertEqual(mensajes.descargados, ["b"])
+        self.assertEqual((r.avisos_leidos, r.nuevos), (2, 0))
+        self.assertTrue(all(n == REINTENTOS_GMAIL for n in mensajes.reintentos))
+
+    def test_regla_nueva_recategoriza_lo_guardado_sin_red(self) -> None:
+        revisar_gmail(3, servicio=self.servicio(), reglas=REGLAS, carpeta=self.carpeta)
+        reglas = [*REGLAS, Regla("TIENDA RARA", "Compras", "Rara")]
+        mensajes = self.mensajes()
+        r = revisar_gmail(3, servicio=_ServicioFalso(mensajes), reglas=reglas, carpeta=self.carpeta)
+        self.assertNotIn("c", mensajes.descargados)
+        self.assertEqual((r.recategorizados, r.sin_categoria), (1, []))
+        gasto = json.loads((self.carpeta / "2026-10-04.json").read_text(encoding="utf-8"))["transacciones"][0]
+        self.assertEqual((gasto["categoria"], gasto["comercio"]), ("Compras", "Rara"))
+        self.assertIn("1 recategorizado(s)", resumen_revision(r))
+
+    def test_cuota_agotada_guarda_lo_leido_y_lo_explica(self) -> None:
+        with self.assertRaises(LimiteDeGmail):
+            revisar_gmail(
+                3, servicio=_ServicioFalso(self.mensajes(falla_en="c")), reglas=REGLAS,
+                carpeta=self.carpeta,
+            )
+        # "a" se leyó antes del error: quedó guardado y no se vuelve a pedir.
+        self.assertEqual(ids_guardados(self.carpeta), {"a"})
+        mensajes = self.mensajes()
+        r = revisar_gmail(3, servicio=_ServicioFalso(mensajes), reglas=REGLAS, carpeta=self.carpeta)
+        self.assertEqual(mensajes.descargados, ["b", "c"])
+        self.assertEqual(r.nuevos, 1)
 
     def test_avisos_en_espanol(self) -> None:
         r = revisar_gmail(3, servicio=self.servicio(), reglas=[], carpeta=self.carpeta)

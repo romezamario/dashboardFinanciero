@@ -417,7 +417,11 @@ python -m sync.gmail_gastos --dias 3 --subir
    usuario (`SUPABASE_EMAIL`/`SUPABASE_PASSWORD` del `.env`, el mismo login que "Sincronizar a
    Supabase..."); la RLS solo le deja escribir tus propias filas. No hace falta ninguna otra clave.
 
-Es idempotente: se puede correr todos los días (o varias veces al día) sin duplicar nada.
+Es idempotente: se puede correr todos los días (o varias veces al día) sin duplicar nada. Solo
+descarga de Gmail los correos que todavía no están en `data/gastos_correo/`; los ya guardados se
+recategorizan en tu computadora con las reglas actuales (así una regla nueva corrige también los
+gastos viejos). Si Gmail limita las consultas por minuto, reintenta solo con esperas crecientes; si
+aun así no alcanza, guarda lo que leyó y te pide volver a intentar en un par de minutos.
 La configuración de Gmail (OAuth de escritorio) está explicada al inicio de `sync/gmail_gastos.py`.
 Las ciudades confirmadas están en ese mismo archivo; agrega más en `data/gastos_correo/ciudades.json`,
 por ejemplo `{"CIU": "Ciudad Apodaca"}`.

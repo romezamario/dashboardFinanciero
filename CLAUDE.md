@@ -155,6 +155,13 @@ same pattern for any future long task. Google libraries are imported lazily insi
 `crear_servicio_gmail`, so the app opens without them. "Revisar automáticamente al abrir" (off by
 default, stored in `data/gastos_correo/preferencias.json`) passes `permitir_autorizar=False`: it
 never opens a browser on startup, and shows problems in the tab instead of popups.
+**Gmail quota (2026-10-04, real 403 "rateLimitExceeded" with a 90-day window)**: `revisar_gmail`
+lists ids (`listar_ids`) and only downloads the ones not already in `data/gastos_correo/`
+(`leer_mensajes`); saved ones are re-categorized locally from their stored `establecimiento`
+(`recategorizar_guardados`), so a new rule still fixes old charges without re-fetching. Every Gmail
+call uses `execute(num_retries=REINTENTOS_GMAIL)` (googleapiclient's exponential backoff on 429/403
+rate limits). If it still fails mid-read, `LecturaInterrumpida` carries what was read, it is saved,
+and the user sees `LimiteDeGmail` (Spanish) instead of a raw HttpError.
 **Upload uses the user's own session (user's decision, 2026-10-04)**: `sync/gastos_correo.py`
 signs in with `SUPABASE_EMAIL`/`SUPABASE_PASSWORD` (`sincronizador.crear_cliente_autenticado`) and
 upserts `gastos_correo` on `(user_id, mensaje_id)`, sending `user_id` explicitly. The original
