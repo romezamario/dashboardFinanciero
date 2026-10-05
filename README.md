@@ -393,9 +393,9 @@ app de escritorio, pestaña **Gastos recientes (Gmail)**:
   barra de progreso; al terminar dice cuántos avisos leyó, cuántos eran nuevos y cuántos gastos subió.
 - Los problemas quedan escritos en la pestaña (botón **Copiar avisos**): comercios "Sin categoría"
   (con el texto completo del establecimiento, para escribir la regla), códigos de ciudad sin
-  confirmar, correos que no se pudieron leer y errores al subir. Si falta `data/gmail/credentials.json`,
-  `INGESTA_CORREO_SECRETO` o `SUPABASE_URL`/`SUPABASE_KEY`, o faltan las librerías de Google, lo dice
-  en español.
+  confirmar, correos que no se pudieron leer y errores al subir. Si falta `data/gmail/credentials.json`
+  o alguna variable de Supabase del `.env`, si el usuario/contraseña de Supabase no sirve, o si faltan
+  las librerías de Google, lo dice en español.
 - **Reautorizar Gmail...** abre el navegador para dar de nuevo el permiso de solo lectura (cuando
   vence o se revoca; la app también lo ofrece sola si detecta un permiso vencido).
 - La tabla muestra los 200 gastos más recientes de `data/gastos_correo/*.json` (fecha, hora, tarjeta,
@@ -413,10 +413,9 @@ python -m sync.gmail_gastos --dias 3 --subir
 1. `sync/gmail_gastos.py` lee los avisos con la API de Gmail (solo lectura), los categoriza con tu
    `transform/reglas_categorizacion.json` y escribe `data/gastos_correo/AAAA-MM-DD.json`. Imprime
    los comercios "Sin categoría", los códigos de ciudad sin confirmar y los correos que no pudo leer.
-2. `sync/gastos_correo.py` (con `--subir`) los sube llamando a la función `ingestar_gastos_correo`
-   de Supabase con la clave anon y el secreto `INGESTA_CORREO_SECRETO` de tu `.env`. Ese secreto
-   solo permite insertar en `gastos_correo`; su hash se da de alta en `ingesta_correo` (instrucciones
-   al final de la migración) y se puede cambiar o revocar cuando quieras.
+2. `sync/gastos_correo.py` (con `--subir`) los sube a `gastos_correo` iniciando sesión con tu
+   usuario (`SUPABASE_EMAIL`/`SUPABASE_PASSWORD` del `.env`, el mismo login que "Sincronizar a
+   Supabase..."); la RLS solo le deja escribir tus propias filas. No hace falta ninguna otra clave.
 
 Es idempotente: se puede correr todos los días (o varias veces al día) sin duplicar nada.
 La configuración de Gmail (OAuth de escritorio) está explicada al inicio de `sync/gmail_gastos.py`.

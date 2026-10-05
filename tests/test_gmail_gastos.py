@@ -16,7 +16,7 @@ from pathlib import Path
 from unittest import mock
 
 from sync.gmail_gastos import (
-    FaltaSecretoIngesta,
+    FaltaConfiguracionSupabase,
     FaltanCredencialesGmail,
     FaltanLibreriasGoogle,
     PermisoGmailInvalido,
@@ -252,9 +252,6 @@ class _MensajesQueFallan(_Mensajes):
         raise _Error401()
 
 
-SECRETO = "s" * 32
-
-
 class RevisarGmailTest(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
@@ -294,29 +291,43 @@ class RevisarGmailTest(unittest.TestCase):
         # La barra recibe cada correo leído (0..3 de 3).
         self.assertEqual([p[1:] for p in pasos if p[2] == 3], [(0, 3), (1, 3), (2, 3), (3, 3)])
 
-    def test_subir_sin_secreto_falla_antes_de_leer_gmail(self) -> None:
-        for secreto in ("", "corto"):
-            with self.assertRaises(FaltaSecretoIngesta):
+    def test_subir_sin_configuracion_falla_antes_de_leer_gmail(self) -> None:
+        sin_supabase = {k: v for k, v in os.environ.items() if not k.startswith("SUPABASE_")}
+        with mock.patch.dict(os.environ, sin_supabase, clear=True):
+            with self.assertRaises(FaltaConfiguracionSupabase) as ctx:
                 revisar_gmail(
-                    3, subir=True, servicio=_ServicioQueNoDebeUsarse(), secreto=secreto,
-                    reglas=REGLAS, carpeta=self.carpeta,
+                    3, subir=True, servicio=_ServicioQueNoDebeUsarse(), reglas=REGLAS,
+                    carpeta=self.carpeta,
                 )
+        self.assertIn("SUPABASE_EMAIL", str(ctx.exception))
         self.assertEqual(list(self.carpeta.iterdir()), [])
+
+    def test_contrasena_incorrecta_falla_antes_de_leer_gmail(self) -> None:
+        datos = {v: "x" for v in ("SUPABASE_URL", "SUPABASE_KEY", "SUPABASE_EMAIL", "SUPABASE_PASSWORD")}
+        with mock.patch.dict(os.environ, datos), mock.patch(
+            "sync.gastos_correo.crear_cliente", side_effect=RuntimeError("Invalid login credentials")
+        ):
+            with self.assertRaises(FaltaConfiguracionSupabase) as ctx:
+                revisar_gmail(
+                    3, subir=True, servicio=_ServicioQueNoDebeUsarse(), reglas=REGLAS,
+                    carpeta=self.carpeta,
+                )
+        self.assertIn("No se pudo iniciar sesión", str(ctx.exception))
 
     def test_subir_con_cliente_falso(self) -> None:
         cliente = ClienteFalso()
         r = revisar_gmail(
-            3, subir=True, servicio=self.servicio(), cliente_supabase=cliente, secreto=SECRETO,
+            3, subir=True, servicio=self.servicio(), cliente_supabase=cliente,
             reglas=REGLAS, carpeta=self.carpeta,
         )
         self.assertEqual((r.gastos_subidos, r.subidas_fallidas), (2, []))
-        self.assertEqual([f for f, _ in cliente.llamadas], ["ingestar_gastos_correo"] * 2)
+        self.assertEqual([t for t, _, _ in cliente.llamadas], ["gastos_correo"] * 2)
         self.assertIn("2 gasto(s) subido(s)", resumen_revision(r))
 
     def test_error_al_subir_queda_en_los_avisos(self) -> None:
         r = revisar_gmail(
             3, subir=True, servicio=self.servicio(), cliente_supabase=ClienteFalso(falla=True),
-            secreto=SECRETO, reglas=REGLAS, carpeta=self.carpeta,
+            reglas=REGLAS, carpeta=self.carpeta,
         )
         self.assertEqual(r.gastos_subidos, 0)
         self.assertEqual(len(r.subidas_fallidas), 2)

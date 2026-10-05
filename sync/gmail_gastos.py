@@ -98,12 +98,8 @@ class PermisoGmailInvalido(ErrorGastosGmail):
     """El permiso guardado venció, se revocó o no existe: hay que reautorizar."""
 
 
-class FaltaSecretoIngesta(ErrorGastosGmail):
-    pass
-
-
 class FaltaConfiguracionSupabase(ErrorGastosGmail):
-    pass
+    """Falta algo del .env de Supabase, o no se pudo iniciar sesión."""
 
 
 # ---------------------------------------------------------------------------
@@ -476,21 +472,31 @@ class ResultadoRevision:
         return [r for r in self.subidas or [] if not r.ok]
 
 
-def _secreto_valido(secreto: str | None) -> str:
-    from sync.gastos_correo import SECRETO_MINIMO
+VARIABLES_SUPABASE = ("SUPABASE_URL", "SUPABASE_KEY", "SUPABASE_EMAIL", "SUPABASE_PASSWORD")
 
-    if not secreto:
-        raise FaltaSecretoIngesta(
-            "Falta INGESTA_CORREO_SECRETO en tu .env: sin él no se puede subir a "
-            "Supabase (ver .env.example y el final de la migración "
-            "20261004210000_add_gastos_correo.sql)."
+
+def _crear_cliente_supabase() -> Any:
+    """Inicia sesión en Supabase con tu usuario (como el sincronizador de
+    estados de cuenta), traduciendo los problemas esperables."""
+    faltantes = [v for v in VARIABLES_SUPABASE if not os.environ.get(v)]
+    if faltantes:
+        raise FaltaConfiguracionSupabase(
+            f"Falta {', '.join(faltantes)} en tu .env: sin eso no se puede subir a Supabase "
+            "(es la misma configuración que usa \"Sincronizar a Supabase...\")."
         )
-    if len(secreto) < SECRETO_MINIMO:
-        raise FaltaSecretoIngesta(
-            f"INGESTA_CORREO_SECRETO en tu .env es muy corto: debe tener al menos "
-            f"{SECRETO_MINIMO} caracteres."
-        )
-    return secreto
+    try:
+        from sync.gastos_correo import crear_cliente
+
+        return crear_cliente()
+    except ImportError as error:
+        raise FaltaConfiguracionSupabase(
+            f"Falta la librería de Supabase ({error.name}): pip install -r requirements.txt"
+        ) from error
+    except Exception as error:  # noqa: BLE001 -- típicamente usuario/contraseña
+        raise FaltaConfiguracionSupabase(
+            f"No se pudo iniciar sesión en Supabase: {error}\n"
+            "Revisa SUPABASE_EMAIL y SUPABASE_PASSWORD en tu .env."
+        ) from error
 
 
 def revisar_gmail(
@@ -499,7 +505,6 @@ def revisar_gmail(
     *,
     servicio: ServicioGmail | None = None,
     cliente_supabase: Any = None,
-    secreto: str | None = None,
     reglas: list[Regla] | None = None,
     carpeta: Path = CARPETA_GASTOS_CORREO,
     permitir_autorizar: bool = True,
@@ -509,8 +514,8 @@ def revisar_gmail(
     con `subir`, sube la carpeta a Supabase. Equivale a
     `python -m sync.gmail_gastos --dias N [--subir]`.
 
-    `servicio`/`cliente_supabase`/`secreto`/`reglas` se pueden inyectar (pruebas);
-    si no, se construyen como en el CLI (Gmail real, cliente anon, `.env`).
+    `servicio`/`cliente_supabase`/`reglas` se pueden inyectar (pruebas); si no,
+    se construyen como en el CLI (Gmail real, tu sesión de Supabase del `.env`).
     `progreso(mensaje, hechos, total)` informa el avance (hechos/total None =
     paso sin cantidad). Los problemas esperables salen como `ErrorGastosGmail`.
     """
@@ -519,11 +524,11 @@ def revisar_gmail(
         if progreso:
             progreso(mensaje, hechos, total)
 
-    # El secreto se valida ANTES de leer Gmail: si falta, mejor saberlo ya.
-    if subir:
-        secreto = _secreto_valido(
-            secreto if secreto is not None else os.environ.get("INGESTA_CORREO_SECRETO", "")
-        )
+    # La sesión de Supabase se abre ANTES de leer Gmail: si falta configuración
+    # o la contraseña está mal, mejor saberlo ya.
+    if subir and cliente_supabase is None:
+        avisar("Iniciando sesión en Supabase…")
+        cliente_supabase = _crear_cliente_supabase()
 
     reglas = cargar_reglas() if reglas is None else reglas
     resultado = ResultadoRevision(dias=dias, sin_reglas=not reglas)
@@ -557,21 +562,13 @@ def revisar_gmail(
     resultado.codigos_sin_confirmar = sorted({g["ciudad_cod"] for g in gastos if "ciudad" not in g})
 
     if subir:
-        from sync.gastos_correo import crear_cliente_anon, subir_todos
+        from sync.gastos_correo import subir_todos
 
         avisar("Subiendo a Supabase…")
-        if cliente_supabase is None:
-            try:
-                cliente_supabase = crear_cliente_anon()
-            except KeyError as error:
-                raise FaltaConfiguracionSupabase(
-                    f"Falta {error.args[0]} en tu .env (se necesitan SUPABASE_URL y SUPABASE_KEY)."
-                ) from error
-            except ImportError as error:
-                raise FaltaConfiguracionSupabase(
-                    f"Falta la librería de Supabase ({error.name}): pip install -r requirements.txt"
-                ) from error
-        resultado.subidas = subir_todos(cliente_supabase, secreto, carpeta)
+        try:
+            resultado.subidas = subir_todos(cliente_supabase, carpeta)
+        except ValueError as error:  # sin sesión
+            raise FaltaConfiguracionSupabase(str(error)) from error
     return resultado
 
 
