@@ -146,6 +146,8 @@ All three hooks are best-effort: on no match/exception they return the "unsuppor
 sentinel and the app silently falls back to whatever the user already has in the manual fields —
 never a hard failure, never a silently wrong guess presented as certain.
 
+**"Recargar reglas" button (2026-10-04, user's request)**: `App.recargar_reglas` re-reads `reglas_categorizacion.json` (e.g. after Claude or the user edits it outside the app) and, if a statement is loaded, runs `recategorizar()` and reports how many rows changed and the uncategorized count before → after — no restart needed. Refuses while `VentanaReglas` is open (that window works on its own copy and "Guardar y cerrar" would overwrite the reloaded file); an unreadable JSON keeps the previous rules.
+
 **Categorization rule order matters — first match wins** (`categorizar()`): a more specific pattern
 must come before a generic one that it contains (e.g. `"SU PAGO INTERBANCARIO"` before `"PAGO
 INTERBANCARIO"`). `VentanaReglas` has "▲ Subir / ▼ Bajar" buttons (2026-09-26) because new rules are

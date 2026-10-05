@@ -722,6 +722,9 @@ class App(tk.Tk):
             marco_superior, text="Reglas de categorización...", command=self.abrir_reglas
         ).pack(side="left")
         ttk.Button(
+            marco_superior, text="Recargar reglas", command=self.recargar_reglas
+        ).pack(side="left", padx=(4, 0))
+        ttk.Button(
             marco_superior,
             text="Inspeccionar PDF...",
             command=self.abrir_inspeccion,
@@ -1183,6 +1186,49 @@ class App(tk.Tk):
 
     def abrir_reglas(self) -> None:
         VentanaReglas(self)
+
+    def recargar_reglas(self) -> None:
+        """Vuelve a leer reglas_categorizacion.json (p. ej. tras editarlo fuera
+        de la app) y recategoriza lo cargado, sin reiniciar la app."""
+        if any(isinstance(w, VentanaReglas) for w in self.winfo_children()):
+            # Esa ventana trabaja sobre su propia copia de las reglas y, al
+            # "Guardar y cerrar", sobrescribiría el archivo recién recargado.
+            messagebox.showwarning(
+                "Cierra el editor de reglas",
+                "La ventana \"Reglas de categorización\" está abierta: ciérrala "
+                "primero (si guardas ahí, reemplaza el archivo con su copia).",
+            )
+            return
+        try:
+            reglas = cargar_reglas()
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            messagebox.showerror(
+                "No se pudieron leer las reglas",
+                f"reglas_categorizacion.json no se pudo leer; se siguen usando las "
+                f"reglas anteriores.\n\n{error}",
+            )
+            return
+        antes = len(self.reglas)
+        self.reglas = reglas
+        detalle = f"{len(reglas)} regla(s) cargada(s) (antes {antes})."
+        if self.transacciones:
+            anteriores = [(t.categoria, t.comercio) for t in self.transacciones]
+            sin_categoria_antes = sum(1 for c, _ in anteriores if c is None)
+            self.recategorizar()
+            cambiadas = sum(
+                1
+                for previo, t in zip(anteriores, self.transacciones)
+                if previo != (t.categoria, t.comercio)
+            )
+            sin_categoria = sum(1 for t in self.transacciones if t.categoria is None)
+            detalle += (
+                f"\n\nTransacciones recategorizadas: {cambiadas} cambiaron de "
+                f"categoría/comercio. Sin categoría: {sin_categoria_antes} → {sin_categoria}."
+            )
+            if cambiadas:
+                self.boton_guardar.config(state="normal")
+                detalle += "\n\nGuarda el archivo procesado para conservar los cambios."
+        messagebox.showinfo("Reglas recargadas", detalle)
 
     def abrir_inspeccion(self) -> None:
         VentanaInspeccion(self)
