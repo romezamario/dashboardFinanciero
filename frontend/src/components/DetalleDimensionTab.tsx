@@ -62,31 +62,58 @@ interface DetalleDimensionTabProps {
 export function DetalleDimensionTab({ transacciones }: DetalleDimensionTabProps) {
   const [filtros, setFiltros] = useState<Filtros>({});
 
+  // Al cambiar de categoría, un comercio ya elegido que no tiene movimientos
+  // en la nueva categoría se quita: el select de comercio solo ofrece los de
+  // la categoría elegida, y dejarlo dejaría una combinación vacía.
+  function conCategoria(anterior: Filtros, categoria: string | undefined): Filtros {
+    const comercio =
+      categoria && anterior.comercio && !comerciosDeCategoria(categoria).includes(anterior.comercio)
+        ? undefined
+        : anterior.comercio;
+    return { ...anterior, categoria, comercio };
+  }
+
   function alternarFiltro(campo: DimensionDetalle, valor: string) {
-    setFiltros((anterior) =>
-      anterior[campo] === valor ? { ...anterior, [campo]: undefined } : { ...anterior, [campo]: valor }
-    );
+    setFiltros((anterior) => {
+      const nuevo = anterior[campo] === valor ? undefined : valor;
+      return campo === "categoria" ? conCategoria(anterior, nuevo) : { ...anterior, [campo]: nuevo };
+    });
   }
 
   // Los selects de arriba fijan el valor directo (a diferencia del clic en
   // una barra, que alterna/quita) -- elegir "(todas)" limpia ese filtro.
   function elegirFiltro(campo: DimensionDetalle, valor: string) {
-    setFiltros((anterior) => ({ ...anterior, [campo]: valor || undefined }));
+    setFiltros((anterior) =>
+      campo === "categoria"
+        ? conCategoria(anterior, valor || undefined)
+        : { ...anterior, [campo]: valor || undefined }
+    );
   }
 
   // Opciones de los selects -- se derivan de TODAS las transacciones de la
   // pestaña (no de `transaccionesFiltradas`), para que la lista de opciones
-  // no cambie según lo que ya esté filtrado.
+  // no cambie según lo que ya esté filtrado. Excepción: con una categoría
+  // elegida, el select de comercio solo ofrece los comercios de esa
+  // categoría (petición del usuario, 2026-10-03).
   const categoriasConocidas = useMemo(
     () => Array.from(new Set(transacciones.map(categoriaDe))).sort(),
     [transacciones]
   );
+  function comerciosDeCategoria(categoria: string | undefined): string[] {
+    return Array.from(
+      new Set(
+        transacciones
+          .filter((t) => !categoria || categoriaDe(t) === categoria)
+          .map((t) => t.comercio)
+          .filter((c): c is string => !!c)
+      )
+    ).sort();
+  }
   const comerciosConocidos = useMemo(
-    () =>
-      Array.from(
-        new Set(transacciones.map((t) => t.comercio).filter((c): c is string => !!c))
-      ).sort(),
-    [transacciones]
+    () => comerciosDeCategoria(filtros.categoria),
+    // comerciosDeCategoria solo lee `transacciones`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [transacciones, filtros.categoria]
   );
 
   // Periodo fijo (últimos 3 meses completos) solo para la ventana de 12

@@ -636,6 +636,13 @@ charts, which already plot both series. Related latent bug fixed in the same pas
 list routinely repeats descriptions (several "UBER…"), so React logged duplicate-key errors and
 left stale rows in the DOM when the filter changed — keys now include the row index.
 
+**"Categorías y Comercios" tab: comercio options follow the category (2026-10-03, user's request)**:
+with a category chosen (select or bar click), the "Filtrar por comercio" select in
+`DetalleDimensionTab.tsx` lists only the comercios that have movements in that category
+(`comerciosDeCategoria`); with no category, all of them. Choosing a category also clears an
+already-chosen comercio that has no movements in it (`conCategoria`), so the pair never ends up
+empty. The category select itself still lists every category.
+
 **"Tarjetas de crédito" tab (2026-10-03, user's request — replaced the per-card tabs)**: the
 credit cards (Invex TDC, TDC Beyond, TDC Conquista, TDC Platino) no longer get one tab each; they
 share a single comparison tab, `TarjetasCreditoTab.tsx` (calculations in `src/lib/tarjetas.ts`,
