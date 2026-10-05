@@ -93,9 +93,12 @@ GLIFOS: dict[str, tuple[str, float]] = {
     "9958dea0c521b64b": ('r', 3.0),
     "0912dd2ca225831d": ('s', 4.5),
     "53a39ac7ee63f54d": ('t', 2.7),
+    "ed6a02eacee97ec6": ('u', 4.8),  # 2026-10-04: en "Tarjeta titular"
     "2e354f6a41ef4dd7": ('v', 4.8),
+    "9e33b9968d034663": ('y', 5.1),  # 2026-10-04
     "9900c5d0371b2da0": ('Ó', 6.3),
     "cb4329d8a11e4bb2": ('ó', 5.1),
+    "c0d0175a9f876be8": ('é', 4.5),  # 2026-10-04
 }
 
 _CLAVE_I_O_L = "0736a5928b2b39b3"
@@ -213,7 +216,10 @@ def _agrupar_en_renglones(imagenes: list[dict]) -> list[list[dict]]:
 
 
 def completar_lineas_con_imagenes(
-    pagina, texto: str, es_incompleta: Callable[[str], bool]
+    pagina,
+    texto: str,
+    es_incompleta: Callable[[str], bool],
+    es_encabezado: Callable[[str], bool] | None = None,
 ) -> list[str]:
     """Las líneas de `texto` (el `extract_text()` de `pagina`), con cada línea
     `es_incompleta` -- y el bloque que abre -- reconstruido juntando por
@@ -225,9 +231,17 @@ def completar_lineas_con_imagenes(
     fechas (un "SU ABONO...GRACIAS"), y otros donde las etiquetas y el monto
     son imagen pero los valores son texto, en el mismo renglón (un PAGO
     INTERBANCARIO: "CLAVE DE RASTREO:" imagen, la clave texto). Si el renglón
-    de las fechas no se puede leer completo, el bloque queda tal cual."""
+    de las fechas no se puede leer completo, el bloque queda tal cual.
+
+    Fuera de esos bloques, un renglón de letras-imagen solo se agrega (en su
+    lugar, por posición) si ya traducido cumple `es_encabezado` -- p. ej. los
+    encabezados de sección "Tarjeta titular: ..." de una TDC, que en varios
+    estados de cuenta son imagen (2026-10-04). El resto (logos, avisos,
+    leyendas) no se toca, para no meterle al extractor texto que no espera."""
     lineas = texto.splitlines()
-    if not pagina.images or not any(es_incompleta(l.strip()) for l in lineas):
+    if not pagina.images:
+        return lineas
+    if not any(es_incompleta(l.strip()) for l in lineas) and es_encabezado is None:
         return lineas
     # Mismas líneas que extract_text(), pero con posición (verificado igual en
     # las 1,215 páginas de los PDFs reales); si alguna vez no, no se toca nada.
@@ -236,12 +250,14 @@ def completar_lineas_con_imagenes(
         return lineas
 
     letras = [i for i in pagina.images if i.get("imagemask")]
-    resultado: list[str] = []
+    # (centro vertical, texto, índice en `posiciones` o None si salió de un bloque)
+    resultado: list[tuple[float, str, int | None]] = []
+    zonas: list[tuple[float, float]] = []
     n = 0
     while n < len(posiciones):
         inicio = posiciones[n]
         if not es_incompleta(inicio["text"].strip()):
-            resultado.append(inicio["text"])
+            resultado.append((_centro(inicio), inicio["text"], n))
             n += 1
             continue
         fin = n + 1
@@ -250,18 +266,65 @@ def completar_lineas_con_imagenes(
         limite = posiciones[fin]["top"] if fin < len(posiciones) else pagina.height
         zona = [i for i in letras if i["bottom"] > inicio["top"] and i["top"] < limite]
         reconstruido = _reconstruir_bloque(posiciones[n:fin], zona)
-        resultado.extend(reconstruido or [p["text"] for p in posiciones[n:fin]])
+        if reconstruido is None:
+            resultado.extend((_centro(p), p["text"], None) for p in posiciones[n:fin])
+        else:
+            resultado.extend((centro, linea, None) for centro, linea in reconstruido)
+            zonas.append((inicio["top"], limite))
         n = fin
-    return resultado
+
+    if es_encabezado is not None:
+        _agregar_encabezados(posiciones, letras, zonas, resultado, es_encabezado)
+    return [linea for _centro_linea, linea, _indice in resultado]
+
+
+def _agregar_encabezados(
+    posiciones: list[dict],
+    letras: list[dict],
+    zonas: list[tuple[float, float]],
+    resultado: list[tuple[float, str, int | None]],
+    es_encabezado: Callable[[str], bool],
+) -> None:
+    """Agrega a `resultado` (en su lugar) los renglones de letras-imagen fuera
+    de los bloques ya reconstruidos que, traducidos, son un encabezado. Si
+    comparten renglón con una línea de texto, se une con ella."""
+    for grupo in _agrupar_en_renglones(letras):
+        centro = _centro(grupo[0])
+        if any(arriba <= centro < abajo for arriba, abajo in zonas):
+            continue  # ya va dentro de un bloque
+        piezas = _piezas_de_imagenes(grupo)
+        if piezas is None:
+            continue
+        companera = next(
+            (
+                k for k, (c, _linea, indice) in enumerate(resultado)
+                if indice is not None and abs(c - centro) <= 5
+            ),
+            None,
+        )
+        if companera is not None:
+            indice = resultado[companera][2]
+            unido = _unir([*_piezas_de_texto(posiciones[indice]), *piezas])
+            if es_encabezado(unido.strip()):
+                resultado[companera] = (resultado[companera][0], unido, None)
+            continue
+        traducido = _unir(piezas)
+        if es_encabezado(traducido.strip()):
+            lugar = next(
+                (k for k, (c, _l, _i) in enumerate(resultado) if c > centro), len(resultado)
+            )
+            resultado.insert(lugar, (centro, traducido, None))
 
 
 def _centro(caja: dict) -> float:
     return (caja["top"] + caja["bottom"]) / 2
 
 
-def _reconstruir_bloque(lineas: list[dict], imagenes: list[dict]) -> list[str] | None:
-    """Renglones del bloque, de arriba abajo; None si el primero (el de las
-    fechas) no tiene letras-imagen legibles."""
+def _reconstruir_bloque(
+    lineas: list[dict], imagenes: list[dict]
+) -> list[tuple[float, str]] | None:
+    """(centro vertical, texto) de cada renglón del bloque, de arriba abajo;
+    None si el primero (el de las fechas) no tiene letras-imagen legibles."""
     # (centro vertical, piezas) por renglón; las líneas de texto primero.
     renglones: list[tuple[float, list[_Pieza]]] = [
         (_centro(l), _piezas_de_texto(l)) for l in lineas
@@ -293,4 +356,4 @@ def _reconstruir_bloque(lineas: list[dict], imagenes: list[dict]) -> list[str] |
             break
         todos.append((centro, piezas))
         todos.sort(key=lambda r: r[0])
-    return [_unir(piezas) for _centro_renglon, piezas in todos if piezas]
+    return [(centro, _unir(piezas)) for centro, piezas in todos if piezas]

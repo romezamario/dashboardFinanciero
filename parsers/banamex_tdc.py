@@ -306,7 +306,13 @@ class BanamexTdcParser(BaseParser):
                     tipo_tarjeta_documento = _detectar_tipo_tarjeta(texto)
 
                 for linea in completar_lineas_con_imagenes(
-                    pagina, texto, lambda l: bool(PATRON_SOLO_FECHAS.match(l))
+                    pagina,
+                    texto,
+                    lambda l: bool(PATRON_SOLO_FECHAS.match(l)),
+                    # Encabezados "Tarjeta titular/adicional/digital: ..." que
+                    # el PDF imprime como imagen (varios estados de 2024-11 a
+                    # 2025-05): sin esto, sus renglones quedaban sin `tarjeta`.
+                    es_encabezado=lambda l: bool(PATRON_SECCION_TARJETA.match(l)),
                 ):
                     linea = linea.strip()
                     if not linea:

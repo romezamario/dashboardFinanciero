@@ -236,6 +236,14 @@ statement from a bank you already support will look anything like the first one:
   by hand: `descartar_ya_capturadas_a_mano` (transformador) drops the newly-extracted row when a
   recovered manual row has the same fecha/monto/tipo and **keeps the manual one** — it may already
   be in Supabase under its own key, and the sync never deletes rows.
+  **Section headers in images too (2026-10-04)**: in 15 statements (2024-10 → 2025-05) the
+  "Tarjeta titular/adicional/digital: ..." headers are image rows outside any transaction block,
+  and "titular" uses a lowercase "u" that wasn't in `GLIFOS` (added u/é/y). Every row in those
+  statements had `tarjeta = None`. `completar_lineas_con_imagenes(..., es_encabezado=)` now also
+  inserts, at their position, image rows outside blocks whose decoded text passes `es_encabezado`
+  (Banamex TDC passes `PATRON_SECCION_TARJETA`); other image rows (logos, notices) are still
+  ignored. On the real PDFs: 803 rows → Titular, 263 → Adicional, 1 → Digital; no other field of
+  any row changed (same upsert keys, so re-syncing just fills `tarjeta`).
 - **Normalize known variant spellings instead of capturing verbatim, when the output feeds a
   stable identifier**: `extraer_info_cuenta`'s alias used to capture whatever word followed
   "Estado de Cuenta" on its own line (`PATRON_ALIAS`) and build `f"TDC {esa_palabra}"` verbatim —
