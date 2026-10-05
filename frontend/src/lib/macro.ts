@@ -569,6 +569,98 @@ export function nombreFechaPublicacion(fecha: string, hoy: string): string {
   return fecha.slice(0, 4) === hoy.slice(0, 4) ? base : `${base} ${anio}`;
 }
 
+// --------------------------------------------- eventos solo de calendario
+//
+// Publicaciones que mueven al mercado pero cuyo DATO no se puede traer gratis:
+// los PMI del ISM y de S&P Global son de licencia (el ISM retiró sus series de
+// FRED en 2016) y las minutas del FOMC son un documento, no un número. De
+// ellos el tablero solo muestra CUÁNDO salen, calculado con reglas fijas:
+// - Minutas del FOMC: 3 semanas después de cada decisión (regla de la Fed;
+//   cerca de un feriado a veces sale un día antes).
+// - ISM manufactura: 1er día hábil del mes; ISM servicios: 3er día hábil. Los
+//   PMI finales de S&P Global salen esos mismos días. Es la regla que sigue el
+//   ISM; muy de vez en cuando la mueve, por eso la fecha es "estimada".
+
+export interface EventoCalendario {
+  id: string;
+  titulo: string;
+  fecha: string;
+  /** Qué es y por qué no viene el dato. */
+  nota: string;
+  estimada: boolean;
+}
+
+/** Feriados federales de EE.UU. que pueden caer en los primeros días hábiles
+ * de un mes (los demás caen a media o fin de mes): Año Nuevo, 4 de julio
+ * (ambos con su día observado) y el Día del Trabajo (1er lunes de sept.). */
+function esFeriadoInicioDeMes(anio: number, mes: number, dia: number): boolean {
+  const semana = new Date(Date.UTC(anio, mes - 1, dia)).getUTCDay();
+  const observado = (mesF: number, diaF: number) => {
+    const s = new Date(Date.UTC(anio, mesF - 1, diaF)).getUTCDay();
+    const d = s === 6 ? diaF - 1 : s === 0 ? diaF + 1 : diaF;
+    return mes === mesF && dia === d;
+  };
+  if (observado(1, 1) || observado(7, 4)) return true;
+  return mes === 9 && semana === 1 && dia <= 7;
+}
+
+/** El n-ésimo día hábil (lun–vie, sin feriados) del mes. */
+function diaHabil(anio: number, mes: number, n: number): string {
+  let cuenta = 0;
+  for (let dia = 1; ; dia++) {
+    const semana = new Date(Date.UTC(anio, mes - 1, dia)).getUTCDay();
+    if (semana === 0 || semana === 6 || esFeriadoInicioDeMes(anio, mes, dia)) continue;
+    if (++cuenta === n) return `${anio}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+  }
+}
+
+/** Próxima fecha (>= hoy) del n-ésimo día hábil, este mes o el siguiente. */
+function proximoDiaHabil(hoy: string, n: number): string {
+  const [anio, mes] = hoy.split("-").map(Number);
+  const este = diaHabil(anio, mes, n);
+  return este >= hoy ? este : diaHabil(mes === 12 ? anio + 1 : anio, mes === 12 ? 1 : mes + 1, n);
+}
+
+function sumarDias(fecha: string, dias: number): string {
+  return new Date(Date.parse(`${fecha}T00:00:00Z`) + dias * 86_400_000).toISOString().slice(0, 10);
+}
+
+export function eventosCalendario(datos: DatosMacro, hoy = fechaLocalHoy()): EventoCalendario[] {
+  const eventos: EventoCalendario[] = [];
+  const minutas = (datos.reunionesFomc ?? []).map((f) => sumarDias(f, 21)).find((f) => f >= hoy);
+  if (minutas) {
+    eventos.push({
+      id: "MINUTAS",
+      titulo: "Minutas del FOMC",
+      fecha: minutas,
+      nota: "Detalle de la discusión de la última reunión de la Fed. Sale 3 semanas después de la decisión, 14:00 ET (cerca de un feriado la Fed puede moverla un día).",
+      estimada: true,
+    });
+  }
+  eventos.push(
+    {
+      id: "ISM_MANUF",
+      titulo: "PMI manufacturero (ISM y S&P Global)",
+      fecha: proximoDiaHabil(hoy, 1),
+      nota: "Encuesta a gerentes de compras de la industria; arriba de 50 = expansión. Dato de licencia, no incluido.",
+      estimada: true,
+    },
+    {
+      id: "ISM_SERV",
+      titulo: "PMI de servicios (ISM y S&P Global)",
+      fecha: proximoDiaHabil(hoy, 3),
+      nota: "La misma encuesta para servicios (~70% de la economía); arriba de 50 = expansión. Dato de licencia, no incluido.",
+      estimada: true,
+    }
+  );
+  return eventos.sort((a, b) => a.fecha.localeCompare(b.fecha));
+}
+
+/** Días naturales de `hoy` a `fecha`. */
+export function diasHasta(fecha: string, hoy: string): number {
+  return proximaPublicacion(fecha, hoy, "Próximo dato").dias;
+}
+
 export function textoFaltan(dias: number): string {
   if (dias < 0) return "ya salió, se refleja en la próxima descarga";
   if (dias === 0) return "hoy";

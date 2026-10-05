@@ -852,7 +852,19 @@ dato" (the Fed tile "Próxima decisión"; the real-rate tile follows core PCE; d
 actualiza cada día hábil"), and when fewer than `DIAS_PUBLICACION_CERCANA` = 5 days remain it's
 highlighted with a yellow (`--series-4`) badge plus "hoy / mañana / en N días" text; a box at the top
 lists the releases within 5 days grouped by date. Days are counted from the browser's *local* date
-(`fechaLocalHoy`, not UTC). Not on FRED, so not included: ISM PMIs and the FOMC calendar.
+(`fechaLocalHoy`, not UTC). **Calendar-only events (2026-10-05, user's request — they missed the
+ISM/PMI and the FOMC minutes)**: `eventosCalendario` (`macro.ts`) adds, with no value, the next
+**FOMC minutes** (decision + 21 days, from `reunionesFomc`, which now also includes the previous
+year so December's minutes show in January), **ISM + S&P Global manufacturing PMI** (1st US
+business day of the month) and **services PMI** (3rd business day) — the final S&P Global PMIs come
+out the same days; flash PMIs have no fixed rule and aren't listed. Business days skip weekends and
+the only federal holidays that can fall in a month's first days (New Year's and July 4 with their
+observed day, Labor Day). All three are labeled "estimada" (the Fed can move minutes a day around a
+holiday; ISM rarely moves). They appear in the "próximos 5 días" box and in a "Calendario (sin dato
+en el tablero)" section. **Their values are not included on purpose**: ISM and S&P Global PMIs are
+licensed (ISM pulled its series from FRED in 2016) and no free keyless source was verified — the
+cloud sandbox's network couldn't even reach ismworld.org to test a scraper; don't add one without
+checking terms and testing it from GitHub Actions.
 
 Per-tab view state (`filtros`, `categoriasOcultas`, `rangoMeses`, `vistaTiempo`) still lives in
 `Dashboard`'s `estadosPorPestana: Record<tabId, EstadoVista>`, passed to each view as controlled

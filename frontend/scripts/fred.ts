@@ -46,7 +46,8 @@ export interface DatosMacro {
    * día hábil). Falta si no se pudo leer; nunca tumba la descarga. */
   proximasPublicaciones?: Partial<Record<SerieMacro, string>>;
   /** Días de anuncio de decisión del FOMC (segundo día de cada reunión), del
-   * año en curso y el siguiente, según federalreserve.gov. */
+   * año anterior, el en curso y el siguiente, según federalreserve.gov. Las
+   * minutas salen 3 semanas después de cada uno. */
   reunionesFomc?: string[];
 }
 
@@ -183,7 +184,9 @@ async function obtenerReunionesFomc(): Promise<string[]> {
   const html = await descargarCsv("https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm");
   const anioActual = new Date().getUTCFullYear();
   const fechas: string[] = [];
-  for (const anio of [anioActual, anioActual + 1]) {
+  // También el año anterior: las minutas de su última reunión (diciembre)
+  // salen en enero.
+  for (const anio of [anioActual - 1, anioActual, anioActual + 1]) {
     const inicio = html.indexOf(`${anio} FOMC Meetings`);
     if (inicio < 0) continue;
     const fin = html.indexOf("FOMC Meetings", inicio + 20);
