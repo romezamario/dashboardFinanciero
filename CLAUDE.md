@@ -289,6 +289,24 @@ statement from a bank you already support will look anything like the first one:
   vanishing — `App.cargar_pdf` shows it in the resumen and a messagebox so the user knows to
   capture that row by hand before trusting the totals. This is the general escape
   hatch for "PDF renders this row as an image" cases in any future parser, not just this one.
+- **Older "2024 format" (statements up to 2024-10) — same parser, second variant (2026-10-05)**:
+  confirmed on 7 real statements (Platino, Beyond, Conquista; 2024-08 → 2024-10) that previously
+  extracted **0 rows** while still being auto-detected. Rows are `"Mes día CONCEPTO monto"` with
+  **no year** (taken from the cover's period, `"Del … al <día> de <mes> de <año>"`; months after
+  the cutoff month belong to the previous year, for periods crossing Dec→Jan), **no `+`** (a cargo
+  has nothing; an abono ends in `" -"`), and foreign-currency purchases take **two lines** (concept
+  line without amount, then `"EURO 50.00 950.00"` / `"U.S. DOLLAR …"`, sometimes with `"TC1* …"`
+  exchange-rate info first — the MXN amount is always the last number; `linea_cruda` joins both
+  with `" | "`). Only lines between `"Detalle de Operaciones"` and the next `"Detalle de Pagos"` (SPEI
+  detail, which repeats the PAGO INTERBANCARIO rows already listed), `"… EN PESOS MONEDA NACIONAL"`
+  (MSI / deferred-purchase tables whose `"Abr 10 … 3 de 12 …"` rows are NOT period movements) or
+  `"RESUMEN DE SU …"` are read. Card = "Titular" until `"Por su Tarjeta Adicional: …"`. A one-line
+  `"PAGO INTERBANCARIO … -"` abono becomes `"PAGO RECIBIDO"` (the generic rule would call it an
+  outgoing transfer); the `"SU ABONO…"` courtesy rewrite still applies. Validated: on all 7 PDFs the
+  sum of extracted cargos and abonos matches the cover totals to the cent, 0 warnings; the 65
+  current-format statements produce byte-identical output to before. Handled by
+  `procesar_linea_2024` inside `extraer()`, which runs before the current-format logic and only
+  claims lines in that section, so it can't affect current-format documents.
 - **Image rows are now READ, not just flagged (2026-10-02, `parsers/glifos.py`)**: checked against
   the user's 144 real PDFs, the "image" rows aren't one picture — each character is its own 1-bit
   image mask placed where the letter goes, and the bank always uses the same bitmap for the same

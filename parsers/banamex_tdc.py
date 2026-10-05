@@ -245,6 +245,62 @@ PATRON_CONCEPTO = re.compile(r"^CONCEPTO:\s*(.+)$", re.IGNORECASE)
 PATRON_ABONO_CORTESIA = re.compile(r"^SU ABONO\.\.\.", re.IGNORECASE)
 
 
+# ---------------------------------------------------------------------------
+# Formato anterior ("formato 2024", hasta 2024-10). Confirmado 2026-10-05 en 7
+# estados reales (Platino, Beyond y Conquista, 2024-08 a 2024-10): mismo
+# banco y misma portada, pero la tabla de movimientos es otra:
+#
+#   "Sep 12 CONCEPTO 1,234.56"        -> cargo (no lleva "+")
+#   "Sep 12 SU ABONO...GRACIAS 9,183.49 -"  -> abono (" -" al final)
+#   "Sep 18 ZOOM.US 888-799-9666 SAN JOSE CA"   (sin monto: moneda extranjera)
+#   "U.S. DOLLAR 20.00 380.10"        -> 2a línea: monto original y en pesos
+#
+# El renglón NO trae año (solo "Mes día"): sale del periodo de la portada
+# ("Del 13 de agosto al 12 de septiembre de 2024"). Las operaciones van entre
+# "Detalle de Operaciones" y la siguiente sección: "Detalle de Pagos ... SPEI"
+# (repite los PAGO INTERBANCARIO que ya vienen en las operaciones), las tablas
+# de meses sin intereses / compras diferidas ("... EN PESOS MONEDA NACIONAL",
+# con renglones "Abr 12 ... 1 de 12 ..." que NO son movimientos del periodo) y
+# el "RESUMEN DE SU ..." -- fuera de esa sección no se lee nada con este
+# formato. La tarjeta es la titular salvo después de "Por su Tarjeta
+# Adicional: ...".
+# ---------------------------------------------------------------------------
+MESES_COMPLETOS = {
+    "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6, "julio": 7,
+    "agosto": 8, "septiembre": 9, "setiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12,
+}
+PATRON_PERIODO_2024 = re.compile(
+    r"\bDel\s+\d{1,2}\s+de\s+[a-záéíóú]+\s+al\s+\d{1,2}\s+de\s+(?P<mes>[a-záéíóú]+)\s+de\s+(?P<anio>\d{4})",
+    re.IGNORECASE,
+)
+PATRON_FECHA_2024 = re.compile(
+    r"^(?P<mes>Ene|Feb|Mar|Abr|May|Jun|Jul|Ago|Sep|Oct|Nov|Dic)\s+(?P<dia>\d{1,2})\s+(?P<resto>.+)$"
+)
+PATRON_MONTO_FINAL_2024 = re.compile(
+    r"^(?P<concepto>.*?)\s*(?P<monto>\d[\d,]*\.\d{2})(?P<abono>\s+-)?[\s.]*$"
+)
+# 2a línea de una compra en moneda extranjera: "EURO 50.00 950.00", a veces con
+# el tipo de cambio antes ("TC1* 18.912 ... EURO 50.00 950.00"). El monto en
+# pesos es el último número.
+PATRON_SEGUNDA_LINEA_2024 = re.compile(
+    r"^(?P<detalle>.*?)\s*(?P<original>\d[\d,]*\.\d{2})\s+(?P<monto>\d[\d,]*\.\d{2})(?P<abono>\s+-)?[\s.]*$"
+)
+PATRON_INICIO_OPERACIONES_2024 = re.compile(r"Detalle de Operaciones", re.IGNORECASE)
+PATRON_FIN_OPERACIONES_2024 = re.compile(
+    r"Detalle de Pagos|EN PESOS MONEDA NACIONAL|RESUMEN DE SU", re.IGNORECASE
+)
+PATRON_TARJETA_2024 = re.compile(r"^Por su Tarjeta\s+(Titular|Adicional|Digital)\b", re.IGNORECASE)
+
+
+def _corte_del_periodo(texto: str) -> tuple[int, int] | None:
+    """(mes, año) del fin del periodo de la portada del formato 2024."""
+    coincidencia = PATRON_PERIODO_2024.search(texto)
+    if not coincidencia:
+        return None
+    mes = MESES_COMPLETOS.get(coincidencia.group("mes").lower())
+    return (mes, int(coincidencia.group("anio"))) if mes else None
+
+
 def _a_decimal(texto: str) -> Decimal:
     return Decimal(texto.replace(",", ""))
 
@@ -272,6 +328,106 @@ class BanamexTdcParser(BaseParser):
         # se detecta una sola vez con la primera página que lo mencione y
         # ya no cambia. Solo se usa para PATRON_ABONO_CORTESIA por ahora.
         tipo_tarjeta_documento: str | None = None
+        # Formato 2024 (ver PATRON_FECHA_2024): sección de operaciones abierta,
+        # compra en moneda extranjera esperando su 2a línea, y fin del periodo
+        # (mes, año) para ponerle año a "Sep 12".
+        en_operaciones_2024 = False
+        pendiente_2024: dict | None = None
+        corte_2024: tuple[int, int] | None = None
+        tarjeta_2024 = "Titular"
+
+        def descripcion_final(descripcion: str) -> str:
+            if tipo_tarjeta_documento is not None and PATRON_ABONO_CORTESIA.match(descripcion):
+                # "TDC Beyond" -> "BEYOND", "TDC Platino" -> "PLATINO", etc.
+                return f"PAGO TDC {tipo_tarjeta_documento.removeprefix('TDC ').upper()}"
+            return descripcion
+
+        def fecha_2024(mes_abreviado: str, dia: str) -> str | None:
+            mes = int(MESES[mes_abreviado.lower()])
+            if corte_2024 is None:
+                return None
+            mes_corte, anio_corte = corte_2024
+            # Un periodo que cruza el año (Dic -> Ene): los meses posteriores al
+            # del corte son del año anterior.
+            anio = anio_corte if mes <= mes_corte else anio_corte - 1
+            return f"{int(dia):02d}/{mes:02d}/{anio}"
+
+        def agregar_2024(fecha: str, concepto: str, monto: str, es_abono: bool, pagina: int, crudas: list[str]) -> None:
+            try:
+                valor = _a_decimal(monto)
+            except InvalidOperation:
+                self._advertencias.append(f"Página {pagina}: monto ilegible: {' | '.join(crudas)!r}")
+                return
+            descripcion = concepto.strip()
+            if es_abono and re.match(r"^PAGO INTERBANCARIO\b", descripcion, re.IGNORECASE):
+                # Un SPEI recibido; con el texto tal cual, la regla
+                # "PAGO INTERBANCARIO" lo tomaría como transferencia ENVIADA.
+                descripcion = "PAGO RECIBIDO"
+            renglones.append(
+                RenglonCrudo(
+                    fecha_texto=fecha,
+                    descripcion_texto=descripcion_final(descripcion),
+                    monto_texto=str(valor) if es_abono else f"-{valor}",
+                    pagina=pagina,
+                    linea_cruda=" | ".join(crudas),
+                    tarjeta=tarjeta_2024,
+                )
+            )
+
+        def procesar_linea_2024(linea: str, pagina: int) -> bool:
+            """True si la línea pertenece al formato 2024 y ya se procesó."""
+            nonlocal en_operaciones_2024, pendiente_2024, tarjeta_2024
+            if pendiente_2024 is not None:
+                segunda = PATRON_SEGUNDA_LINEA_2024.match(linea)
+                pendiente, pendiente_2024 = pendiente_2024, None
+                if segunda:
+                    agregar_2024(
+                        pendiente["fecha"], pendiente["concepto"], segunda.group("monto"),
+                        bool(segunda.group("abono")), pendiente["pagina"], [pendiente["linea"], linea],
+                    )
+                    return True
+                self._advertencias.append(
+                    f"Página {pendiente['pagina']}: movimiento sin monto (se esperaba la línea "
+                    f"de moneda extranjera) — revísalo a mano: {pendiente['linea']!r}"
+                )
+                self._sugerencias.append(
+                    SugerenciaRenglonManual(
+                        fecha_texto=pendiente["fecha"], pagina=pendiente["pagina"], tarjeta=tarjeta_2024
+                    )
+                )
+            if PATRON_INICIO_OPERACIONES_2024.search(linea):
+                en_operaciones_2024 = True
+                return True
+            if not en_operaciones_2024:
+                return False
+            if PATRON_FIN_OPERACIONES_2024.search(linea):
+                en_operaciones_2024 = False
+                return True
+            tarjeta = PATRON_TARJETA_2024.match(linea)
+            if tarjeta:
+                tarjeta_2024 = tarjeta.group(1).capitalize()
+                return True
+            fecha = PATRON_FECHA_2024.match(linea)
+            if not fecha:
+                return False
+            fecha_texto = fecha_2024(fecha.group("mes"), fecha.group("dia"))
+            if fecha_texto is None:
+                self._advertencias.append(
+                    f"Página {pagina}: no se encontró el periodo (\"Del ... al ... de AAAA\") "
+                    f"para saber el año de: {linea!r}"
+                )
+                return True
+            monto = PATRON_MONTO_FINAL_2024.match(fecha.group("resto"))
+            if monto and monto.group("concepto"):
+                agregar_2024(
+                    fecha_texto, monto.group("concepto"), monto.group("monto"),
+                    bool(monto.group("abono")), pagina, [linea],
+                )
+            else:
+                pendiente_2024 = {
+                    "fecha": fecha_texto, "concepto": fecha.group("resto"), "pagina": pagina, "linea": linea,
+                }
+            return True
 
         def abandonar_bloque_interbancario(motivo: str) -> None:
             nonlocal bloque_interbancario
@@ -296,8 +452,11 @@ class BanamexTdcParser(BaseParser):
             # la primera con transacciones) debe conocerse ya cuando aparezca
             # un "SU ABONO...GRACIAS" que hay que reescribir.
             for pagina in pdf.pages[:3]:
+                texto_inicial = pagina.extract_text() or ""
                 if tipo_tarjeta_documento is None:
-                    tipo_tarjeta_documento = _detectar_tipo_tarjeta(pagina.extract_text() or "")
+                    tipo_tarjeta_documento = _detectar_tipo_tarjeta(texto_inicial)
+                if corte_2024 is None:
+                    corte_2024 = _corte_del_periodo(texto_inicial)
 
             for numero_pagina, pagina in enumerate(pdf.pages, start=1):
                 texto = pagina.extract_text() or ""
@@ -316,6 +475,9 @@ class BanamexTdcParser(BaseParser):
                 ):
                     linea = linea.strip()
                     if not linea:
+                        continue
+
+                    if procesar_linea_2024(linea, numero_pagina):
                         continue
 
                     coincidencia_seccion = PATRON_SECCION_TARJETA.match(linea)
@@ -447,6 +609,11 @@ class BanamexTdcParser(BaseParser):
 
         if bloque_interbancario is not None:
             abandonar_bloque_interbancario("fin del documento")
+        if pendiente_2024 is not None:
+            self._advertencias.append(
+                f"Página {pendiente_2024['pagina']}: movimiento sin monto al final del "
+                f"documento — revísalo a mano: {pendiente_2024['linea']!r}"
+            )
 
         self._tipo_tarjeta_documento = tipo_tarjeta_documento
         return renglones
