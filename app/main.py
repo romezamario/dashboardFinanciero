@@ -696,6 +696,100 @@ class VentanaRenglonManual(tk.Toplevel):
         )
 
 
+class VentanaCategoriaManual(tk.Toplevel):
+    """Cambia a mano la categoría/comercio de uno o varios renglones, sin
+    crear una regla: para casos muy específicos (p. ej. "CIERRE COMPRA DIF",
+    que el usuario sabe que es Apple pero que como regla atraparía cualquier
+    compra diferida). Solo categoría y comercio: fecha, monto y descripción
+    vienen del PDF y no se tocan (auditoría).
+
+    El cambio se guarda en el JSON procesado (`"categoria_manual": true`) y
+    sobrevive a "Recargar reglas" y a volver a cargar el mismo PDF (ver
+    `App.categorias_manuales`)."""
+
+    def __init__(self, master: "App", indices: list[int]) -> None:
+        super().__init__(master)
+        self.master_app = master
+        self.indices = indices
+        transacciones = [master.transacciones[i] for i in indices]
+        self.title("Cambiar categoría")
+        self.transient(master)
+        self.resizable(False, False)
+
+        marco = ttk.Frame(self, padding=14)
+        marco.pack(fill="both", expand=True)
+
+        if len(transacciones) == 1:
+            t = transacciones[0]
+            detalle = f"{t.fecha.isoformat()} · {t.descripcion} · {t.tipo} ${t.monto:,.2f}"
+        else:
+            detalle = f"{len(transacciones)} renglones seleccionados"
+        ttk.Label(marco, text=detalle, style="Seccion.TLabel", wraplength=460).grid(
+            row=0, column=0, columnspan=2, sticky="w", pady=(0, 10)
+        )
+
+        categorias = sorted(
+            {t.categoria for t in master.transacciones if t.categoria}
+            | {r.categoria for r in master.reglas}
+        )
+        comercios = sorted(
+            {t.comercio for t in master.transacciones if t.comercio}
+            | {r.comercio for r in master.reglas if r.comercio}
+        )
+        ttk.Label(marco, text="Categoría:").grid(row=1, column=0, sticky="w", pady=3)
+        self.combo_categoria = ttk.Combobox(marco, values=categorias, width=40)
+        self.combo_categoria.grid(row=1, column=1, sticky="ew", padx=(8, 0))
+        ttk.Label(marco, text="Comercio (opcional):").grid(row=2, column=0, sticky="w", pady=3)
+        self.combo_comercio = ttk.Combobox(marco, values=comercios, width=40)
+        self.combo_comercio.grid(row=2, column=1, sticky="ew", padx=(8, 0))
+        primero = transacciones[0]
+        self.combo_categoria.set(primero.categoria or "")
+        self.combo_comercio.set(primero.comercio or "")
+
+        ttk.Label(
+            marco,
+            text=(
+                "No crea una regla: solo cambia este renglón. Se conserva al recargar "
+                "reglas o volver a cargar este PDF (después de guardar)."
+            ),
+            style="Ayuda.TLabel",
+            wraplength=460,
+        ).grid(row=3, column=0, columnspan=2, sticky="w", pady=(10, 0))
+
+        botones = ttk.Frame(marco)
+        botones.grid(row=4, column=0, columnspan=2, sticky="ew", pady=(14, 0))
+        ttk.Button(botones, text="Guardar", style="Primario.TButton", command=self._guardar).pack(
+            side="right"
+        )
+        ttk.Button(botones, text="Cancelar", command=self.destroy).pack(side="right", padx=(0, 6))
+        if any(master.tiene_categoria_manual(t) for t in transacciones):
+            ttk.Button(
+                botones, text="Volver a la regla", command=self._volver_a_la_regla
+            ).pack(side="left")
+
+        self.bind("<Return>", lambda _e: self._guardar())
+        self.bind("<Escape>", lambda _e: self.destroy())
+        self.combo_categoria.focus_set()
+        self.grab_set()
+
+    def _guardar(self) -> None:
+        categoria = self.combo_categoria.get().strip()
+        comercio = self.combo_comercio.get().strip() or None
+        if not categoria:
+            messagebox.showwarning(
+                "Falta la categoría",
+                "Escribe o elige una categoría (o usa \"Volver a la regla\").",
+                parent=self,
+            )
+            return
+        self.master_app.asignar_categoria_manual(self.indices, categoria, comercio)
+        self.destroy()
+
+    def _volver_a_la_regla(self) -> None:
+        self.master_app.quitar_categoria_manual(self.indices)
+        self.destroy()
+
+
 def _leer_preferencias_gmail() -> dict:
     try:
         datos = json.loads(RUTA_PREFERENCIAS_GMAIL.read_text(encoding="utf-8"))
@@ -1073,6 +1167,11 @@ class App(tk.Tk):
         # como faltante en la última carga -- valores por defecto de
         # VentanaRenglonManual.
         self.sugerencias_renglon_manual: list[tuple[str, int | None, str | None]] = []
+        # Categoría/comercio puestos a mano en renglones extraídos del PDF
+        # (VentanaCategoriaManual), por su llave (pagina, linea_cruda) -- la
+        # misma del upsert, así que es única dentro del documento. Las reglas
+        # nunca los pisan (recategorizar) y se guardan en el JSON.
+        self.categorias_manuales: dict[tuple[int, str], tuple[str, str | None]] = {}
 
         self._construir_ui()
         # Opcional (casilla en la pestaña de Gmail, apagada por defecto).
@@ -1201,7 +1300,7 @@ class App(tk.Tk):
         self.boton_editar_manual = ttk.Button(
             marco_acciones_tabla,
             text="Editar...",
-            command=self.editar_renglon_manual,
+            command=self.editar_seleccion,
             state="disabled",
         )
         self.boton_editar_manual.pack(side="left", padx=(6, 0))
@@ -1214,14 +1313,19 @@ class App(tk.Tk):
         self.boton_eliminar_manual.pack(side="left", padx=(6, 0))
         ttk.Label(
             marco_acciones_tabla,
-            text="■ manual (doble clic para editar)",
+            text="■ renglón manual",
             foreground=COLOR_FONDO_MANUAL_TEXTO,
         ).pack(side="left", padx=(14, 0))
         ttk.Label(
             marco_acciones_tabla, text="■ sin categoría", foreground=COLOR_SIN_CATEGORIA
         ).pack(side="left", padx=(10, 0))
         ttk.Label(
-            marco_acciones_tabla, text="Clic en un encabezado para ordenar", style="Ayuda.TLabel"
+            marco_acciones_tabla, text="✎ categoría puesta a mano", style="Ayuda.TLabel"
+        ).pack(side="left", padx=(10, 0))
+        ttk.Label(
+            marco_acciones_tabla,
+            text="Doble clic: editar · clic en un encabezado: ordenar",
+            style="Ayuda.TLabel",
         ).pack(side="right")
 
         marco_tabla = ttk.Frame(padre)
@@ -1266,7 +1370,7 @@ class App(tk.Tk):
         # Solo si el doble clic cae sobre un renglón (no en los encabezados).
         self.tabla.bind(
             "<Double-1>",
-            lambda e: self.tabla.identify_row(e.y) and self.editar_renglon_manual(),
+            lambda e: self.tabla.identify_row(e.y) and self.editar_seleccion(),
         )
         self.tabla.bind("<<TreeviewSelect>>", lambda _e: self._actualizar_botones_manual())
 
@@ -1372,12 +1476,13 @@ class App(tk.Tk):
 
     def _actualizar_botones_manual(self) -> None:
         seleccion = self.tabla.selection()
-        es_manual = bool(seleccion) and self.transacciones[int(seleccion[0])].linea_cruda.startswith(
+        # Editar: cualquier renglón (los del PDF, solo su categoría). Eliminar:
+        # solo un renglón manual.
+        self.boton_editar_manual.config(state="normal" if seleccion else "disabled")
+        es_manual = len(seleccion) == 1 and self.transacciones[int(seleccion[0])].linea_cruda.startswith(
             PREFIJO_RENGLON_MANUAL
         )
-        estado = "normal" if es_manual else "disabled"
-        self.boton_editar_manual.config(state=estado)
-        self.boton_eliminar_manual.config(state=estado)
+        self.boton_eliminar_manual.config(state="normal" if es_manual else "disabled")
 
     def _detectar_banco(self, ruta_pdf: Path) -> str | None:
         """Prueba cada extractor registrado contra el PDF. Si exactamente
@@ -1496,6 +1601,8 @@ class App(tk.Tk):
             )
         transacciones = nuevas_transacciones
 
+        self.categorias_manuales = self._recuperar_categorias_manuales(ruta_pdf)
+        transacciones = self._aplicar_categorias_manuales(transacciones)
         manuales_recuperados = self._recuperar_renglones_manuales(ruta_pdf)
         transacciones, ya_capturadas = descartar_ya_capturadas_a_mano(
             transacciones, manuales_recuperados
@@ -1607,14 +1714,76 @@ class App(tk.Tk):
                 # diálogo; si ya ninguna regla lo cubre, no se le borra.
                 categoria, comercio = t.categoria, t.comercio
             nuevas_transacciones.append(replace(t, categoria=categoria, comercio=comercio))
-        self.transacciones = nuevas_transacciones
+        self.transacciones = self._aplicar_categorias_manuales(nuevas_transacciones)
         self._refrescar_tabla()
         self._actualizar_totales()
+
+    def tiene_categoria_manual(self, t: TransaccionCanonica) -> bool:
+        return (t.pagina, t.linea_cruda) in self.categorias_manuales
+
+    def _aplicar_categorias_manuales(
+        self, transacciones: list[TransaccionCanonica]
+    ) -> list[TransaccionCanonica]:
+        resultado = []
+        for t in transacciones:
+            manual = self.categorias_manuales.get((t.pagina, t.linea_cruda))
+            resultado.append(replace(t, categoria=manual[0], comercio=manual[1]) if manual else t)
+        return resultado
+
+    def _recuperar_categorias_manuales(self, ruta_pdf: Path) -> dict[tuple[int, str], tuple[str, str | None]]:
+        """Las categorías puestas a mano en una carga anterior de ESTE PDF
+        (marcadas `categoria_manual` en su data/procesados/<hash>.json).
+        Cualquier problema leyendo el JSON se ignora (no se recupera nada)."""
+        ruta_json = CARPETA_PROCESADOS / f"{_hash_pdf(ruta_pdf)}.json"
+        try:
+            datos = json.loads(ruta_json.read_text(encoding="utf-8"))
+            return {
+                (int(t["pagina"]), t["linea_cruda"]): (t["categoria"], t.get("comercio"))
+                for t in datos.get("transacciones", [])
+                if t.get("categoria_manual") and t.get("categoria")
+            }
+        except (OSError, ValueError, KeyError, TypeError):
+            return {}
+
+    def asignar_categoria_manual(self, indices: list[int], categoria: str, comercio: str | None) -> None:
+        for i in indices:
+            t = self.transacciones[i]
+            if t.linea_cruda.startswith(PREFIJO_RENGLON_MANUAL):
+                # Un renglón tecleado ya conserva su categoría por sí solo.
+                self.transacciones[i] = replace(t, categoria=categoria, comercio=comercio)
+            else:
+                self.categorias_manuales[(t.pagina, t.linea_cruda)] = (categoria, comercio)
+        self.transacciones = self._aplicar_categorias_manuales(self.transacciones)
+        self._despues_de_cambiar_categorias(indices)
+
+    def quitar_categoria_manual(self, indices: list[int]) -> None:
+        for i in indices:
+            t = self.transacciones[i]
+            self.categorias_manuales.pop((t.pagina, t.linea_cruda), None)
+            if not t.linea_cruda.startswith(PREFIJO_RENGLON_MANUAL):
+                categoria, comercio = categorizar(t.descripcion, self.reglas)
+                self.transacciones[i] = replace(t, categoria=categoria, comercio=comercio)
+        self._despues_de_cambiar_categorias(indices)
+
+    def _despues_de_cambiar_categorias(self, indices: list[int]) -> None:
+        orden = self._orden_tabla
+        self._refrescar_tabla()
+        if orden is not None:  # se queda como el usuario la tenía ordenada
+            self._orden_tabla = (orden[0], not orden[1])
+            self._ordenar_tabla(orden[0])
+        self._actualizar_totales()
+        self.boton_guardar.config(state="normal")
+        visibles = [str(i) for i in indices if self.tabla.exists(str(i))]
+        if visibles:
+            self.tabla.selection_set(visibles)
+            self.tabla.see(visibles[0])
 
     def _refrescar_tabla(self) -> None:
         self.tabla.delete(*self.tabla.get_children())
         for indice, t in enumerate(self.transacciones):
             categoria = t.categoria or "(sin categoría)"
+            if self.tiene_categoria_manual(t):
+                categoria = f"✎ {categoria}"
             etiquetas = []
             if t.categoria is None:
                 etiquetas.append("sin_categoria")
@@ -1787,9 +1956,9 @@ class App(tk.Tk):
         if not t.linea_cruda.startswith(PREFIJO_RENGLON_MANUAL):
             messagebox.showinfo(
                 "No es un renglón manual",
-                "Solo los renglones agregados a mano (en amarillo) se pueden editar o "
-                "eliminar. Los demás vienen del PDF: si su categoría está mal, "
-                "corrige la regla en \"Reglas de categorización...\".",
+                "Solo los renglones agregados a mano (en amarillo) se pueden eliminar: "
+                "los demás vienen del PDF. Para cambiar su categoría, haz doble clic "
+                "en el renglón (o corrige la regla si aplica a varios).",
             )
             return None
         return t
@@ -1798,6 +1967,20 @@ class App(tk.Tk):
         t = self._renglon_manual_seleccionado()
         if t is not None:
             VentanaRenglonManual(self, editando=t)
+
+    def editar_seleccion(self) -> None:
+        """Doble clic / "Editar...": un renglón manual abre su formulario
+        completo; uno o varios renglones del PDF, el cambio de categoría."""
+        seleccion = self.tabla.selection()
+        if not seleccion:
+            return
+        indices = [int(iid) for iid in seleccion]
+        if len(indices) == 1 and self.transacciones[indices[0]].linea_cruda.startswith(
+            PREFIJO_RENGLON_MANUAL
+        ):
+            VentanaRenglonManual(self, editando=self.transacciones[indices[0]])
+        else:
+            VentanaCategoriaManual(self, indices)
 
     def eliminar_renglon_manual(self) -> None:
         t = self._renglon_manual_seleccionado()
@@ -1863,6 +2046,10 @@ class App(tk.Tk):
                     "comercio": t.comercio,
                     "tarjeta": t.tarjeta,
                     "origen": t.origen,
+                    # Puesta a mano (VentanaCategoriaManual): al recargar este
+                    # PDF se recupera en vez de recalcularse con las reglas. El
+                    # sincronizador no lee esta llave.
+                    **({"categoria_manual": True} if self.tiene_categoria_manual(t) else {}),
                 }
                 for t in self.transacciones
             ],

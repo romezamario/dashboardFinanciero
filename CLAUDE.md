@@ -185,6 +185,17 @@ Colors live in the `COLOR_*` constants at the top of `app/main.py`; the native "
 Scripts that open `App()` for testing must patch `RUTA_PREFERENCIAS_GMAIL`/`CARPETA_GASTOS_CORREO`,
 or the user's real "revisar al abrir" preference starts a real Gmail check.
 
+**Manual category on PDF-extracted rows (2026-10-05, user's request)**: double-click / "Editar..." on
+a row that came from the PDF opens `VentanaCategoriaManual` (several selected rows at once is fine):
+it changes only categoría/comercio — fecha/monto/descripción stay as the PDF prints them — and
+creates **no rule** (for one-offs like "CIERRE COMPRA DIF" = Apple, where a rule would catch every
+deferred purchase). Overrides live in `App.categorias_manuales`, keyed by `(pagina, linea_cruda)` (the
+upsert key, unique per document); `recategorizar()` re-applies them after the rules so "Recargar
+reglas" never overwrites them; `guardar_procesado` marks those rows `"categoria_manual": true` in the
+JSON (the sync ignores that key) and `_recuperar_categorias_manuales` restores them when the same PDF
+is reloaded. The table shows them as "✎ <categoría>"; "Volver a la regla" removes the override.
+A typed manual row still opens its full `VentanaRenglonManual` form.
+
 **"Recargar reglas" button (2026-10-04, user's request)**: `App.recargar_reglas` re-reads `reglas_categorizacion.json` (e.g. after Claude or the user edits it outside the app) and, if a statement is loaded, runs `recategorizar()` and reports how many rows changed and the uncategorized count before → after — no restart needed. Refuses while `VentanaReglas` is open (that window works on its own copy and "Guardar y cerrar" would overwrite the reloaded file); an unreadable JSON keeps the previous rules.
 
 **Categorization rule order matters — first match wins** (`categorizar()`): a more specific pattern
