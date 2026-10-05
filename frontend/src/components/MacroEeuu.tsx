@@ -14,6 +14,8 @@ import {
 } from "recharts";
 import {
   calcularLecturasMacro,
+  diasHasta,
+  eventosCalendario,
   GRUPOS,
   DIAS_PUBLICACION_CERCANA,
   fechaLocalHoy,
@@ -48,14 +50,22 @@ export function MacroEeuu() {
   const lecturas = useMemo(() => (datos ? calcularLecturasMacro(datos, hoy) : []), [datos, hoy]);
   // Varias series salen en el mismo reporte (empleo, desempleo y salarios el
   // mismo viernes): en el resumen van juntas bajo una sola fecha.
+  // Minutas del FOMC y PMI (ISM / S&P Global): solo su fecha, el dato no se
+  // puede traer gratis (ver `eventosCalendario`).
+  const eventos = useMemo(() => (datos ? eventosCalendario(datos, hoy) : []), [datos, hoy]);
   const cercanas = useMemo(() => {
     const porFecha = new Map<string, string[]>();
+    const agregar = (fecha: string, titulo: string) =>
+      porFecha.set(fecha, [...(porFecha.get(fecha) ?? []), titulo]);
     for (const l of lecturas) {
-      if (!l.proxima?.cercana) continue;
-      porFecha.set(l.proxima.fecha, [...(porFecha.get(l.proxima.fecha) ?? []), l.titulo]);
+      if (l.proxima?.cercana) agregar(l.proxima.fecha, l.titulo);
+    }
+    for (const e of eventos) {
+      const dias = diasHasta(e.fecha, hoy);
+      if (dias >= 0 && dias < DIAS_PUBLICACION_CERCANA) agregar(e.fecha, e.titulo);
     }
     return Array.from(porFecha.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [lecturas]);
+  }, [lecturas, eventos, hoy]);
   const fallidas = datos ? Object.keys(datos.errores) : [];
 
   if (!datos) {
@@ -96,7 +106,7 @@ export function MacroEeuu() {
         ) : (
           <ul className="mt-2 space-y-1.5">
             {cercanas.map(([fecha, titulos]) => {
-              const dias = lecturas.find((l) => l.proxima?.fecha === fecha)!.proxima!.dias;
+              const dias = diasHasta(fecha, hoy);
               return (
                 <li key={fecha} className="flex flex-wrap items-baseline gap-x-2 text-sm">
                   <InsigniaFecha fecha={fecha} dias={dias} hoy={hoy} />
@@ -137,6 +147,37 @@ export function MacroEeuu() {
           </section>
         );
       })}
+
+      <section className="space-y-3">
+        <h3 className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+          Calendario (sin dato en el tablero)
+        </h3>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          {eventos.map((e) => {
+            const dias = diasHasta(e.fecha, hoy);
+            return (
+              <div key={e.id} className="rounded-lg p-4" style={estiloTarjeta}>
+                <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                  {e.titulo}
+                </div>
+                <div className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
+                  <div>{e.estimada ? "Próxima publicación (estimada):" : "Próxima publicación:"}</div>
+                  {dias < DIAS_PUBLICACION_CERCANA ? (
+                    <InsigniaFecha fecha={e.fecha} dias={dias} hoy={hoy} />
+                  ) : (
+                    <span style={{ color: "var(--text-secondary)" }}>
+                      {nombreFechaPublicacion(e.fecha, hoy)} · {textoFaltan(dias)}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
+                  {e.nota}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </section>
 
       <p className="text-xs" style={{ color: "var(--text-muted)" }}>
         Cada dato corresponde al periodo indicado (no a su fecha de publicación) y FRED lo
