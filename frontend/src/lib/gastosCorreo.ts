@@ -158,6 +158,36 @@ function armarDia(fecha: string, gastos: GastoCorreo[]): DiaGastos {
   return { fecha, gastos, tarjetas, categorias, total: sumar(gastos, tarjetas), resumen, detalle };
 }
 
+/** Semanas (domingo a sábado, como el calendario de es-MX) de un mes
+ * "YYYY-MM": cada celda es la fecha ISO del día o null en los huecos antes
+ * del día 1 y después del último. Todo en UTC para que la zona horaria del
+ * navegador no corra ningún día. */
+export function semanasDelMes(mes: string): (string | null)[][] {
+  const [anio, m] = mes.split("-").map(Number);
+  const huecosIniciales = new Date(Date.UTC(anio, m - 1, 1)).getUTCDay();
+  const diasDelMes = new Date(Date.UTC(anio, m, 0)).getUTCDate();
+  const celdas: (string | null)[] = Array.from({ length: huecosIniciales }, () => null);
+  for (let d = 1; d <= diasDelMes; d++) celdas.push(`${mes}-${String(d).padStart(2, "0")}`);
+  while (celdas.length % 7 !== 0) celdas.push(null);
+  const semanas: (string | null)[][] = [];
+  for (let i = 0; i < celdas.length; i += 7) semanas.push(celdas.slice(i, i + 7));
+  return semanas;
+}
+
+/** "2026-10" desplazado `delta` meses (negativo = hacia atrás). */
+export function desplazarMes(mes: string, delta: number): string {
+  const [anio, m] = mes.split("-").map(Number);
+  const indice = anio * 12 + (m - 1) + delta;
+  return `${Math.floor(indice / 12)}-${String((indice % 12) + 1).padStart(2, "0")}`;
+}
+
+/** "Octubre 2026" */
+export function tituloMes(mes: string): string {
+  const [anio, m] = mes.split("-").map(Number);
+  const nombre = MESES[m - 1] ?? mes;
+  return `${nombre.charAt(0).toUpperCase()}${nombre.slice(1)} ${anio}`;
+}
+
 const SEMANA = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
 const MESES = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",

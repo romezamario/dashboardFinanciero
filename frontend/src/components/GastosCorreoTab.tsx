@@ -1,16 +1,28 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   agruparPorDia,
+  desplazarMes,
   DIAS_HISTORIAL,
   nombreTarjeta,
   obtenerGastosCorreo,
+  semanasDelMes,
   tituloDia,
+  tituloMes,
   type DiaGastos,
   type GastoCorreo,
   type Sumas,
 } from "../lib/gastosCorreo";
 
 const formatoMoneda = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
+// Para las celdas del calendario en pantallas angostas, donde no cabe el monto completo.
+const formatoCompacto = new Intl.NumberFormat("es-MX", {
+  style: "currency",
+  currency: "MXN",
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
+const DIAS_SEMANA = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
 /** Los centavos en 0 se dejan en blanco, como en el reporte diario. */
 function dinero(centavos: number | undefined): string {
@@ -18,17 +30,18 @@ function dinero(centavos: number | undefined): string {
 }
 
 /**
- * Pestaña "Gastos recientes": cargos de los avisos de compra de Banamex,
- * un día por sección (el más reciente abierto). Cada día muestra el resumen
- * por categoría y tarjeta y el detalle por transacción con ciudad, subtotales
- * por comercio (solo si hay más de una compra) y por categoría. Los datos
- * vienen de `gastos_correo`, aparte de `transacciones`, así que no se mezclan
- * con los estados de cuenta ni con los filtros del Resumen.
+ * Pestaña "Gastos recientes": cargos de los avisos de compra de Banamex en un
+ * calendario mensual. Cada día con cargos muestra lo mismo que mostraba su
+ * renglón contraído (movimientos, tarjetas y total); al hacer clic se despliega,
+ * justo debajo de su semana, el resumen por categoría y tarjeta y el detalle por
+ * transacción con ciudad, subtotales por comercio (solo si hay más de una
+ * compra) y por categoría. Los datos vienen de `gastos_correo`, aparte de
+ * `transacciones`, así que no se mezclan con los estados de cuenta ni con los
+ * filtros del Resumen.
  */
 export function GastosCorreoTab() {
   const [gastos, setGastos] = useState<GastoCorreo[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [abiertos, setAbiertos] = useState<Set<string> | null>(null);
 
   useEffect(() => {
     obtenerGastosCorreo()
@@ -61,55 +74,193 @@ export function GastosCorreoTab() {
     );
   }
 
-  // Hasta que el usuario abre o cierra algo, solo el día más reciente está abierto.
-  const abiertosEfectivos = abiertos ?? new Set([dias[0].fecha]);
-
-  function alternar(fecha: string, abierto: boolean) {
-    setAbiertos((anterior) => {
-      const siguiente = new Set(anterior ?? [dias[0].fecha]);
-      if (abierto) siguiente.add(fecha);
-      else siguiente.delete(fecha);
-      return siguiente;
-    });
-  }
-
   return (
     <div className="space-y-4">
       <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-        Cargos de los avisos de compra de Banamex, del día más reciente al más antiguo (últimos{" "}
-        {DIAS_HISTORIAL} días). Horas en CDMX, montos en MXN. Aparte de tus estados de cuenta: los
+        Cargos de los avisos de compra de Banamex (últimos {DIAS_HISTORIAL} días). Elige un día
+        para ver su detalle. Horas en CDMX, montos en MXN. Aparte de tus estados de cuenta: los
         cargos de aquí aún no se concilian con ellos.
       </p>
-      {dias.map((dia) => (
-        <details
-          key={dia.fecha}
-          open={abiertosEfectivos.has(dia.fecha)}
-          onToggle={(e) => alternar(dia.fecha, e.currentTarget.open)}
-          className="rounded-md"
-          style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
-        >
-          <summary className="flex cursor-pointer flex-wrap items-baseline gap-x-4 gap-y-1 px-4 py-3">
-            <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-              {tituloDia(dia.fecha)}
-            </h2>
-            <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
-              {dia.gastos.length} {dia.gastos.length === 1 ? "movimiento" : "movimientos"} ·{" "}
-              {dia.tarjetas.length} {dia.tarjetas.length === 1 ? "tarjeta" : "tarjetas"}
-            </span>
-            <span
-              className="ml-auto text-sm font-semibold tabular-nums"
-              style={{ color: "var(--text-primary)" }}
-            >
-              {formatoMoneda.format(dia.total.total / 100)}
-            </span>
-          </summary>
-          <div className="space-y-5 px-4 pb-4 pt-2">
-            <TablaResumen dia={dia} />
-            <TablaDetalle dia={dia} />
-          </div>
-        </details>
-      ))}
+      <CalendarioGastos dias={dias} />
     </div>
+  );
+}
+
+/** Mes "YYYY-MM" de una fecha ISO. */
+const mesDe = (fecha: string) => fecha.slice(0, 7);
+
+/**
+ * Calendario mensual de los días con cargos. `dias` viene del más reciente al
+ * más antiguo (`agruparPorDia`); al abrir, el mes y el día seleccionados son los
+ * del día más reciente (igual que antes, cuando solo ese renglón estaba
+ * abierto). Se navega solo entre los meses que tienen cargos.
+ */
+export function CalendarioGastos({ dias }: { dias: DiaGastos[] }) {
+  // `undefined` = el usuario aún no elige (se usa el día más reciente);
+  // `null` = cerró el detalle a propósito.
+  const [seleccion, setSeleccion] = useState<string | null | undefined>(undefined);
+  const [mesElegido, setMesElegido] = useState<string | null>(null);
+
+  const porFecha = useMemo(() => new Map(dias.map((d) => [d.fecha, d])), [dias]);
+  const mesMasReciente = mesDe(dias[0].fecha);
+  const mesMasAntiguo = mesDe(dias[dias.length - 1].fecha);
+  const mes = mesElegido ?? mesMasReciente;
+  const fechaSeleccionada = seleccion === undefined ? dias[0].fecha : seleccion;
+  const semanas = useMemo(() => semanasDelMes(mes), [mes]);
+
+  function elegir(fecha: string) {
+    setSeleccion(fecha === fechaSeleccionada ? null : fecha);
+  }
+
+  const botonMes = (delta: -1 | 1, etiqueta: string, deshabilitado: boolean) => (
+    <button
+      onClick={() => setMesElegido(desplazarMes(mes, delta))}
+      disabled={deshabilitado}
+      aria-label={etiqueta}
+      className="rounded-md px-3 py-1 text-sm disabled:opacity-30"
+      style={{ border: "1px solid var(--border)", color: "var(--text-primary)" }}
+    >
+      {delta < 0 ? "‹" : "›"}
+    </button>
+  );
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        {botonMes(-1, "Mes anterior", mes <= mesMasAntiguo)}
+        <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>
+          {tituloMes(mes)}
+        </h2>
+        {botonMes(1, "Mes siguiente", mes >= mesMasReciente)}
+      </div>
+
+      <div className="grid grid-cols-7 gap-1 sm:gap-2" aria-hidden="true">
+        {DIAS_SEMANA.map((d) => (
+          <div
+            key={d}
+            className="py-1 text-center text-[11px] font-semibold uppercase tracking-wider"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            {d}
+          </div>
+        ))}
+      </div>
+
+      {semanas.map((semana, i) => {
+        const diaAbierto =
+          fechaSeleccionada && semana.includes(fechaSeleccionada)
+            ? porFecha.get(fechaSeleccionada)
+            : undefined;
+        return (
+          <Fragment key={`${mes}-${i}`}>
+            <div className="grid grid-cols-7 gap-1 sm:gap-2">
+              {semana.map((fecha, j) =>
+                fecha === null ? (
+                  <div key={`hueco-${j}`} />
+                ) : (
+                  <CeldaDia
+                    key={fecha}
+                    fecha={fecha}
+                    dia={porFecha.get(fecha)}
+                    seleccionado={fecha === fechaSeleccionada}
+                    onElegir={elegir}
+                  />
+                )
+              )}
+            </div>
+            {diaAbierto && <PanelDia dia={diaAbierto} />}
+          </Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+function CeldaDia({
+  fecha,
+  dia,
+  seleccionado,
+  onElegir,
+}: {
+  fecha: string;
+  dia: DiaGastos | undefined;
+  seleccionado: boolean;
+  onElegir: (fecha: string) => void;
+}) {
+  const numero = Number(fecha.slice(8));
+  if (!dia) {
+    return (
+      <div
+        className="min-h-14 rounded-md p-1.5 text-xs sm:min-h-24 sm:p-2"
+        style={{ border: "1px solid var(--gridline)", color: "var(--text-muted)" }}
+      >
+        {numero}
+      </div>
+    );
+  }
+  const movimientos = dia.gastos.length;
+  const tarjetas = dia.tarjetas.length;
+  return (
+    <button
+      onClick={() => onElegir(fecha)}
+      aria-expanded={seleccionado}
+      aria-label={`${tituloDia(fecha)}: ${movimientos} ${movimientos === 1 ? "movimiento" : "movimientos"}, ${formatoMoneda.format(dia.total.total / 100)}`}
+      className="flex min-h-14 flex-col items-start justify-between rounded-md p-1.5 text-left sm:min-h-24 sm:p-2"
+      style={{
+        background: "var(--surface-1)",
+        border: `1px solid ${seleccionado ? "var(--series-1)" : "var(--border)"}`,
+        boxShadow: seleccionado ? "0 0 0 1px var(--series-1)" : undefined,
+        color: "var(--text-primary)",
+      }}
+    >
+      <span className="text-xs font-semibold sm:text-sm">{numero}</span>
+      <span className="w-full">
+        <span
+          className="hidden text-[11px] sm:block"
+          style={{ color: "var(--text-secondary)" }}
+        >
+          {movimientos} mov. · {tarjetas}{" "}
+          {tarjetas === 1 ? "tarjeta" : "tarjetas"}
+        </span>
+        <span className="block truncate text-[10px] font-semibold tabular-nums sm:hidden">
+          {formatoCompacto.format(dia.total.total / 100)}
+        </span>
+        <span className="hidden text-sm font-semibold tabular-nums sm:block">
+          {formatoMoneda.format(dia.total.total / 100)}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+/** El detalle de un día: el mismo encabezado del renglón de antes (fecha,
+ * movimientos · tarjetas, total) y debajo las dos tablas. */
+function PanelDia({ dia }: { dia: DiaGastos }) {
+  return (
+    <section
+      className="rounded-md"
+      style={{ background: "var(--surface-1)", border: "1px solid var(--series-1)" }}
+    >
+      <header className="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-4 py-3">
+        <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+          {tituloDia(dia.fecha)}
+        </h3>
+        <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+          {dia.gastos.length} {dia.gastos.length === 1 ? "movimiento" : "movimientos"} ·{" "}
+          {dia.tarjetas.length} {dia.tarjetas.length === 1 ? "tarjeta" : "tarjetas"}
+        </span>
+        <span
+          className="ml-auto text-sm font-semibold tabular-nums"
+          style={{ color: "var(--text-primary)" }}
+        >
+          {formatoMoneda.format(dia.total.total / 100)}
+        </span>
+      </header>
+      <div className="space-y-5 px-4 pb-4 pt-1">
+        <TablaResumen dia={dia} />
+        <TablaDetalle dia={dia} />
+      </div>
+    </section>
   );
 }
 

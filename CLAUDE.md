@@ -171,6 +171,17 @@ a cloud scheduled task without the password) was dropped in
 policies and drops that function and table. If an unattended cloud uploader is ever wanted again,
 it needs a new design — don't resurrect the anon-callable function without thinking it through.
 
+**Dashboard "Gastos recientes" tab = month calendar (2026-10-04, user's request)**:
+`GastosCorreoTab.tsx` used to be one collapsible `<details>` row per day; it is now `CalendarioGastos`
+(a Sunday-first month grid, `semanasDelMes`/`desplazarMes`/`tituloMes` in `lib/gastosCorreo.ts`).
+Each day with charges keeps exactly what its collapsed row showed — movimientos · tarjetas and the
+day total (compact amount only on narrow screens) — and clicking it opens `PanelDia` (same header +
+`TablaResumen` + `TablaDetalle`) *directly under that day's week row*; clicking the open day closes
+it, only one day is open at a time, and the most recent day starts open (as the most recent row did
+before). ‹ › move between months that have charges (data is the last `DIAS_HISTORIAL` = 60 days, so
+usually 2–3). Selection survives month changes but its panel only shows in its own month. The phone
+layout (cells collapse to number + compact total) was not verified in a real narrow viewport.
+
 **Main window layout (2026-10-04, user's request to improve look & usability)**: `_construir_ui`
 packs the header (`_construir_encabezado`: bank → "Cargar PDF..." → "Inspeccionar PDF...", rules on
 the right; account row below) and the footer (`_construir_pie`: summary, totals as four "cards" —
