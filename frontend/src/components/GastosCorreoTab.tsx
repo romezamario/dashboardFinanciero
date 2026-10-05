@@ -1,11 +1,14 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
+import { descargarDiaExcel } from "../lib/exportarGastosDia";
 import {
   agruparPorDia,
   desplazarMes,
   DIAS_HISTORIAL,
   nombreTarjeta,
   obtenerGastosCorreo,
+  posicionEnEscala,
   semanasDelMes,
+  sumarUno,
   tituloDia,
   tituloMes,
   type DiaGastos,
@@ -23,6 +26,19 @@ const formatoCompacto = new Intl.NumberFormat("es-MX", {
 });
 
 const DIAS_SEMANA = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+
+/** Verde (0, poco gasto) -> amarillo -> rojo (1, mucho gasto): el tono (hue)
+ * va de 120 a 0 en HSL. */
+const colorCalor = (t: number) => `hsl(${Math.round(120 * (1 - t))} 75% 45%)`;
+/** El color nunca va a todo color: se mezcla con el fondo de la tarjeta para
+ * que el texto siga legible en modo claro y oscuro (`--surface-1` cambia con
+ * el tema, la mezcla también). El monto está escrito en cada celda, así que
+ * el color refuerza, no es lo único que dice cuánto se gastó. */
+const FONDO_CALOR = 30;
+const fondoCalor = (t: number) =>
+  `color-mix(in srgb, ${colorCalor(t)} ${FONDO_CALOR}%, var(--surface-1))`;
+const bordeCalor = (t: number) =>
+  `color-mix(in srgb, ${colorCalor(t)} 60%, var(--border))`;
 
 /** Los centavos en 0 se dejan en blanco, como en el reporte diario. */
 function dinero(centavos: number | undefined): string {
@@ -102,6 +118,12 @@ export function CalendarioGastos({ dias }: { dias: DiaGastos[] }) {
   const [mesElegido, setMesElegido] = useState<string | null>(null);
 
   const porFecha = useMemo(() => new Map(dias.map((d) => [d.fecha, d])), [dias]);
+  // La escala de color usa TODOS los días cargados (no solo el mes a la vista)
+  // para que un mismo monto tenga el mismo color en cualquier mes.
+  const extremos = useMemo(() => {
+    const totales = dias.map((d) => d.total.total);
+    return { minimo: Math.min(...totales), maximo: Math.max(...totales) };
+  }, [dias]);
   const mesMasReciente = mesDe(dias[0].fecha);
   const mesMasAntiguo = mesDe(dias[dias.length - 1].fecha);
   const mes = mesElegido ?? mesMasReciente;
@@ -134,6 +156,8 @@ export function CalendarioGastos({ dias }: { dias: DiaGastos[] }) {
         {botonMes(1, "Mes siguiente", mes >= mesMasReciente)}
       </div>
 
+      <LeyendaCalor minimo={extremos.minimo} maximo={extremos.maximo} />
+
       <div className="grid grid-cols-7 gap-1 sm:gap-2" aria-hidden="true">
         {DIAS_SEMANA.map((d) => (
           <div
@@ -162,6 +186,7 @@ export function CalendarioGastos({ dias }: { dias: DiaGastos[] }) {
                     key={fecha}
                     fecha={fecha}
                     dia={porFecha.get(fecha)}
+                    extremos={extremos}
                     seleccionado={fecha === fechaSeleccionada}
                     onElegir={elegir}
                   />
@@ -176,14 +201,40 @@ export function CalendarioGastos({ dias }: { dias: DiaGastos[] }) {
   );
 }
 
+/** Barra de la escala verde -> rojo, con el monto del día más barato y del más caro. */
+function LeyendaCalor({ minimo, maximo }: { minimo: number; maximo: number }) {
+  const paradas = [0, 0.25, 0.5, 0.75, 1].map((t) => fondoCalor(t)).join(", ");
+  return (
+    <div
+      className="flex items-center gap-2 text-[11px]"
+      style={{ color: "var(--text-secondary)" }}
+      aria-label={`Escala de color: de ${formatoMoneda.format(minimo / 100)} (verde) a ${formatoMoneda.format(maximo / 100)} (rojo) de gasto por día`}
+    >
+      <span className="tabular-nums">{formatoMoneda.format(minimo / 100)}</span>
+      <span
+        aria-hidden="true"
+        className="h-2.5 w-28 rounded-full sm:w-44"
+        style={{
+          background: `linear-gradient(to right, ${paradas})`,
+          border: "1px solid var(--border)",
+        }}
+      />
+      <span className="tabular-nums">{formatoMoneda.format(maximo / 100)}</span>
+      <span>gasto por día</span>
+    </div>
+  );
+}
+
 function CeldaDia({
   fecha,
   dia,
+  extremos,
   seleccionado,
   onElegir,
 }: {
   fecha: string;
   dia: DiaGastos | undefined;
+  extremos: { minimo: number; maximo: number };
   seleccionado: boolean;
   onElegir: (fecha: string) => void;
 }) {
@@ -200,6 +251,7 @@ function CeldaDia({
   }
   const movimientos = dia.gastos.length;
   const tarjetas = dia.tarjetas.length;
+  const calor = posicionEnEscala(dia.total.total, extremos.minimo, extremos.maximo);
   return (
     <button
       onClick={() => onElegir(fecha)}
@@ -207,9 +259,9 @@ function CeldaDia({
       aria-label={`${tituloDia(fecha)}: ${movimientos} ${movimientos === 1 ? "movimiento" : "movimientos"}, ${formatoMoneda.format(dia.total.total / 100)}`}
       className="flex min-h-14 flex-col items-start justify-between rounded-md p-1.5 text-left sm:min-h-24 sm:p-2"
       style={{
-        background: "var(--surface-1)",
-        border: `1px solid ${seleccionado ? "var(--series-1)" : "var(--border)"}`,
-        boxShadow: seleccionado ? "0 0 0 1px var(--series-1)" : undefined,
+        background: fondoCalor(calor),
+        border: `1px solid ${seleccionado ? "var(--series-1)" : bordeCalor(calor)}`,
+        boxShadow: seleccionado ? "0 0 0 2px var(--series-1)" : undefined,
         color: "var(--text-primary)",
       }}
     >
@@ -234,8 +286,24 @@ function CeldaDia({
 }
 
 /** El detalle de un día: el mismo encabezado del renglón de antes (fecha,
- * movimientos · tarjetas, total) y debajo las dos tablas. */
+ * movimientos · tarjetas, total), el botón para bajar el día a Excel y debajo
+ * las dos tablas. */
 function PanelDia({ dia }: { dia: DiaGastos }) {
+  const [descargando, setDescargando] = useState(false);
+  const [errorExcel, setErrorExcel] = useState<string | null>(null);
+
+  async function descargar() {
+    setDescargando(true);
+    setErrorExcel(null);
+    try {
+      await descargarDiaExcel(dia);
+    } catch (e) {
+      setErrorExcel(e instanceof Error ? e.message : "No se pudo generar el Excel.");
+    } finally {
+      setDescargando(false);
+    }
+  }
+
   return (
     <section
       className="rounded-md"
@@ -255,7 +323,21 @@ function PanelDia({ dia }: { dia: DiaGastos }) {
         >
           {formatoMoneda.format(dia.total.total / 100)}
         </span>
+        <button
+          onClick={descargar}
+          disabled={descargando}
+          className="rounded-md px-3 py-1 text-xs font-medium disabled:opacity-50"
+          style={{ border: "1px solid var(--border)", color: "var(--text-primary)" }}
+          title={`Descarga gastos-${dia.fecha}.xlsx con el resumen, el detalle y los movimientos de este día`}
+        >
+          {descargando ? "Generando…" : "Descargar Excel"}
+        </button>
       </header>
+      {errorExcel && (
+        <p className="px-4 pb-2 text-xs" style={{ color: "var(--status-critical)" }}>
+          No se pudo generar el Excel: {errorExcel}
+        </p>
+      )}
       <div className="space-y-5 px-4 pb-4 pt-1">
         <TablaResumen dia={dia} />
         <TablaDetalle dia={dia} />
@@ -405,13 +487,5 @@ function TablaDetalle({ dia }: { dia: DiaGastos }) {
       </div>
     </section>
   );
-}
-
-function sumarUno(g: GastoCorreo, tarjetas: string[]): Sumas {
-  const porTarjeta: Record<string, number> = {};
-  for (const t of tarjetas) porTarjeta[t] = 0;
-  const centavos = Math.round(g.monto * 100);
-  porTarjeta[g.tarjeta] = centavos;
-  return { porTarjeta, total: centavos };
 }
 

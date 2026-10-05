@@ -92,6 +92,15 @@ export function sumar(gastos: GastoCorreo[], tarjetas: string[]): Sumas {
   return { porTarjeta, total };
 }
 
+/** Las sumas de UN gasto: su monto en la columna de su tarjeta, 0 en las demás. */
+export function sumarUno(g: GastoCorreo, tarjetas: string[]): Sumas {
+  const porTarjeta: Record<string, number> = {};
+  for (const t of tarjetas) porTarjeta[t] = 0;
+  const centavos = Math.round(g.monto * 100);
+  porTarjeta[g.tarjeta] = centavos;
+  return { porTarjeta, total: centavos };
+}
+
 export type FilaDetalle =
   | { tipo: "gasto"; gasto: GastoCorreo }
   | { tipo: "comercio"; comercio: string; sumas: Sumas }
@@ -172,6 +181,20 @@ export function semanasDelMes(mes: string): (string | null)[][] {
   const semanas: (string | null)[][] = [];
   for (let i = 0; i < celdas.length; i += 7) semanas.push(celdas.slice(i, i + 7));
   return semanas;
+}
+
+/** Dónde cae `valor` entre `minimo` (0) y `maximo` (1) en escala LOGARÍTMICA:
+ * con una escala lineal un solo día de $15,000 dejaría todos los de $500 en el
+ * mismo verde; el logaritmo reparte los colores sin perder el orden (más
+ * gasto, siempre más cerca de 1). Todos los valores iguales (o uno solo) caen
+ * en 0.5, sin nada con qué comparar. Los valores se acotan a >= 1 para que el
+ * logaritmo exista. */
+export function posicionEnEscala(valor: number, minimo: number, maximo: number): number {
+  const lo = Math.log(Math.max(minimo, 1));
+  const hi = Math.log(Math.max(maximo, 1));
+  if (hi <= lo) return 0.5;
+  const t = (Math.log(Math.max(valor, 1)) - lo) / (hi - lo);
+  return Math.min(1, Math.max(0, t));
 }
 
 /** "2026-10" desplazado `delta` meses (negativo = hacia atrás). */

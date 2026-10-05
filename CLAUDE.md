@@ -181,6 +181,19 @@ it, only one day is open at a time, and the most recent day starts open (as the 
 before). ‹ › move between months that have charges (data is the last `DIAS_HISTORIAL` = 60 days, so
 usually 2–3). Selection survives month changes but its panel only shows in its own month. The phone
 layout (cells collapse to number + compact total) was not verified in a real narrow viewport.
+**Heat colors (user's request)**: each day's cell is tinted green → yellow → red by its total
+(`colorCalor`: HSL hue 120 → 0, mixed 30% into `--surface-1` with `color-mix` so text stays readable in
+light and dark; the amount is printed in every cell, color only reinforces). The scale is
+`posicionEnEscala`: **logarithmic** between the cheapest and the most expensive day of *all* loaded
+days (not just the visible month) — linear would paint everything green next to one $15k day — and all
+days equal → 0.5. `LeyendaCalor` shows the gradient with those two amounts. **"Descargar Excel"** in
+the day panel header (`lib/exportarGastosDia.ts`, dependency `write-excel-file`, loaded with a dynamic
+`import()` so it's its own ~20 KB-gzip chunk) downloads `gastos-AAAA-MM-DD.xlsx` with three sheets:
+*Resumen* and *Detalle* (what the screen shows, subtotals and styling included) and *Movimientos* (one
+plain row per charge — the one to filter/pivot). Amounts are real numbers with a `"$"#,##0.00` format
+(zeros left empty like on screen); the date column is ISO text so the browser time zone can't shift it.
+`hojasDelDia()` builds the sheets without downloading, which is how it was checked (zip opened, sums
+compared) — the actual "Guardar como" was not exercised.
 
 **Main window layout (2026-10-04, user's request to improve look & usability)**: `_construir_ui`
 packs the header (`_construir_encabezado`: bank → "Cargar PDF..." → "Inspeccionar PDF...", rules on
