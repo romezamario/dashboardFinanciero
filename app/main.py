@@ -19,6 +19,7 @@ import json
 import queue
 import threading
 import tkinter as tk
+import tkinter.font as tkfont
 from dataclasses import replace
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
@@ -62,6 +63,13 @@ PARSERS: dict[str, type[BaseParser]] = {
     "Banamex TDC": BanamexTdcParser,
     "Invex TDC": InvexTdcParser,
 }
+
+# Colores de apoyo de la interfaz (el resto lo pone el tema nativo de Windows).
+COLOR_TEXTO_SECUNDARIO = "#5f6368"
+COLOR_FILA_PAR = "#f6f8fa"
+COLOR_FONDO_MANUAL = "#fff4cc"
+COLOR_FONDO_MANUAL_TEXTO = "#b38600"  # el mismo amarillo, legible como texto
+COLOR_SIN_CATEGORIA = "#b3261e"
 
 COLUMNAS = ("pagina", "fecha", "descripcion", "monto", "tipo", "categoria", "comercio", "tarjeta", "origen")
 
@@ -1051,7 +1059,8 @@ class App(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("Dashboard Financiero — revisión de estados de cuenta")
-        self.geometry("900x600")
+        self.geometry("1240x780")
+        self.minsize(980, 600)
 
         self.reglas: list[Regla] = cargar_reglas()
         self.transacciones: list[TransaccionCanonica] = []
@@ -1069,120 +1078,40 @@ class App(tk.Tk):
         # Opcional (casilla en la pestaña de Gmail, apagada por defecto).
         self.after(500, self.pestana_gmail.revisar_al_abrir)
 
+    def _configurar_estilos(self) -> None:
+        """Tipografía y estilos compartidos. Se queda con el tema nativo de
+        Windows ("vista"); solo ajusta tamaños, pesos y colores de apoyo."""
+        for nombre in ("TkDefaultFont", "TkTextFont", "TkMenuFont", "TkHeadingFont"):
+            try:
+                tkfont.nametofont(nombre).configure(family="Segoe UI", size=10)
+            except tk.TclError:
+                pass
+        estilo = ttk.Style(self)
+        estilo.configure("Treeview", rowheight=26)
+        estilo.configure("Treeview.Heading", font=("Segoe UI", 10, "bold"))
+        estilo.configure("Primario.TButton", font=("Segoe UI", 10, "bold"), padding=(12, 4))
+        estilo.configure("Ayuda.TLabel", foreground=COLOR_TEXTO_SECUNDARIO)
+        estilo.configure("Seccion.TLabel", font=("Segoe UI", 10, "bold"))
+        estilo.configure("TotalTitulo.TLabel", foreground=COLOR_TEXTO_SECUNDARIO, font=("Segoe UI", 9))
+        estilo.configure("TotalValor.TLabel", font=("Segoe UI", 13, "bold"))
+        estilo.configure("Vacio.TLabel", foreground=COLOR_TEXTO_SECUNDARIO, font=("Segoe UI", 11))
+
     def _construir_ui(self) -> None:
-        marco_superior = ttk.Frame(self)
-        marco_superior.pack(fill="x", padx=8, pady=8)
+        self._configurar_estilos()
 
-        ttk.Label(marco_superior, text="Banco (se detecta solo si es posible):").pack(
-            side="left"
-        )
-        self.combo_banco = ttk.Combobox(
-            marco_superior, values=list(PARSERS), state="readonly", width=20
-        )
-        self.combo_banco.current(0)
-        self.combo_banco.pack(side="left", padx=4)
-
-        ttk.Button(marco_superior, text="Cargar PDF...", command=self.cargar_pdf).pack(
-            side="left", padx=12
-        )
-        ttk.Button(
-            marco_superior, text="Reglas de categorización...", command=self.abrir_reglas
-        ).pack(side="left")
-        ttk.Button(
-            marco_superior, text="Recargar reglas", command=self.recargar_reglas
-        ).pack(side="left", padx=(4, 0))
-        ttk.Button(
-            marco_superior,
-            text="Inspeccionar PDF...",
-            command=self.abrir_inspeccion,
-        ).pack(side="left", padx=(4, 0))
-        ttk.Button(
-            marco_superior,
-            text="Agregar renglón manual...",
-            command=self.abrir_renglon_manual,
-        ).pack(side="left", padx=(4, 0))
-
-        marco_cuenta = ttk.Frame(self)
-        marco_cuenta.pack(fill="x", padx=8, pady=(0, 8))
-
-        ttk.Label(marco_cuenta, text="Alias de cuenta:").pack(side="left")
-        self.entrada_alias_cuenta = ttk.Entry(marco_cuenta, width=24)
-        self.entrada_alias_cuenta.pack(side="left", padx=4)
-
-        ttk.Label(marco_cuenta, text="Últimos 4 dígitos:").pack(
-            side="left", padx=(12, 0)
-        )
-        self.entrada_ultimos_4 = ttk.Entry(marco_cuenta, width=6)
-        self.entrada_ultimos_4.pack(side="left", padx=4)
-        ttk.Label(
-            marco_cuenta,
-            text=(
-                "(se autocompleta al cargar el PDF si el extractor lo soporta — "
-                "verifica antes de guardar; nunca escribas el número completo)"
-            ),
-            foreground="#a00",
-        ).pack(side="left", padx=8)
+        # Orden de empaquetado: primero lo de arriba y lo de abajo, al final las
+        # pestañas con expand=True -- así la tabla se queda con el espacio que
+        # sobra y nunca empuja fuera de la ventana los botones de Guardar y
+        # Sincronizar (antes quedaban aplastados con la ventana chica).
+        self._construir_encabezado()
+        self._construir_pie()
 
         self.notebook = ttk.Notebook(self)
-        self.notebook.pack(fill="both", expand=True, padx=8, pady=4)
+        self.notebook.pack(fill="both", expand=True, padx=10, pady=(4, 0))
 
-        pestana_transacciones = ttk.Frame(self.notebook)
+        pestana_transacciones = ttk.Frame(self.notebook, padding=(0, 6, 0, 0))
         self.notebook.add(pestana_transacciones, text="Transacciones")
-
-        self.tabla = ttk.Treeview(pestana_transacciones, columns=COLUMNAS, show="headings")
-        encabezados = {
-            "pagina": "Pág.",
-            "fecha": "Fecha",
-            "descripcion": "Descripción",
-            "monto": "Monto",
-            "tipo": "Tipo",
-            "categoria": "Categoría",
-            "comercio": "Comercio",
-            "tarjeta": "Tarjeta",
-            "origen": "Estado de cuenta",
-        }
-        anchos = {
-            "pagina": 40,
-            "fecha": 90,
-            "descripcion": 280,
-            "monto": 90,
-            "tipo": 70,
-            "categoria": 130,
-            "comercio": 110,
-            "tarjeta": 80,
-            "origen": 160,
-        }
-        for col in COLUMNAS:
-            self.tabla.heading(col, text=encabezados[col])
-            self.tabla.column(col, width=anchos[col], anchor="w")
-        # Los renglones manuales se distinguen a simple vista: son los únicos
-        # que se pueden editar/eliminar (los extraídos vienen del PDF).
-        self.tabla.tag_configure("manual", background="#fff4cc")
-        # Solo si el doble clic cae sobre un renglón (no en los encabezados).
-        self.tabla.bind(
-            "<Double-1>",
-            lambda e: self.tabla.identify_row(e.y) and self.editar_renglon_manual(),
-        )
-
-        marco_acciones_tabla = ttk.Frame(pestana_transacciones)
-        marco_acciones_tabla.pack(side="bottom", fill="x", pady=(4, 0))
-        ttk.Button(
-            marco_acciones_tabla,
-            text="Editar renglón manual...",
-            command=self.editar_renglon_manual,
-        ).pack(side="left")
-        ttk.Button(
-            marco_acciones_tabla,
-            text="Eliminar renglón manual",
-            command=self.eliminar_renglon_manual,
-        ).pack(side="left", padx=(4, 0))
-        ttk.Label(
-            marco_acciones_tabla,
-            text="Renglones manuales en amarillo · doble clic para editar",
-            foreground="#666",
-        ).pack(side="left", padx=8)
-
-        self.tabla.pack(fill="both", expand=True)
+        self._construir_tabla(pestana_transacciones)
 
         # Pestaña separada (no solo un filtro de la tabla) para que las
         # descripciones sin categoría queden en texto plano, una por línea,
@@ -1192,10 +1121,10 @@ class App(tk.Tk):
         # tabla como se venía haciendo. Únicas y sin acentos/orden de
         # aparición alterado: no tiene caso pegar la misma descripción
         # repetida 20 veces si "Uber" apareció 20 veces sin categorizar.
-        pestana_sin_categorizar = ttk.Frame(self.notebook)
-        self.notebook.add(pestana_sin_categorizar, text="Sin categorizar")
+        self.pestana_sin_categorizar = ttk.Frame(self.notebook)
+        self.notebook.add(self.pestana_sin_categorizar, text="Sin categorizar")
 
-        marco_sin_categorizar_top = ttk.Frame(pestana_sin_categorizar)
+        marco_sin_categorizar_top = ttk.Frame(self.pestana_sin_categorizar)
         marco_sin_categorizar_top.pack(fill="x", padx=8, pady=(8, 4))
         self.etiqueta_sin_categorizar = ttk.Label(
             marco_sin_categorizar_top, text="Sin datos cargados."
@@ -1208,7 +1137,8 @@ class App(tk.Tk):
         ).pack(side="right")
 
         self.texto_sin_categorizar = tk.Text(
-            pestana_sin_categorizar, wrap="none", height=10, state="disabled"
+            self.pestana_sin_categorizar, wrap="none", height=10, state="disabled",
+            font=("Consolas", 10), relief="flat", borderwidth=1,
         )
         self.texto_sin_categorizar.pack(fill="both", expand=True, padx=8, pady=(0, 8))
 
@@ -1217,35 +1147,237 @@ class App(tk.Tk):
         self.pestana_gmail = PestanaGastosGmail(self.notebook)
         self.notebook.add(self.pestana_gmail, text="Gastos recientes (Gmail)")
 
-        self.etiqueta_resumen = ttk.Label(self, text="Sin datos cargados.")
-        self.etiqueta_resumen.pack(fill="x", padx=8)
+    def _construir_encabezado(self) -> None:
+        # Renglón 1: el flujo principal (banco -> cargar PDF) a la izquierda,
+        # las reglas (afectan a todo, no solo a este PDF) a la derecha.
+        barra = ttk.Frame(self, padding=(10, 10, 10, 4))
+        barra.pack(fill="x")
 
-        marco_totales = ttk.LabelFrame(self, text="Totales de la tabla cargada")
-        marco_totales.pack(fill="x", padx=8, pady=(0, 8))
-        self.etiqueta_totales = ttk.Label(
-            marco_totales,
-            text="Cargos: — · Disposición de efectivo: — · Abonos: —",
-            font=("Consolas", 10),
+        ttk.Label(barra, text="Banco:").pack(side="left")
+        self.combo_banco = ttk.Combobox(barra, values=list(PARSERS), state="readonly", width=16)
+        self.combo_banco.current(0)
+        self.combo_banco.pack(side="left", padx=(4, 8))
+        ttk.Button(
+            barra, text="Cargar PDF...", style="Primario.TButton", command=self.cargar_pdf
+        ).pack(side="left")
+        ttk.Button(barra, text="Inspeccionar PDF...", command=self.abrir_inspeccion).pack(
+            side="left", padx=(6, 0)
         )
-        self.etiqueta_totales.pack(fill="x", padx=8, pady=6)
+        ttk.Label(barra, text="se detecta solo al cargar", style="Ayuda.TLabel").pack(
+            side="left", padx=(10, 0)
+        )
 
-        marco_acciones_finales = ttk.Frame(self)
-        marco_acciones_finales.pack(fill="x", padx=8, pady=8)
+        ttk.Button(barra, text="Recargar reglas", command=self.recargar_reglas).pack(side="right")
+        ttk.Button(
+            barra, text="Reglas de categorización...", command=self.abrir_reglas
+        ).pack(side="right", padx=(0, 6))
+
+        # Renglón 2: la cuenta a la que se asocia este estado de cuenta.
+        cuenta = ttk.Frame(self, padding=(10, 2, 10, 4))
+        cuenta.pack(fill="x")
+        ttk.Label(cuenta, text="Cuenta:", style="Seccion.TLabel").pack(side="left")
+        ttk.Label(cuenta, text="Alias").pack(side="left", padx=(10, 4))
+        self.entrada_alias_cuenta = ttk.Entry(cuenta, width=22)
+        self.entrada_alias_cuenta.pack(side="left")
+        ttk.Label(cuenta, text="Últimos 4 dígitos").pack(side="left", padx=(14, 4))
+        self.entrada_ultimos_4 = ttk.Entry(cuenta, width=6)
+        self.entrada_ultimos_4.pack(side="left")
+        ttk.Label(
+            cuenta,
+            text="Se llenan al cargar el PDF: verifícalos antes de guardar. Nunca escribas el número completo.",
+            style="Ayuda.TLabel",
+        ).pack(side="left", padx=(12, 0))
+
+        ttk.Separator(self).pack(fill="x", padx=10, pady=(4, 0))
+
+    def _construir_tabla(self, padre: ttk.Frame) -> None:
+        marco_acciones_tabla = ttk.Frame(padre)
+        marco_acciones_tabla.pack(side="bottom", fill="x", pady=(6, 0))
+        ttk.Button(
+            marco_acciones_tabla,
+            text="Agregar renglón manual...",
+            command=self.abrir_renglon_manual,
+        ).pack(side="left")
+        self.boton_editar_manual = ttk.Button(
+            marco_acciones_tabla,
+            text="Editar...",
+            command=self.editar_renglon_manual,
+            state="disabled",
+        )
+        self.boton_editar_manual.pack(side="left", padx=(6, 0))
+        self.boton_eliminar_manual = ttk.Button(
+            marco_acciones_tabla,
+            text="Eliminar",
+            command=self.eliminar_renglon_manual,
+            state="disabled",
+        )
+        self.boton_eliminar_manual.pack(side="left", padx=(6, 0))
+        ttk.Label(
+            marco_acciones_tabla,
+            text="■ manual (doble clic para editar)",
+            foreground=COLOR_FONDO_MANUAL_TEXTO,
+        ).pack(side="left", padx=(14, 0))
+        ttk.Label(
+            marco_acciones_tabla, text="■ sin categoría", foreground=COLOR_SIN_CATEGORIA
+        ).pack(side="left", padx=(10, 0))
+        ttk.Label(
+            marco_acciones_tabla, text="Clic en un encabezado para ordenar", style="Ayuda.TLabel"
+        ).pack(side="right")
+
+        marco_tabla = ttk.Frame(padre)
+        marco_tabla.pack(fill="both", expand=True)
+        self.tabla = ttk.Treeview(marco_tabla, columns=COLUMNAS, show="headings")
+        encabezados = {
+            "pagina": "Pág.",
+            "fecha": "Fecha",
+            "descripcion": "Descripción",
+            "monto": "Monto",
+            "tipo": "Tipo",
+            "categoria": "Categoría",
+            "comercio": "Comercio",
+            "tarjeta": "Tarjeta",
+            "origen": "Estado de cuenta",
+        }
+        # (ancho, alineación, ¿crece con la ventana?)
+        columnas = {
+            "pagina": (48, "center", False),
+            "fecha": (96, "w", False),
+            "descripcion": (320, "w", True),
+            "monto": (110, "e", False),
+            "tipo": (80, "center", False),
+            "categoria": (150, "w", False),
+            "comercio": (140, "w", False),
+            "tarjeta": (80, "w", False),
+            "origen": (170, "w", False),
+        }
+        for col in COLUMNAS:
+            ancho, alineacion, crece = columnas[col]
+            self.tabla.heading(
+                col, text=encabezados[col], anchor=alineacion,
+                command=lambda c=col: self._ordenar_tabla(c),
+            )
+            self.tabla.column(col, width=ancho, minwidth=40, anchor=alineacion, stretch=crece)
+        # Primero el rayado, después lo que debe destacar encima de él.
+        self.tabla.tag_configure("par", background=COLOR_FILA_PAR)
+        self.tabla.tag_configure("sin_categoria", foreground=COLOR_SIN_CATEGORIA)
+        # Los renglones manuales se distinguen a simple vista: son los únicos
+        # que se pueden editar/eliminar (los extraídos vienen del PDF).
+        self.tabla.tag_configure("manual", background=COLOR_FONDO_MANUAL)
+        # Solo si el doble clic cae sobre un renglón (no en los encabezados).
+        self.tabla.bind(
+            "<Double-1>",
+            lambda e: self.tabla.identify_row(e.y) and self.editar_renglon_manual(),
+        )
+        self.tabla.bind("<<TreeviewSelect>>", lambda _e: self._actualizar_botones_manual())
+
+        barra_v = ttk.Scrollbar(marco_tabla, orient="vertical", command=self.tabla.yview)
+        barra_h = ttk.Scrollbar(marco_tabla, orient="horizontal", command=self.tabla.xview)
+        self.tabla.configure(yscrollcommand=barra_v.set, xscrollcommand=barra_h.set)
+        self.tabla.grid(row=0, column=0, sticky="nsew")
+        barra_v.grid(row=0, column=1, sticky="ns")
+        barra_h.grid(row=1, column=0, sticky="ew")
+        marco_tabla.rowconfigure(0, weight=1)
+        marco_tabla.columnconfigure(0, weight=1)
+
+        # Estado vacío: encima de la tabla mientras no haya nada cargado.
+        self.etiqueta_tabla_vacia = ttk.Label(
+            marco_tabla,
+            text="Elige el banco (o déjalo detectar) y presiona «Cargar PDF...» para empezar.",
+            style="Vacio.TLabel",
+            background="white",
+        )
+        self.etiqueta_tabla_vacia.place(relx=0.5, rely=0.45, anchor="center")
+        self._orden_tabla: tuple[str, bool] | None = None
+
+    def _construir_pie(self) -> None:
+        pie = ttk.Frame(self, padding=(10, 6, 10, 10))
+        pie.pack(side="bottom", fill="x")
+
+        ttk.Separator(pie).pack(fill="x", pady=(0, 6))
+        self.etiqueta_resumen = ttk.Label(pie, text="Sin datos cargados.", style="Ayuda.TLabel")
+        self.etiqueta_resumen.pack(fill="x")
+        # El resumen puede ser largo (advertencias, manuales recuperados...):
+        # que se ajuste al ancho en vez de cortarse.
+        pie.bind(
+            "<Configure>",
+            lambda e: self.etiqueta_resumen.configure(wraplength=max(e.width - 20, 200)),
+        )
+
+        fila = ttk.Frame(pie)
+        fila.pack(fill="x", pady=(6, 0))
+
+        self.etiquetas_totales: dict[str, tuple[ttk.Label, ttk.Label]] = {}
+        for clave, titulo in (
+            ("cargos", "Cargos"),
+            ("efectivo", "Disposición de efectivo"),
+            ("abonos", "Abonos"),
+            ("neto", "Neto (abonos − cargos)"),
+        ):
+            tarjeta = ttk.Frame(fila, padding=(0, 0, 28, 0))
+            tarjeta.pack(side="left")
+            ttk.Label(tarjeta, text=titulo, style="TotalTitulo.TLabel").pack(anchor="w")
+            valor = ttk.Label(tarjeta, text="—", style="TotalValor.TLabel")
+            valor.pack(anchor="w")
+            detalle = ttk.Label(tarjeta, text="", style="TotalTitulo.TLabel")
+            detalle.pack(anchor="w")
+            self.etiquetas_totales[clave] = (valor, detalle)
 
         self.boton_sincronizar = ttk.Button(
-            marco_acciones_finales,
+            fila,
             text="Sincronizar a Supabase...",
             command=self.sincronizar,
         )
         self.boton_sincronizar.pack(side="right", padx=(8, 0))
 
         self.boton_guardar = ttk.Button(
-            marco_acciones_finales,
+            fila,
             text="Guardar archivo procesado",
+            style="Primario.TButton",
             command=self.guardar_procesado,
             state="disabled",
         )
         self.boton_guardar.pack(side="right")
+
+    def _ordenar_tabla(self, columna: str) -> None:
+        """Ordena lo que se ve (no `self.transacciones`): los iid siguen siendo
+        la posición en la lista, así que editar/eliminar no se afecta."""
+        descendente = self._orden_tabla == (columna, False)
+        self._orden_tabla = (columna, descendente)
+
+        def clave(iid: str):
+            t = self.transacciones[int(iid)]
+            valor = {
+                "pagina": t.pagina, "fecha": t.fecha, "descripcion": t.descripcion.upper(),
+                "monto": t.monto, "tipo": t.tipo, "categoria": (t.categoria or "").upper(),
+                "comercio": (t.comercio or "").upper(), "tarjeta": t.tarjeta or "",
+                "origen": t.origen or "",
+            }[columna]
+            return (valor, int(iid))
+
+        for posicion, iid in enumerate(sorted(self.tabla.get_children(), key=clave, reverse=descendente)):
+            self.tabla.move(iid, "", posicion)
+        self._rayar_tabla()
+        flecha = " ▼" if descendente else " ▲"
+        for col in COLUMNAS:
+            texto = self.tabla.heading(col, "text").rstrip(" ▲▼")
+            self.tabla.heading(col, text=texto + (flecha if col == columna else ""))
+
+    def _rayar_tabla(self) -> None:
+        """Filas alternadas según el orden visible (cambia al ordenar)."""
+        for posicion, iid in enumerate(self.tabla.get_children()):
+            etiquetas = [e for e in self.tabla.item(iid, "tags") if e != "par"]
+            if posicion % 2:
+                etiquetas.insert(0, "par")
+            self.tabla.item(iid, tags=etiquetas)
+
+    def _actualizar_botones_manual(self) -> None:
+        seleccion = self.tabla.selection()
+        es_manual = bool(seleccion) and self.transacciones[int(seleccion[0])].linea_cruda.startswith(
+            PREFIJO_RENGLON_MANUAL
+        )
+        estado = "normal" if es_manual else "disabled"
+        self.boton_editar_manual.config(state=estado)
+        self.boton_eliminar_manual.config(state=estado)
 
     def _detectar_banco(self, ruta_pdf: Path) -> str | None:
         """Prueba cada extractor registrado contra el PDF. Si exactamente
@@ -1483,18 +1615,23 @@ class App(tk.Tk):
         self.tabla.delete(*self.tabla.get_children())
         for indice, t in enumerate(self.transacciones):
             categoria = t.categoria or "(sin categoría)"
+            etiquetas = []
+            if t.categoria is None:
+                etiquetas.append("sin_categoria")
+            if t.linea_cruda.startswith(PREFIJO_RENGLON_MANUAL):
+                etiquetas.append("manual")
             self.tabla.insert(
                 "",
                 "end",
                 # iid = posición en self.transacciones, para saber qué renglón
                 # se seleccionó (_renglon_manual_seleccionado).
                 iid=str(indice),
-                tags=("manual",) if t.linea_cruda.startswith(PREFIJO_RENGLON_MANUAL) else (),
+                tags=etiquetas,
                 values=(
                     t.pagina,
                     t.fecha.isoformat(),
                     t.descripcion,
-                    f"{t.monto:.2f}",
+                    f"{t.monto:,.2f}",
                     t.tipo,
                     categoria,
                     t.comercio or "",
@@ -1502,6 +1639,16 @@ class App(tk.Tk):
                     t.origen or "",
                 ),
             )
+        # Recién cargada, la tabla va en el orden del PDF (sin flecha de orden).
+        self._orden_tabla = None
+        for col in COLUMNAS:
+            self.tabla.heading(col, text=self.tabla.heading(col, "text").rstrip(" ▲▼"))
+        self._rayar_tabla()
+        if self.transacciones:
+            self.etiqueta_tabla_vacia.place_forget()
+        else:
+            self.etiqueta_tabla_vacia.place(relx=0.5, rely=0.45, anchor="center")
+        self._actualizar_botones_manual()
         self._refrescar_sin_categorizar()
 
     def _refrescar_sin_categorizar(self) -> None:
@@ -1526,6 +1673,10 @@ class App(tk.Tk):
         else:
             texto_etiqueta = "Todas las transacciones tienen categoría."
         self.etiqueta_sin_categorizar.config(text=texto_etiqueta)
+        self.notebook.tab(
+            self.pestana_sin_categorizar,
+            text=f"Sin categorizar ({len(descripciones_unicas)})" if descripciones_unicas else "Sin categorizar",
+        )
 
     def _copiar_sin_categorizar(self) -> None:
         self.clipboard_clear()
@@ -1548,13 +1699,20 @@ class App(tk.Tk):
         total_otros_cargos = sum((t.monto for t in otros_cargos), start=Decimal("0"))
         total_abonos = sum((t.monto for t in abonos), start=Decimal("0"))
 
-        self.etiqueta_totales.config(
-            text=(
-                f"Cargos: {total_otros_cargos:,.2f} ({len(otros_cargos)})   ·   "
-                f"Disposición de efectivo: {total_efectivo:,.2f} ({len(cargos_efectivo)})   ·   "
-                f"Abonos: {total_abonos:,.2f} ({len(abonos)})"
-            )
+        neto = total_abonos - total_otros_cargos - total_efectivo
+        for clave, valor, cuantos in (
+            ("cargos", total_otros_cargos, len(otros_cargos)),
+            ("efectivo", total_efectivo, len(cargos_efectivo)),
+            ("abonos", total_abonos, len(abonos)),
+        ):
+            etiqueta_valor, etiqueta_detalle = self.etiquetas_totales[clave]
+            etiqueta_valor.config(text=f"${valor:,.2f}" if self.transacciones else "—")
+            etiqueta_detalle.config(text=f"{cuantos} movimiento(s)" if self.transacciones else "")
+        etiqueta_valor, etiqueta_detalle = self.etiquetas_totales["neto"]
+        etiqueta_valor.config(
+            text=(f"{'−' if neto < 0 else ''}${abs(neto):,.2f}" if self.transacciones else "—")
         )
+        etiqueta_detalle.config(text=f"{len(self.transacciones)} en total" if self.transacciones else "")
 
     def abrir_reglas(self) -> None:
         VentanaReglas(self)

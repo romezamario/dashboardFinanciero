@@ -164,6 +164,20 @@ a cloud scheduled task without the password) was dropped in
 policies and drops that function and table. If an unattended cloud uploader is ever wanted again,
 it needs a new design — don't resurrect the anon-callable function without thinking it through.
 
+**Main window layout (2026-10-04, user's request to improve look & usability)**: `_construir_ui`
+packs the header (`_construir_encabezado`: bank → "Cargar PDF..." → "Inspeccionar PDF...", rules on
+the right; account row below) and the footer (`_construir_pie`: summary, totals as four "cards" —
+cargos, efectivo, abonos, neto — and the Guardar/Sincronizar buttons) **before** the notebook, which
+gets `expand=True`. Keep that order: when the notebook was packed first, a small window squeezed the
+Guardar/Sincronizar buttons to empty slivers. The table has scrollbars, right-aligned amounts with
+thousands separators, zebra rows (`_rayar_tabla`, recomputed after sorting), red text for
+uncategorized rows, yellow background for manual rows, click-to-sort headers (`_ordenar_tabla` only
+reorders the view; iids stay = index in `self.transacciones`), an empty-state label, and
+"Agregar renglón manual..." next to Editar/Eliminar (enabled only when a manual row is selected).
+Colors live in the `COLOR_*` constants at the top of `app/main.py`; the native "vista" theme is kept.
+Scripts that open `App()` for testing must patch `RUTA_PREFERENCIAS_GMAIL`/`CARPETA_GASTOS_CORREO`,
+or the user's real "revisar al abrir" preference starts a real Gmail check.
+
 **"Recargar reglas" button (2026-10-04, user's request)**: `App.recargar_reglas` re-reads `reglas_categorizacion.json` (e.g. after Claude or the user edits it outside the app) and, if a statement is loaded, runs `recategorizar()` and reports how many rows changed and the uncategorized count before → after — no restart needed. Refuses while `VentanaReglas` is open (that window works on its own copy and "Guardar y cerrar" would overwrite the reloaded file); an unreadable JSON keeps the previous rules.
 
 **Categorization rule order matters — first match wins** (`categorizar()`): a more specific pattern
