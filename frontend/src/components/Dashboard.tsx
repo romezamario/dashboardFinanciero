@@ -7,7 +7,7 @@ import { esTarjetaCredito } from "../lib/tarjetas";
 import { AnalisisTecnicoTab } from "./AnalisisTecnicoTab";
 import { DetalleDimensionTab } from "./DetalleDimensionTab";
 import { EventosTab } from "./EventosTab";
-import { GastosCorreoTab } from "./GastosCorreoTab";
+import { GastosRecientesTab } from "./GastosRecientesTab";
 import { TarjetasCreditoTab } from "./TarjetasCreditoTab";
 import type { VistaTiempo } from "./IngresosGastosChart";
 import { VistaResumen } from "./VistaResumen";
@@ -43,8 +43,9 @@ const PESTANA_RESUMEN = "resumen";
 const PESTANA_EVENTOS = "eventos";
 const PESTANA_CATEGORIAS_COMERCIOS = "categorias-comercios";
 const PESTANA_TARJETAS_CREDITO = "tarjetas-credito";
-// Gastos de los avisos de compra de Banamex (tabla gastos_correo): no usa las
-// transacciones de estados de cuenta, así que carga sus propios datos.
+// "Gastos recientes": vista por correo (tabla gastos_correo, carga sus propios
+// datos) y vista por estado de cuenta (las transacciones de arriba, con su
+// propio "Ocultar categorías" guardado en el estado de esta pestaña).
 const PESTANA_GASTOS_CORREO = "gastos-correo";
 // Análisis técnico de QQQ/TQQQ: no usa las transacciones (cotizaciones de
 // /api/cotizaciones), solo vive aquí para tener todo en un mismo lugar.
@@ -276,7 +277,22 @@ export function Dashboard() {
         {vistaActiva === PESTANA_TECNICO ? (
           <AnalisisTecnicoTab />
         ) : vistaActiva === PESTANA_GASTOS_CORREO ? (
-          <GastosCorreoTab />
+          <GastosRecientesTab
+            transacciones={transacciones}
+            // Su propio "Ocultar categorías": se guarda aparte del Resumen
+            // (misma lógica de default `null` = categorías de pagos entre cuentas).
+            categoriasOcultas={
+              (estadosPorPestana[PESTANA_GASTOS_CORREO] ?? ESTADO_VACIO).categoriasOcultas ??
+              categoriasOcultasPorDefecto
+            }
+            onCambiarCategoriasOcultas={(cambio) =>
+              actualizarEstado(PESTANA_GASTOS_CORREO, (e) => ({
+                ...e,
+                categoriasOcultas: cambio(e.categoriasOcultas ?? categoriasOcultasPorDefecto),
+              }))
+            }
+            onActualizado={recargarTransacciones}
+          />
         ) : transacciones.length === 0 ? (
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
             No hay transacciones sincronizadas todavía — usa la app de

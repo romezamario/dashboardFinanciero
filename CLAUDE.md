@@ -206,6 +206,34 @@ plain row per charge — the one to filter/pivot). Amounts are real numbers with
 `hojasDelDia()` builds the sheets without downloading, which is how it was checked (zip opened, sums
 compared) — the actual "Guardar como" was not exercised.
 
+**"Gastos recientes" has two sources (2026-10-07, user's request)**: `GastosRecientesTab.tsx` puts a
+`Segmentado` ("Por correo | Por estado de cuenta", same pill as QQQ's; now its own file) over the
+tab; it opens on "Por correo", which is exactly the view above (the calendar shell moved to
+`CalendarioMensual.tsx` — generic over `ResumenDia`, with `renderPanel` — and the table pieces to
+`TablasGastosDia.tsx`/`lib/gastosUI.ts`, no behavior change). **"Por estado de cuenta"**
+(`GastosEstadoCuentaTab.tsx`, `lib/gastosEstadoCuenta.ts`) builds the same days from `transacciones`
+(no new query; whole history, month `<select>` when >4 months, opens on the latest day). Differences,
+all by the user's choice: columns are **cuentas** (`cuentas.alias`), not card endings; no hora/ciudad
+(detail has descripción, tarjeta Titular/Adicional, evento); **only cargos whose categoría is not
+hidden add up** to the day total, the heat color, the Resumen and Detalle tables — abonos and hidden
+categories (default: `categoriasExcluidasPorDefecto`, i.e. Pago TDC/traspasos, so paying the card from
+Priority is visible but doesn't count) go in a separate "No suman al total" table with the reason, and
+the cell shows "+N sin sumar"; a day with only those has no heat color ("sin gasto"). **Own "Ocultar
+categorías" row** (collapsed disclosure, independent from the Resumen's; stored in
+`estadosPorPestana["gastos-correo"].categoriasOcultas`, `null` = default). Cell badges: one per
+non-TDC account with movements that day ("Priority", `nombreCorto`) and "Abono" when there are abonos
+of non-hidden categories (a card payment is not income). `$0` cargos (Invex V2 echo lines) are
+dropped. A "Datos hasta:" line shows each cuenta's last date (⚠ after 45 days) because statements
+arrive weeks late — an empty day after that date means "not loaded", not "no spending". The day panel
+has **inline "Editar"** per movement (categoría/comercio/evento + "Quitar evento", same functions as the
+bulk editor, then `recargarTransacciones`; same non-durable-against-reprocessing caveat) and its own
+Excel (`lib/exportarGastosEstadoCuenta.ts`, `estado-de-cuenta-AAAA-MM-DD.xlsx`: Resumen, Detalle,
+"No suman" when applicable, Movimientos with a "Suma al total" Sí/No column). Checked with a
+throwaway harness and synthetic data (sums, hidden-category toggle, month select, editor, workbook
+built); not checked in a real phone-width viewport. **Not done on purpose (phase 2)**: reconciling the
+two sources (matching a correo charge to its statement row) / a combined view that fills the days after
+the last cutoff with correo data.
+
 **Main window layout (2026-10-04, user's request to improve look & usability)**: `_construir_ui`
 packs the header (`_construir_encabezado`: bank → "Cargar PDF..." → "Inspeccionar PDF...", rules on
 the right; account row below) and the footer (`_construir_pie`: summary, totals as three "cards" —

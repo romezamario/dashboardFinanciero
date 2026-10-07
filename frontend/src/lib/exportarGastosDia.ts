@@ -5,12 +5,14 @@ import { nombreTarjeta, sumarUno, type DiaGastos, type Sumas } from "./gastosCor
 // siendo un número, así que se puede sumar/filtrar en Excel.
 const PESOS = '"$"#,##0.00';
 
-const CABECERA = { fontWeight: "bold", textColor: "#ffffff", backgroundColor: "#222222" } as const;
-const SUBTOTAL_COMERCIO = { fontStyle: "italic", backgroundColor: "#f3f3f3" } as const;
-const SUBTOTAL_CATEGORIA = { fontWeight: "bold", backgroundColor: "#dcdcdc" } as const;
-const TOTAL = { fontWeight: "bold", textColor: "#ffffff", backgroundColor: "#222222" } as const;
+// Estilos y celdas que también usa el Excel de "Por estado de cuenta"
+// (exportarGastosEstadoCuenta.ts).
+export const CABECERA = { fontWeight: "bold", textColor: "#ffffff", backgroundColor: "#222222" } as const;
+export const SUBTOTAL_COMERCIO = { fontStyle: "italic", backgroundColor: "#f3f3f3" } as const;
+export const SUBTOTAL_CATEGORIA = { fontWeight: "bold", backgroundColor: "#dcdcdc" } as const;
+export const TOTAL = { fontWeight: "bold", textColor: "#ffffff", backgroundColor: "#222222" } as const;
 
-interface Estilo {
+export interface Estilo {
   fontWeight?: "bold";
   fontStyle?: "italic";
   textColor?: string;
@@ -18,12 +20,12 @@ interface Estilo {
   align?: "left" | "center" | "right";
 }
 
-const texto = (valor: string, estilo: Estilo = {}) => ({ value: valor, ...estilo });
+export const texto = (valor: string, estilo: Estilo = {}) => ({ value: valor, ...estilo });
 
 /** Monto en pesos (el dato va en centavos enteros). En las filas sin estilo un
  * cero se deja vacío, como en pantalla; en las con relleno se escribe una celda
  * vacía con el mismo fondo para que la fila no quede "rota". */
-function monto(centavos: number | undefined, estilo: Estilo = {}) {
+export function monto(centavos: number | undefined, estilo: Estilo = {}) {
   if (!centavos) return Object.keys(estilo).length > 0 ? texto("", estilo) : null;
   return {
     value: centavos / 100,
@@ -34,7 +36,7 @@ function monto(centavos: number | undefined, estilo: Estilo = {}) {
   };
 }
 
-function celdasSumas(sumas: Sumas, tarjetas: string[], estilo: Estilo = {}) {
+export function celdasSumas(sumas: Sumas, tarjetas: string[], estilo: Estilo = {}) {
   return [...tarjetas.map((t) => monto(sumas.porTarjeta[t], estilo)), monto(sumas.total, estilo)];
 }
 

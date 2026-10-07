@@ -168,7 +168,7 @@ export function PanelFiltros({
 
 /** Etiqueta en su propia columna (alineada entre filas) en pantallas
  * medianas; arriba de las píldoras en un teléfono. */
-function Fila({ etiqueta, children }: { etiqueta: string; children: ReactNode }) {
+export function Fila({ etiqueta, children }: { etiqueta: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5 sm:flex-row sm:items-baseline sm:gap-3">
       <span className="shrink-0 text-xs sm:w-20" style={{ color: "var(--text-muted)" }}>
@@ -198,14 +198,17 @@ function PildoraFiltro({ texto, activa, onClick }: { texto: string; activa: bool
   );
 }
 
-function PildoraExclusion({
+export function PildoraExclusion({
   texto,
   excluida,
   onClick,
+  titulo,
 }: {
   texto: string;
   excluida: boolean;
   onClick: () => void;
+  /** Texto del tooltip cuando no es el del Resumen ("de todo el dashboard"). */
+  titulo?: string;
 }) {
   // El estado "excluida" no depende solo del color: tachado + borde.
   return (
@@ -220,14 +223,14 @@ function PildoraExclusion({
         color: excluida ? "var(--status-critical)" : "var(--text-secondary)",
         textDecoration: excluida ? "line-through" : "none",
       }}
-      title={excluida ? "Volver a incluir" : "Excluir de todo el dashboard"}
+      title={titulo ?? (excluida ? "Volver a incluir" : "Excluir de todo el dashboard")}
     >
       {texto}
     </button>
   );
 }
 
-function EnlaceTexto({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+export function EnlaceTexto({ onClick, children }: { onClick: () => void; children: ReactNode }) {
   return (
     <button type="button" onClick={onClick} className="ml-1 text-xs underline" style={{ color: "var(--text-muted)" }}>
       {children}
