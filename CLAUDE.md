@@ -162,6 +162,17 @@ lists ids (`listar_ids`) and only downloads the ones not already in `data/gastos
 call uses `execute(num_retries=REINTENTOS_GMAIL)` (googleapiclient's exponential backoff on 429/403
 rate limits). If it still fails mid-read, `LecturaInterrumpida` carries what was read, it is saved,
 and the user sees `LimiteDeGmail` (Spanish) instead of a raw HttpError.
+**Debit notices are not expenses (2026-10-06, user's decision)**: "Retiro/Compra con cuenta
+Banamex" notices from a debit account (`"Cheques M.N. ***123"`, `"CTA PRIORITY BNM M.N. ***123"`)
+have amount/date but **no Establecimiento** — not even whether it was an ATM withdrawal or a purchase.
+They used to be reported as "no se pudieron leer" (14 real ones). `parsear_debito` recognizes them
+(account line `M.N. ***<digits>`, which card notices don't have); they're saved apart in
+`data/gastos_correo/debitos.json` (never uploaded, never summed as gastos) so they aren't
+re-downloaded, and the tab shows "N retiro(s)/compra(s) con tu cuenta de cheques (débito) por $X: no
+se suman como gastos". `leer_mensajes` now returns `(avisos, ilegibles, debitos)`; `leer_avisos`
+keeps its 2-tuple. City codes: the bank truncates the city to 3 letters (or sends the billing
+city/phone for online charges, e.g. `+14`, `866`, `Ams`); the user confirmed 35 mappings in their
+gitignored `ciudades.json`, online ones as "En línea".
 **Upload uses the user's own session (user's decision, 2026-10-04)**: `sync/gastos_correo.py`
 signs in with `SUPABASE_EMAIL`/`SUPABASE_PASSWORD` (`sincronizador.crear_cliente_autenticado`) and
 upserts `gastos_correo` on `(user_id, mensaje_id)`, sending `user_id` explicitly. The original

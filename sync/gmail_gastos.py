@@ -190,6 +190,38 @@ def parsear_aviso(html: str, mensaje_id: str) -> dict[str, Any] | None:
     }
 
 
+def parsear_debito(html: str, mensaje_id: str) -> dict[str, Any] | None:
+    """El aviso "Retiro/Compra con cuenta Banamex" de una cuenta de débito
+    (cheques o Priority): trae monto, fecha y la cuenta ("Cheques M.N. ***123",
+    "CTA PRIORITY BNM M.N. ***123") pero NO el
+    establecimiento, así que ni el banco dice si fue un retiro de cajero o una
+    compra. Por decisión del usuario (2026-10-06) NO se suma como gasto: se
+    guarda aparte, como débito ({id, fecha, hora, monto: Decimal}), o None si
+    el correo no es eso."""
+    p = _Textos()
+    p.feed(html)
+    textos = p.textos
+    if not any(re.search(r"Retiro\s*/\s*Compra", t) for t in textos):
+        return None
+    # La cuenta viene como "Cheques M.N. ***123" o "CTA PRIORITY BNM M.N. ***123"
+    # (los avisos de tarjeta de crédito dicen "BEYOND BANAMEX**904", sin M.N.).
+    es_cuenta = any(re.search(r"\bM\.N\.\s*\*{3}\d+", t) for t in textos)
+    if not es_cuenta or _valor_tras(textos, "Establecimiento"):
+        return None
+    if (_valor_tras(textos, "Estatus") or "").lower() != "exitoso":
+        return None
+    monto = re.search(r"\$\s*([\d,]+\.\d{2})", _valor_tras(textos, "Monto") or "")
+    fecha_hora = _fecha_hora(_valor_tras(textos, "Fecha y hora") or "")
+    if not (monto and fecha_hora):
+        return None
+    return {
+        "id": mensaje_id,
+        "fecha": fecha_hora[0],
+        "hora": fecha_hora[1],
+        "monto": Decimal(monto.group(1).replace(",", "")),
+    }
+
+
 def ciudad_de(establecimiento: str, extra: dict[str, str] | None = None) -> tuple[str, str | None]:
     """(código, ciudad|None). El código son las 3 últimas letras del
     Establecimiento (a veces pegado al nombre: "BATH AND BODY WORKS#55MCA").
@@ -267,6 +299,33 @@ def cargar_ciudades_extra(carpeta: Path = CARPETA_GASTOS_CORREO) -> dict[str, st
     return {k.upper(): v for k, v in json.loads(ruta.read_text(encoding="utf-8")).items()}
 
 
+NOMBRE_ARCHIVO_DEBITOS = "debitos.json"
+
+
+def cargar_debitos(carpeta: Path = CARPETA_GASTOS_CORREO) -> dict[str, dict[str, Any]]:
+    """Débitos de la cuenta de cheques ya vistos, por id de mensaje (ver
+    `parsear_debito`). No son gastos: no se suben a Supabase."""
+    ruta = carpeta / NOMBRE_ARCHIVO_DEBITOS
+    try:
+        datos = json.loads(ruta.read_text(encoding="utf-8"))
+        return {d["id"]: d for d in datos.get("debitos", []) if "id" in d}
+    except (OSError, ValueError, TypeError, AttributeError):
+        return {}
+
+
+def guardar_debitos(nuevos: list[dict[str, Any]], carpeta: Path = CARPETA_GASTOS_CORREO) -> None:
+    """Mezcla por id con los ya guardados (así no se vuelven a descargar)."""
+    if not nuevos:
+        return
+    todos = cargar_debitos(carpeta)
+    todos.update({d["id"]: {**d, "monto": float(d["monto"])} for d in nuevos})
+    carpeta.mkdir(parents=True, exist_ok=True)
+    ordenados = sorted(todos.values(), key=lambda d: (d["fecha"], d["hora"], d["id"]))
+    (carpeta / NOMBRE_ARCHIVO_DEBITOS).write_text(
+        json.dumps({"debitos": ordenados}, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+
 def ids_guardados(carpeta: Path = CARPETA_GASTOS_CORREO) -> set[str]:
     """Ids de mensaje que ya están en los archivos por día (para contar cuáles
     son nuevos). Un archivo ilegible simplemente no aporta ids."""
@@ -334,9 +393,16 @@ REINTENTOS_GMAIL = 6
 class LecturaInterrumpida(Exception):
     """Falló Gmail a media lectura: trae lo que sí se leyó, para no perderlo."""
 
-    def __init__(self, error: Exception, avisos: list[dict[str, Any]], ilegibles: list[str]) -> None:
+    def __init__(
+        self,
+        error: Exception,
+        avisos: list[dict[str, Any]],
+        ilegibles: list[str],
+        debitos: list[dict[str, Any]] | None = None,
+    ) -> None:
         super().__init__(str(error))
         self.error, self.avisos, self.ilegibles = error, avisos, ilegibles
+        self.debitos = debitos or []
 
 
 def listar_ids(servicio: ServicioGmail, dias: int) -> list[str]:
@@ -359,15 +425,17 @@ def leer_mensajes(
     servicio: ServicioGmail,
     ids: list[str],
     progreso: Callable[[int, int], None] | None = None,
-) -> tuple[list[dict[str, Any]], list[str]]:
-    """Descarga y lee cada id: (avisos leídos, ids que no se pudieron leer como
-    cargo exitoso -- se reportan para que no se pierdan en silencio).
+) -> tuple[list[dict[str, Any]], list[str], list[dict[str, Any]]]:
+    """Descarga y lee cada id: (avisos de compra con tarjeta, ids que no se
+    pudieron leer -- se reportan para que no se pierdan en silencio --, débitos
+    de la cuenta de cheques, que no son gastos; ver `parsear_debito`).
     `progreso(leidos, total)` se llama tras cada correo (para la barra de la
     app). Si Gmail falla a media lectura, lanza `LecturaInterrumpida` con lo
     ya leído."""
     mensajes = servicio.users().messages()
     avisos: list[dict[str, Any]] = []
     ilegibles: list[str] = []
+    debitos: list[dict[str, Any]] = []
     if progreso:
         progreso(0, len(ids))
     for n, mid in enumerate(ids, start=1):
@@ -376,16 +444,19 @@ def leer_mensajes(
                 num_retries=REINTENTOS_GMAIL
             )
         except Exception as error:  # noqa: BLE001
-            raise LecturaInterrumpida(error, avisos, ilegibles) from error
+            raise LecturaInterrumpida(error, avisos, ilegibles, debitos) from error
         html = html_del_mensaje(mensaje)
         aviso = parsear_aviso(html, mid) if html else None
+        debito = parsear_debito(html, mid) if html and not aviso else None
         if aviso:
             avisos.append(aviso)
+        elif debito:
+            debitos.append(debito)
         else:
             ilegibles.append(mid)
         if progreso:
             progreso(n, len(ids))
-    return avisos, ilegibles
+    return avisos, ilegibles, debitos
 
 
 def leer_avisos(
@@ -395,7 +466,8 @@ def leer_avisos(
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Lista y lee TODOS los avisos de los últimos `dias` (sin saltarse los ya
     guardados; `revisar_gmail` sí se los salta)."""
-    return leer_mensajes(servicio, listar_ids(servicio, dias), progreso)
+    avisos, ilegibles, _debitos = leer_mensajes(servicio, listar_ids(servicio, dias), progreso)
+    return avisos, ilegibles
 
 
 def recategorizar_guardados(
@@ -553,6 +625,9 @@ class ResultadoRevision:
     recategorizados: int = 0
     por_dia: list[ResumenDia] = field(default_factory=list)
     ilegibles: list[str] = field(default_factory=list)
+    # Retiros/compras con la cuenta de cheques en la ventana: no son gastos.
+    debitos: int = 0
+    total_debitos: Decimal = Decimal("0")
     sin_categoria: list[str] = field(default_factory=list)
     codigos_sin_confirmar: list[str] = field(default_factory=list)
     sin_reglas: bool = False
@@ -634,7 +709,8 @@ def revisar_gmail(
         servicio = crear_servicio_gmail(permitir_autorizar=permitir_autorizar)
     avisar("Buscando avisos de compra en Gmail…")
     ciudades = cargar_ciudades_extra(carpeta)
-    previos = ids_guardados(carpeta)
+    debitos_previos = cargar_debitos(carpeta)
+    previos = ids_guardados(carpeta) | set(debitos_previos)
     error_lectura: Exception | None = None
     try:
         ids = listar_ids(servicio, dias)
@@ -643,7 +719,7 @@ def revisar_gmail(
         # Gmail (con 90 días son cientos). Los ya guardados se recategorizan
         # abajo, sin red.
         por_descargar = [i for i in ids if i not in previos]
-        avisos, ilegibles = leer_mensajes(
+        avisos, ilegibles, debitos = leer_mensajes(
             servicio,
             por_descargar,
             lambda n, total: avisar(f"Leyendo correo nuevo {n} de {total}…", n, total),
@@ -652,11 +728,13 @@ def revisar_gmail(
         # Se guarda lo leído antes de reportar el error: la próxima revisión
         # ya no lo vuelve a pedir.
         avisos, ilegibles, error_lectura = interrumpida.avisos, interrumpida.ilegibles, interrumpida.error
+        debitos = interrumpida.debitos
         ids = None
     except Exception as error:  # noqa: BLE001 -- falló el listado
-        avisos, ilegibles, error_lectura, ids = [], [], error, None
+        avisos, ilegibles, debitos, error_lectura, ids = [], [], [], error, None
 
     escribir_dias(agrupar_por_dia(avisos, reglas, ciudades), carpeta)
+    guardar_debitos(debitos, carpeta)
 
     if error_lectura is not None:
         if _es_permiso_invalido(error_lectura):
@@ -675,6 +753,9 @@ def revisar_gmail(
     resultado.avisos_leidos = len(gastos)
     resultado.nuevos = len(avisos)
     resultado.ilegibles = ilegibles
+    debitos_en_ventana = [d for i, d in cargar_debitos(carpeta).items() if i in en_ventana]
+    resultado.debitos = len(debitos_en_ventana)
+    resultado.total_debitos = sum((Decimal(str(d["monto"])) for d in debitos_en_ventana), Decimal("0"))
     por_dia: dict[str, list[dict[str, Any]]] = {}
     for g in gastos:
         por_dia.setdefault(g["fecha"], []).append(g)
@@ -717,6 +798,11 @@ def avisos_para_mostrar(r: ResultadoRevision) -> list[str]:
         lineas.append(
             f"{len(r.ilegibles)} correo(s) no se pudieron leer como cargo exitoso "
             f"(otro tipo de aviso o formato nuevo), ids: {', '.join(r.ilegibles)}"
+        )
+    if r.debitos:
+        lineas.append(
+            f"{r.debitos} retiro(s)/compra(s) con tu cuenta de cheques (débito) por "
+            f"${r.total_debitos:,.2f}: no se suman como gastos."
         )
     if r.sin_reglas:
         lineas.append(

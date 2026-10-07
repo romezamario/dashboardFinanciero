@@ -417,6 +417,10 @@ python -m sync.gmail_gastos --dias 3 --subir
    usuario (`SUPABASE_EMAIL`/`SUPABASE_PASSWORD` del `.env`, el mismo login que "Sincronizar a
    Supabase..."); la RLS solo le deja escribir tus propias filas. No hace falta ninguna otra clave.
 
+Los avisos de retiro/compra con tu cuenta de cheques o Priority (débito) no traen el comercio:
+no se suman como gastos ni se suben; se guardan aparte en `data/gastos_correo/debitos.json` y la
+pestaña solo dice cuántos hubo y por cuánto.
+
 Es idempotente: se puede correr todos los días (o varias veces al día) sin duplicar nada. Solo
 descarga de Gmail los correos que todavía no están en `data/gastos_correo/`; los ya guardados se
 recategorizan en tu computadora con las reglas actuales (así una regla nueva corrige también los

@@ -32,8 +32,10 @@ from sync.gmail_gastos import (
     hay_permiso_guardado,
     html_del_mensaje,
     ids_guardados,
+    cargar_debitos,
     leer_avisos,
     parsear_aviso,
+    parsear_debito,
     resumen_revision,
     revisar_gmail,
 )
@@ -60,6 +62,22 @@ def aviso_html(
         + _fila("Establecimiento", establecimiento)
         + _fila("Fecha y hora", fecha)
         + _fila("Estatus", f"\n\t\t\t\t{estatus}\n\t\t\t")
+        + _fila("No. Autorizaci&oacute;n", "123456")
+        + "</table></body></html>"
+    )
+
+
+def debito_html(monto: str = "$ 1,500.00 M.N.", fecha: str = "05 Octubre 2026 / 10:15:00") -> str:
+    """Aviso "Retiro/Compra con cuenta Banamex" de la cuenta de cheques: sin
+    Establecimiento (misma estructura que el real, datos inventados)."""
+    return (
+        "<html><body><table><tr><td><p><b>Se realiz&oacute; la siguiente operaci&oacute;n: "
+        "Retiro/Compra<br></b></p><p>NOMBRE DEMO <br></p></td></tr>"
+        "<tr><td><b>Cheques M.N. ***123</b></td></tr>"
+        "<tr><td><b>Detalle de la operaci&oacute;n</b></td></tr>"
+        + _fila("Monto", monto)
+        + _fila("Fecha y hora", fecha)
+        + _fila("Estatus", "Exitoso")
         + _fila("No. Autorizaci&oacute;n", "123456")
         + "</table></body></html>"
     )
@@ -95,6 +113,17 @@ class ParsearAvisoTest(unittest.TestCase):
     def test_conserva_codigo_pegado_al_nombre(self) -> None:
         a = parsear_aviso(aviso_html(establecimiento="BATH AND BODY WORKS#55MCA"), "m")
         self.assertEqual(a["establecimiento"], "BATH AND BODY WORKS#55MCA")
+
+    def test_aviso_de_debito_se_reconoce_aparte(self) -> None:
+        self.assertIsNone(parsear_aviso(debito_html(), "d"))
+        self.assertEqual(
+            parsear_debito(debito_html(), "d"),
+            {"id": "d", "fecha": "2026-10-05", "hora": "10:15", "monto": Decimal("1500.00")},
+        )
+        priority = debito_html().replace("Cheques M.N. ***123", "CTA PRIORITY BNM M.N. ***123")
+        self.assertEqual(parsear_debito(priority, "p")["monto"], Decimal("1500.00"))
+        # Una compra con tarjeta (trae Establecimiento) no es débito.
+        self.assertIsNone(parsear_debito(aviso_html(), "m"))
 
     def test_no_es_cargo_exitoso_devuelve_none(self) -> None:
         self.assertIsNone(parsear_aviso(aviso_html(estatus="Rechazado"), "m"))
@@ -393,6 +422,29 @@ class RevisarGmailTest(unittest.TestCase):
         r = revisar_gmail(3, servicio=_ServicioFalso(mensajes), reglas=REGLAS, carpeta=self.carpeta)
         self.assertEqual(mensajes.descargados, ["b", "c"])
         self.assertEqual(r.nuevos, 1)
+
+    def test_debito_de_cuenta_de_cheques_no_es_gasto(self) -> None:
+        mensajes = self.mensajes()
+        mensajes.paginas = [["a", "b", "c", "d"]]
+        mensajes.cuerpos["d"] = _msg(debito_html())
+        r = revisar_gmail(
+            3, subir=True, servicio=_ServicioFalso(mensajes), cliente_supabase=ClienteFalso(),
+            reglas=REGLAS, carpeta=self.carpeta,
+        )
+        # Ni gasto ni "no se pudo leer": débito aparte, que no se sube.
+        self.assertNotIn("d", ids_guardados(self.carpeta))
+        self.assertEqual(r.ilegibles, ["b"])
+        self.assertEqual((r.debitos, r.total_debitos), (1, Decimal("1500.00")))
+        self.assertEqual(set(cargar_debitos(self.carpeta)), {"d"})
+        self.assertEqual(r.gastos_subidos, 2)
+        self.assertIn("1 retiro(s)/compra(s) con tu cuenta de cheques (débito) por $1,500.00", "\n".join(avisos_para_mostrar(r)))
+        # La siguiente revisión ya no lo descarga, pero lo sigue contando.
+        otra = self.mensajes()
+        otra.paginas = [["a", "b", "c", "d"]]
+        otra.cuerpos["d"] = _msg(debito_html())
+        r2 = revisar_gmail(3, servicio=_ServicioFalso(otra), reglas=REGLAS, carpeta=self.carpeta)
+        self.assertNotIn("d", otra.descargados)
+        self.assertEqual(r2.debitos, 1)
 
     def test_avisos_en_espanol(self) -> None:
         r = revisar_gmail(3, servicio=self.servicio(), reglas=[], carpeta=self.carpeta)
