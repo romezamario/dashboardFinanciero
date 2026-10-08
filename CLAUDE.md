@@ -793,6 +793,14 @@ charts, which already plot both series. Related latent bug fixed in the same pas
 list routinely repeats descriptions (several "UBER…"), so React logged duplicate-key errors and
 left stale rows in the DOM when the filter changed — keys now include the row index.
 
+**Click-a-month on that tab's first chart (2026-10-07, user's report: "el clic tipo Power BI no funciona")**: the
+monthly bars of `GastoConPromedioMovilChart` are now a cross-filter like the other charts: a click anywhere on a month's
+column (chart-level `onClick` + `activeLabel`, not just the thin bar) sets `mes` (local state in `DetalleDimensionTab`),
+which narrows the category/comercio bar charts, the "mayores" table and the transactions table to that month; the monthly
+chart itself is **not** trimmed (it excludes its own dimension, `transaccionesSinMes`) — the chosen month stays full and
+the rest dim to 0.3. Same click again, the "Mes: AAAA-MM ×" chip or "Limpiar todos los filtros" clear it. `lado`
+(ingreso vs gasto) is decided without the month so the chart doesn't flip labels.
+
 **"Categorías y Comercios" tab: comercio options follow the category (2026-10-03, user's request)**:
 with a category chosen (select or bar click), the "Filtrar por comercio" select in
 `DetalleDimensionTab.tsx` lists only the comercios that have movements in that category

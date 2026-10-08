@@ -61,6 +61,11 @@ interface DetalleDimensionTabProps {
  */
 export function DetalleDimensionTab({ transacciones }: DetalleDimensionTabProps) {
   const [filtros, setFiltros] = useState<Filtros>({});
+  // Mes ("YYYY-MM") elegido con un clic en la gráfica mensual: filtra todo lo de
+  // abajo (barras por categoría/comercio, mayores gastos, tabla) a ese mes. La
+  // propia gráfica mensual no se recorta (cross-filter: excluye su dimensión).
+  const [mes, setMes] = useState<string | null>(null);
+  const alternarMes = (valor: string) => setMes((anterior) => (anterior === valor ? null : valor));
 
   // Al cambiar de categoría, un comercio ya elegido que no tiene movimientos
   // en la nueva categoría se quita: el select de comercio solo ofrece los de
@@ -123,21 +128,31 @@ export function DetalleDimensionTab({ transacciones }: DetalleDimensionTabProps)
   const ultimoMes = periodo.meses[periodo.meses.length - 1];
   const mesesTendencia = useMemo(() => mesesHasta(ultimoMes, 12), [ultimoMes]);
 
+  const transaccionesDelMes = useMemo(
+    () => (mes ? transacciones.filter((t) => t.fecha.startsWith(mes)) : transacciones),
+    [transacciones, mes]
+  );
   const gastoPorCategoria = useMemo(
-    () => agruparPorCategoria(aplicarFiltros(transacciones, filtros, "categoria")),
-    [transacciones, filtros]
+    () => agruparPorCategoria(aplicarFiltros(transaccionesDelMes, filtros, "categoria")),
+    [transaccionesDelMes, filtros]
   );
   const gastoPorComercio = useMemo(
-    () => agruparPorComercio(aplicarFiltros(transacciones, filtros, "comercio")),
-    [transacciones, filtros]
+    () => agruparPorComercio(aplicarFiltros(transaccionesDelMes, filtros, "comercio")),
+    [transaccionesDelMes, filtros]
   );
-  const transaccionesFiltradas = useMemo(
+  // Sin el filtro de mes: es lo que grafica la gráfica mensual (que resalta el
+  // mes elegido en vez de recortarse a él) y lo que decide ingreso vs. gasto.
+  const transaccionesSinMes = useMemo(
     () => aplicarFiltros(transacciones, filtros),
     [transacciones, filtros]
   );
+  const transaccionesFiltradas = useMemo(
+    () => aplicarFiltros(transaccionesDelMes, filtros),
+    [transaccionesDelMes, filtros]
+  );
   // Una selección de puros abonos (ej. "Transferencia recibida") se grafica y
   // lista como ingreso -- ver ladoDominante.
-  const lado = useMemo(() => ladoDominante(transaccionesFiltradas), [transaccionesFiltradas]);
+  const lado = useMemo(() => ladoDominante(transaccionesSinMes), [transaccionesSinMes]);
   const esIngreso = lado === "ingreso";
   const topGastos = useMemo(
     () =>
@@ -156,11 +171,11 @@ export function DetalleDimensionTab({ transacciones }: DetalleDimensionTabProps)
       ? `${filtros.categoria} en ${filtros.comercio}`
       : (filtros.categoria ?? filtros.comercio ?? null);
   const tendenciaConPromedioMovil = useMemo(
-    () => gastoMensualConPromedioMovil(transaccionesFiltradas, mesesTendencia, 3, lado),
-    [transaccionesFiltradas, mesesTendencia, lado]
+    () => gastoMensualConPromedioMovil(transaccionesSinMes, mesesTendencia, 3, lado),
+    [transaccionesSinMes, mesesTendencia, lado]
   );
 
-  const hayFiltrosActivos = Boolean(filtros.categoria || filtros.comercio);
+  const hayFiltrosActivos = Boolean(filtros.categoria || filtros.comercio || mes);
 
   return (
     <div className="space-y-4">
@@ -223,8 +238,21 @@ export function DetalleDimensionTab({ transacciones }: DetalleDimensionTabProps)
                 {ETIQUETAS_FILTRO[campo]}: {filtros[campo]} ×
               </button>
             ))}
+          {mes && (
+            <button
+              onClick={() => setMes(null)}
+              className="rounded-full px-3 py-1 text-xs font-medium"
+              style={{ background: "var(--series-1)", color: "#ffffff" }}
+              title="Quitar este filtro"
+            >
+              Mes: {mes} ×
+            </button>
+          )}
           <button
-            onClick={() => setFiltros({})}
+            onClick={() => {
+              setFiltros({});
+              setMes(null);
+            }}
             className="text-xs underline"
             style={{ color: "var(--text-muted)" }}
           >
@@ -236,6 +264,8 @@ export function DetalleDimensionTab({ transacciones }: DetalleDimensionTabProps)
       <GastoConPromedioMovilChart
         datos={tendenciaConPromedioMovil}
         lado={lado}
+        mesSeleccionado={mes ?? undefined}
+        onClickMes={alternarMes}
         titulo={`${esIngreso ? "Ingreso" : "Gasto"} mensual y promedio móvil${
           seleccionActual ? ` de "${seleccionActual}"` : ""
         }`}
@@ -253,7 +283,7 @@ export function DetalleDimensionTab({ transacciones }: DetalleDimensionTabProps)
       />
 
       <Tabla
-        titulo={`${esIngreso ? "Ingresos" : "Gastos"} individuales más grandes (según lo filtrado arriba)`}
+        titulo={`${esIngreso ? "Ingresos" : "Gastos"} individuales más grandes (según lo filtrado arriba${mes ? `, ${mes}` : ""})`}
         vacio={`No hay ${esIngreso ? "ingresos" : "gastos"} en la selección actual.`}
         encabezados={["Descripción", "Fecha", "Monto"]}
         filas={topGastos.map((t) => [

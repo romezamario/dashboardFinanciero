@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import {
   Bar,
   CartesianGrid,
+  Cell,
   ComposedChart,
   Legend,
   Line,
@@ -28,6 +29,12 @@ interface GastoConPromedioMovilChartProps {
    * barras y los colores (azul = ingresos, naranja = gastos, igual que el
    * resto del dashboard). */
   lado?: LadoMovimiento;
+  /** Mes ("YYYY-MM") elegido con un clic (cross-filter, estilo Power BI): su
+   * barra queda completa y las demás se atenúan. */
+  mesSeleccionado?: string;
+  /** Clic en un mes (en cualquier punto de su columna, no solo sobre la barra,
+   * que en los meses bajos es muy delgada). Sin él la gráfica no es clicable. */
+  onClickMes?: (mes: string) => void;
 }
 
 /** Promedio plano del monto sobre los últimos `n` meses visibles en `datos`
@@ -57,6 +64,8 @@ export function GastoConPromedioMovilChart({
   datos,
   titulo,
   lado = "gasto",
+  mesSeleccionado,
+  onClickMes,
 }: GastoConPromedioMovilChartProps) {
   const esIngreso = lado === "ingreso";
   const colorBarras = esIngreso ? "var(--series-1)" : "var(--series-2)";
@@ -75,10 +84,26 @@ export function GastoConPromedioMovilChart({
     >
       <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
         {titulo}
+        {onClickMes && (
+          <span className="ml-2 font-normal" style={{ color: "var(--text-muted)" }}>
+            (clic en un mes para filtrar lo de abajo)
+          </span>
+        )}
       </h3>
-      <div className="mt-3 h-72">
+      <div className="mt-3 h-72" style={onClickMes ? { cursor: "pointer" } : undefined}>
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={datosConPromedios}>
+          <ComposedChart
+            data={datosConPromedios}
+            onClick={
+              onClickMes
+                ? (estado) => {
+                    // `activeLabel` = el mes de la columna bajo el cursor.
+                    const mes = estado?.activeLabel;
+                    if (typeof mes === "string") onClickMes(mes);
+                  }
+                : undefined
+            }
+          >
             <CartesianGrid vertical={false} stroke="var(--gridline)" strokeWidth={1} />
             <XAxis
               dataKey="mes"
@@ -112,7 +137,14 @@ export function GastoConPromedioMovilChart({
               fill={colorBarras}
               radius={[4, 4, 0, 0]}
               maxBarSize={24}
-            />
+            >
+              {datosConPromedios.map((d) => (
+                <Cell
+                  key={d.mes}
+                  fillOpacity={mesSeleccionado && d.mes !== mesSeleccionado ? 0.3 : 1}
+                />
+              ))}
+            </Bar>
             <Line
               dataKey="promedioMovil"
               name="Promedio móvil (3 meses)"
