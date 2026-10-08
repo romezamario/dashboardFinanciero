@@ -157,6 +157,38 @@ class SubirGastosCorreoTest(unittest.TestCase):
         subir_todos(cliente, self.carpeta)
         self.assertEqual([len(filas) for _, filas, _ in cliente.llamadas], [500, 1])
 
+    def test_solo_sube_lo_que_cambio_desde_la_ultima_subida(self) -> None:
+        _escribir(self.carpeta, "2026-09-05.json", "2026-09-05", [_gasto("g1", 100)])
+        _escribir(self.carpeta, "2026-09-06.json", "2026-09-06", [_gasto("g2", 200)])
+        cliente = ClienteFalso()
+        self.assertEqual(len(subir_todos(cliente, self.carpeta)), 2)
+
+        # Sin cambios: no se llama a Supabase ni se reportan archivos.
+        cliente = ClienteFalso()
+        self.assertEqual(subir_todos(cliente, self.carpeta), [])
+        self.assertEqual(cliente.llamadas, [])
+
+        # Cambia un día (p. ej. una regla recategorizó): solo ese vuelve a subir.
+        _escribir(self.carpeta, "2026-09-06.json", "2026-09-06", [_gasto("g2", 200, categoria="Ocio")])
+        resultados = subir_todos(cliente, self.carpeta)
+        self.assertEqual([r.archivo for r in resultados], ["2026-09-06.json"])
+        self.assertEqual(len(cliente.llamadas), 1)
+
+    def test_un_archivo_que_falla_se_reintenta_la_proxima_vez(self) -> None:
+        _escribir(self.carpeta, "2026-09-05.json", "2026-09-05", [_gasto("g1", 100)])
+        self.assertFalse(subir_todos(ClienteFalso(falla=True), self.carpeta)[0].ok)
+        cliente = ClienteFalso()
+        resultados = subir_todos(cliente, self.carpeta)
+        self.assertEqual([r.ok for r in resultados], [True])
+        self.assertEqual(len(cliente.llamadas), 1)
+
+    def test_forzar_sube_todo_otra_vez(self) -> None:
+        _escribir(self.carpeta, "2026-09-05.json", "2026-09-05", [_gasto("g1", 100)])
+        subir_todos(ClienteFalso(), self.carpeta)
+        cliente = ClienteFalso()
+        self.assertEqual(len(subir_todos(cliente, self.carpeta, forzar=True)), 1)
+        self.assertEqual(len(cliente.llamadas), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

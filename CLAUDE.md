@@ -162,6 +162,18 @@ lists ids (`listar_ids`) and only downloads the ones not already in `data/gastos
 call uses `execute(num_retries=REINTENTOS_GMAIL)` (googleapiclient's exponential backoff on 429/403
 rate limits). If it still fails mid-read, `LecturaInterrumpida` carries what was read, it is saved,
 and the user sees `LimiteDeGmail` (Spanish) instead of a raw HttpError.
+**Full-history load (2026-10-07, user's request)**: the desktop tab's "Días hacia atrás" box was capped at 90
+(now `MAXIMO_DIAS_GMAIL` = 3650) and there is a **"Cargar todo el historial..."** button (confirmation first) that calls
+`revisar_gmail(None, subir=True)` — `dias=None` searches Gmail without `newer_than` (`consulta_gmail`; CLI:
+`python -m sync.gmail_gastos --todo --subir`). Because it can be thousands of messages and minutes, `leer_mensajes` now
+calls `guardar_lote` every `LOTE_GUARDADO` = 50 messages (days + debits written as it goes, so closing the app or a
+quota error only loses the last batch; Gmail lists newest first, so a partial load fills recent months first) and just
+pressing the button again continues where it stopped (saved ids are never re-downloaded). **Upload is incremental**
+(`subir_todos`): with years of history it used to re-send one upsert per day file on every check; it now skips files whose
+sha256 equals the last *successful* upload (`data/gastos_correo/_estado_subida.json`, failed files are retried;
+`forzar=True` / `python -m sync.gastos_correo --forzar` re-sends everything, e.g. after deleting rows in Supabase by
+hand) and returns only the files it tried. The dashboard's `obtenerGastosCorreo` no longer limits to 60 days: it pages
+1,000 rows at a time ordered by fecha, hora **and id** (PostgREST's per-query cap).
 **Debit notices are not expenses (2026-10-06, user's decision)**: "Retiro/Compra con cuenta
 Banamex" notices from a debit account (`"Cheques M.N. ***123"`, `"CTA PRIORITY BNM M.N. ***123"`)
 have amount/date but **no Establecimiento** — not even whether it was an ATM withdrawal or a purchase.
@@ -189,8 +201,7 @@ Each day with charges keeps exactly what its collapsed row showed — movimiento
 day total (compact amount only on narrow screens) — and clicking it opens `PanelDia` (same header +
 `TablaResumen` + `TablaDetalle`) *directly under that day's week row*; clicking the open day closes
 it, only one day is open at a time, and the most recent day starts open (as the most recent row did
-before). ‹ › move between months that have charges (data is the last `DIAS_HISTORIAL` = 60 days, so
-usually 2–3). Selection survives month changes but its panel only shows in its own month. The phone
+before). ‹ › move between months that have charges (the tab loads every `gastos_correo` row, paged; see "Full-history load" below). Selection survives month changes but its panel only shows in its own month. The phone
 layout (cells collapse to number + compact total) was not verified in a real narrow viewport.
 **Heat colors (user's request)**: each day's cell is tinted green → yellow → red by its total
 (`colorCalor`: HSL hue 120 → 0, mixed 30% into `--surface-1` with `color-mix` so text stays readable in
@@ -226,7 +237,7 @@ non-TDC account with movements that day ("Priority", `nombreCorto`) and "Abono" 
 of non-hidden categories (a card payment is not income). `$0` cargos (Invex V2 echo lines) are
 dropped. **The chosen month/day is shared between the two sources** (`VistaCalendario`, state lives in
 `GastosRecientesTab`, `CalendarioMensual` is controlled): switching keeps the month, clamped for display
-to the other source's range (correo only has 60 days) without overwriting the choice, so going back
+to the other source's range (correo may start later than the statements) without overwriting the choice, so going back
 returns to it. The correo data is fetched once by `GastosRecientesTab` (not by `GastosCorreoTab`, which
 unmounts on every switch) so returning to "Por correo" doesn't flash "Cargando…" or re-query. A "Datos hasta:" line shows each cuenta's last date (⚠ after 45 days) because statements
 arrive weeks late — an empty day after that date means "not loaded", not "no spending". The day panel

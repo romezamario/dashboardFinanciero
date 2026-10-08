@@ -26,6 +26,7 @@ poder probarlas con uno falso, sin red ni credenciales reales.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
@@ -34,6 +35,10 @@ from typing import Any, Protocol
 
 CARPETA_GASTOS_CORREO = Path(__file__).parent.parent / "data" / "gastos_correo"
 MAXIMO_POR_LLAMADA = 500  # filas por upsert
+# Qué archivos ya se subieron y con qué contenido (nombre -> sha256). Con años
+# de historial son cientos de archivos: sin esto cada revisión volvía a subirlos
+# todos (una llamada por día).
+NOMBRE_ARCHIVO_ESTADO = "_estado_subida.json"
 
 
 class ClienteSupabase(Protocol):
@@ -108,17 +113,54 @@ def subir_archivo(client: ClienteSupabase, ruta: Path, user_id: str) -> Resultad
     return ResultadoGastosCorreo(ruta.name, len(filas), True)
 
 
+def _hash_archivo(ruta: Path) -> str:
+    return hashlib.sha256(ruta.read_bytes()).hexdigest()
+
+
+def _leer_estado(carpeta: Path) -> dict[str, str]:
+    try:
+        datos = json.loads((carpeta / NOMBRE_ARCHIVO_ESTADO).read_text(encoding="utf-8"))
+        return {str(k): str(v) for k, v in datos.items()}
+    except (OSError, ValueError, AttributeError):
+        return {}
+
+
 def subir_todos(
-    client: ClienteSupabase, carpeta: Path = CARPETA_GASTOS_CORREO
+    client: ClienteSupabase, carpeta: Path = CARPETA_GASTOS_CORREO, forzar: bool = False
 ) -> list[ResultadoGastosCorreo]:
-    """Sube todos los `AAAA-MM-DD.json` de la carpeta (no `ciudades.json` ni
-    `preferencias.json`), del más antiguo al más nuevo, con la sesión de
-    `client`. No hace falta llevar registro de lo ya subido: es idempotente y
-    son pocos archivos."""
+    """Sube los `AAAA-MM-DD.json` de la carpeta (no `ciudades.json`, `debitos.json`
+    ni `preferencias.json`), del más antiguo al más nuevo, con la sesión de
+    `client`. Salta los archivos cuyo contenido es el mismo de la última subida
+    exitosa (`_estado_subida.json`); un archivo que falla no se registra, así
+    que la próxima vez se reintenta. `forzar=True` los sube todos otra vez
+    (p. ej. si se borraron filas en Supabase a mano). Solo devuelve los que se
+    intentaron subir. Sigue siendo idempotente: el upsert no duplica."""
     user_id = id_usuario(client)
-    return [
-        subir_archivo(client, ruta, user_id) for ruta in sorted(carpeta.glob("????-??-??.json"))
-    ]
+    estado = {} if forzar else _leer_estado(carpeta)
+    resultados: list[ResultadoGastosCorreo] = []
+    try:
+        for ruta in sorted(carpeta.glob("????-??-??.json")):
+            try:
+                huella = _hash_archivo(ruta)
+            except OSError as e:
+                resultados.append(ResultadoGastosCorreo(ruta.name, 0, False, str(e)))
+                continue
+            if estado.get(ruta.name) == huella:
+                continue
+            resultado = subir_archivo(client, ruta, user_id)
+            resultados.append(resultado)
+            if resultado.ok:
+                estado[ruta.name] = huella
+            else:
+                estado.pop(ruta.name, None)
+    finally:
+        # Aunque algo corte el ciclo, lo que ya se subió queda registrado.
+        try:
+            carpeta.mkdir(parents=True, exist_ok=True)
+            (carpeta / NOMBRE_ARCHIVO_ESTADO).write_text(json.dumps(estado, indent=2), encoding="utf-8")
+        except OSError:
+            pass
+    return resultados
 
 
 def crear_cliente() -> Any:
@@ -133,9 +175,11 @@ def main() -> None:
     from dotenv import load_dotenv
 
     load_dotenv()
-    resultados = subir_todos(crear_cliente())
+    import sys
+
+    resultados = subir_todos(crear_cliente(), forzar="--forzar" in sys.argv)
     if not resultados:
-        print(f"No hay archivos en {CARPETA_GASTOS_CORREO}.")
+        print(f"Nada que subir en {CARPETA_GASTOS_CORREO} (usa --forzar para subirlo todo otra vez).")
     for r in resultados:
         estado = "OK" if r.ok else f"ERROR: {r.error}"
         print(f"{r.archivo}: {r.gastos_enviados} gastos — {estado}")

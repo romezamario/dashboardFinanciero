@@ -54,6 +54,8 @@ CARPETA_ERRORES = RAIZ / "data" / "errores"
 # preferencias de su pestaña; la carpeta está en .gitignore.
 CARPETA_GASTOS_CORREO = RAIZ / "data" / "gastos_correo"
 RUTA_PREFERENCIAS_GMAIL = CARPETA_GASTOS_CORREO / "preferencias.json"
+# Tope del cuadro "Días hacia atrás" (10 años); para todo el historial hay un botón aparte.
+MAXIMO_DIAS_GMAIL = 3650
 
 # Registro de bancos soportados. Al copiar parsers/ejemplo.py para un banco
 # real (ver su docstring), agrega la clase nueva aquí.
@@ -830,13 +832,17 @@ class PestanaGastosGmail(ttk.Frame):
         marco_acciones = ttk.Frame(self)
         marco_acciones.pack(fill="x", padx=8, pady=(8, 4))
         ttk.Label(marco_acciones, text="Días hacia atrás:").pack(side="left")
-        self.spin_dias = ttk.Spinbox(marco_acciones, from_=1, to=90, width=4)
+        self.spin_dias = ttk.Spinbox(marco_acciones, from_=1, to=MAXIMO_DIAS_GMAIL, width=5)
         self.spin_dias.set(str(preferencias.get("dias", 3)))
         self.spin_dias.pack(side="left", padx=4)
         self.boton_revisar = ttk.Button(
             marco_acciones, text="Revisar Gmail y subir", command=self.revisar
         )
         self.boton_revisar.pack(side="left", padx=(8, 0))
+        self.boton_todo = ttk.Button(
+            marco_acciones, text="Cargar todo el historial...", command=self.cargar_todo
+        )
+        self.boton_todo.pack(side="left", padx=4)
         self.boton_reautorizar = ttk.Button(
             marco_acciones, text="Reautorizar Gmail...", command=self.reautorizar
         )
@@ -952,7 +958,7 @@ class PestanaGastosGmail(ttk.Frame):
         """Corre `trabajo(progreso)` en un hilo; `al_terminar(resultado)` o
         `al_fallar(error)` corren después en el hilo de la interfaz."""
         self._trabajando = True
-        for widget in (self.boton_revisar, self.boton_reautorizar, self.spin_dias):
+        for widget in (self.boton_revisar, self.boton_todo, self.boton_reautorizar, self.spin_dias):
             widget.config(state="disabled")
         self.barra.config(mode="indeterminate")
         self.barra.start(12)
@@ -999,7 +1005,7 @@ class PestanaGastosGmail(ttk.Frame):
         self._trabajando = False
         self.barra.stop()
         self.barra.config(mode="determinate", value=0)
-        for widget in (self.boton_revisar, self.boton_reautorizar):
+        for widget in (self.boton_revisar, self.boton_todo, self.boton_reautorizar):
             widget.config(state="normal")
         self.spin_dias.config(state="normal")
 
@@ -1013,12 +1019,36 @@ class PestanaGastosGmail(ttk.Frame):
             return
         try:
             dias = int(self.spin_dias.get())
-            if not 1 <= dias <= 90:
+            if not 1 <= dias <= MAXIMO_DIAS_GMAIL:
                 raise ValueError
         except ValueError:
-            messagebox.showwarning("Días inválidos", "Escribe un número de días entre 1 y 90.")
+            messagebox.showwarning(
+                "Días inválidos", f"Escribe un número de días entre 1 y {MAXIMO_DIAS_GMAIL}."
+            )
             return
         self._guardar_preferencias()
+        self._iniciar_revision(dias, automatico)
+
+    def cargar_todo(self) -> None:
+        """Carga inicial: lee TODOS los avisos de Banamex del buzón (sin límite de
+        días) y los sube. Puede tardar varios minutos; lo ya leído se guarda por
+        lotes y no se vuelve a descargar, así que si se interrumpe (cuota de
+        Gmail, red) basta con volver a pulsar el botón."""
+        if self._trabajando:
+            return
+        if not messagebox.askokcancel(
+            "Cargar todo el historial",
+            "Se leerán TODOS los avisos de compra de Banamex que haya en tu Gmail, sin "
+            "límite de días, y se subirán a Supabase.\n\n"
+            "Puede tardar varios minutos (un correo a la vez). Lo que se vaya leyendo se "
+            "guarda en data/gastos_correo/; si Gmail corta por cuota o se va el internet, "
+            "vuelve a pulsar el botón y continúa donde se quedó.\n\n¿Continuar?",
+        ):
+            return
+        self._iniciar_revision(None, automatico=False)
+
+    def _iniciar_revision(self, dias: int | None, automatico: bool) -> None:
+        """`dias=None` = todo el historial."""
         self.etiqueta_estado.config(text="Iniciando…", foreground="")
 
         def trabajo(progreso):

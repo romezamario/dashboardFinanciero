@@ -34,6 +34,7 @@ from sync.gmail_gastos import (
     ids_guardados,
     cargar_debitos,
     leer_avisos,
+    leer_mensajes,
     parsear_aviso,
     parsear_debito,
     resumen_revision,
@@ -422,6 +423,32 @@ class RevisarGmailTest(unittest.TestCase):
         r = revisar_gmail(3, servicio=_ServicioFalso(mensajes), reglas=REGLAS, carpeta=self.carpeta)
         self.assertEqual(mensajes.descargados, ["b", "c"])
         self.assertEqual(r.nuevos, 1)
+
+    def test_todo_el_historial_busca_sin_limite_de_dias(self) -> None:
+        mensajes = self.mensajes()
+        r = revisar_gmail(None, servicio=_ServicioFalso(mensajes), reglas=REGLAS, carpeta=self.carpeta)
+        self.assertNotIn("newer_than", mensajes.consultas[0])
+        self.assertIn("from:notificaciones@banamex.com", mensajes.consultas[0])
+        self.assertIsNone(r.dias)
+        self.assertIn("todo el historial", resumen_revision(r))
+
+    def test_lo_leido_se_guarda_por_lotes_durante_la_lectura(self) -> None:
+        # Con lotes de 2, tras leer "a" y "b" ya hay un guardado parcial: si la
+        # app se cierra a media carga inicial no se pierde todo lo leído.
+        cuerpos = {
+            "a": _msg(aviso_html()),
+            "b": _msg(aviso_html(fecha="04 Octubre 2026 / 08:00:00")),
+            "c": _msg(aviso_html(fecha="05 Octubre 2026 / 08:00:00")),
+        }
+        mensajes = _Mensajes(paginas=[["a", "b", "c"]], cuerpos=cuerpos)
+        lotes: list[tuple[list[str], list[str]]] = []
+        with mock.patch("sync.gmail_gastos.LOTE_GUARDADO", 2):
+            avisos, _ilegibles, _debitos = leer_mensajes(
+                _ServicioFalso(mensajes), ["a", "b", "c"],
+                guardar_lote=lambda av, de: lotes.append(([a["id"] for a in av], [d["id"] for d in de])),
+            )
+        self.assertEqual(lotes, [(["a", "b"], [])])
+        self.assertEqual([a["id"] for a in avisos], ["a", "b", "c"])
 
     def test_debito_de_cuenta_de_cheques_no_es_gasto(self) -> None:
         mensajes = self.mensajes()

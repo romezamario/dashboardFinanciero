@@ -12,6 +12,7 @@ Uso: desde la app de escritorio (pestaña "Gastos recientes (Gmail)", que llama 
 
     python -m sync.gmail_gastos                 # últimos 3 días, solo escribe archivos
     python -m sync.gmail_gastos --dias 10       # ventana más grande
+    python -m sync.gmail_gastos --todo --subir  # carga inicial de todo el historial
     python -m sync.gmail_gastos --subir         # además sube a Supabase
 
 Idempotente: volver a correrlo no duplica nada. Si un día ya tiene archivo se
@@ -59,6 +60,13 @@ CREDENCIALES_POR_DEFECTO = RAIZ / "data" / "gmail" / "credentials.json"
 TOKEN_POR_DEFECTO = RAIZ / "data" / "gmail" / "token.json"
 ALCANCES = ["https://www.googleapis.com/auth/gmail.readonly"]
 CONSULTA_GMAIL = "from:notificaciones@banamex.com subject:Retiro newer_than:{dias}d"
+# Sin `newer_than`: todo lo que haya en el buzón (carga inicial del historial).
+CONSULTA_GMAIL_TODO = "from:notificaciones@banamex.com subject:Retiro"
+
+
+def consulta_gmail(dias: int | None) -> str:
+    """La búsqueda de Gmail de los últimos `dias`; `None` = sin límite."""
+    return CONSULTA_GMAIL_TODO if dias is None else CONSULTA_GMAIL.format(dias=dias)
 
 # Códigos de 3 letras al final del Establecimiento confirmados por el usuario.
 CIUDADES_CONFIRMADAS = {"MCA": "McAllen", "APO": "Apodaca"}
@@ -405,14 +413,15 @@ class LecturaInterrumpida(Exception):
         self.debitos = debitos or []
 
 
-def listar_ids(servicio: ServicioGmail, dias: int) -> list[str]:
-    """Ids de los avisos de compra de los últimos `dias` (sin descargarlos)."""
+def listar_ids(servicio: ServicioGmail, dias: int | None) -> list[str]:
+    """Ids de los avisos de compra de los últimos `dias` -- todos si es `None` --
+    (sin descargarlos). Gmail los devuelve del más nuevo al más viejo."""
     mensajes = servicio.users().messages()
     ids: list[str] = []
     pagina = None
     while True:
         resp = mensajes.list(
-            userId="me", q=CONSULTA_GMAIL.format(dias=dias), maxResults=500, pageToken=pagina
+            userId="me", q=consulta_gmail(dias), maxResults=500, pageToken=pagina
         ).execute(num_retries=REINTENTOS_GMAIL)
         ids += [m["id"] for m in resp.get("messages", [])]
         pagina = resp.get("nextPageToken")
@@ -421,23 +430,32 @@ def listar_ids(servicio: ServicioGmail, dias: int) -> list[str]:
     return ids
 
 
+# Cada cuántos correos leídos se guarda lo leído (carga inicial de años de
+# historial: miles de correos, minutos de lectura; si se cierra la app o se cae
+# la red a la mitad, solo se pierde el último lote).
+LOTE_GUARDADO = 50
+
+
 def leer_mensajes(
     servicio: ServicioGmail,
     ids: list[str],
     progreso: Callable[[int, int], None] | None = None,
+    guardar_lote: Callable[[list[dict[str, Any]], list[dict[str, Any]]], None] | None = None,
 ) -> tuple[list[dict[str, Any]], list[str], list[dict[str, Any]]]:
     """Descarga y lee cada id: (avisos de compra con tarjeta, ids que no se
     pudieron leer -- se reportan para que no se pierdan en silencio --, débitos
     de la cuenta de cheques, que no son gastos; ver `parsear_debito`).
     `progreso(leidos, total)` se llama tras cada correo (para la barra de la
-    app). Si Gmail falla a media lectura, lanza `LecturaInterrumpida` con lo
-    ya leído."""
+    app). `guardar_lote(avisos, debitos)` se llama cada `LOTE_GUARDADO` correos
+    con lo leído desde el lote anterior. Si Gmail falla a media lectura, lanza
+    `LecturaInterrumpida` con lo ya leído."""
     mensajes = servicio.users().messages()
     avisos: list[dict[str, Any]] = []
     ilegibles: list[str] = []
     debitos: list[dict[str, Any]] = []
     if progreso:
         progreso(0, len(ids))
+    guardados_avisos = guardados_debitos = 0
     for n, mid in enumerate(ids, start=1):
         try:
             mensaje = mensajes.get(userId="me", id=mid, format="full").execute(
@@ -456,6 +474,9 @@ def leer_mensajes(
             ilegibles.append(mid)
         if progreso:
             progreso(n, len(ids))
+        if guardar_lote and n % LOTE_GUARDADO == 0:
+            guardar_lote(avisos[guardados_avisos:], debitos[guardados_debitos:])
+            guardados_avisos, guardados_debitos = len(avisos), len(debitos)
     return avisos, ilegibles, debitos
 
 
@@ -616,7 +637,7 @@ class ResumenDia:
 class ResultadoRevision:
     """Lo que pasó en una revisión, para que la app (o el CLI) lo muestre."""
 
-    dias: int
+    dias: int | None  # None = todo el historial
     # Avisos de compra que hay en Gmail en la ventana (guardados o nuevos).
     avisos_leidos: int = 0
     # Los que no estaban guardados y se descargaron en esta revisión.
@@ -671,7 +692,7 @@ def _crear_cliente_supabase() -> Any:
 
 
 def revisar_gmail(
-    dias: int = 3,
+    dias: int | None = 3,
     subir: bool = False,
     *,
     servicio: ServicioGmail | None = None,
@@ -681,9 +702,10 @@ def revisar_gmail(
     permitir_autorizar: bool = True,
     progreso: Callable[[str, int | None, int | None], None] | None = None,
 ) -> ResultadoRevision:
-    """Lee los avisos de los últimos `dias`, los guarda por día en `carpeta` y,
-    con `subir`, sube la carpeta a Supabase. Equivale a
-    `python -m sync.gmail_gastos --dias N [--subir]`.
+    """Lee los avisos de los últimos `dias` (`None` = todo el historial del
+    buzón: la carga inicial), los guarda por día en `carpeta` y, con `subir`,
+    sube la carpeta a Supabase. Equivale a
+    `python -m sync.gmail_gastos --dias N [--subir]` (`--todo` para el historial).
 
     `servicio`/`cliente_supabase`/`reglas` se pueden inyectar (pruebas); si no,
     se construyen como en el CLI (Gmail real, tu sesión de Supabase del `.env`).
@@ -719,10 +741,16 @@ def revisar_gmail(
         # Gmail (con 90 días son cientos). Los ya guardados se recategorizan
         # abajo, sin red.
         por_descargar = [i for i in ids if i not in previos]
+
+        def guardar_lote(lote_avisos: list[dict[str, Any]], lote_debitos: list[dict[str, Any]]) -> None:
+            escribir_dias(agrupar_por_dia(lote_avisos, reglas, ciudades), carpeta)
+            guardar_debitos(lote_debitos, carpeta)
+
         avisos, ilegibles, debitos = leer_mensajes(
             servicio,
             por_descargar,
             lambda n, total: avisar(f"Leyendo correo nuevo {n} de {total}…", n, total),
+            guardar_lote,
         )
     except LecturaInterrumpida as interrumpida:
         # Se guarda lo leído antes de reportar el error: la próxima revisión
@@ -779,7 +807,8 @@ def revisar_gmail(
 
 def resumen_revision(r: ResultadoRevision) -> str:
     """Una línea con los conteos, para la barra de estado de la app."""
-    texto = f"{r.avisos_leidos} aviso(s) en los últimos {r.dias} día(s), {r.nuevos} nuevo(s) descargado(s)"
+    ventana = "todo el historial" if r.dias is None else f"los últimos {r.dias} día(s)"
+    texto = f"{r.avisos_leidos} aviso(s) en {ventana}, {r.nuevos} nuevo(s) descargado(s)"
     if r.recategorizados:
         texto += f", {r.recategorizados} recategorizado(s)"
     if r.subidas is not None:
@@ -825,11 +854,16 @@ def main() -> None:
     load_dotenv()
     ap = argparse.ArgumentParser(description="Lee los avisos de compra de Banamex en Gmail.")
     ap.add_argument("--dias", type=int, default=3, help="días hacia atrás a revisar (default 3)")
+    ap.add_argument(
+        "--todo",
+        action="store_true",
+        help="carga inicial: todos los avisos del buzón, sin límite de días (ignora --dias)",
+    )
     ap.add_argument("--subir", action="store_true", help="después sube los archivos a Supabase")
     args = ap.parse_args()
 
     try:
-        r = revisar_gmail(args.dias, args.subir)
+        r = revisar_gmail(None if args.todo else args.dias, args.subir)
     except ErrorGastosGmail as error:
         raise SystemExit(str(error)) from error
 

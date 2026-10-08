@@ -102,8 +102,8 @@ export function CalendarioMensual({
   }, [dias]);
   const mesMasReciente = mesDe(dias[0].fecha);
   const mesMasAntiguo = mesDe(dias[dias.length - 1].fecha);
-  // El mes elegido puede caer fuera de los datos de esta fuente (los correos
-  // solo cubren 60 días): se acota para mostrarlo, sin borrar la elección.
+  // El mes elegido puede caer fuera de los datos de esta fuente (p. ej. un
+  // estado de cuenta más antiguo que el primer aviso de correo): se acota para mostrarlo, sin borrar la elección.
   const mes =
     mesElegido === null
       ? mesMasReciente

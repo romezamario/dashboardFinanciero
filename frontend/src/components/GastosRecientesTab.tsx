@@ -15,7 +15,7 @@ interface GastosRecientesTabProps {
 
 /** Pestaña "Gastos recientes": el mismo calendario con dos fuentes. "Por
  * correo" (la de siempre) son los avisos de compra de Banamex: casi en tiempo
- * real, solo compras con tarjeta, 60 días. "Por estado de cuenta" son los PDF
+ * real, solo compras con tarjeta, desde el primer aviso cargado. "Por estado de cuenta" son los PDF
  * ya sincronizados: todo el historial y todas las cuentas, pero con el atraso
  * del último corte. Al abrir la pestaña se muestra la de correo. */
 export function GastosRecientesTab(props: GastosRecientesTabProps) {

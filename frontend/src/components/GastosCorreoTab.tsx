@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import { descargarDiaExcel } from "../lib/exportarGastosDia";
 import {
   agruparPorDia,
-  DIAS_HISTORIAL,
   nombreTarjeta,
   sumarUno,
   tituloDia,
@@ -79,7 +78,7 @@ export function GastosCorreoTab({
   return (
     <div className="space-y-4">
       <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-        Cargos de los avisos de compra de Banamex (últimos {DIAS_HISTORIAL} días). Elige un día
+        Cargos de los avisos de compra de Banamex (todo lo que se ha cargado). Elige un día
         para ver su detalle. Horas en CDMX, montos en MXN. Aparte de tus estados de cuenta: los
         cargos de aquí aún no se concilian con ellos.
       </p>
