@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { obtenerGastosCorreo, type GastoCorreo } from "../lib/gastosCorreo";
 import type { Transaccion } from "../lib/types";
 import { GastosCorreoTab } from "./GastosCorreoTab";
 import { GastosEstadoCuentaTab } from "./GastosEstadoCuentaTab";
@@ -22,6 +23,16 @@ export function GastosRecientesTab(props: GastosRecientesTabProps) {
   // El mes y el día elegidos se comparten entre las dos fuentes: al cambiar de
   // una a otra el calendario se queda donde estaba (acotado a lo que haya).
   const [vista, setVista] = useState<VistaCalendario>(VISTA_CALENDARIO_INICIAL);
+  // Los avisos de correo se cargan aquí, una vez al abrir la pestaña, y no en
+  // GastosCorreoTab: esa vista se desmonta al cambiar de fuente y volvería a
+  // consultar (y a mostrar "Cargando…") cada vez que se regresa a ella.
+  const [gastosCorreo, setGastosCorreo] = useState<GastoCorreo[] | null>(null);
+  const [errorCorreo, setErrorCorreo] = useState<string | null>(null);
+  useEffect(() => {
+    obtenerGastosCorreo()
+      .then(setGastosCorreo)
+      .catch((e) => setErrorCorreo(e instanceof Error ? e.message : String(e)));
+  }, []);
   const cambiarVista = (cambio: (anterior: VistaCalendario) => VistaCalendario) => setVista(cambio);
   return (
     <div className="space-y-6">
@@ -34,7 +45,10 @@ export function GastosRecientesTab(props: GastosRecientesTabProps) {
         onCambiar={setFuente}
       />
       {fuente === "correo" ? (
-        <GastosCorreoTab vista={vista} onCambiarVista={cambiarVista} />
+        <GastosCorreoTab
+          gastos={gastosCorreo}
+          error={errorCorreo}
+          vista={vista} onCambiarVista={cambiarVista} />
       ) : (
         <GastosEstadoCuentaTab {...props} vista={vista} onCambiarVista={cambiarVista} />
       )}

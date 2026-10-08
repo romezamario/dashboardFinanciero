@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { descargarDiaExcel } from "../lib/exportarGastosDia";
 import {
   agruparPorDia,
   DIAS_HISTORIAL,
   nombreTarjeta,
-  obtenerGastosCorreo,
   sumarUno,
   tituloDia,
   type DiaGastos,
@@ -29,21 +28,18 @@ import {
  * con los filtros del Resumen.
  */
 export function GastosCorreoTab({
+  gastos,
+  error,
   vista,
   onCambiarVista,
 }: {
+  /** null = todavía cargando (los carga `GastosRecientesTab`, una sola vez, para
+   * que volver a esta vista desde "Por estado de cuenta" no vuelva a consultar). */
+  gastos: GastoCorreo[] | null;
+  error: string | null;
   vista: VistaCalendario;
   onCambiarVista: (cambio: (anterior: VistaCalendario) => VistaCalendario) => void;
 }) {
-  const [gastos, setGastos] = useState<GastoCorreo[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    obtenerGastosCorreo()
-      .then(setGastos)
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)));
-  }, []);
-
   const dias = useMemo(() => (gastos ? agruparPorDia(gastos) : []), [gastos]);
   const resumenes = useMemo<ResumenDia[]>(
     () =>

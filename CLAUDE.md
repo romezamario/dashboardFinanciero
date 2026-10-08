@@ -227,7 +227,8 @@ of non-hidden categories (a card payment is not income). `$0` cargos (Invex V2 e
 dropped. **The chosen month/day is shared between the two sources** (`VistaCalendario`, state lives in
 `GastosRecientesTab`, `CalendarioMensual` is controlled): switching keeps the month, clamped for display
 to the other source's range (correo only has 60 days) without overwriting the choice, so going back
-returns to it. A "Datos hasta:" line shows each cuenta's last date (⚠ after 45 days) because statements
+returns to it. The correo data is fetched once by `GastosRecientesTab` (not by `GastosCorreoTab`, which
+unmounts on every switch) so returning to "Por correo" doesn't flash "Cargando…" or re-query. A "Datos hasta:" line shows each cuenta's last date (⚠ after 45 days) because statements
 arrive weeks late — an empty day after that date means "not loaded", not "no spending". The day panel
 has **inline "Editar"** per movement (categoría/comercio/evento + "Quitar evento", same functions as the
 bulk editor, then `recargarTransacciones`; same non-durable-against-reprocessing caveat) and its own
