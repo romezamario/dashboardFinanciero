@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useMemo, type ReactNode } from "react";
 import {
   desplazarMes,
   posicionEnEscala,
@@ -6,7 +6,7 @@ import {
   tituloDia,
   tituloMes,
 } from "../lib/gastosCorreo";
-import { formatoMoneda } from "../lib/gastosUI";
+import { formatoMoneda, type VistaCalendario } from "../lib/gastosUI";
 
 // Para las celdas del calendario en pantallas angostas, donde no cabe el monto completo.
 const formatoCompacto = new Intl.NumberFormat("es-MX", {
@@ -75,16 +75,21 @@ export function CalendarioMensual({
   etiquetaFuente,
   etiquetaTotal,
   renderPanel,
+  vista,
+  onCambiarVista,
 }: {
   dias: ResumenDia[];
   etiquetaFuente: [singular: string, plural: string];
   etiquetaTotal: string;
   renderPanel: (fecha: string) => ReactNode;
+  /** Mes y día elegidos. Viven en quien monta el calendario (no aquí) para que
+   * sobrevivan al cambio entre "Por correo" y "Por estado de cuenta". */
+  vista: VistaCalendario;
+  onCambiarVista: (cambio: (anterior: VistaCalendario) => VistaCalendario) => void;
 }) {
-  // `undefined` = el usuario aún no elige (se usa el día más reciente);
-  // `null` = cerró el detalle a propósito.
-  const [seleccion, setSeleccion] = useState<string | null | undefined>(undefined);
-  const [mesElegido, setMesElegido] = useState<string | null>(null);
+  const { seleccion, mesElegido } = vista;
+  const setSeleccion = (s: string | null) => onCambiarVista((v) => ({ ...v, seleccion: s }));
+  const setMesElegido = (m: string) => onCambiarVista((v) => ({ ...v, mesElegido: m }));
 
   const porFecha = useMemo(() => new Map(dias.map((d) => [d.fecha, d])), [dias]);
   // La escala de color usa TODOS los días cargados (no solo el mes a la vista)
@@ -97,7 +102,16 @@ export function CalendarioMensual({
   }, [dias]);
   const mesMasReciente = mesDe(dias[0].fecha);
   const mesMasAntiguo = mesDe(dias[dias.length - 1].fecha);
-  const mes = mesElegido ?? mesMasReciente;
+  // El mes elegido puede caer fuera de los datos de esta fuente (los correos
+  // solo cubren 60 días): se acota para mostrarlo, sin borrar la elección.
+  const mes =
+    mesElegido === null
+      ? mesMasReciente
+      : mesElegido > mesMasReciente
+        ? mesMasReciente
+        : mesElegido < mesMasAntiguo
+          ? mesMasAntiguo
+          : mesElegido;
   const fechaSeleccionada = seleccion === undefined ? dias[0].fecha : seleccion;
   const semanas = useMemo(() => semanasDelMes(mes), [mes]);
   const mesesDelRango = useMemo(() => {

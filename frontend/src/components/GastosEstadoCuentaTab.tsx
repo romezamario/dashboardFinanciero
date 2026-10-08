@@ -19,7 +19,7 @@ import {
   SIN_CATEGORIA,
 } from "../lib/queries";
 import type { Transaccion } from "../lib/types";
-import { dinero, formatoMoneda, useDescargaExcel, ESTILO_CABECERA, ESTILO_SUBTOTAL_CATEGORIA, ESTILO_SUBTOTAL_COMERCIO, ESTILO_TOTAL } from "../lib/gastosUI";
+import { type VistaCalendario, dinero, formatoMoneda, useDescargaExcel, ESTILO_CABECERA, ESTILO_SUBTOTAL_CATEGORIA, ESTILO_SUBTOTAL_COMERCIO, ESTILO_TOTAL } from "../lib/gastosUI";
 import { CalendarioMensual, type ResumenDia } from "./CalendarioMensual";
 import { EnlaceTexto, Fila, PildoraExclusion } from "./PanelFiltros";
 import {
@@ -58,6 +58,8 @@ interface GastosEstadoCuentaTabProps {
   categoriasOcultas: Set<string>;
   onCambiarCategoriasOcultas: (cambio: (anteriores: Set<string>) => Set<string>) => void;
   onActualizado: () => void | Promise<void>;
+  vista: VistaCalendario;
+  onCambiarVista: (cambio: (anterior: VistaCalendario) => VistaCalendario) => void;
 }
 
 /**
@@ -74,6 +76,8 @@ export function GastosEstadoCuentaTab({
   categoriasOcultas,
   onCambiarCategoriasOcultas,
   onActualizado,
+  vista,
+  onCambiarVista,
 }: GastosEstadoCuentaTabProps) {
   const [verOcultas, setVerOcultas] = useState(false);
 
@@ -239,6 +243,8 @@ export function GastosEstadoCuentaTab({
         dias={resumenes}
         etiquetaFuente={["cuenta", "cuentas"]}
         etiquetaTotal="gasto por día"
+        vista={vista}
+        onCambiarVista={onCambiarVista}
         renderPanel={(fecha) => {
           const dia = porFecha.get(fecha);
           return dia ? (

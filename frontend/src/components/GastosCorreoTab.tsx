@@ -10,7 +10,7 @@ import {
   type DiaGastos,
   type GastoCorreo,
 } from "../lib/gastosCorreo";
-import { formatoMoneda, useDescargaExcel, ESTILO_CABECERA, ESTILO_SUBTOTAL_CATEGORIA, ESTILO_SUBTOTAL_COMERCIO, ESTILO_TOTAL } from "../lib/gastosUI";
+import { type VistaCalendario, formatoMoneda, useDescargaExcel, ESTILO_CABECERA, ESTILO_SUBTOTAL_CATEGORIA, ESTILO_SUBTOTAL_COMERCIO, ESTILO_TOTAL } from "../lib/gastosUI";
 import { CalendarioMensual, type ResumenDia } from "./CalendarioMensual";
 import {
   CabeceraColumnas,
@@ -28,7 +28,13 @@ import {
  * aparte de `transacciones`, así que no se mezclan con los estados de cuenta ni
  * con los filtros del Resumen.
  */
-export function GastosCorreoTab() {
+export function GastosCorreoTab({
+  vista,
+  onCambiarVista,
+}: {
+  vista: VistaCalendario;
+  onCambiarVista: (cambio: (anterior: VistaCalendario) => VistaCalendario) => void;
+}) {
   const [gastos, setGastos] = useState<GastoCorreo[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -85,6 +91,8 @@ export function GastosCorreoTab() {
         dias={resumenes}
         etiquetaFuente={["tarjeta", "tarjetas"]}
         etiquetaTotal="gasto por día"
+        vista={vista}
+        onCambiarVista={onCambiarVista}
         renderPanel={(fecha) => {
           const dia = porFecha.get(fecha);
           return dia ? <PanelDia dia={dia} /> : null;

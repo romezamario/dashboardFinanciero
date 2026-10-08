@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Transaccion } from "../lib/types";
 import { GastosCorreoTab } from "./GastosCorreoTab";
 import { GastosEstadoCuentaTab } from "./GastosEstadoCuentaTab";
+import { VISTA_CALENDARIO_INICIAL, type VistaCalendario } from "../lib/gastosUI";
 import { Segmentado } from "./Segmentado";
 
 interface GastosRecientesTabProps {
@@ -18,6 +19,10 @@ interface GastosRecientesTabProps {
  * del último corte. Al abrir la pestaña se muestra la de correo. */
 export function GastosRecientesTab(props: GastosRecientesTabProps) {
   const [fuente, setFuente] = useState<"correo" | "estados">("correo");
+  // El mes y el día elegidos se comparten entre las dos fuentes: al cambiar de
+  // una a otra el calendario se queda donde estaba (acotado a lo que haya).
+  const [vista, setVista] = useState<VistaCalendario>(VISTA_CALENDARIO_INICIAL);
+  const cambiarVista = (cambio: (anterior: VistaCalendario) => VistaCalendario) => setVista(cambio);
   return (
     <div className="space-y-6">
       <Segmentado
@@ -28,7 +33,11 @@ export function GastosRecientesTab(props: GastosRecientesTabProps) {
         valor={fuente}
         onCambiar={setFuente}
       />
-      {fuente === "correo" ? <GastosCorreoTab /> : <GastosEstadoCuentaTab {...props} />}
+      {fuente === "correo" ? (
+        <GastosCorreoTab vista={vista} onCambiarVista={cambiarVista} />
+      ) : (
+        <GastosEstadoCuentaTab {...props} vista={vista} onCambiarVista={cambiarVista} />
+      )}
     </div>
   );
 }

@@ -11,6 +11,16 @@ export function dinero(centavos: number | undefined): string {
   return centavos ? formatoMoneda.format(centavos / 100) : "";
 }
 
+/** Mes y día elegidos en el calendario. `mesElegido` null = el más reciente;
+ * `seleccion` undefined = aún no elige (se abre el día más reciente), null =
+ * cerró el detalle a propósito. */
+export interface VistaCalendario {
+  mesElegido: string | null;
+  seleccion: string | null | undefined;
+}
+
+export const VISTA_CALENDARIO_INICIAL: VistaCalendario = { mesElegido: null, seleccion: undefined };
+
 export const ESTILO_CABECERA = { background: "var(--text-primary)", color: "var(--page-plane)" } as const;
 export const ESTILO_SUBTOTAL_COMERCIO = { background: "var(--page-plane)", fontStyle: "italic" } as const;
 export const ESTILO_SUBTOTAL_CATEGORIA = { background: "var(--gridline)", fontWeight: 600 } as const;
