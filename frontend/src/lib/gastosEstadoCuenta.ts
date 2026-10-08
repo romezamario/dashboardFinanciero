@@ -9,7 +9,8 @@ import type { Transaccion } from "./types";
 //  - no hay hora ni ciudad; la "tarjeta" que distingue columnas es la CUENTA
 //    (`cuentas.alias`: "TDC Beyond", "Cuenta Priority"...);
 //  - hay abonos, pagos de tarjeta y movimientos de la cuenta de cheques. Solo
-//    SUMAN al día los CARGOS cuya categoría no esté oculta; el resto se lista
+//    SUMAN al día los CARGOS de tarjetas de crédito cuya categoría no esté
+//    oculta; el resto (abonos, cuenta de cheques) se lista
 //    aparte ("No suman al total") para poder verlo sin inflar el gasto.
 
 /** Un movimiento de un día. `centavos` siempre positivo (el signo lo da `tipo`). */
@@ -30,7 +31,7 @@ export interface MovimientoDia {
   esDebito: boolean;
 }
 
-export type MotivoSinSumar = "Es un abono" | "Categoría oculta";
+export type MotivoSinSumar = "Es un abono" | "Cuenta de cheques" | "Categoría oculta";
 
 export interface MovimientoSinSumar {
   mov: MovimientoDia;
@@ -96,9 +97,10 @@ function aMovimiento(t: Transaccion): MovimientoDia | null {
 
 /**
  * Agrupa las transacciones por día (del más reciente al más antiguo).
- * `categoriasOcultas`: sus CARGOS no suman al día (siguen en el detalle).
- * Los abonos nunca suman: son pagos recibidos, ingresos o devoluciones, y
- * restarlos cancelaría el gasto que pagaron.
+ * Solo suman los CARGOS de cuentas de crédito cuya categoría no esté en
+ * `categoriasOcultas`. Los abonos nunca suman (pagos recibidos, ingresos o
+ * devoluciones: restarlos cancelaría el gasto que pagaron) y la cuenta de
+ * cheques tampoco; todo eso queda en `sinSumar`, visible en el detalle.
  */
 export function agruparEstadosPorDia(
   transacciones: Transaccion[],
@@ -130,6 +132,10 @@ function armarDia(
       sinSumar.push({ mov, motivo: "Es un abono" });
       // Pagar la tarjeta (o un traspaso entre tus cuentas) no es un ingreso.
       if (!categoriasOcultas.has(mov.categoria)) hayAbonos = true;
+    } else if (mov.esDebito) {
+      // La cuenta de cheques (Priority) se ve en el día pero no suma: sus
+      // compras ya cuentan por las tarjetas, y sus pagos/traspasos no son gasto.
+      sinSumar.push({ mov, motivo: "Cuenta de cheques" });
     } else if (categoriasOcultas.has(mov.categoria)) {
       sinSumar.push({ mov, motivo: "Categoría oculta" });
     } else {

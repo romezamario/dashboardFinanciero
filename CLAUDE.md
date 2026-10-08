@@ -214,10 +214,11 @@ tab; it opens on "Por correo", which is exactly the view above (the calendar she
 (`GastosEstadoCuentaTab.tsx`, `lib/gastosEstadoCuenta.ts`) builds the same days from `transacciones`
 (no new query; whole history, month `<select>` when >4 months, opens on the latest day). Differences,
 all by the user's choice: columns are **cuentas** (`cuentas.alias`), not card endings; no hora/ciudad
-(detail has descripción, tarjeta Titular/Adicional, evento); **only cargos whose categoría is not
-hidden add up** to the day total, the heat color, the Resumen and Detalle tables — abonos and hidden
-categories (default: `categoriasExcluidasPorDefecto`, i.e. Pago TDC/traspasos, so paying the card from
-Priority is visible but doesn't count) go in a separate "No suman al total" table with the reason, and
+(detail has descripción, tarjeta Titular/Adicional, evento); **only cargos of credit-card accounts whose
+categoría is not hidden add up** to the day total, the heat color, the Resumen and Detalle tables —
+abonos, **everything of the non-TDC account (Priority, `MovimientoDia.esDebito`; user's correction the
+same day: its movements are shown but never counted)** and hidden categories (default:
+`categoriasExcluidasPorDefecto`, i.e. Pago TDC/traspasos) go in a separate "No suman al total" table with the reason, and
 the cell shows "+N sin sumar"; a day with only those has no heat color ("sin gasto"). **Own "Ocultar
 categorías" row** (collapsed disclosure, independent from the Resumen's; stored in
 `estadosPorPestana["gastos-correo"].categoriasOcultas`, `null` = default). Cell badges: one per

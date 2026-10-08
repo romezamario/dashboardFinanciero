@@ -151,8 +151,8 @@ export function GastosEstadoCuentaTab({
     <div className="space-y-4">
       <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
         Movimientos de tus estados de cuenta, de todas las cuentas. Elige un día para ver su
-        detalle. Solo los <strong>cargos</strong> suman al total y al color del día; los abonos y las
-        categorías ocultas se listan aparte. Montos en MXN.
+        detalle. Solo los <strong>cargos de tus tarjetas</strong> suman al total y al color del día; los abonos,
+        la cuenta de cheques (Priority) y las categorías ocultas se listan aparte. Montos en MXN.
       </p>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs" style={{ color: "var(--text-secondary)" }}>
@@ -227,7 +227,7 @@ export function GastosEstadoCuentaTab({
               )}
             </Fila>
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-              Los cargos de estas categorías no suman al total del día ni al color del calendario,
+              Los cargos de tarjeta de estas categorías no suman al total del día ni al color del calendario,
               pero siguen apareciendo en el detalle del día. Por defecto: pagos de tarjeta y
               traspasos entre tus propias cuentas. Es independiente de la misma opción del Resumen.
             </p>
@@ -507,7 +507,7 @@ function TablaSinSumar({
   return (
     <SeccionTabla
       titulo="No suman al total"
-      nota="Abonos (pagos recibidos, ingresos, devoluciones) y cargos de categorías ocultas: no cuentan en el total del día ni en el color del calendario."
+      nota="Abonos (pagos recibidos, ingresos, devoluciones), movimientos de la cuenta de cheques y cargos de categorías ocultas: no cuentan en el total del día ni en el color del calendario."
     >
       <thead>
         <tr style={ESTILO_CABECERA}>
