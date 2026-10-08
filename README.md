@@ -74,7 +74,10 @@ puede ver y tocar sus propios datos.
 
 ## CI/CD
 
-Dos pipelines de GitHub Actions, cada uno disparado solo por los archivos que le corresponden:
+Tres pipelines de GitHub Actions, cada uno disparado solo por los archivos que le corresponden:
+
+- **`ci.yml`** — cuando cambia algo en `frontend/` (cualquier rama o PR), corre typecheck, lint y
+  las pruebas del frontend (`npm test`, Vitest).
 
 - **`db-migrate.yml`** — cuando cambia algo en `supabase/migrations/`, aplica esas migraciones
   al proyecto remoto. El esquema de la base de datos se versiona como código: todo cambio es un
@@ -82,7 +85,7 @@ Dos pipelines de GitHub Actions, cada uno disparado solo por los archivos que le
 - **`deploy.yml`** — cuando cambia algo en `frontend/`, compila y publica el sitio a Cloudflare Pages.
 
 Cada uno solo corre cuando le toca, así que trabajar en el pipeline local (parsers/transform/sync)
-no dispara ninguno de los dos.
+no dispara ninguno.
 
 ## Estructura
 
