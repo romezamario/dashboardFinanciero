@@ -1,6 +1,7 @@
 import { categoriaDe, cuentaDe, eventoDe } from "./queries";
 import { mesesHasta, nombreMes, nombrePeriodo, resumenPorMes, type Periodo } from "./indicadores";
 import type { Transaccion } from "./types";
+import { moneda, monedaConCentavos as monedaExacta, porcentaje, decimal } from "./formato";
 
 // Alertas automáticas del Resumen: lo relevante del periodo, en frases.
 // Todo sale de las transacciones ya sincronizadas (nada nuevo en Supabase
@@ -34,14 +35,6 @@ export interface Alerta {
   filtro?: { campo: "comercio" | "categoria"; valor: string };
 }
 
-const moneda = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-const monedaExacta = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
-const porcentaje = new Intl.NumberFormat("es-MX", { style: "percent", maximumFractionDigits: 0 });
-const decimal = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 1 });
 const formatoDia = new Intl.DateTimeFormat("es-MX", { day: "numeric", month: "short" });
 
 const mesDe = (t: Transaccion) => t.fecha.slice(0, 7);

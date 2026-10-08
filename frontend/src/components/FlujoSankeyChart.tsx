@@ -4,12 +4,7 @@ import type { SankeyLinkProps, SankeyNodeProps } from "recharts";
 import { nombrePeriodo, type FlujoSankeyDatos } from "../lib/indicadores";
 import { useEsMovil } from "../hooks/useEsMovil";
 import { truncar } from "../lib/texto";
-
-const formateadorMoneda = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
+import { moneda as formateadorMoneda } from "../lib/formato";
 
 // Mismos dos tonos ya validados del resto del dashboard (azul = ingresos,
 // naranja = gastos) -- ver la nota de "Chart colors/specs" en CLAUDE.md:

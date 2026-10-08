@@ -711,15 +711,17 @@ the frontend query can't leak another user's rows. Aggregation (by-month, by-cat
 balance per account) happens client-side in plain functions in `queries.ts`, kept separate from
 the React components so they're unit-testable without rendering anything.
 
-**Charts**: `IngresosGastosChart` (ingresos vs. gastos por mes), `GastoPorCategoriaChart`, and
-`GastoPorComercioChart` (added 2026-09-20, replacing an earlier `TendenciaSaldoChart` — see
-below). `GastoPorComercioChart` mirrors `GastoPorCategoriaChart`'s exact shape (top-8 horizontal
-bars, single hue, cross-filter) but deliberately has **no** "Sin comercio" fallback bucket and no
-"Otros" fold: `comercio` is optional by design (only rules that explicitly set it populate it —
-see the `comercio` bullet earlier in this doc), so `agruparGastoPorComercio` in `queries.ts` just
-skips transactions with `comercio === null` rather than lumping them into a noisy catch-all the
-way `categoriaDe()`'s `SIN_CATEGORIA` fallback does for categories (categorization is expected to
-eventually cover everything; comercio tagging isn't and that's fine).
+**Charts**: `IngresosGastosChart` (ingresos vs. gastos por mes) and "ingresos y gastos por
+categoría / comercio / evento", which since 2026-10-08 are ONE component,
+`IngresosGastosPorDimensionChart` (`dimension` prop; it replaced three near-identical
+`GastoPor{Categoria,Comercio,Evento}Chart` files), fed by the generic `agruparPor(transacciones,
+claveDe)` in `queries.ts` (`categoriaDe` / `comercioDe` / `eventoDe`). Top-8 horizontal bars,
+cross-filter. Only categoría folds the rest into a non-clickable "Otros" (`plegarResto`);
+comercio and evento have **no** "Sin comercio/evento" bucket and no fold: they are optional by
+design (only rules that explicitly set a comercio populate it — see the `comercio` bullet earlier
+in this doc), so `claveDe` returns null and those transactions are skipped rather than lumped
+into a noisy catch-all the way `categoriaDe()`'s `SIN_CATEGORIA` fallback does for categories.
+(The comercio chart was added 2026-09-20, replacing an earlier `TendenciaSaldoChart` — see below.)
 
 **Resumen tab = former Resumen + former Indicadores, merged (2026-09-26, user's request)**:
 `VistaResumen.tsx` is the single view for the "Resumen" tab *and* every non-credit-card account tab; the separate
@@ -769,7 +771,7 @@ differ on purpose** (user chose each one explicitly) — keep them this way:
   the chips says so). `aplicarFiltros(transacciones, filtros, excluir?)` — `excluir` (a key or an
   array) is the cross-filter trick: each chart is computed with every *other* active dimension but
   not its own, so it still shows the other options to click. Non-selected marks dim to ~0.3 via
-  `<Cell fillOpacity>`. The "Otros" fold in `GastoPorCategoriaChart` is not clickable.
+  `<Cell fillOpacity>`. The "Otros" fold of the category chart is not clickable.
 
 **Filter layout (2026-10-03, user's request — "se ve amontonado")**: the Resumen's pill rows live in
 one card, `PanelFiltros.tsx` (presentational only; every click handler stays in `VistaResumen`):
@@ -884,7 +886,9 @@ doesn't touch Supabase or the transactions and shows even with no synced data. D
 years) come from `frontend/functions/api/cotizaciones.ts`, a **Cloudflare Pages Function** (free,
 same domain → behind the same Cloudflare Access, no CORS problem) that proxies Yahoo Finance's
 public, unofficial chart endpoint — no API key; whitelisted to `SIMBOLOS_PERMITIDOS` so it isn't an
-open proxy. For it to deploy, `deploy.yml` runs `wrangler pages deploy dist` with
+open proxy. The upstream fetch uses `cf: { cacheTtl: 300, cacheEverything: true }` (2026-10-08) so
+Cloudflare's edge cache serves repeat requests for 5 minutes instead of hitting Yahoo every time
+(public data, same for everyone; ignored in `npm run dev`). For it to deploy, `deploy.yml` runs `wrangler pages deploy dist` with
 `workingDirectory: frontend` (wrangler picks up `functions/` from its cwd); in `npm run dev`,
 `vite.config.ts` mounts the same handler as middleware. If Yahoo ever changes/blocks it, only this
 tab shows an error. Indicators are pure functions in `src/lib/tecnico.ts` (SMA 50/200, Bollinger
@@ -990,11 +994,36 @@ CSS custom properties for the palette live in `src/index.css`, keyed by role (`-
 `[data-theme]` override — same pattern artifacts use. If you add a chart, re-run the dataviz
 skill's procedure (form → color → validate) rather than picking colors by eye.
 
-**Data loading & writes**: `obtenerTransacciones` pages with `.range()` ordered by `fecha` **and
-`id`** — ordering by date alone isn't stable for same-day rows, so offset paging could return a
-row twice and skip another at a 1000-row page boundary. Bulk updates (`actualizarCategoriaComercioYEvento`,
-`actualizarCuentaDeDocumentos`) send ids in batches of 150 (`enLotes`) because `.in("id", ids)` goes in
-the URL and hundreds of UUIDs exceeded the server's URL limit. `Dashboard` memoizes the
+**Data loading & writes (reworked 2026-10-08 for latency)**: `Dashboard` holds
+`DatosTransacciones` = the raw `transacciones` rows (foreign keys only:
+`categoria_id`/`evento_id`/`documento_id`) **plus** `Catalogos` (categorias, eventos, documentos
+with their cuenta + banco, fetched separately in parallel), and derives the nested `Transaccion[]`
+the rest of the app uses with `armarTransacciones` (same shape PostgREST used to return when the
+relations were nested per row — that nesting repeated the same alias/bank JSON thousands of times
+and was most of the payload; now every row of a document shares one object). Every list goes
+through `obtenerTodasLasPaginas` (also used by `obtenerGastosCorreo`): `.range()` ordered by a
+total key (`fecha` **and `id`** — ordering by date alone isn't stable for same-day rows, so offset
+paging could return a row twice and skip another at a page boundary), first page with
+`count: "estimated"` (cheap, unlike a full `COUNT(*)`), the estimated remaining pages in
+parallel, then one at a time while the last page came back full (the estimate can be short).
+**After an edit, only the edited rows are re-fetched**: `onActualizado(ids)` →
+`recargarTransacciones(ids)` re-reads the catalogs (a new categoría/evento or a document moved to
+another cuenta lives there) + those ids, and `reemplazarFilas` swaps them in; `onActualizado()`
+without ids reloads everything. A failed reload never unmounts the dashboard: it shows a
+"Los cambios se guardaron, pero no se pudo recargar la vista … Reintentar" banner (only the
+*initial* load failing shows the full-page error). Errors from PostgREST are wrapped into real
+`Error`s (`comoError`) so callers can show their message. Bulk updates
+(`actualizarCategoriaComercioYEvento`, `quitarEventoDeTransacciones`,
+`actualizarCuentaDeDocumentos`) send ids in batches of 150 (`enLotes`) because `.in("id", ids)`
+goes in the URL and hundreds of UUIDs exceeded the server's URL limit; `porLotes` sends up to
+`LOTES_EN_PARALELO` = 4 batches at a time. Tabs other than Resumen/per-account are `React.lazy`
+(own chunks, downloaded when first opened; `cargarPestana` reloads the page ONCE if a chunk fails
+to load — after a deploy Cloudflare no longer serves the previous version's files, so a dashboard
+left open would otherwise break on the next tab click; checked by 404-ing a chunk in Playwright)
+and Recharts is its own `recharts` chunk
+(`manualChunks` in `vite.config.ts`) so it stays cached across deploys. Number/date formatters
+live once in `src/lib/formato.ts` (`moneda`, `monedaConCentavos`, `compacto`, `porcentaje`,
+`decimal`, `fechaCorta`) — don't re-create `Intl.NumberFormat` per component. `Dashboard` memoizes the
 default-hidden categories and the per-account transaction lists so their identity is stable across
 renders — `VistaResumen` memoizes every calculation on those references. `EventosTab`'s own filters
 are local component state (unlike the per-tab `EstadoVista`), so they reset when leaving that tab.
@@ -1014,15 +1043,16 @@ for clearing a field to null, only reassigning it), and `actualizarCategoriaYCom
 `queries.ts` applies it via `supabase.from("transacciones").update(...).in("id", ids)`. This
 relies entirely on the existing RLS `update` policy — same authenticated session as every read,
 no new credentials, no service_role, no new migration needed. `categoria` is a special case
-because `transacciones.categoria_id` is a FK, not free text: `buscarOCrearCategoriaId` mirrors
-`sync/sincronizador.py`'s Python find-or-create (select by `nombre`, insert if missing) so typing
+because `transacciones.categoria_id` is a FK, not free text: `buscarOCrearId("categorias" |
+"eventos", nombre)` does the find-or-create as ONE upsert on the unique `(user_id, nombre)`
+(`onConflict: "user_id,nombre"`, `user_id` from its `auth.uid()` default; race-free, one round
+trip — it used to be select-then-insert, same as `sync/sincronizador.py`) so typing
 a brand-new category name from the browser creates it in `categorias` on the fly, same as the
 desktop app does locally. Category/comercio autocomplete suggestions come from
 `Array.from(new Set(transacciones.map(...)))` over the already-loaded transacciones — no extra
-Supabase query for that. After a successful edit, `Dashboard` calls `obtenerTransacciones()` again
-(`recargarTransacciones`, extracted from the initial `useEffect` so both paths share it) rather
-than patching local state, trading a bit of latency for certainty that what's on screen matches
-what Supabase actually has.
+Supabase query for that. After a successful edit, `Dashboard` re-reads the edited rows (and the
+catalogs) from Supabase rather than patching local state by hand, so what's on screen is what
+Supabase actually has — see "Data loading & writes".
 
 **Known interaction, not a bug**: this write does *not* touch `documento_id`/`pagina`/`linea_cruda`
 — the audit trail back to the source PDF line stays intact, per the non-negotiable constraint. But
@@ -1066,7 +1096,13 @@ through the REST API without logging in. Now authenticated users may select and 
 frontend's nested read and the sync's find-or-create need) and nobody may update/delete via the
 API. Known, accepted gap for a single-user app: the insert/update policies only check `user_id =
 auth.uid()` on the row itself, not that the referenced `documento_id`/`categoria_id`/`evento_id`/
-`cuenta_id` belong to the same user.
+`cuenta_id` belong to the same user. **Policies are written `user_id = (select auth.uid())`**, not
+`user_id = auth.uid()` (`20261008120000_rls_auth_uid_initplan.sql` altered all 24 in place): the
+subselect is evaluated once per query (an InitPlan) instead of potentially once per row, which
+matters for the dashboard's full-history reads — Supabase's advisor flags the bare form as
+`auth_rls_initplan`. Write any new policy the same way. Checked by applying every migration to a
+throwaway local Postgres 16 with a stub `auth.uid()`: plan shows the InitPlan, RLS still isolates
+users, and the frontend's `categorias` upsert on `(user_id, nombre)` works under it.
 `transacciones.comercio` (added in `20260920145914_add_comercio.sql`) and `transacciones.tarjeta`
 (added in `20260920180242_add_tarjeta.sql`) are both plain nullable text columns, not catalog
 tables with their own FK like `categoria_id` — see the `comercio` bullet in Architecture above
@@ -1173,9 +1209,12 @@ user over the simpler alternative — don't silently change these:
 
 ## CI/CD
 
-Two independent GitHub Actions workflows, each gated by path filters so they don't fire on
-unrelated commits:
+Three GitHub Actions workflows, each gated by path filters so they don't fire on unrelated
+commits:
 
+- `.github/workflows/ci.yml` (added 2026-10-08) — triggers on `frontend/**` for every push (any
+  branch) and PR: `tsc -b`, `npm run lint`, `npm test`. `deploy.yml` doesn't lint or test, and
+  changes go straight to `main`, so this is the safety net. Python tests are not in CI yet.
 - `.github/workflows/db-migrate.yml` — triggers on `supabase/migrations/**`. Applies pending Supabase migrations.
 - `.github/workflows/deploy.yml` — triggers on `frontend/**`. Builds the frontend and deploys to
   Cloudflare Pages via `wrangler pages deploy`, using secrets `CLOUDFLARE_API_TOKEN`,
@@ -1217,8 +1256,38 @@ python -m unittest discover -s tests -t .
 ```
 
 Real PDFs can't be fixtures (they never leave the laptop), so parser tests feed synthetic
-`(pagina, linea)` tuples to `_procesar_documento`. The Tkinter app itself has no tests. The
-frontend has no test runner either — `npm run build` (typecheck) and `npm run lint` are the checks.
+`(pagina, linea)` tuples to `_procesar_documento`. The Tkinter app itself has no tests.
+
+**Frontend** (added 2026-10-08): Vitest (dev dependency only), `cd frontend && npm test`;
+`vitest.config.ts` fills in fake `VITE_SUPABASE_*` because `supabase.ts` throws without them —
+no test touches the network (network helpers like `obtenerTodasLasPaginas` take the query as a
+parameter). Tests live next to their module as `src/lib/*.test.ts`, with a `transaccion()` factory
+in `src/test/fabrica.ts`: `queries` (agruparPor, cross-filter exclusion, month gap filling,
+armarTransacciones/reemplazarFilas, paging with short/over estimates and error wrapping),
+`indicadores` (resolverPeriodo incl. year crossing, rangoDeAnio, default-hidden categories,
+ladoDominante, gasto hormiga), `alertas` (duplicates, $0 echo lines, price change incl. the >50%
+and several-charges-a-month cases, new subscription), `gastosEstadoCuenta` (only TDC cargos of
+non-hidden categories add up; sinSumar reasons; day order; esTarjetaCredito) and `tecnico`
+(SMA, RSI edges). `npx tsc -b` and `npm run lint` are the other checks; CI runs all three.
+
+**Dashboard thresholds and rules (constants)** — the numbers that decide what the user sees,
+in one place (change the constant, not a copy of it):
+
+| Constant (file) | Value | Rule |
+|---|---|---|
+| `UMBRAL_GASTO_HORMIGA` (indicadores.ts) | 200 | cargo < $200 = gasto hormiga |
+| `VENTANA_RECURRENTES` / `MESES_MINIMOS_RECURRENTE` (indicadores.ts) | 6 / 3 | recurring = comercio in ≥3 of the 6 months ending at the period |
+| `MESES_PERIODO_POR_DEFECTO` (indicadores.ts) | 3 | default period = last 3 complete months |
+| `PATRON_EXCLUIDA_POR_DEFECTO` (indicadores.ts) | `pago tdc\|entre cuentas\|traspaso` | categories hidden by default |
+| `TOPE_SANKEY_INGRESOS` / `TOPE_SANKEY_GASTOS` (indicadores.ts) | 5 / 8 | Sankey nodes before folding |
+| `TOLERANCIA_MONTO_FIJO` (alertas.ts) | 2% | two charges count as "the same price" |
+| `CAMBIO_PRECIO_MINIMO` / `_PESOS` / `_MAXIMO` (alertas.ts) | 3% and $10 / 50% | price-change alert bounds |
+| `MESES_SUSCRIPCION_NUEVA` (alertas.ts) | 3 | "new" subscription window |
+| `MULTIPLO_INUSUAL` / `MONTO_MINIMO_INUSUAL` / `HISTORIAL_MINIMO_INUSUAL` / `TOPE_CARGOS_INUSUALES` (alertas.ts) | 3× / $1,000 / 6 / 3 | unusual-charge alert |
+| `ALERTAS_VISIBLES` (AlertasPanel.tsx) | 4 | alerts shown before "Ver N más" |
+| `TOPE_CATEGORIAS_TARJETAS` (tarjetas.ts) | 8 | categories in the per-card chart before "Otras" |
+| `DIAS_ESTADO_ATRASADO` (GastosEstadoCuentaTab.tsx) | 45 | ⚠ on "Datos hasta" |
+| `TAMANO_PAGINA` / `TAMANO_LOTE_IDS` / `LOTES_EN_PARALELO` (queries.ts) | 1000 / 150 / 4 | paging and write batches |
 
 ## Working locally with Supabase CLI
 

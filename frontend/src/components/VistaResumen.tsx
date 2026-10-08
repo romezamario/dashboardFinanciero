@@ -2,10 +2,10 @@ import { useMemo, useState } from "react";
 import {
   agruparIngresosGastosPorAnio,
   agruparIngresosGastosPorMes,
-  agruparPorCategoria,
-  agruparPorComercio,
+  agruparPor,
   aplicarFiltros,
   categoriaDe,
+  comercioDe,
   cuentaDe,
   eventoDe,
   ocultarCategorias,
@@ -37,17 +37,18 @@ import {
 } from "../lib/indicadores";
 import type { Transaccion } from "../lib/types";
 import { IngresosGastosChart, type VistaTiempo } from "./IngresosGastosChart";
-import { GastoPorCategoriaChart } from "./GastoPorCategoriaChart";
-import { GastoPorComercioChart } from "./GastoPorComercioChart";
 import { FlujoNetoChart } from "./FlujoNetoChart";
 import { FlujoSankeyChart } from "./FlujoSankeyChart";
 import { Sparkline } from "./Sparkline";
 import { Delta, SelectorPeriodo, Tabla, Tile } from "./IndicadoresUI";
+import { IngresosGastosPorDimensionChart } from "./IngresosGastosPorDimensionChart";
+import { MENSAJE_SIN_COMERCIO } from "../lib/texto";
 import { TransaccionesTabla } from "./TransaccionesTabla";
 import { EditorTransacciones } from "./EditorTransacciones";
 import { AlertasPanel } from "./AlertasPanel";
 import { PanelFiltros } from "./PanelFiltros";
 import { calcularAlertas } from "../lib/alertas";
+import { moneda, porcentaje, decimal } from "../lib/formato";
 
 /** Meses de la vista por defecto de "Ingresos vs. gastos" (mes en curso incluido). */
 const MESES_GRAFICA_RECIENTES = 13;
@@ -65,14 +66,6 @@ const ETIQUETAS_FILTRO: Record<keyof Filtros, string> = {
   tarjeta: "Tarjeta",
   evento: "Evento",
 };
-
-const moneda = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-const porcentaje = new Intl.NumberFormat("es-MX", { style: "percent", maximumFractionDigits: 0 });
-const decimal = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 1 });
 
 type Actualizador<T> = (anterior: T) => T;
 
@@ -99,7 +92,7 @@ interface VistaResumenProps {
   /** Agrupación de la gráfica de ingresos vs. gastos (por mes o por año). */
   vistaTiempo: VistaTiempo;
   onCambiarVistaTiempo: (vista: VistaTiempo) => void;
-  onActualizado: () => void | Promise<void>;
+  onActualizado: (ids?: string[]) => void | Promise<void>;
 }
 
 /**
@@ -239,11 +232,11 @@ export function VistaResumen({
     [delPeriodo, filtros]
   );
   const gastoPorCategoria = useMemo(
-    () => agruparPorCategoria(aplicarFiltros(delPeriodo, filtros, "categoria")),
+    () => agruparPor(aplicarFiltros(delPeriodo, filtros, "categoria"), categoriaDe),
     [delPeriodo, filtros]
   );
   const gastoPorComercio = useMemo(
-    () => agruparPorComercio(aplicarFiltros(delPeriodo, filtros, "comercio")),
+    () => agruparPor(aplicarFiltros(delPeriodo, filtros, "comercio"), comercioDe),
     [delPeriodo, filtros]
   );
   const flujoSankey = useMemo(
@@ -643,15 +636,19 @@ export function VistaResumen({
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <GastoPorCategoriaChart
+        <IngresosGastosPorDimensionChart
+          dimension="categoría"
+          plegarResto
           datos={gastoPorCategoria}
-          categoriaSeleccionada={filtros.categoria}
-          onClickCategoria={seleccionarCategoria}
+          seleccionado={filtros.categoria}
+          onClickElemento={seleccionarCategoria}
         />
-        <GastoPorComercioChart
+        <IngresosGastosPorDimensionChart
+          dimension="comercio"
+          mensajeVacio={MENSAJE_SIN_COMERCIO}
           datos={gastoPorComercio}
-          comercioSeleccionado={filtros.comercio}
-          onClickComercio={(comercio) => alternarFiltro("comercio", comercio)}
+          seleccionado={filtros.comercio}
+          onClickElemento={(comercio) => alternarFiltro("comercio", comercio)}
         />
       </div>
 

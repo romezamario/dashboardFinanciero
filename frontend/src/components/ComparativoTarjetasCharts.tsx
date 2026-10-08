@@ -13,14 +13,7 @@ import {
 import { colorTarjeta, OTRAS_CATEGORIAS, type FilaPorTarjeta } from "../lib/tarjetas";
 import { truncar } from "../lib/texto";
 import { useEsMovil } from "../hooks/useEsMovil";
-
-const moneda = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-const compacto = new Intl.NumberFormat("es-MX", { notation: "compact", maximumFractionDigits: 1 });
-const porcentaje = new Intl.NumberFormat("es-MX", { style: "percent", maximumFractionDigits: 0 });
+import { moneda, compacto, porcentaje } from "../lib/formato";
 
 const estiloTooltip = {
   background: "var(--surface-1)",

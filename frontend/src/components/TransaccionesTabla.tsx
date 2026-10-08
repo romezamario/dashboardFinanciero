@@ -1,15 +1,6 @@
 import type { Transaccion } from "../lib/types";
 import { useEsMovil } from "../hooks/useEsMovil";
-
-const formateadorMoneda = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-});
-const formateadorFecha = new Intl.DateTimeFormat("es-MX", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-});
+import { monedaConCentavos as formateadorMoneda, fechaCorta } from "../lib/formato";
 
 export function TransaccionesTabla({
   transacciones,
@@ -63,7 +54,7 @@ export function TransaccionesTabla({
                 </span>
               </div>
               <div className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-                {formateadorFecha.format(new Date(t.fecha + "T00:00:00"))} ·{" "}
+                {fechaCorta(t.fecha)} ·{" "}
                 {t.documentos.cuentas.alias}
                 {t.tarjeta ? ` · ${t.tarjeta}` : ""}
               </div>
@@ -134,7 +125,7 @@ export function TransaccionesTabla({
               {ordenadas.map((t) => (
                 <tr key={t.id} style={{ borderBottom: "1px solid var(--gridline)" }}>
                   <td className="py-2" style={{ color: "var(--text-secondary)" }}>
-                    {formateadorFecha.format(new Date(t.fecha + "T00:00:00"))}
+                    {fechaCorta(t.fecha)}
                   </td>
                   <td className="py-2" style={{ color: "var(--text-primary)" }}>
                     {t.descripcion}

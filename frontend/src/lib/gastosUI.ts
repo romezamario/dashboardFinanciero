@@ -1,10 +1,11 @@
 import { useState } from "react";
+import { monedaConCentavos as formatoMoneda } from "./formato";
+
+export { formatoMoneda };
 
 // Formato y estilos compartidos por las tablas/calendario de "Gastos recientes"
 // (vista por correo y vista por estado de cuenta). Fuera de los componentes
 // para que esos archivos solo exporten componentes (fast refresh).
-
-export const formatoMoneda = new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN" });
 
 /** Los centavos en 0 se dejan en blanco, como en el reporte diario. */
 export function dinero(centavos: number | undefined): string {

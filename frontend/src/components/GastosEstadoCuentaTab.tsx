@@ -57,7 +57,7 @@ interface GastosEstadoCuentaTabProps {
   transacciones: Transaccion[];
   categoriasOcultas: Set<string>;
   onCambiarCategoriasOcultas: (cambio: (anteriores: Set<string>) => Set<string>) => void;
-  onActualizado: () => void | Promise<void>;
+  onActualizado: (ids?: string[]) => void | Promise<void>;
   vista: VistaCalendario;
   onCambiarVista: (cambio: (anterior: VistaCalendario) => VistaCalendario) => void;
 }
@@ -263,7 +263,7 @@ function PanelDiaEstado({
 }: {
   dia: DiaEstadoCuenta;
   sugerencias: Sugerencias;
-  onActualizado: () => void | Promise<void>;
+  onActualizado: (ids?: string[]) => void | Promise<void>;
 }) {
   const { descargando, errorExcel, descargar } = useDescargaExcel(() =>
     descargarDiaEstadoExcel(dia)
@@ -278,9 +278,10 @@ function PanelDiaEstado({
   }
 
   async function guardado(texto: string) {
+    const id = editando;
     setEditando(null);
     setAviso(texto);
-    await onActualizado();
+    await onActualizado(id ? [id] : undefined);
   }
 
   return (

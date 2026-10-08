@@ -10,20 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import type { ResumenMes } from "../lib/indicadores";
-
-const formateadorEje = new Intl.NumberFormat("es-MX", {
-  notation: "compact",
-  maximumFractionDigits: 1,
-});
-const formateadorMoneda = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-const formateadorPorcentaje = new Intl.NumberFormat("es-MX", {
-  style: "percent",
-  maximumFractionDigits: 0,
-});
+import { compacto as formateadorEje, moneda as formateadorMoneda, porcentaje as formateadorPorcentaje } from "../lib/formato";
 
 // Polaridad sobre una línea base en 0 (ahorro arriba, déficit abajo): se
 // reutilizan los dos tonos ya validados del dashboard -- azul del lado

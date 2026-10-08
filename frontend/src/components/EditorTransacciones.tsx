@@ -8,16 +8,7 @@ import {
 } from "../lib/queries";
 import type { Transaccion } from "../lib/types";
 import { useEsMovil } from "../hooks/useEsMovil";
-
-const formateadorMoneda = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-});
-const formateadorFecha = new Intl.DateTimeFormat("es-MX", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-});
+import { monedaConCentavos as formateadorMoneda, fechaCorta } from "../lib/formato";
 
 const TOPE_RESULTADOS = 100;
 
@@ -29,7 +20,7 @@ interface EditorTransaccionesProps {
    * búsqueda solo encuentra sus transacciones), pero mover un documento a
    * OTRA cuenta necesita ver las demás. Si se omite, se usa `transacciones`. */
   catalogo?: Transaccion[];
-  onActualizado: () => void | Promise<void>;
+  onActualizado: (ids?: string[]) => void | Promise<void>;
 }
 
 export function EditorTransacciones({
@@ -165,7 +156,7 @@ export function EditorTransacciones({
       setNuevaCategoria("");
       setNuevoComercio("");
       setNuevaCuentaId("");
-      await onActualizado();
+      await onActualizado(idsSeleccionados);
     } catch (e) {
       setMensaje({
         tipo: "error",
@@ -344,7 +335,7 @@ export function EditorTransacciones({
                         </span>
                       </div>
                       <div className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-                        {formateadorFecha.format(new Date(t.fecha + "T00:00:00"))} ·{" "}
+                        {fechaCorta(t.fecha)} ·{" "}
                         {t.documentos.cuentas.alias}
                         {t.tarjeta ? ` · ${t.tarjeta}` : ""}
                       </div>
@@ -385,7 +376,7 @@ export function EditorTransacciones({
                         />
                       </td>
                       <td className="py-2 pr-2" style={{ color: "var(--text-secondary)" }}>
-                        {formateadorFecha.format(new Date(t.fecha + "T00:00:00"))}
+                        {fechaCorta(t.fecha)}
                       </td>
                       <td className="py-2 pr-2" style={{ color: "var(--text-primary)" }}>
                         {t.descripcion}

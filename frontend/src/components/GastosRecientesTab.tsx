@@ -10,7 +10,7 @@ interface GastosRecientesTabProps {
   transacciones: Transaccion[];
   categoriasOcultas: Set<string>;
   onCambiarCategoriasOcultas: (cambio: (anteriores: Set<string>) => Set<string>) => void;
-  onActualizado: () => void | Promise<void>;
+  onActualizado: (ids?: string[]) => void | Promise<void>;
 }
 
 /** Pestaña "Gastos recientes": el mismo calendario con dos fuentes. "Por
