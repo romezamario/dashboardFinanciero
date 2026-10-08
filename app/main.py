@@ -70,6 +70,7 @@ COLOR_FILA_PAR = "#f6f8fa"
 COLOR_FONDO_MANUAL = "#fff4cc"
 COLOR_FONDO_MANUAL_TEXTO = "#b38600"  # el mismo amarillo, legible como texto
 COLOR_SIN_CATEGORIA = "#b3261e"
+COLOR_ABONO = "#1b7a3a"
 
 # "origen" (estado de cuenta) se sigue guardando en el JSON, pero no se muestra:
 # el usuario no lo usa (2026-10-05).
@@ -1319,6 +1320,9 @@ class App(tk.Tk):
             foreground=COLOR_FONDO_MANUAL_TEXTO,
         ).pack(side="left", padx=(14, 0))
         ttk.Label(
+            marco_acciones_tabla, text="■ abono", foreground=COLOR_ABONO
+        ).pack(side="left", padx=(10, 0))
+        ttk.Label(
             marco_acciones_tabla, text="■ sin categoría", foreground=COLOR_SIN_CATEGORIA
         ).pack(side="left", padx=(10, 0))
         ttk.Label(
@@ -1363,6 +1367,7 @@ class App(tk.Tk):
             self.tabla.column(col, width=ancho, minwidth=40, anchor=alineacion, stretch=crece)
         # Primero el rayado, después lo que debe destacar encima de él.
         self.tabla.tag_configure("par", background=COLOR_FILA_PAR)
+        self.tabla.tag_configure("abono", foreground=COLOR_ABONO)
         self.tabla.tag_configure("sin_categoria", foreground=COLOR_SIN_CATEGORIA)
         # Los renglones manuales se distinguen a simple vista: son los únicos
         # que se pueden editar/eliminar (los extraídos vienen del PDF).
@@ -1784,7 +1789,9 @@ class App(tk.Tk):
                 categoria = f"✎ {categoria}"
             etiquetas = []
             if t.categoria is None:
-                etiquetas.append("sin_categoria")
+                etiquetas.append("sin_categoria")  # el rojo gana: pide atención
+            elif t.tipo == "abono":
+                etiquetas.append("abono")
             if t.linea_cruda.startswith(PREFIJO_RENGLON_MANUAL):
                 etiquetas.append("manual")
             self.tabla.insert(

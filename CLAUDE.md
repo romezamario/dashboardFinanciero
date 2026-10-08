@@ -242,7 +242,7 @@ cargos, efectivo, abonos; "neto" was removed 2026-10-05, unused — and the Guar
 gets `expand=True`. Keep that order: when the notebook was packed first, a small window squeezed the
 Guardar/Sincronizar buttons to empty slivers. The table has scrollbars, right-aligned amounts with
 thousands separators, zebra rows (`_rayar_tabla`, recomputed after sorting), red text for
-uncategorized rows, yellow background for manual rows, click-to-sort headers (`_ordenar_tabla` only
+uncategorized rows, green text for abonos (2026-10-07; an uncategorized abono stays red), yellow background for manual rows, click-to-sort headers (`_ordenar_tabla` only
 reorders the view; iids stay = index in `self.transacciones`), an empty-state label, and
 "Agregar renglón manual..." next to Editar/Eliminar (enabled only when a manual row is selected).
 Colors live in the `COLOR_*` constants at the top of `app/main.py`; the native "vista" theme is kept.
