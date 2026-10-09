@@ -875,6 +875,14 @@ differ on purpose** (user chose each one explicitly) — keep them this way:
   not its own, so it still shows the other options to click. Non-selected marks dim to ~0.3 via
   `<Cell fillOpacity>`. The "Otros" fold of the category chart is not clickable.
 
+**"Shophunters" tab (2026-10-09, user's request)**: the same `VistaResumen` as the Resumen (same period /
+hide-categories / click-filters / bulk editor, own per-tab state under key `"shophunters"`), fed only with
+the transactions whose **event name contains "shophunters"** (`lib/shophunters.ts`, case-insensitive, so
+"2026-08 Shophunters", "2026-09 Shophunters" and any future "2026-10 Shophunters" enter by themselves).
+It sits right after "Eventos" and only appears when at least one such transaction exists. Because every
+movement here has an event, the "recurring" block and the alert kinds that skip events (price changes, new
+subscriptions, unusual charges) are naturally empty; the "Evento" pill row lists just the Shophunters events.
+
 **Filter layout (2026-10-03, user's request — "se ve amontonado")**: the Resumen's pill rows live in
 one card, `PanelFiltros.tsx` (presentational only; every click handler stays in `VistaResumen`):
 click filters (Cuenta/Tarjeta/Evento) as rows with an aligned label column (label above the pills on

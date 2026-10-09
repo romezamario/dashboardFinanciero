@@ -12,6 +12,7 @@ import {
   type Filtros,
 } from "../lib/queries";
 import { eventosOcultosPorDefecto, eventosVisiblesTras } from "../lib/gastosEstadoCuenta";
+import { soloShophunters } from "../lib/shophunters";
 import { categoriasExcluidasPorDefecto, RANGO_MESES_VACIO, type RangoMeses } from "../lib/indicadores";
 import type { Transaccion } from "../lib/types";
 import { supabase } from "../lib/supabase";
@@ -102,6 +103,8 @@ const ESTADO_VACIO: EstadoVista = {
 
 const PESTANA_RESUMEN = "resumen";
 const PESTANA_EVENTOS = "eventos";
+// Mismo VistaResumen que el Resumen, pero solo con los eventos de Shophunters.
+const PESTANA_SHOPHUNTERS = "shophunters";
 const PESTANA_CATEGORIAS_COMERCIOS = "categorias-comercios";
 const PESTANA_TARJETAS_CREDITO = "tarjetas-credito";
 // "Gastos recientes": vista por correo (tabla gastos_correo, carga sus propios
@@ -220,6 +223,7 @@ export function Dashboard() {
     () => eventosOcultosPorDefecto(eventosExistentes, eventosVisiblesGastos),
     [eventosExistentes, eventosVisiblesGastos]
   );
+  const transaccionesShophunters = useMemo(() => soloShophunters(transacciones), [transacciones]);
   const transaccionesPorCuenta = useMemo(() => {
     const porCuenta = new Map<string, Transaccion[]>();
     for (const t of transacciones) {
@@ -234,6 +238,9 @@ export function Dashboard() {
   const pestanas = [
     { id: PESTANA_RESUMEN, etiqueta: "Resumen" },
     { id: PESTANA_EVENTOS, etiqueta: "Eventos" },
+    ...(transaccionesShophunters.length > 0
+      ? [{ id: PESTANA_SHOPHUNTERS, etiqueta: "Shophunters" }]
+      : []),
     { id: PESTANA_CATEGORIAS_COMERCIOS, etiqueta: "Categorías y Comercios" },
     ...(transaccionesTarjetas.length > 0
       ? [{ id: PESTANA_TARJETAS_CREDITO, etiqueta: "Tarjetas de crédito" }]
@@ -450,6 +457,8 @@ export function Dashboard() {
           />
         ) : vistaActiva === PESTANA_CATEGORIAS_COMERCIOS ? (
           <DetalleDimensionTab transacciones={transacciones} />
+        ) : vistaActiva === PESTANA_SHOPHUNTERS ? (
+          renderVistaResumen(PESTANA_SHOPHUNTERS, transaccionesShophunters)
         ) : vistaActiva === PESTANA_RESUMEN ? (
           renderVistaResumen(PESTANA_RESUMEN, transacciones)
         ) : (
