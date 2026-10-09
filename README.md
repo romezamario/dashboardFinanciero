@@ -301,7 +301,7 @@ mismo usuario con el que después entras al frontend):
 
 ## Frontend (fase 5)
 
-Dashboard de solo lectura: login con Supabase Auth (el mismo usuario del Sincronizador) y luego
+Dashboard web: login con Supabase Auth (el mismo usuario del Sincronizador) y luego
 todo lo que RLS deje ver a ese usuario — sin backend intermedio, `supabase-js` habla directo con
 Postgres.
 
@@ -323,49 +323,70 @@ aparece un aviso con **Reintentar** sin perder lo que tenías filtrado. Las pest
 de inicio se descargan la primera vez que las abres; si el sitio se actualizó mientras lo tenías
 abierto, la página se recarga sola una vez.
 
-**Qué muestra:**
-- KPIs: saldo actual (siempre sin filtrar — es un hecho de la cuenta, no una suma que deba
-  encogerse), ingresos del mes, gastos del mes
-- Ingresos vs. gastos por mes (barras agrupadas)
-- Gasto por categoría (barras horizontales, top 8 + "Otros")
-- Gasto por comercio (barras horizontales, top 8 — solo transacciones con comercio asignado,
-  ver "Reglas de categorización..." en la app de escritorio)
-- Tabla de transacciones completa, con columna **Tarjeta** (Titular/Adicional/Digital) para
-  estados de cuenta que agrupan sus movimientos por tarjeta dentro del mismo documento — vacía
-  para bancos/documentos sin ese concepto
-- **Editar categoría/comercio en lote**: busca transacciones por un texto en la descripción
-  (ej. "TELEVIA"), selecciona una o varias (o "Seleccionar todas las coincidencias" para
-  seleccionar de golpe todo lo que matchee, no solo lo que se ve en pantalla), y asígnales una
-  categoría y/o comercio nuevos — ambos campos quedan como sugerencia autocompletada con lo que
-  ya existe, pero aceptan texto libre (una categoría nueva se crea al vuelo). Deja un campo en
-  blanco para no tocarlo. Es la única escritura que hace el frontend directo a Supabase (todo lo
-  demás es solo lectura) — usa las mismas políticas de RLS que ya protegen las lecturas, sin
-  credenciales nuevas. Ojo: si vuelves a cargar y sincronizar el mismo PDF desde la app de
-  escritorio más adelante, el upsert por `(documento_id, pagina, linea_cruda)` va a
-  sobreescribir categoría/comercio con lo que digan las reglas en ese momento — una edición aquí
-  no sobrevive un resync del mismo documento (lo mismo con un cambio de cuenta). Para una
-  corrección que sí debe persistir, agrega o ajusta una regla en "Reglas de categorización..." en
-  vez de (o además de) editar aquí.
+**Qué muestra** — una pestaña por tema; cada pestaña recuerda sus propios filtros al cambiar de
+una a otra. Botón de modo claro/oscuro arriba a la derecha.
 
-**Cross-filter estilo Power BI**: da clic en una barra de mes, una categoría, o un comercio,
-y el resto del dashboard (KPIs, las otras gráficas, la tabla) se filtra a eso —
-seleccionado en color completo, lo demás atenuado. Clic otra vez sobre lo mismo lo quita; los
-chips arriba muestran qué filtros están activos, con botón para quitar cada uno o todos. Cada
-gráfica se sigue mostrando completa (para poder cambiar la selección) excepto por los filtros de
-las *otras* dimensiones — es decir, filtrar por mes no oculta meses en su propia gráfica, pero sí
-reduce qué categorías/comercios aparecen en las demás. La categoría "Otros" (la cola de gasto por
-categoría plegada) no es clicable — agrupa varias categorías reales, no hay un solo nombre que
-filtrar.
+- **Resumen** — la vista principal:
+  - **Periodo** ("Desde/Hasta", por meses): todo lo de la pestaña se calcula sobre él. Sin elegir
+    nada son los últimos 3 meses completos (el mes en curso no cuenta: los estados de cuenta
+    llegan a mes vencido). Las comparaciones son contra el periodo anterior de la misma duración.
+  - **Indicadores de salud**: tasa de ahorro del periodo (y la de 12 meses como referencia),
+    flujo neto, gasto mensual vs. tu promedio previo, meses cubiertos con tu saldo, gastos
+    recurrentes, gasto hormiga (cargos de menos de $200) y categorías gastando más de lo normal.
+  - **Gráficas**: ingresos vs. gastos por mes (13 meses, todo el historial o por años — clic en
+    un mes o un año lo vuelve el periodo), flujo de dinero (Sankey: de dónde entra y en qué se
+    va), ingresos y gastos por categoría y por comercio, y flujo neto mensual.
+  - **Tablas**: categorías al alza (con tendencia de 12 meses), gastos recurrentes y todas las
+    transacciones del periodo.
+  - **Editar en lote** (ver abajo) y **alertas** al final: posibles cargos duplicados,
+    suscripciones que cambiaron de precio o son nuevas, cargos inusualmente grandes para su
+    categoría y cambios fuertes en la tasa de ahorro. "Ver movimientos" filtra la tabla a eso.
+- **Eventos** — viajes, fiestas, etc.: cuánto gastaste en cada uno, en qué categorías y comercios,
+  sus transacciones, y un buscador para asignar (o quitar) un evento a varias transacciones.
+- **Categorías y Comercios** — el detalle de una categoría y/o un comercio: gasto mensual con
+  promedio móvil de 3 meses (o ingreso, si lo elegido solo tiene abonos), sus movimientos más
+  grandes y sus transacciones. Clic en un mes filtra lo de abajo a ese mes.
+- **Tarjetas de crédito** — todas las tarjetas comparadas en el mismo periodo: cómo se reparte
+  el gasto entre ellas, una tabla por tarjeta (gasto, compras, ticket promedio, cambio vs. el
+  periodo anterior, pagos y abonos, categoría principal), gasto mensual por tarjeta y para qué
+  usas cada una (gasto por categoría y tarjeta). "Gasto" son solo cargos; los pagos van aparte.
+- **Gastos recientes** — un calendario con el gasto de cada día coloreado de verde a rojo. Dos
+  fuentes: **por correo** (los avisos de compra de Banamex, llegan el mismo día) y **por estado
+  de cuenta** (las transacciones sincronizadas, que llegan semanas después; solo suman los cargos
+  de tarjetas de crédito). Clic en un día abre su detalle, con **Descargar Excel**; en la vista
+  por estado de cuenta cada movimiento se puede editar ahí mismo.
+- **Una pestaña por cada cuenta que no es tarjeta** (p. ej. la de cheques) — la misma vista
+  que el Resumen, solo con esa cuenta.
+- **QQQ / TQQQ** — análisis técnico (velas, medias móviles, Bollinger, RSI, MACD, comparación
+  QQQ vs. TQQQ) y un tablero de indicadores macro de EE. UU. (Fed, inflación, empleo, tasas,
+  VIX) con las fechas de los próximos datos. No usa tus finanzas; solo vive aquí para tener todo
+  junto.
 
-**Ocultar categorías (lo inverso del cross-filter)**: la fila de chips "Ocultar categorías:"
-arriba de los KPIs deja quitar una o varias categorías de *todo* el dashboard a la vez —
-distinto de dar clic en una barra, que aísla una sola categoría sin tocar las demás. Clic en una
-categoría la tacha y la quita de todos lados (incluida su propia gráfica de Gasto por categoría);
-clic otra vez la regresa. "Mostrar todas" limpia todo lo oculto de un golpe. Si tenías una
-categoría aislada por clic y la ocultas (o viceversa), el otro filtro se quita solo para no
-quedar en un estado contradictorio. El editor de categoría/comercio en lote no respeta lo
-oculto — sigue buscando sobre todas las transacciones, porque ocultar es una preferencia de
-vista, no una restricción de qué puedes editar.
+**Filtros por clic (estilo Power BI)**: en el Resumen y en Tarjetas de crédito, un clic en una
+barra (categoría, comercio, tarjeta) o en las filas de Cuenta/Tarjeta/Evento filtra el resto de
+la pestaña a eso; lo no seleccionado se atenúa. Clic otra vez lo quita, y los chips de arriba
+muestran qué está activo. Cada gráfica sigue mostrando todas sus opciones (solo la filtran las
+*otras* selecciones), para poder cambiar de elección. Los filtros por clic afectan el detalle del
+gasto, **no** los indicadores de salud ni las alertas: una tasa de ahorro "solo de Comida" no
+significa nada. "Otros" (la cola plegada de categorías) no es clicable.
+
+**Excluir del análisis**: en el Resumen, el panel "Excluir del análisis" quita categorías o
+eventos de *todo* (indicadores, gráficas, tabla). Por defecto excluye los movimientos entre tus
+propias cuentas (Pago TDC, traspasos): pagar la tarjeta desde la cuenta de cheques contaría como
+gasto en una y como ingreso en la otra. Es lo inverso del filtro por clic, que aísla una sola.
+
+**Editar categoría/comercio/cuenta en lote** (Resumen y pestañas de cuenta): busca transacciones
+por un texto de la descripción (ej. "TELEVIA"), selecciona una o varias (o "Seleccionar todas las
+coincidencias", no solo las que se ven), y asígnales categoría, comercio y/o cuenta nuevos. Las
+sugerencias salen de lo que ya existe, pero aceptan texto libre (una categoría nueva se crea al
+vuelo); un campo en blanco no se toca. Cambiar la cuenta mueve el estado de cuenta completo (te
+avisa cuántas transacciones son). Junto con la edición dentro de Gastos recientes y la asignación
+de eventos, son las únicas escrituras del frontend, con las mismas políticas de RLS que las
+lecturas. Ojo: si vuelves a cargar y sincronizar el mismo PDF desde la app de escritorio, el
+upsert por `(documento_id, pagina, linea_cruda)` regresa categoría/comercio a lo que digan las
+reglas, y la cuenta a la del JSON — una edición aquí no sobrevive un resync del mismo documento.
+Para una corrección que sí debe persistir, agrega o ajusta una regla en "Reglas de
+categorización..." en vez de (o además de) editar aquí.
 
 Todas las consultas van sin filtrar por `user_id` explícitamente — las políticas de RLS ya
 garantizan que cada usuario solo ve sus propias filas, así que el filtro nunca depende de que el
