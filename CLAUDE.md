@@ -69,7 +69,7 @@ merchant it was.
 "Guardar archivo procesado" writes `data/procesados/<sha256_del_pdf>.json` **and** moves the
 source PDF itself into a `procesados/` subfolder of whatever folder it was loaded from (e.g.
 `C:\...\00Estadosdecuenta\procesados\`, not the project's `data/procesados/` — that's only for
-the JSON) via `App._mover_a_procesados_junto_al_pdf`: reuses that subfolder if it already exists,
+the JSON) via `mover_a_procesados_junto_al_pdf` (`app/logica.py`): reuses that subfolder if it already exists,
 no-ops if the PDF is already inside a folder named `procesados` (avoids nesting
 `procesados/procesados` on a reload-to-fix-something), and appends `" (1)"`, `" (2)"`, ... on a
 same-name collision with an unrelated file rather than overwriting it silently.
@@ -83,7 +83,7 @@ different, project-local destination, for the "couldn't even extract" case rathe
 When adding a real bank, register its `BaseParser` subclass in the `PARSERS` dict at the top of
 `app/main.py` — that's what populates the "Banco" dropdown, used as a manual fallback. Some
 parsers need extra context the PDF doesn't print (e.g. `BanamexParser` needs a year, since the
-statement only prints "DD MES" per row) — `App.cargar_pdf` tries
+statement only prints "DD MES" per row) — `crear_parser` (`app/logica.py`) tries
 `parser_cls(ano_estado_de_cuenta=anio_respaldo)` and falls back to `parser_cls()` on `TypeError`,
 so a parser only needs that constructor param if it actually uses it. `BanamexParser.extraer()`
 then tries to **self-correct** that year from the PDF's own cover page ("Fecha de corte" /
@@ -117,7 +117,7 @@ the default yet — both `BanamexParser` and `BanamexTdcParser` already normaliz
 **Auto-detection, so the user doesn't have to pick the bank manually**: `BaseParser` has two
 optional hooks, both defaulting to "unsupported" so old/simple parsers (`EjemploParser`) don't
 need to implement them:
-- `puede_procesar(ruta_pdf) -> bool` — a cheap, conservative check. `App._detectar_banco` tries
+- `puede_procesar(ruta_pdf) -> bool` — a cheap, conservative check. `detectar_banco` (`app/logica.py`) tries
   every registered parser's `puede_procesar` against the loaded PDF; if exactly one matches, that
   bank is used and the dropdown is updated to show it. Zero or multiple matches fall back to
   whatever the dropdown is currently set to (ambiguity always degrades to manual, never guesses).
@@ -146,12 +146,19 @@ All three hooks are best-effort: on no match/exception they return the "unsuppor
 sentinel and the app silently falls back to whatever the user already has in the manual fields —
 never a hard failure, never a silently wrong guess presented as certain.
 
-**"Gastos recientes (Gmail)" tab (2026-10-04)**: `PestanaGastosGmail` in `app/main.py` drives
+**"Gastos recientes (Gmail)" tab (2026-10-04)**: `PestanaGastosGmail` in `app/pestana_gmail.py` drives
 `sync.gmail_gastos.revisar_gmail()` (the CLI `main()` is now a thin wrapper over it; expected
-problems are `ErrorGastosGmail` subclasses with Spanish messages). It is the app's **only
-background thread**: the worker never touches widgets, it posts `("progreso"|"fin"|"error", ...)`
-to a `queue.Queue` that the UI drains with `after(100)` (Tkinter isn't thread-safe) — follow the
-same pattern for any future long task. Google libraries are imported lazily inside
+problems are `ErrorGastosGmail` subclasses with Spanish messages). Its work runs in a background
+thread via `correr_en_hilo` (`app/hilos.py`): the worker never touches widgets, it posts
+progress/result/error to a `queue.Queue` that the UI drains with `after(100)` (Tkinter isn't
+thread-safe), and `al_progresar`/`al_terminar`/`al_fallar` run on the UI thread. **Since
+2026-10-08 "Cargar PDF..." and "Sincronizar a Supabase..." use the same helper** (they used to
+freeze the window: glyph decoding, and network calls): `cargar_pdf` only does the file dialog and
+then runs `leer_estado_de_cuenta` (`app/logica.py`: detect bank, extract, account info, warnings
+→ suggestions, transform + categorize, recover manual rows/categories from the previous JSON —
+no tkinter) in the thread; `_al_leer_pdf` fills the UI. `_marcar_ocupado` disables Cargar
+PDF/Guardar/Sincronizar and shows "Leyendo …"/"Sincronizando…" meanwhile, restoring the previous
+summary on failure. Use `correr_en_hilo` for any future long task. Google libraries are imported lazily inside
 `crear_servicio_gmail`, so the app opens without them. "Revisar automáticamente al abrir" (off by
 default, stored in `data/gastos_correo/preferencias.json`) passes `permitir_autorizar=False`: it
 never opens a browser on startup, and shows problems in the tab instead of popups.
@@ -172,7 +179,11 @@ pressing the button again continues where it stopped (saved ids are never re-dow
 (`subir_todos`): with years of history it used to re-send one upsert per day file on every check; it now skips files whose
 sha256 equals the last *successful* upload (`data/gastos_correo/_estado_subida.json`, failed files are retried;
 `forzar=True` / `python -m sync.gastos_correo --forzar` re-sends everything, e.g. after deleting rows in Supabase by
-hand) and returns only the files it tried. The dashboard's `obtenerGastosCorreo` no longer limits to 60 days: it pages
+hand) and returns only the files it tried. **Changed days travel together (2026-10-08)**: they are
+grouped into calls of up to `MAXIMO_POR_LLAMADA` = 500 rows without splitting a day across calls
+(before: one call per day — hundreds on a full-history load); a failing call marks all its days
+failed (retried next time), an invalid day fails alone without being sent, and a `mensaje_id`
+repeated in one call is sent once (Postgres rejects the whole call otherwise, error 21000). The dashboard's `obtenerGastosCorreo` no longer limits to 60 days: it pages
 1,000 rows at a time ordered by fecha, hora **and id** (PostgREST's per-query cap).
 **Debit notices are not expenses (2026-10-06, user's decision)**: "Retiro/Compra con cuenta
 Banamex" notices from a debit account (`"Cheques M.N. ***123"`, `"CTA PRIORITY BNM M.N. ***123"`)
@@ -263,8 +274,30 @@ reorders the view; iids stay = index in `self.transacciones`), an empty-state la
 Colors live in the `COLOR_*` constants at the top of `app/main.py`; the native "vista" theme is kept.
 Compact sizing (2026-10-05, user's request): Segoe UI 9, row height 22. The "Estado de cuenta"
 (`origen`) column is no longer shown (still saved in the JSON and synced) — the user doesn't use it.
-Scripts that open `App()` for testing must patch `RUTA_PREFERENCIAS_GMAIL`/`CARPETA_GASTOS_CORREO`,
-or the user's real "revisar al abrir" preference starts a real Gmail check.
+Scripts that open `App()` for testing must patch `app.pestana_gmail.RUTA_PREFERENCIAS_GMAIL`/
+`CARPETA_GASTOS_CORREO` (they moved there from `app.main` on 2026-10-08), or the user's real
+"revisar al abrir" preference starts a real Gmail check.
+
+**`app/` layout (split 2026-10-08; `main.py` was 2,200 lines)**: `main.py` = `App` (main window,
+`PARSERS`, colors) + `main()`; `logica.py` = everything without widgets (`leer_estado_de_cuenta`,
+`detectar_banco`, `crear_parser`, manual-row/category recovery, `mover_a_procesados_junto_al_pdf`,
+`hash_pdf`, `PREFIJO_RENGLON_MANUAL`), tested in `tests/test_logica_app.py`; `ventanas.py` = the
+dialogs (`VentanaReglas`, `VentanaInspeccion`, `VentanaRenglonManual`, `VentanaCategoriaManual`);
+`pestana_gmail.py` = the Gmail tab and its preferences; `hilos.py` = `correr_en_hilo`. Checked
+by driving the real app under Xvfb (Python 3.12 + tkinter) with temp folders: a synthetic Invex PDF
+with an artificially slow extraction (the window kept processing events), save, reload recovering
+a manual category, sync against the in-memory fake client, bad login, unreadable PDF → `errores/`,
+every dialog opening, and the Gmail tab with a fake `revisar_gmail` reporting progress.
+
+**PDF read once per load (2026-10-08)**: `parsers/comun.py` holds what the parsers used to copy
+(`MESES`, `PATRON_PAGO_MINIMO`, `PATRON_INVEX`) and `textos_iniciales(ruta, n)`: the text of the
+first `PAGINAS_INICIALES` = 3 pages, extracted once and cached by (path, mtime, size). Bank
+detection tries every parser's `puede_procesar` and then `extraer_info_cuenta` runs — before, each
+opened the PDF and re-extracted the same pages (5–6 times per load); `puede_procesar` and
+`extraer_info_cuenta` of the three real parsers now read through it (`extraer` still opens the PDF
+itself, it needs the page objects). That text can include the full account number, so
+`leer_estado_de_cuenta` calls `olvidar_textos_iniciales()` in a `finally` — nothing stays in
+memory past the load (the "only the last 4 digits" rule).
 
 **Manual category on PDF-extracted rows (2026-10-05, user's request)**: double-click / "Editar..." on
 a row that came from the PDF opens `VentanaCategoriaManual` (several selected rows at once is fine):
@@ -273,7 +306,7 @@ creates **no rule** (for one-offs like "CIERRE COMPRA DIF" = Apple, where a rule
 deferred purchase). Overrides live in `App.categorias_manuales`, keyed by `(pagina, linea_cruda)` (the
 upsert key, unique per document); `recategorizar()` re-applies them after the rules so "Recargar
 reglas" never overwrites them; `guardar_procesado` marks those rows `"categoria_manual": true` in the
-JSON (the sync ignores that key) and `_recuperar_categorias_manuales` restores them when the same PDF
+JSON (the sync ignores that key) and `recuperar_categorias_manuales` restores them when the same PDF
 is reloaded. The table shows them as "✎ <categoría>"; "Volver a la regla" removes the override.
 A typed manual row still opens its full `VentanaRenglonManual` form.
 
@@ -601,7 +634,7 @@ patterns per line (V1 first, then V2) so a document could in principle mix both 
   parsers key off "Pago mínimo" (exclusive to a credit-card statement over a checking account),
   but with two TDC issuers now sharing that marker, "Pago mínimo" alone stopped being enough —
   confirmed by testing the same synthetic PDF against both parsers and getting `True` from both
-  (which `App._detectar_banco` treats as an unresolvable tie, degrading *both* to manual selection
+  (which `detectar_banco` treats as an unresolvable tie, degrading *both* to manual selection
   instead of picking the right one). Unlike Banamex TDC's own history (where dropping the
   "BANAMEX" requirement was safe because no other TDC parser existed yet to collide with),
   `InvexTdcParser.puede_procesar` requires "INVEX" **and** "Pago mínimo" both present, and
@@ -659,7 +692,7 @@ unreadable-image row this dialog exists for (typing it used to infer nothing, si
 equivalents in the load only carry the original text in `linea_cruda`); the dialog reaches the
 parser through `App.parser_actual`; once the user edits either combo by hand it stops
 being re-inferred, and leaving them empty saves the row uncategorized. Because the category of a
-manual row is no longer purely rule-derived, `App.recategorizar()` and `_recuperar_renglones_manuales`
+manual row is no longer purely rule-derived, `App.recategorizar()` and `recuperar_renglones_manuales`
 keep a manual row's existing categoría/comercio when no rule matches it (a matching rule still wins;
 extracted rows are unaffected and still go uncategorized when their rule disappears). (Before this,
 the dialog only ever applied `categorizar()` with no way to choose — "add/edit a rule instead".) `pagina`
@@ -672,7 +705,7 @@ to an extracted one — no special-casing anywhere downstream. Two rules added 2
 *identical* manual rows (same fecha/descripción/monto/tipo, e.g. two unreadable identical tolls)
 get `" (2)"`, `" (3)"`… appended to `linea_cruda`, same as `_desambiguar_renglones_duplicados` does
 for extracted rows — otherwise the upsert rejects the whole document; (2) reloading a PDF recovers
-its manual rows from its previous `data/procesados/<hash>.json` (`App._recuperar_renglones_manuales`,
+its manual rows from its previous `data/procesados/<hash>.json` (`recuperar_renglones_manuales` in `app/logica.py`,
 recognized by the `PREFIJO_RENGLON_MANUAL = "(manual) "` prefix, re-categorized with the current
 rules) — before, reloading to recategorize and re-saving silently dropped every row the user had
 typed in. **Editing/deleting manual rows (2026-10-02, user's request)**: manual rows show in yellow in the table (`manual` tag); double-click or "Editar renglón manual..." reopens `VentanaRenglonManual` with `editando=` (prefilled, "Guardar cambios" replaces the row in place, found by identity), and "Eliminar renglón manual" removes it after a confirmation. Extracted rows are refused (they come from the PDF — fix the rule instead). An edit **keeps the original `linea_cruda`** on purpose: with `pagina` it's the upsert key, so re-syncing updates the already-synced row instead of leaving the wrong one plus a new one (stale rows are never deleted); changing `pagina` does change the key, so that case warns. Deleting an already-synced manual row leaves it in Supabase — the confirmation says to remove it by hand there. Changes persist only after "Guardar archivo procesado".
@@ -1122,6 +1155,14 @@ user over the simpler alternative — don't silently change these:
 - **Idempotency**: `bancos`/`cuentas`/`documentos`/`categorias` use a manual find-or-create
   (`_buscar_o_crear`: select by unique key, insert only if missing) rather than relying on
   `.upsert()`'s return-row semantics, which vary across supabase-py/PostgREST versions.
+  **Per-run cache + batched categories (2026-10-08)**: `sincronizar_todos` shares a `CacheIds`
+  dict across the documents of one run, so banco and cuenta ids are looked up once (dozens of
+  statements of the same card used to repeat the same selects), and categories go through
+  `_ids_de_categorias`: one `select(...).in_("nombre", [...])` for the names not yet cached and one
+  `insert([...])` with the missing ones — it used to be a select (and maybe an insert) per category
+  per document; `forzar_todos` over the whole history was hundreds of round trips. postgrest-py's
+  `in_` quotes names with commas/parentheses (checked against the installed library). The cache
+  lives only for one run.
   **`cuentas` is the one exception to "insert only if missing" (2026-10-02,
   `_buscar_o_crear_cuenta`)**: it finds by `(banco, últimos 4)`, but if the row exists with a
   *different* `alias` it updates the alias to the document's (last synced wins). The alias is what
@@ -1152,7 +1193,8 @@ user over the simpler alternative — don't silently change these:
   (idempotent upsert) but slow, and it got noticeably worse as the folder accumulated one file
   per statement ever loaded. User reported syncing 4 new records took as long as syncing the
   entire history, because it *was* syncing the entire history. Fixed by skipping a file whose
-  content hash (sha256 of the raw JSON bytes, via `_hash_contenido`) matches what it was the last
+  content hash (sha256 of the raw JSON bytes, via `huella` in `sync/estado_incremental.py`, shared
+  with the gastos_correo upload) matches what it was the last
   time it synced *successfully* — tracked in `data/procesados/_estado_sync.json` (gitignored
   along with the rest of that folder; excluded from `sincronizar_todos`'s own `*.json` glob by an
   explicit name check, `NOMBRE_ARCHIVO_ESTADO_SYNC`, rather than relying on dotfile-glob
@@ -1214,7 +1256,10 @@ commits:
 
 - `.github/workflows/ci.yml` (added 2026-10-08) — triggers on `frontend/**` for every push (any
   branch) and PR: `tsc -b`, `npm run lint`, `npm test`. `deploy.yml` doesn't lint or test, and
-  changes go straight to `main`, so this is the safety net. Python tests are not in CI yet.
+  changes go straight to `main`, so this is the safety net. A second job (`python`, added the
+  same day) runs `python -m unittest discover -s tests -t .` on Python 3.12 with
+  `requirements.txt`; the workflow also triggers on `app/`, `parsers/`, `transform/`, `sync/`,
+  `tests/` and `requirements.txt`.
 - `.github/workflows/db-migrate.yml` — triggers on `supabase/migrations/**`. Applies pending Supabase migrations.
 - `.github/workflows/deploy.yml` — triggers on `frontend/**`. Builds the frontend and deploys to
   Cloudflare Pages via `wrangler pages deploy`, using secrets `CLOUDFLARE_API_TOKEN`,
@@ -1244,19 +1289,52 @@ Account-side setup (Cloudflare tokens, Supabase tokens, GitHub secrets) is docum
 
 ## Tests
 
-`tests/` (stdlib `unittest`, no extra dependency; added 2026-09-26) covers the transformer
-(signed amounts, deterministic duplicate-line suffixes, total validation), the sync against an
-in-memory fake Supabase client (corrupt JSON doesn't abort the run, unchanged files are skipped,
-re-sync is idempotent — the fake raises Postgres' error 21000 on duplicate upsert keys), and
-`BanamexParser`'s warnings. Run from the repo root (needs `requirements.txt` installed, for
-pdfplumber):
+`tests/` (stdlib `unittest`, no extra dependency; added 2026-09-26; 101 tests as of 2026-10-08,
+also run by CI) — one file per module:
+
+- `test_transformador.py` — signed amounts, deterministic duplicate-line suffixes, total validation.
+- `test_categorizador.py` — first-match rules, `inferir_categoria_comercio` (rules → same
+  description → substring incl. `linea_cruda`).
+- `test_sincronizador.py` — against an in-memory fake Supabase client: corrupt JSON doesn't abort
+  the run, unchanged files are skipped, re-sync is idempotent (the fake raises Postgres' error 21000
+  on duplicate upsert keys), alias rename, and the per-run id cache / batched categories (counts
+  the calls per table).
+- `test_gastos_correo.py` — gastos_correo upload: Decimal amounts, validation, incremental state,
+  batching days into calls, a failing call marks all its days, duplicated message ids.
+- `test_gmail_gastos.py` — Gmail notice parsing, debit notices, quota/permission errors, the
+  `revisar_gmail` flow with fake Gmail and Supabase (2 tests skip without the Google libraries).
+- `test_banamex.py` — checking-account parser warnings.
+- `test_banamex_tdc.py` — tier detection (name / last 4), courtesy-line rewrite, 2024 format.
+- `test_invex_tdc.py` — V1 sign convention, V2 "CR" convention, card sections/roles, detection vs.
+  Banamex TDC, and that detection + account info open the PDF once (`parsers/comun.py` cache).
+- `test_glifos.py` — glyph decoding of image-rendered rows.
+- `test_logica_app.py` — `app/logica.py`: reading a PDF with a fake parser (detection, ambiguity,
+  extractor error, suggestions, manual rows/categories recovered, cache forgotten), moving to
+  `procesados/`.
+
+Run from the repo root (needs `requirements.txt` installed, for pdfplumber):
 
 ```
 python -m unittest discover -s tests -t .
 ```
 
 Real PDFs can't be fixtures (they never leave the laptop), so parser tests feed synthetic
-`(pagina, linea)` tuples to `_procesar_documento`. The Tkinter app itself has no tests.
+`(pagina, linea)` tuples to `_procesar_documento` or a fake `pdfplumber.open`. The Tkinter
+windows have no automated tests (CI has no display); their logic lives in `app/logica.py`, which
+does. To check the real window, run it under Xvfb (see "`app/` layout" above).
+
+**Desktop thresholds and rules (constants)** that change behavior and were only in the code:
+
+| Constant (file) | Value | Rule |
+|---|---|---|
+| `CATEGORIA_DISPOSICION_EFECTIVO` (app/main.py) | "Disposición de efectivo" | cargos of this category go to the "Disposición de efectivo" total, not "Cargos" — must match the rule's category exactly |
+| `PREFIJO_RENGLON_MANUAL` (app/logica.py) | "(manual) " | marks typed rows; recovered on reload |
+| `PAGINAS_INICIALES` (parsers/comun.py) | 3 | pages read for bank detection / account info |
+| `MAXIMO_POR_LLAMADA` (sync/gastos_correo.py) | 500 | rows per gastos_correo upsert |
+| `LOTE_GUARDADO` (sync/gmail_gastos.py) | 50 | Gmail messages read before saving to disk |
+| `CIUDADES_CONFIRMADAS` (sync/gmail_gastos.py) | MCA→McAllen, APO→Apodaca | built-in city codes; the rest come from the gitignored `ciudades.json` |
+| `MAXIMO_GLIFOS_SUELTOS` / `DISTANCIA_MAXIMA_SUELTOS` (parsers/glifos.py) | 3 / 6.0 pt | a group of ≤3 glyph boxes within 6 pt is merged into the nearest row ("$", ",", "-") |
+| `MINIMO_CARACTERES_COINCIDENCIA_PARCIAL` (transform/categorizador.py) | 3 | min typed chars for substring inference in the manual-row dialog |
 
 **Frontend** (added 2026-10-08): Vitest (dev dependency only), `cd frontend && npm test`;
 `vitest.config.ts` fills in fake `VITE_SUPABASE_*` because `supabase.ts` throws without them —
