@@ -52,7 +52,13 @@ export function GastosRecientesTab(props: GastosRecientesTabProps) {
           error={errorCorreo}
           vista={vista} onCambiarVista={cambiarVista} />
       ) : (
-        <GastosEstadoCuentaTab {...props} vista={vista} onCambiarVista={cambiarVista} />
+        <GastosEstadoCuentaTab
+          {...props}
+          gastosCorreo={gastosCorreo}
+          errorCorreo={errorCorreo}
+          vista={vista}
+          onCambiarVista={cambiarVista}
+        />
       )}
     </div>
   );

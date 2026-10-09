@@ -81,7 +81,7 @@ export const sumarUnoEstado = (m: MovimientoDia, cuentas: string[]): Sumas => su
 
 /** Pasa una transacción al formato del día. Los cargos de $0 (líneas de eco de
  * Invex V2, ver CLAUDE.md) no son movimientos: devuelve null. */
-function aMovimiento(t: Transaccion): MovimientoDia | null {
+export function aMovimiento(t: Transaccion): MovimientoDia | null {
   const centavos = Math.round(t.monto * 100);
   if (centavos <= 0) return null;
   return {

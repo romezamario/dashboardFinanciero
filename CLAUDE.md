@@ -259,9 +259,19 @@ bulk editor, then `recargarTransacciones`; same non-durable-against-reprocessing
 Excel (`lib/exportarGastosEstadoCuenta.ts`, `estado-de-cuenta-AAAA-MM-DD.xlsx`: Resumen, Detalle,
 "No suman" when applicable, Movimientos with a "Suma al total" Sí/No column). Checked with a
 throwaway harness and synthetic data (sums, hidden-category toggle, month select, editor, workbook
-built); not checked in a real phone-width viewport. **Not done on purpose (phase 2)**: reconciling the
-two sources (matching a correo charge to its statement row) / a combined view that fills the days after
-the last cutoff with correo data.
+built); not checked in a real phone-width viewport. **Possible correo match (2026-10-08, user's request — a light version of the old "phase 2")**: clicking a movement row in the
+statement view opens a floating, tooltip-style card (`CoincidenciaFlotante.tsx`, fixed-position next to the click, closes with
+Esc / outside click / × / scroll or resize) with the correo notice that probably is the same charge, or says why there's none.
+`lib/conciliarCorreo.ts` matches **exact amount to the cent and date ±1 day** (`TOLERANCIA_DIAS`); there is no shared id between
+the two sources, so it's a hint ("posible coincidencia"), not a reconciliation. Rules: only TDC **cargos** (correo notices are
+credit-card only; Priority/abonos get an explanatory message) and notices in MXN; **one-to-one** (a notice pairs with a single
+charge — two identical charges and one notice don't both claim it; same-day pairs are assigned before ±1-day ones; ties by
+fecha/hora/id) with `otrosCandidatos` shown as "hay N avisos más…"; computed over ALL transactions, not the visible days, so
+hiding a category/event never changes which notice a charge gets. Rows with a match show a ✉ mark; unmatched rows still open the
+card with the reason (no notice that amount/day, notices only start on <date> and the charge is older, still loading, load error).
+The correo data is the one `GastosRecientesTab` already loads (passed down as `gastosCorreo`/`errorCorreo`); the row click is a
+context (`ContextoCoincidencia`) so the description cell is a button (keyboard) and "Editar" stops propagation. **Still not
+done on purpose**: a combined view that fills the days after the last cutoff with correo data, and persisting/confirming matches.
 
 **Weekly daily-average vs. goal (2026-10-08, user's request: "el objetivo es tener un gasto diario de 1000")**: under each
 week row of the calendar (both sources; `FranjaSemana` in `CalendarioMensual.tsx`, math in `lib/metaDiaria.ts`) a strip

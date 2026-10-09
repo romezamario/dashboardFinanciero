@@ -1,9 +1,11 @@
-import { useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { descargarDiaEstadoExcel } from "../lib/exportarGastosEstadoCuenta";
-import { tituloDia } from "../lib/gastosCorreo";
+import { conciliarConCorreo, primeraFechaCorreo, type Coincidencia } from "../lib/conciliarCorreo";
+import { tituloDia, type GastoCorreo } from "../lib/gastosCorreo";
 import { hoyIso } from "../lib/metaDiaria";
 import {
   agruparEstadosPorDia,
+  aMovimiento,
   diasEntre,
   nombreCorto,
   sumarUnoEstado,
@@ -22,6 +24,7 @@ import {
 import type { Transaccion } from "../lib/types";
 import { type VistaCalendario, dinero, formatoMoneda, useDescargaExcel, ESTILO_CABECERA, ESTILO_SUBTOTAL_CATEGORIA, ESTILO_SUBTOTAL_COMERCIO, ESTILO_TOTAL } from "../lib/gastosUI";
 import { CalendarioMensual, type ResumenDia } from "./CalendarioMensual";
+import { CoincidenciaFlotante, type EstadoCorreo } from "./CoincidenciaFlotante";
 import { EnlaceTexto, Fila, PildoraExclusion } from "./PanelFiltros";
 import {
   CabeceraColumnas,
@@ -54,6 +57,9 @@ interface GastosEstadoCuentaTabProps {
   eventosOcultos: Set<string>;
   onCambiarEventosOcultos: (cambio: (anteriores: Set<string>) => Set<string>) => void;
   onActualizado: (ids?: string[]) => void | Promise<void>;
+  /** Avisos de correo (null = cargando) con los que se buscan coincidencias. */
+  gastosCorreo: GastoCorreo[] | null;
+  errorCorreo: string | null;
   vista: VistaCalendario;
   onCambiarVista: (cambio: (anterior: VistaCalendario) => VistaCalendario) => void;
 }
@@ -74,6 +80,8 @@ export function GastosEstadoCuentaTab({
   eventosOcultos,
   onCambiarEventosOcultos,
   onActualizado,
+  gastosCorreo,
+  errorCorreo,
   vista,
   onCambiarVista,
 }: GastosEstadoCuentaTabProps) {
@@ -84,6 +92,28 @@ export function GastosEstadoCuentaTab({
     [transacciones, categoriasOcultas, eventosOcultos]
   );
   const porFecha = useMemo(() => new Map(dias.map((d) => [d.fecha, d])), [dias]);
+  // Posible coincidencia de cada cargo con un aviso de correo (mismo monto, ±1
+  // día). Se calcula sobre TODAS las transacciones, no sobre `dias`: ocultar
+  // categorías o eventos no debe cambiar qué aviso le toca a cada cargo.
+  const coincidencias = useMemo(
+    () =>
+      gastosCorreo
+        ? conciliarConCorreo(
+            transacciones.flatMap((t) => aMovimiento(t) ?? []),
+            gastosCorreo
+          )
+        : new Map<string, Coincidencia>(),
+    [transacciones, gastosCorreo]
+  );
+  const correo = useMemo<EstadoCorreo>(
+    () =>
+      errorCorreo
+        ? { tipo: "error" }
+        : gastosCorreo
+          ? { tipo: "listo", primeraFecha: primeraFechaCorreo(gastosCorreo) }
+          : { tipo: "cargando" },
+    [gastosCorreo, errorCorreo]
+  );
   const resumenes = useMemo<ResumenDia[]>(
     () =>
       dias.map((d) => ({
@@ -293,7 +323,13 @@ export function GastosEstadoCuentaTab({
         renderPanel={(fecha) => {
           const dia = porFecha.get(fecha);
           return dia ? (
-            <PanelDiaEstado dia={dia} sugerencias={sugerencias} onActualizado={onActualizado} />
+            <PanelDiaEstado
+              dia={dia}
+              sugerencias={sugerencias}
+              onActualizado={onActualizado}
+              coincidencias={coincidencias}
+              correo={correo}
+            />
           ) : null;
         }}
       />
@@ -301,14 +337,25 @@ export function GastosEstadoCuentaTab({
   );
 }
 
+/** Lo que las filas necesitan para mostrar/abrir la coincidencia con el correo. */
+interface ContextoCoincidencias {
+  coincidencias: Map<string, Coincidencia>;
+  abrir: (evento: React.MouseEvent, mov: MovimientoDia) => void;
+}
+const ContextoCoincidencia = createContext<ContextoCoincidencias | null>(null);
+
 function PanelDiaEstado({
   dia,
   sugerencias,
   onActualizado,
+  coincidencias,
+  correo,
 }: {
   dia: DiaEstadoCuenta;
   sugerencias: Sugerencias;
   onActualizado: (ids?: string[]) => void | Promise<void>;
+  coincidencias: Map<string, Coincidencia>;
+  correo: EstadoCorreo;
 }) {
   const { descargando, errorExcel, descargar } = useDescargaExcel(() =>
     descargarDiaEstadoExcel(dia)
@@ -316,6 +363,16 @@ function PanelDiaEstado({
   // Id del movimiento cuyo editor está abierto (uno a la vez) y último aviso.
   const [editando, setEditando] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  // Tarjetita de la posible coincidencia en el correo (junto al clic).
+  const [flotante, setFlotante] = useState<{ mov: MovimientoDia; x: number; y: number } | null>(null);
+  const cerrarFlotante = useCallback(() => setFlotante(null), []);
+  const contextoCoincidencia = useMemo<ContextoCoincidencias>(
+    () => ({
+      coincidencias,
+      abrir: (evento, mov) => setFlotante({ mov, x: evento.clientX, y: evento.clientY }),
+    }),
+    [coincidencias]
+  );
 
   function abrirEditor(id: string) {
     setAviso(null);
@@ -330,6 +387,7 @@ function PanelDiaEstado({
   }
 
   return (
+    <ContextoCoincidencia.Provider value={contextoCoincidencia}>
     <section
       className="rounded-md"
       style={{ background: "var(--surface-1)", border: "1px solid var(--series-1)" }}
@@ -398,7 +456,18 @@ function PanelDiaEstado({
           />
         )}
       </div>
+      {flotante && (
+        <CoincidenciaFlotante
+          mov={flotante.mov}
+          x={flotante.x}
+          y={flotante.y}
+          coincidencia={coincidencias.get(flotante.mov.id)}
+          correo={correo}
+          onCerrar={cerrarFlotante}
+        />
+      )}
     </section>
+    </ContextoCoincidencia.Provider>
   );
 }
 
@@ -436,7 +505,10 @@ function BotonEditar({ id, onEditar }: { id: string; onEditar: (id: string) => v
   return (
     <button
       type="button"
-      onClick={() => onEditar(id)}
+      onClick={(e) => {
+        e.stopPropagation(); // el clic en la fila abre la coincidencia con el correo
+        onEditar(id);
+      }}
       className="text-xs underline"
       style={{ color: "var(--series-1)" }}
       title="Cambiar la categoría, el comercio o el evento de este movimiento"
@@ -493,8 +565,8 @@ function TablaDetalleEstado({
               >
                 <td className="whitespace-nowrap px-3 py-1.5">{g.categoria}</td>
                 <td className="whitespace-nowrap px-3 py-1.5">{g.comercio}</td>
-                <td className="max-w-64 truncate px-3 py-1.5" title={g.descripcion}>
-                  {g.descripcion}
+                <td className="max-w-64 px-3 py-1.5">
+                  <DescripcionMovimiento mov={g} />
                 </td>
                 <td className="whitespace-nowrap px-3 py-1.5" style={{ color: "var(--text-secondary)" }}>
                   {g.tarjeta ?? ""}
@@ -584,8 +656,8 @@ function TablaSinSumar({
             onCancelar={onCancelar}
           >
             <td className="whitespace-nowrap px-3 py-1.5">{mov.categoria}</td>
-            <td className="max-w-64 truncate px-3 py-1.5" title={mov.descripcion}>
-              {mov.descripcion}
+            <td className="max-w-64 px-3 py-1.5">
+              <DescripcionMovimiento mov={mov} />
             </td>
             <td className="whitespace-nowrap px-3 py-1.5" style={{ color: "var(--text-secondary)" }}>
               {mov.cuenta}
@@ -614,6 +686,29 @@ function TablaSinSumar({
   );
 }
 
+/** La descripción del movimiento -- un botón, para que se pueda abrir con el
+ * teclado (su clic sube a la fila, que abre la tarjeta) -- y, si tiene una
+ * posible coincidencia en el correo, una marca ✉. */
+function DescripcionMovimiento({ mov }: { mov: MovimientoDia }) {
+  const contexto = useContext(ContextoCoincidencia);
+  const coincide = contexto?.coincidencias.has(mov.id) ?? false;
+  return (
+    <button type="button" className="flex max-w-full items-center gap-1.5 text-left" title={mov.descripcion}>
+      <span className="truncate">{mov.descripcion}</span>
+      {coincide && (
+        <span
+          className="shrink-0"
+          style={{ color: "var(--series-1)" }}
+          title="Posible coincidencia en el correo"
+          aria-label="Tiene una posible coincidencia en el correo"
+        >
+          ✉
+        </span>
+      )}
+    </button>
+  );
+}
+
 /** Una fila de movimiento y, justo debajo cuando está abierta, su editor. */
 function FilaMovimiento({
   mov,
@@ -632,9 +727,17 @@ function FilaMovimiento({
   onCancelar: () => void;
   children: React.ReactNode;
 }) {
+  const contexto = useContext(ContextoCoincidencia);
   return (
     <>
-      <tr style={{ borderBottom: "1px solid var(--border)" }}>{children}</tr>
+      <tr
+        onClick={contexto ? (e) => contexto.abrir(e, mov) : undefined}
+        className="cursor-pointer"
+        style={{ borderBottom: "1px solid var(--border)" }}
+        title="Clic para ver la posible coincidencia en el correo"
+      >
+        {children}
+      </tr>
       {abierta && (
         <tr style={{ borderBottom: "1px solid var(--border)", background: "var(--page-plane)" }}>
           <td colSpan={columnasTotales} className="px-3 py-3">
