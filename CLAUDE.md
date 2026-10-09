@@ -170,12 +170,12 @@ call uses `execute(num_retries=REINTENTOS_GMAIL)` (googleapiclient's exponential
 rate limits). If it still fails mid-read, `LecturaInterrumpida` carries what was read, it is saved,
 and the user sees `LimiteDeGmail` (Spanish) instead of a raw HttpError.
 **Full-history load (2026-10-07, user's request)**: the desktop tab's "Días hacia atrás" box was capped at 90
-(now `MAXIMO_DIAS_GMAIL` = 3650) and there is a **"Cargar todo el historial..."** button (confirmation first) that calls
+(now `MAXIMO_DIAS_GMAIL` = 3650) and there was a **"Cargar todo el historial..."** button (removed 2026-10-08 at the user's request once the initial load was done; the CLI below remains) that called
 `revisar_gmail(None, subir=True)` — `dias=None` searches Gmail without `newer_than` (`consulta_gmail`; CLI:
 `python -m sync.gmail_gastos --todo --subir`). Because it can be thousands of messages and minutes, `leer_mensajes` now
 calls `guardar_lote` every `LOTE_GUARDADO` = 50 messages (days + debits written as it goes, so closing the app or a
 quota error only loses the last batch; Gmail lists newest first, so a partial load fills recent months first) and just
-pressing the button again continues where it stopped (saved ids are never re-downloaded). **Upload is incremental**
+running it again continues where it stopped (saved ids are never re-downloaded). **Upload is incremental**
 (`subir_todos`): with years of history it used to re-send one upsert per day file on every check; it now skips files whose
 sha256 equals the last *successful* upload (`data/gastos_correo/_estado_subida.json`, failed files are retried;
 `forzar=True` / `python -m sync.gastos_correo --forzar` re-sends everything, e.g. after deleting rows in Supabase by
