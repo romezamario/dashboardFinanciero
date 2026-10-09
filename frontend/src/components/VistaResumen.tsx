@@ -96,6 +96,9 @@ interface VistaResumenProps {
   /** Oculta la tarjeta grande de "Tasa de ahorro" (la pestaña Shophunters no la
    * quiere: son solo gastos de un evento, no tiene sentido hablar de ahorro). */
   sinTasaDeAhorro?: boolean;
+  /** Dibuja en la gráfica de barras los promedios de gasto (móvil de 3 meses, últimos 3 y 12)
+   * con sus etiquetas a la derecha: la pestaña Shophunters (ver `IngresosGastosChart`). */
+  conPromediosEnGrafica?: boolean;
 }
 
 /**
@@ -132,6 +135,7 @@ export function VistaResumen({
   onCambiarVistaTiempo,
   onActualizado,
   sinTasaDeAhorro = false,
+  conPromediosEnGrafica = false,
 }: VistaResumenProps) {
   // Todas las categorías que existen, sin importar si están ocultas -- así
   // el control de "Ocultar categorías" no pierde de vista una categoría una
@@ -626,6 +630,7 @@ export function VistaResumen({
         onCambiarVista={onCambiarVistaTiempo}
         resaltados={resaltadosTiempo}
         onClickPeriodo={elegirPeriodoConClic}
+        conPromedios={conPromediosEnGrafica}
       />
 
       {/* Un solo diagrama con selector de dimensión en vez de varios

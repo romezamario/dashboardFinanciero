@@ -886,6 +886,18 @@ other tiles (net flow, spend, etc.) stay. Because every
 movement here has an event, the "recurring" block and the alert kinds that skip events (price changes, new
 subscriptions, unusual charges) are naturally empty; the "Evento" pill row lists just the Shophunters events.
 
+**The Shophunters bar chart carries the averages** (2026-10-09, user's request: the same three lines as the
+Categorías y Comercios chart): `VistaResumen` takes `conPromediosEnGrafica` and passes it to `IngresosGastosChart`
+(`conPromedios`), which becomes a `ComposedChart` and draws, over the *gastos*, the 3-month moving average and the
+flat averages of the last 3 and last 12 months. Their name + value sit in a column on the right, like QQQ's level
+labels, but inside the SVG: `EtiquetasPromedios` uses Recharts' `useYAxisScale` / `usePlotArea` hooks, so each label
+lands exactly at its line's height with no hand-computed pixels (labels closer than 30 px are pushed apart with a
+leader line); the chart reserves `ANCHO_COLUMNA` of right margin. On a phone there is no room, so the lines keep their
+names in the legend instead. Only in the month views (not "Años"). **What counts** (`lib/promedios.ts`, tested): only
+complete months (the current month is half-loaded and would drag the averages down) and **only months from the first
+month with spending** (an event that started in August must not average ten empty months as $0); so with two months
+of data both flat averages are the same and the 3-month moving average (and its label) appears from the third month.
+
 **Filter layout (2026-10-03, user's request — "se ve amontonado")**: the Resumen's pill rows live in
 one card, `PanelFiltros.tsx` (presentational only; every click handler stays in `VistaResumen`):
 click filters (Cuenta/Tarjeta/Evento) as rows with an aligned label column (label above the pills on

@@ -285,7 +285,7 @@ export function Dashboard() {
   function renderVistaResumen(
     pestana: string,
     transaccionesVista: Transaccion[],
-    opciones: { sinTasaDeAhorro?: boolean } = {}
+    opciones: { sinTasaDeAhorro?: boolean; conPromedios?: boolean } = {}
   ) {
     const estado = estadosPorPestana[pestana] ?? ESTADO_VACIO;
     const categoriasOcultas = estado.categoriasOcultas ?? categoriasOcultasPorDefecto;
@@ -322,6 +322,7 @@ export function Dashboard() {
         }
         onActualizado={recargarTransacciones}
         sinTasaDeAhorro={opciones.sinTasaDeAhorro}
+        conPromediosEnGrafica={opciones.conPromedios}
       />
     );
   }
@@ -463,7 +464,10 @@ export function Dashboard() {
         ) : vistaActiva === PESTANA_CATEGORIAS_COMERCIOS ? (
           <DetalleDimensionTab transacciones={transacciones} />
         ) : vistaActiva === PESTANA_SHOPHUNTERS ? (
-          renderVistaResumen(PESTANA_SHOPHUNTERS, transaccionesShophunters, { sinTasaDeAhorro: true })
+          renderVistaResumen(PESTANA_SHOPHUNTERS, transaccionesShophunters, {
+            sinTasaDeAhorro: true,
+            conPromedios: true,
+          })
         ) : vistaActiva === PESTANA_RESUMEN ? (
           renderVistaResumen(PESTANA_RESUMEN, transacciones)
         ) : (
