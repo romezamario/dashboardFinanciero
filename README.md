@@ -217,12 +217,10 @@ Flujo completo una vez que el extractor de tu banco existe:
    haga falta y "Agregar reglas" las guarda al final de `reglas_categorizacion.json` y recategoriza
    la tabla. Las que Claude no reconoce quedan sin marcar, para categorizarlas a mano. Usa tu
    suscripción de Claude (sin API key ni costo extra) y solo envía las descripciones sin
-   categoría y tus reglas actuales, nunca el PDF. Requiere instalar Claude Code una vez e iniciar
-   sesión:
-   ```
-   npm install -g @anthropic-ai/claude-code
-   claude
-   ```
+   categoría y tus reglas actuales, nunca el PDF. La primera vez, si Claude Code no está
+   instalado, la app ofrece instalarlo (con npm o, si no hay, con el instalador oficial) y luego
+   abre una ventana para iniciar sesión con tu cuenta en el navegador; al cerrarla, pide las
+   propuestas sola. No hay que correr comandos.
 3. Compara los **totales** de abajo (cargos, disposición de efectivo, abonos) contra los que
    imprime el estado de cuenta: si no cuadran, falta un renglón o hay algo mal leído.
 4. **Reglas de categorización...** para agregar/editar/borrar reglas — se aplican de inmediato a

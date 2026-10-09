@@ -776,6 +776,16 @@ pattern matches). `App.agregar_reglas` re-reads the rules file from disk, **appe
 rules (appending can only catch currently-uncategorized rows — earlier rules still win, so no
 regression check is needed), saves, recategorizes, enables "Guardar". Refuses while `VentanaReglas`
 is open (same reason as "Recargar reglas"). Not done: the Gmail tab's uncategorized merchants.
+**Setup is handled by the app (2026-10-09, user's request: "no que el usuario tenga que estar corriendo
+comandos")**: `_ejecutar_claude` raises `FaltaClaudeCode` (not found) or `FaltaIniciarSesion` (CLI
+output matches `PATRON_SIN_SESION`: login / API key / authenticat…). `App.sugerir_reglas_con_ia`
+then asks and runs `instalar_claude()` in the thread (`npm install -g @anthropic-ai/claude-code` if
+npm exists, else Anthropic's official `irm https://claude.ai/install.ps1 | iex`), then
+`abrir_inicio_de_sesion()`: `claude` in its own console (`cmd /k`, `CREATE_NEW_CONSOLE`) where the
+user logs in via the browser; the app polls the process every second (`after`) and, when that
+window is closed, retries the request by itself. Login itself can't be automated (the user's own
+credentials, in the browser). Checked with fakes driving the real window (install → login → proposals
+→ rule saved); the real install/login was not run from here.
 
 The app can be packaged as a standalone `.exe` via `DashboardFinanciero.spec` (PyInstaller,
 `--windowed`, icon from `app/icono.ico` — see README's "Empaquetar como ejecutable"). Build deps

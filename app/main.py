@@ -695,39 +695,99 @@ class App(tk.Tk):
         )
 
     def sugerir_reglas_con_ia(self) -> None:
+        """Pide a Claude las propuestas. Si Claude Code no está instalado o no
+        tiene sesión, lo resuelve la app (ofrece instalarlo / abre el inicio de
+        sesión) y luego reintenta sola: el usuario no corre comandos."""
         descripciones = list(self.descripciones_sin_categoria)
         if not descripciones or self._pidiendo_sugerencias:
             return
-        self._pidiendo_sugerencias = True
-        self.boton_sugerir_ia.config(state="disabled")
-        texto_previo = self.etiqueta_sin_categorizar.cget("text")
-        self.etiqueta_sin_categorizar.config(
-            text=f"Claude está revisando {len(descripciones)} descripción(es)… (puede tardar un par de minutos)"
-        )
+        from transform import sugerencias_ia as ia
+
         reglas = list(self.reglas)
+        texto_previo = self.etiqueta_sin_categorizar.cget("text")
 
-        def trabajo(_progreso):
-            from transform.sugerencias_ia import pedir_sugerencias
+        def ocupado(texto: str) -> None:
+            self._pidiendo_sugerencias = True
+            self.boton_sugerir_ia.config(state="disabled")
+            self.etiqueta_sin_categorizar.config(text=texto)
 
-            return pedir_sugerencias(descripciones, reglas)
-
-        def terminar() -> None:
+        def libre(restaurar_texto: bool = True) -> None:
             self._pidiendo_sugerencias = False
             self._refrescar_sin_categorizar()
+            if restaurar_texto:
+                self.etiqueta_sin_categorizar.config(text=texto_previo)
 
-        def al_terminar(sugerencias) -> None:
-            terminar()
+        def mostrar_error(titulo: str, error: Exception) -> None:
+            mensaje = str(error) if isinstance(error, ia.ErrorSugerenciasIA) else f"{type(error).__name__}: {error}"
+            messagebox.showerror(titulo, mensaje)
+
+        def pedir() -> None:
+            ocupado(f"Claude está revisando {len(descripciones)} descripción(es)… (puede tardar un par de minutos)")
+            correr_en_hilo(
+                self,
+                lambda _p: ia.pedir_sugerencias(descripciones, reglas),
+                al_tener_propuestas,
+                al_fallar_pedido,
+            )
+
+        def al_tener_propuestas(sugerencias) -> None:
+            libre(restaurar_texto=False)
             VentanaSugerenciasIA(self, sugerencias)
 
-        def al_fallar(error: Exception) -> None:
-            terminar()
-            self.etiqueta_sin_categorizar.config(text=texto_previo)
-            from transform.sugerencias_ia import ErrorSugerenciasIA
+        def al_fallar_pedido(error: Exception) -> None:
+            libre()
+            if isinstance(error, ia.FaltaClaudeCode):
+                ofrecer_instalar()
+            elif isinstance(error, ia.FaltaIniciarSesion):
+                ofrecer_inicio_de_sesion()
+            else:
+                mostrar_error("No se pudieron obtener propuestas", error)
 
-            mensaje = str(error) if isinstance(error, ErrorSugerenciasIA) else f"{type(error).__name__}: {error}"
-            messagebox.showerror("No se pudieron obtener propuestas", mensaje)
+        def ofrecer_instalar() -> None:
+            if not messagebox.askyesno(
+                "Instalar Claude Code",
+                "Para proponer reglas, la app usa Claude Code con tu suscripción de Claude "
+                "(sin API key ni costo extra). No está instalado en esta computadora.\n\n"
+                "¿Instalarlo ahora? Tarda uno o dos minutos y solo se hace una vez.",
+            ):
+                return
+            ocupado("Instalando Claude Code… (uno o dos minutos)")
+            correr_en_hilo(self, lambda _p: ia.instalar_claude(), al_instalar, al_fallar_instalacion)
 
-        correr_en_hilo(self, trabajo, al_terminar, al_fallar)
+        def al_instalar(_ruta) -> None:
+            libre()
+            ofrecer_inicio_de_sesion(recien_instalado=True)
+
+        def al_fallar_instalacion(error: Exception) -> None:
+            libre()
+            mostrar_error("No se pudo instalar Claude Code", error)
+
+        def ofrecer_inicio_de_sesion(recien_instalado: bool = False) -> None:
+            intro = "Claude Code quedó instalado. " if recien_instalado else ""
+            if not messagebox.askokcancel(
+                "Iniciar sesión en Claude",
+                f"{intro}Falta iniciar sesión con tu cuenta de Claude (solo la primera vez).\n\n"
+                "Se abrirá una ventana negra y después el navegador: elige tu cuenta de "
+                "Claude y autoriza. Cuando la ventana muestre la bienvenida, ciérrala y la "
+                "app pedirá las propuestas sola.",
+            ):
+                return
+            try:
+                proceso = ia.abrir_inicio_de_sesion()
+            except (ia.ErrorSugerenciasIA, OSError) as error:
+                mostrar_error("No se pudo abrir el inicio de sesión", error)
+                return
+            ocupado("Esperando a que inicies sesión en la ventana de Claude… (ciérrala al terminar)")
+            esperar_cierre(proceso)
+
+        def esperar_cierre(proceso) -> None:
+            if proceso.poll() is None:
+                self.after(1000, lambda: esperar_cierre(proceso))
+                return
+            libre()
+            pedir()
+
+        pedir()
 
     def agregar_reglas(self, nuevas: list[Regla], parent: tk.Misc | None = None) -> bool:
         """Agrega `nuevas` al final de reglas_categorizacion.json (al final:

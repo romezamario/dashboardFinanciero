@@ -7,6 +7,9 @@ Lo único que sale de la laptop son las descripciones sin categoría (lo mismo
 que ya se pegaba en el chat) y las reglas actuales, como ejemplo del estilo;
 nunca el PDF ni su texto crudo.
 
+Si Claude Code no está instalado o no tiene sesión, la app lo instala y abre
+el inicio de sesión ella misma (`instalar_claude`, `abrir_inicio_de_sesion`).
+
 Claude solo PROPONE: la app muestra cada propuesta y el usuario elige cuáles
 se vuelven reglas (`VentanaSugerenciasIA`). Sin tkinter aquí, para poder
 probarlo sin pantalla (tests/test_sugerencias_ia.py).
@@ -16,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -70,6 +74,14 @@ class ErrorSugerenciasIA(Exception):
     """Problema esperado, con un mensaje en español listo para mostrar."""
 
 
+class FaltaClaudeCode(ErrorSugerenciasIA):
+    """No está instalado: la app ofrece instalarlo (`instalar_claude`)."""
+
+
+class FaltaIniciarSesion(ErrorSugerenciasIA):
+    """Instalado pero sin sesión: la app abre el inicio (`abrir_inicio_de_sesion`)."""
+
+
 @dataclass
 class Sugerencia:
     descripcion: str
@@ -120,15 +132,20 @@ def buscar_claude() -> str | None:
     return next((str(c) for c in candidatos if c.is_file()), None)
 
 
+_SIN_VENTANA = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
+# Mensajes de Claude Code cuando no hay sesión iniciada ("Invalid API key ·
+# Please run /login", "Not logged in", ...).
+PATRON_SIN_SESION = re.compile(r"login|log in|logged|api key|authenticat|credential|oauth", re.IGNORECASE)
+PAQUETE_NPM = "@anthropic-ai/claude-code"
+# Instalador oficial de Anthropic, para cuando no hay npm.
+INSTALADOR_OFICIAL = "irm https://claude.ai/install.ps1 | iex"
+TIEMPO_MAXIMO_INSTALACION = 900
+
+
 def _ejecutar_claude(prompt: str) -> str:
     ejecutable = buscar_claude()
     if ejecutable is None:
-        raise ErrorSugerenciasIA(
-            "No encontré Claude Code (el comando `claude`). Instálalo una vez desde "
-            "una consola:\n\n    npm install -g @anthropic-ai/claude-code\n\n"
-            "y luego corre `claude` una vez para iniciar sesión con tu cuenta. "
-            "Después vuelve a intentarlo."
-        )
+        raise FaltaClaudeCode("Claude Code no está instalado.")
     try:
         proceso = subprocess.run(
             [ejecutable, "-p", "--output-format", "json"],
@@ -140,7 +157,7 @@ def _ejecutar_claude(prompt: str) -> str:
             # Fuera del repo: así no carga el CLAUDE.md del proyecto (enorme e
             # irrelevante para esto) ni puede tocar sus archivos.
             cwd=tempfile.gettempdir(),
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0,
+            creationflags=_SIN_VENTANA,
         )
     except subprocess.TimeoutExpired as error:
         raise ErrorSugerenciasIA(
@@ -154,13 +171,58 @@ def _ejecutar_claude(prompt: str) -> str:
         salida = json.loads(proceso.stdout)
     except ValueError:
         detalle = (proceso.stderr or proceso.stdout).strip()[:600]
-        raise ErrorSugerenciasIA(
-            "Claude Code no devolvió una respuesta válida. Si nunca has iniciado "
-            "sesión, corre `claude` una vez en una consola.\n\n" + detalle
-        ) from None
+        if PATRON_SIN_SESION.search(detalle):
+            raise FaltaIniciarSesion(detalle) from None
+        raise ErrorSugerenciasIA(f"Claude Code no devolvió una respuesta válida.\n\n{detalle}") from None
     if salida.get("is_error"):
-        raise ErrorSugerenciasIA(f"Claude Code respondió con un error:\n\n{salida.get('result', '')}")
+        resultado = str(salida.get("result", ""))
+        if PATRON_SIN_SESION.search(resultado):
+            raise FaltaIniciarSesion(resultado)
+        raise ErrorSugerenciasIA(f"Claude Code respondió con un error:\n\n{resultado}")
     return str(salida.get("result", ""))
+
+
+def instalar_claude() -> str:
+    """Instala Claude Code (con npm si está, si no con el instalador oficial
+    de Anthropic) y devuelve la ruta del ejecutable. Tarda un par de minutos."""
+    npm = shutil.which("npm")
+    if npm:
+        orden = [npm, "install", "-g", PAQUETE_NPM]
+    else:
+        orden = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", INSTALADOR_OFICIAL]
+    try:
+        proceso = subprocess.run(
+            orden, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=TIEMPO_MAXIMO_INSTALACION, creationflags=_SIN_VENTANA,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise ErrorSugerenciasIA(f"No se pudo instalar Claude Code: {error}") from error
+    ejecutable = buscar_claude()
+    if ejecutable is None:
+        detalle = (proceso.stderr or proceso.stdout).strip()[-800:]
+        raise ErrorSugerenciasIA(f"La instalación de Claude Code no terminó bien.\n\n{detalle}")
+    return ejecutable
+
+
+def abrir_inicio_de_sesion() -> subprocess.Popen:
+    """Abre Claude Code en una consola propia para que el usuario inicie
+    sesión (lo pide solo la primera vez: abre el navegador). La consola se
+    cierra a mano al terminar; quien llama puede esperar a que el proceso
+    acabe para reintentar."""
+    ejecutable = buscar_claude()
+    if ejecutable is None:
+        raise FaltaClaudeCode("Claude Code no está instalado.")
+    if sys.platform != "win32":
+        return subprocess.Popen([ejecutable], cwd=tempfile.gettempdir())
+    aviso = (
+        "Inicia sesion con tu cuenta de Claude (se abrira el navegador). "
+        "Cuando veas el mensaje de bienvenida, cierra esta ventana y la app continua sola."
+    )
+    return subprocess.Popen(
+        f'cmd /k "echo {aviso} & echo. & "{ejecutable}""',
+        cwd=tempfile.gettempdir(),
+        creationflags=subprocess.CREATE_NEW_CONSOLE,
+    )
 
 
 def _extraer_arreglo(texto: str) -> list[dict]:

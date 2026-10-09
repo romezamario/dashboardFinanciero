@@ -4,7 +4,13 @@ from unittest import mock
 
 from transform import sugerencias_ia
 from transform.categorizador import Regla
-from transform.sugerencias_ia import ErrorSugerenciasIA, construir_prompt, pedir_sugerencias
+from transform.sugerencias_ia import (
+    ErrorSugerenciasIA,
+    FaltaClaudeCode,
+    FaltaIniciarSesion,
+    construir_prompt,
+    pedir_sugerencias,
+)
 
 REGLAS = [Regla("DOMINOS", "Restaurantes", "Domino's Pizza"), Regla("OXXO", "Tiendas de conveniencia")]
 
@@ -78,7 +84,7 @@ class PedirSugerenciasTest(unittest.TestCase):
 class EjecutarClaudeTest(unittest.TestCase):
     def test_sin_claude_instalado(self):
         with mock.patch.object(sugerencias_ia, "buscar_claude", return_value=None):
-            with self.assertRaisesRegex(ErrorSugerenciasIA, "npm install"):
+            with self.assertRaises(FaltaClaudeCode):
                 sugerencias_ia._ejecutar_claude("hola")
 
     def _correr(self, stdout, stderr=""):
@@ -93,13 +99,28 @@ class EjecutarClaudeTest(unittest.TestCase):
         self.assertEqual(run.call_args.kwargs["input"], "hola")
         self.assertIn("-p", run.call_args.args[0])
 
-    def test_error_de_claude(self):
-        with self.assertRaisesRegex(ErrorSugerenciasIA, "Invalid API key"):
-            self._correr(json.dumps({"is_error": True, "result": "Invalid API key"}))
+    def test_sin_sesion(self):
+        with self.assertRaises(FaltaIniciarSesion):
+            self._correr(json.dumps({"is_error": True, "result": "Invalid API key · Please run /login"}))
+        with self.assertRaises(FaltaIniciarSesion):
+            self._correr("", stderr="Not logged in")
 
-    def test_salida_no_json(self):
-        with self.assertRaisesRegex(ErrorSugerenciasIA, "iniciado"):
-            self._correr("", stderr="not logged in")
+    def test_otro_error_de_claude(self):
+        with self.assertRaises(ErrorSugerenciasIA) as contexto:
+            self._correr(json.dumps({"is_error": True, "result": "Usage limit reached"}))
+        self.assertNotIsInstance(contexto.exception, FaltaIniciarSesion)
+
+    def test_instalar_usa_npm_si_existe(self):
+        with mock.patch.object(sugerencias_ia.shutil, "which", return_value="npm.cmd"),                 mock.patch.object(sugerencias_ia.subprocess, "run") as run,                 mock.patch.object(sugerencias_ia, "buscar_claude", return_value="claude.cmd"):
+            self.assertEqual(sugerencias_ia.instalar_claude(), "claude.cmd")
+        self.assertEqual(run.call_args.args[0], ["npm.cmd", "install", "-g", "@anthropic-ai/claude-code"])
+
+    def test_instalar_sin_npm_usa_el_instalador_oficial_y_reporta_fallo(self):
+        proceso = mock.Mock(stdout="", stderr="sin internet")
+        with mock.patch.object(sugerencias_ia.shutil, "which", return_value=None),                 mock.patch.object(sugerencias_ia.subprocess, "run", return_value=proceso) as run,                 mock.patch.object(sugerencias_ia, "buscar_claude", return_value=None):
+            with self.assertRaisesRegex(ErrorSugerenciasIA, "sin internet"):
+                sugerencias_ia.instalar_claude()
+        self.assertIn("https://claude.ai/install.ps1", run.call_args.args[0][-1])
 
 
 if __name__ == "__main__":
