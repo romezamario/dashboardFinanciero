@@ -146,6 +146,29 @@ class SincronizarTodosTest(unittest.TestCase):
         sincronizar_todos(cliente, self.carpeta)
         self.assertEqual([c["alias"] for c in cliente.tablas["cuentas"]], ["TDC Platino"])
 
+    def test_documento_se_mueve_a_la_cuenta_corregida(self) -> None:
+        documento = _documento("a", ["L1"])
+        self._escribir("a.json", json.dumps(documento))
+        cliente = ClienteFalso()
+        sincronizar_todos(cliente, self.carpeta)
+
+        documento["cuenta_ultimos_4_digitos"] = "9876"  # corregido en la app
+        self._escribir("a.json", json.dumps(documento))
+        sincronizar_todos(cliente, self.carpeta)
+
+        cuentas = {c["id"]: c["ultimos_4_digitos"] for c in cliente.tablas["cuentas"]}
+        self.assertEqual(len(cliente.tablas["documentos"]), 1)
+        self.assertEqual(cuentas[cliente.tablas["documentos"][0]["cuenta_id"]], "9876")
+        self.assertEqual(len(cliente.tablas["transacciones"]), 1)  # sin duplicar
+
+    def test_documento_en_su_cuenta_no_se_actualiza(self) -> None:
+        self._escribir("a.json", json.dumps(_documento("a", ["L1"])))
+        cliente = ClienteFalso()
+        sincronizar_todos(cliente, self.carpeta)
+        cliente.llamadas.clear()
+        sincronizar_todos(cliente, self.carpeta, forzar_todos=True)
+        self.assertNotIn(("documentos", "update"), cliente.llamadas)
+
     def test_ids_se_reusan_entre_documentos_y_categorias_van_en_lote(self) -> None:
         a = _documento("a", ["L1", "L2"])
         a["transacciones"][1]["categoria"] = "Transporte"

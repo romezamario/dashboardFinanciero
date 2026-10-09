@@ -546,7 +546,10 @@ statement from a bank you already support will look anything like the first one:
   that, so `_detectar_tipo_tarjeta` falls back to the card number: `_ultimos_4_de_texto()` (the
   `"Número de tarjeta: ..."` line, `[-4:]` only) looked up in `TIPOS_POR_ULTIMOS_4` — same "known
   list, falls through if not listed" shape as `ROLES_TARJETA_CONOCIDOS` in `invex_tdc.py`, and just
-  as specific to this user's cards (each tier was reissued under a new number more than once: Conquista
+  as specific to this user's cards — **kept in the code on purpose (user's decision, 2026-10-09)**, same
+  for `ROLES_TARJETA_CONOCIDOS` (invex_tdc.py), `CIUDADES_CONFIRMADAS` (gmail_gastos.py) and
+  `NOMBRES_TARJETA`/`ORDEN_TARJETAS` (frontend `lib/gastosCorreo.ts`, which ships in the site's JS):
+  moving them to a gitignored config was offered and declined (each tier was reissued under a new number more than once: Conquista
   5482/1236/8423, Beyond 4391/4904, Platino 5491/6599/2989 — the last one confirmed by the user).
   A name in the text still wins over the number. Three ordering details that mattered: (1) `extraer_info_cuenta` keeps the
   `"Estado de Cuenta <Palabra>"` alias (`PATRON_ALIAS`) as a *last-resort* (`alias_respaldo`) applied
@@ -1087,6 +1090,9 @@ Supabase query for that. After a successful edit, `Dashboard` re-reads the edite
 catalogs) from Supabase rather than patching local state by hand, so what's on screen is what
 Supabase actually has — see "Data loading & writes".
 
+**Account changes made here are not durable either**: since 2026-10-09 re-syncing a document
+moves it back to the account in its JSON (see `_buscar_o_crear_documento` under Sincronizador).
+
 **Known interaction, not a bug**: this write does *not* touch `documento_id`/`pagina`/`linea_cruda`
 — the audit trail back to the source PDF line stays intact, per the non-negotiable constraint. But
 it also means an edit made here is **not durable against reprocessing the same PDF**: if the user
@@ -1170,6 +1176,12 @@ user over the simpler alternative — don't silently change these:
   → "TDC Platino") must be able to rename accounts that already exist — before, the only way was
   editing Supabase by hand. Side effect to know: re-syncing an old document with a *different*
   alias typed in the app renames that account too.
+  **`documentos` follows the same rule (user's decision, 2026-10-09, `_buscar_o_crear_documento`)**:
+  found by `hash`, but if it already exists under a *different* `cuenta_id` it is moved to the
+  JSON's account — so fixing the last 4 digits (or bank) of an already-synced statement in the app
+  and re-syncing reassigns it (transactions keep their ids; no duplicates). Before, the document
+  stayed on the old account forever. Side effect: re-syncing a JSON undoes a "cambiar cuenta" made
+  in the dashboard's bulk editor for that document (same last-synced-wins as categories).
   `transacciones` uses real `.upsert(..., on_conflict="documento_id,pagina,linea_cruda")` since
   that's a bulk operation where per-row select-then-insert would be wasteful — the `on_conflict`
   columns match the table's actual unique constraint exactly. **This assumes `(pagina,

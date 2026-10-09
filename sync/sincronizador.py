@@ -145,6 +145,34 @@ def _buscar_o_crear_cuenta(
     return insertado.data[0]["id"]
 
 
+def _buscar_o_crear_documento(
+    client: ClienteSupabase, documento_hash: str, cuenta_id: str, ruta_local: str | None
+) -> str:
+    """Find-or-create de `documentos` por hash del PDF, con la misma excepción
+    que `cuentas`: si el documento ya existe pero en OTRA cuenta, se mueve a la
+    del JSON que se está sincronizando (decisión del usuario, 2026-10-09). Así,
+    corregir en la app los últimos 4 dígitos (o el banco) de un estado de
+    cuenta ya sincronizado y volver a sincronizar lo reasigna, en vez de dejarlo
+    en la cuenta equivocada. Mismo efecto que "cambiar cuenta" en el editor del
+    dashboard -- y por lo mismo, volver a sincronizar un JSON viejo deshace un
+    cambio de cuenta hecho allá."""
+    resultado = (
+        client.table("documentos").select("id, cuenta_id").eq("hash", documento_hash).execute()
+    )
+    if resultado.data:
+        fila = resultado.data[0]
+        if fila.get("cuenta_id") != cuenta_id:
+            client.table("documentos").update({"cuenta_id": cuenta_id}).eq("id", fila["id"]).execute()
+        return fila["id"]
+
+    insertado = (
+        client.table("documentos")
+        .insert({"cuenta_id": cuenta_id, "hash": documento_hash, "ruta_local": ruta_local})
+        .execute()
+    )
+    return insertado.data[0]["id"]
+
+
 def _ids_de_categorias(client: ClienteSupabase, nombres: set[str], cache: CacheIds) -> dict[str, str]:
     """{nombre: id} de las categorías, creando las que falten. En lote: UN
     select con `in_` para todas las que aún no están en `cache` y UN insert
@@ -181,14 +209,8 @@ def sincronizar_documento(
         client, banco_id, datos["cuenta_ultimos_4_digitos"], datos["cuenta_alias"], cache
     )
 
-    documento_id = _buscar_o_crear(
-        client, "documentos",
-        {"hash": datos["documento_hash"]},
-        {
-            "cuenta_id": cuenta_id,
-            "hash": datos["documento_hash"],
-            "ruta_local": datos.get("ruta_pdf_original"),
-        },
+    documento_id = _buscar_o_crear_documento(
+        client, datos["documento_hash"], cuenta_id, datos.get("ruta_pdf_original")
     )
 
     nombres_categoria = {
