@@ -13,6 +13,8 @@
 export const SIMBOLOS_PERMITIDOS = ["QQQ", "TQQQ"] as const;
 export type Simbolo = (typeof SIMBOLOS_PERMITIDOS)[number];
 
+const SEGUNDOS_EN_CACHE = 300;
+
 export interface Vela {
   /** YYYY-MM-DD, día de operación en Nueva York. */
   fecha: string;
@@ -57,8 +59,15 @@ function redondear(valor: number): number {
 
 export async function obtenerSerie(simbolo: Simbolo): Promise<SerieCotizaciones> {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${simbolo}?range=10y&interval=1d`;
-  // Sin User-Agent de navegador Yahoo suele responder 429.
-  const respuesta = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" } });
+  // Sin User-Agent de navegador Yahoo suele responder 429. `cf.cacheTtl`
+  // guarda la respuesta de Yahoo 5 min en la caché de Cloudflare (los datos
+  // son públicos e iguales para todos): recargar la pestaña o abrirla desde
+  // otro dispositivo no vuelve a pegarle a Yahoo, que es más lento y limita
+  // por frecuencia. Fuera de Cloudflare (`npm run dev`) se ignora.
+  const respuesta = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0" },
+    cf: { cacheTtl: SEGUNDOS_EN_CACHE, cacheEverything: true },
+  } as RequestInit);
   if (!respuesta.ok) throw new Error(`Yahoo Finance respondió ${respuesta.status}`);
   const cuerpo = (await respuesta.json()) as RespuestaYahoo;
   const resultado = cuerpo.chart.result?.[0];
@@ -97,7 +106,7 @@ export async function onRequestGet({ request }: { request: Request }): Promise<R
   }
   try {
     const serie = await obtenerSerie(simbolo as Simbolo);
-    return Response.json(serie, { headers: { "Cache-Control": "private, max-age=300" } });
+    return Response.json(serie, { headers: { "Cache-Control": `private, max-age=${SEGUNDOS_EN_CACHE}` } });
   } catch (e) {
     return Response.json(
       { error: e instanceof Error ? e.message : String(e) },

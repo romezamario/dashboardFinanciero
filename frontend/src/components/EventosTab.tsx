@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import {
   actualizarCategoriaComercioYEvento,
-  agruparPorCategoria,
-  agruparPorComercio,
-  agruparPorEvento,
+  agruparPor,
   aplicarFiltros,
   buscarPorDescripcion,
+  categoriaDe,
+  comercioDe,
   cuentaDe,
   eventoDe,
   quitarEventoDeTransacciones,
@@ -13,20 +13,10 @@ import {
 } from "../lib/queries";
 import type { Transaccion } from "../lib/types";
 import { useEsMovil } from "../hooks/useEsMovil";
-import { GastoPorEventoChart } from "./GastoPorEventoChart";
-import { GastoPorCategoriaChart } from "./GastoPorCategoriaChart";
-import { GastoPorComercioChart } from "./GastoPorComercioChart";
+import { IngresosGastosPorDimensionChart } from "./IngresosGastosPorDimensionChart";
+import { MENSAJE_SIN_COMERCIO } from "../lib/texto";
 import { TransaccionesTabla } from "./TransaccionesTabla";
-
-const formateadorMoneda = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-});
-const formateadorFecha = new Intl.DateTimeFormat("es-MX", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-});
+import { monedaConCentavos as formateadorMoneda, fechaCorta } from "../lib/formato";
 
 const TOPE_RESULTADOS = 100;
 
@@ -38,7 +28,7 @@ const ETIQUETAS_FILTRO_EVENTO = {
 
 interface EventosTabProps {
   transacciones: Transaccion[];
-  onActualizado: () => void | Promise<void>;
+  onActualizado: (ids?: string[]) => void | Promise<void>;
 }
 
 /**
@@ -114,16 +104,16 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
     [transacciones]
   );
   const gastoPorEvento = useMemo(
-    () => agruparPorEvento(aplicarFiltros(transaccionesConEvento, filtrosEvento, "evento")),
+    () => agruparPor(aplicarFiltros(transaccionesConEvento, filtrosEvento, "evento"), eventoDe),
     [transaccionesConEvento, filtrosEvento]
   );
   const gastoPorCategoriaDelEvento = useMemo(
     () =>
-      agruparPorCategoria(aplicarFiltros(transaccionesConEvento, filtrosEvento, "categoria")),
+      agruparPor(aplicarFiltros(transaccionesConEvento, filtrosEvento, "categoria"), categoriaDe),
     [transaccionesConEvento, filtrosEvento]
   );
   const gastoPorComercioDelEvento = useMemo(
-    () => agruparPorComercio(aplicarFiltros(transaccionesConEvento, filtrosEvento, "comercio")),
+    () => agruparPor(aplicarFiltros(transaccionesConEvento, filtrosEvento, "comercio"), comercioDe),
     [transaccionesConEvento, filtrosEvento]
   );
   const transaccionesFiltradasPorEvento = useMemo(
@@ -171,17 +161,18 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
     const evento = nuevoEvento.trim();
     if (seleccionadas.size === 0 || !evento) return;
 
+    const ids = Array.from(seleccionadas);
     setGuardando(true);
     setMensaje(null);
     try {
-      await actualizarCategoriaComercioYEvento(Array.from(seleccionadas), { evento });
+      await actualizarCategoriaComercioYEvento(ids, { evento });
       setMensaje({
         tipo: "ok",
         texto: `Se asignó "${evento}" a ${seleccionadas.size} transacción(es).`,
       });
       setSeleccionadas(new Set());
       setNuevoEvento("");
-      await onActualizado();
+      await onActualizado(ids);
     } catch (e) {
       setMensaje({
         tipo: "error",
@@ -199,16 +190,17 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
   async function quitarEvento() {
     if (seleccionadas.size === 0) return;
 
+    const ids = Array.from(seleccionadas);
     setGuardando(true);
     setMensaje(null);
     try {
-      await quitarEventoDeTransacciones(Array.from(seleccionadas));
+      await quitarEventoDeTransacciones(ids);
       setMensaje({
         tipo: "ok",
         texto: `Se quitó el evento de ${seleccionadas.size} transacción(es).`,
       });
       setSeleccionadas(new Set());
-      await onActualizado();
+      await onActualizado(ids);
     } catch (e) {
       setMensaje({
         tipo: "error",
@@ -249,24 +241,31 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
         </div>
       )}
 
-      <GastoPorEventoChart
+      <IngresosGastosPorDimensionChart
+        dimension="evento"
+        ayudaClic="clic en un evento para ver su detalle"
+        mensajeVacio="Ninguna transacción tiene un evento asignado todavía -- selecciona transacciones abajo y asígnales uno."
         datos={gastoPorEvento}
-        eventoSeleccionado={filtrosEvento.evento}
-        onClickEvento={(evento) => alternarFiltroEvento("evento", evento)}
+        seleccionado={filtrosEvento.evento}
+        onClickElemento={(evento) => alternarFiltroEvento("evento", evento)}
       />
 
       {transaccionesConEvento.length > 0 && (
         <>
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <GastoPorCategoriaChart
+            <IngresosGastosPorDimensionChart
+              dimension="categoría"
+              plegarResto
               datos={gastoPorCategoriaDelEvento}
-              categoriaSeleccionada={filtrosEvento.categoria}
-              onClickCategoria={(categoria) => alternarFiltroEvento("categoria", categoria)}
+              seleccionado={filtrosEvento.categoria}
+              onClickElemento={(categoria) => alternarFiltroEvento("categoria", categoria)}
             />
-            <GastoPorComercioChart
+            <IngresosGastosPorDimensionChart
+              dimension="comercio"
+              mensajeVacio={MENSAJE_SIN_COMERCIO}
               datos={gastoPorComercioDelEvento}
-              comercioSeleccionado={filtrosEvento.comercio}
-              onClickComercio={(comercio) => alternarFiltroEvento("comercio", comercio)}
+              seleccionado={filtrosEvento.comercio}
+              onClickElemento={(comercio) => alternarFiltroEvento("comercio", comercio)}
             />
           </div>
 
@@ -479,7 +478,7 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
                           </span>
                         </div>
                         <div className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-                          {formateadorFecha.format(new Date(t.fecha + "T00:00:00"))} ·{" "}
+                          {fechaCorta(t.fecha)} ·{" "}
                           {t.documentos.cuentas.alias}
                           {t.tarjeta ? ` · ${t.tarjeta}` : ""}
                         </div>
@@ -519,7 +518,7 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
                           />
                         </td>
                         <td className="py-2 pr-2" style={{ color: "var(--text-secondary)" }}>
-                          {formateadorFecha.format(new Date(t.fecha + "T00:00:00"))}
+                          {fechaCorta(t.fecha)}
                         </td>
                         <td className="py-2 pr-2" style={{ color: "var(--text-primary)" }}>
                           {t.descripcion}

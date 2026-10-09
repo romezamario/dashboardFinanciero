@@ -372,7 +372,8 @@ class RevisarGmailTest(unittest.TestCase):
             reglas=REGLAS, carpeta=self.carpeta,
         )
         self.assertEqual((r.gastos_subidos, r.subidas_fallidas), (2, []))
-        self.assertEqual([t for t, _, _ in cliente.llamadas], ["gastos_correo"] * 2)
+        # Los dos días viajan juntos en una sola llamada (ver subir_todos).
+        self.assertEqual([t for t, _, _ in cliente.llamadas], ["gastos_correo"])
         self.assertIn("2 gasto(s) subido(s)", resumen_revision(r))
 
     def test_error_al_subir_queda_en_los_avisos(self) -> None:

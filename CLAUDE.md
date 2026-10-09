@@ -42,8 +42,8 @@ upsert key, so re-syncing would duplicate every affected row unless stale rows a
 **Local pipeline** — entry point is a **Tkinter desktop app** (`app/main.py`), not a folder
 watcher. The user explicitly redesigned this away from the original spec's automatic
 watcher-on-`data/nuevos/` design, to get a manual review/validation step before anything is
-considered final: load a PDF → see parsed transactions in a table → validate the calculated total
-against the real total from the statement → adjust categorization rules live → only then export.
+considered final: load a PDF → see parsed transactions in a table → check the totals against the
+statement → adjust categorization rules live → only then export.
 
 Flow: user picks a bank + loads a PDF in the app → Extractor (`parsers/base.py`'s `BaseParser`,
 one concrete implementation per bank — `RenglonCrudo.monto_texto` must carry sign: negative =
@@ -69,7 +69,7 @@ merchant it was.
 "Guardar archivo procesado" writes `data/procesados/<sha256_del_pdf>.json` **and** moves the
 source PDF itself into a `procesados/` subfolder of whatever folder it was loaded from (e.g.
 `C:\...\00Estadosdecuenta\procesados\`, not the project's `data/procesados/` — that's only for
-the JSON) via `App._mover_a_procesados_junto_al_pdf`: reuses that subfolder if it already exists,
+the JSON) via `mover_a_procesados_junto_al_pdf` (`app/logica.py`): reuses that subfolder if it already exists,
 no-ops if the PDF is already inside a folder named `procesados` (avoids nesting
 `procesados/procesados` on a reload-to-fix-something), and appends `" (1)"`, `" (2)"`, ... on a
 same-name collision with an unrelated file rather than overwriting it silently.
@@ -83,7 +83,7 @@ different, project-local destination, for the "couldn't even extract" case rathe
 When adding a real bank, register its `BaseParser` subclass in the `PARSERS` dict at the top of
 `app/main.py` — that's what populates the "Banco" dropdown, used as a manual fallback. Some
 parsers need extra context the PDF doesn't print (e.g. `BanamexParser` needs a year, since the
-statement only prints "DD MES" per row) — `App.cargar_pdf` tries
+statement only prints "DD MES" per row) — `crear_parser` (`app/logica.py`) tries
 `parser_cls(ano_estado_de_cuenta=anio_respaldo)` and falls back to `parser_cls()` on `TypeError`,
 so a parser only needs that constructor param if it actually uses it. `BanamexParser.extraer()`
 then tries to **self-correct** that year from the PDF's own cover page ("Fecha de corte" /
@@ -117,7 +117,7 @@ the default yet — both `BanamexParser` and `BanamexTdcParser` already normaliz
 **Auto-detection, so the user doesn't have to pick the bank manually**: `BaseParser` has two
 optional hooks, both defaulting to "unsupported" so old/simple parsers (`EjemploParser`) don't
 need to implement them:
-- `puede_procesar(ruta_pdf) -> bool` — a cheap, conservative check. `App._detectar_banco` tries
+- `puede_procesar(ruta_pdf) -> bool` — a cheap, conservative check. `detectar_banco` (`app/logica.py`) tries
   every registered parser's `puede_procesar` against the loaded PDF; if exactly one matches, that
   bank is used and the dropdown is updated to show it. Zero or multiple matches fall back to
   whatever the dropdown is currently set to (ambiguity always degrades to manual, never guesses).
@@ -138,7 +138,7 @@ need to implement them:
 - `advertencias() -> list[str]` — non-fatal warnings about the *last* `extraer()` call, e.g. a
   line that structurally looks like a transaction (right position, right prefix) but whose
   content couldn't be read as text (see the "row rendered as an image" lesson under
-  `parsers/banamex_tdc.py` below). `App.cargar_pdf` surfaces these in the load summary and a
+  `parsers/banamex_tdc.py` below). `App._al_leer_pdf` surfaces these in the load summary and a
   messagebox so the user knows to check that row by hand — it's a hint, not a recovery mechanism;
   nothing gets reconstructed automatically.
 
@@ -146,12 +146,19 @@ All three hooks are best-effort: on no match/exception they return the "unsuppor
 sentinel and the app silently falls back to whatever the user already has in the manual fields —
 never a hard failure, never a silently wrong guess presented as certain.
 
-**"Gastos recientes (Gmail)" tab (2026-10-04)**: `PestanaGastosGmail` in `app/main.py` drives
+**"Gastos recientes (Gmail)" tab (2026-10-04)**: `PestanaGastosGmail` in `app/pestana_gmail.py` drives
 `sync.gmail_gastos.revisar_gmail()` (the CLI `main()` is now a thin wrapper over it; expected
-problems are `ErrorGastosGmail` subclasses with Spanish messages). It is the app's **only
-background thread**: the worker never touches widgets, it posts `("progreso"|"fin"|"error", ...)`
-to a `queue.Queue` that the UI drains with `after(100)` (Tkinter isn't thread-safe) — follow the
-same pattern for any future long task. Google libraries are imported lazily inside
+problems are `ErrorGastosGmail` subclasses with Spanish messages). Its work runs in a background
+thread via `correr_en_hilo` (`app/hilos.py`): the worker never touches widgets, it posts
+progress/result/error to a `queue.Queue` that the UI drains with `after(100)` (Tkinter isn't
+thread-safe), and `al_progresar`/`al_terminar`/`al_fallar` run on the UI thread. **Since
+2026-10-08 "Cargar PDF..." and "Sincronizar a Supabase..." use the same helper** (they used to
+freeze the window: glyph decoding, and network calls): `cargar_pdf` only does the file dialog and
+then runs `leer_estado_de_cuenta` (`app/logica.py`: detect bank, extract, account info, warnings
+→ suggestions, transform + categorize, recover manual rows/categories from the previous JSON —
+no tkinter) in the thread; `_al_leer_pdf` fills the UI. `_marcar_ocupado` disables Cargar
+PDF/Guardar/Sincronizar and shows "Leyendo …"/"Sincronizando…" meanwhile, restoring the previous
+summary on failure. Use `correr_en_hilo` for any future long task. Google libraries are imported lazily inside
 `crear_servicio_gmail`, so the app opens without them. "Revisar automáticamente al abrir" (off by
 default, stored in `data/gastos_correo/preferencias.json`) passes `permitir_autorizar=False`: it
 never opens a browser on startup, and shows problems in the tab instead of popups.
@@ -172,7 +179,11 @@ pressing the button again continues where it stopped (saved ids are never re-dow
 (`subir_todos`): with years of history it used to re-send one upsert per day file on every check; it now skips files whose
 sha256 equals the last *successful* upload (`data/gastos_correo/_estado_subida.json`, failed files are retried;
 `forzar=True` / `python -m sync.gastos_correo --forzar` re-sends everything, e.g. after deleting rows in Supabase by
-hand) and returns only the files it tried. The dashboard's `obtenerGastosCorreo` no longer limits to 60 days: it pages
+hand) and returns only the files it tried. **Changed days travel together (2026-10-08)**: they are
+grouped into calls of up to `MAXIMO_POR_LLAMADA` = 500 rows without splitting a day across calls
+(before: one call per day — hundreds on a full-history load); a failing call marks all its days
+failed (retried next time), an invalid day fails alone without being sent, and a `mensaje_id`
+repeated in one call is sent once (Postgres rejects the whole call otherwise, error 21000). The dashboard's `obtenerGastosCorreo` no longer limits to 60 days: it pages
 1,000 rows at a time ordered by fecha, hora **and id** (PostgREST's per-query cap).
 **Debit notices are not expenses (2026-10-06, user's decision)**: "Retiro/Compra con cuenta
 Banamex" notices from a debit account (`"Cheques M.N. ***123"`, `"CTA PRIORITY BNM M.N. ***123"`)
@@ -276,8 +287,30 @@ reorders the view; iids stay = index in `self.transacciones`), an empty-state la
 Colors live in the `COLOR_*` constants at the top of `app/main.py`; the native "vista" theme is kept.
 Compact sizing (2026-10-05, user's request): Segoe UI 9, row height 22. The "Estado de cuenta"
 (`origen`) column is no longer shown (still saved in the JSON and synced) — the user doesn't use it.
-Scripts that open `App()` for testing must patch `RUTA_PREFERENCIAS_GMAIL`/`CARPETA_GASTOS_CORREO`,
-or the user's real "revisar al abrir" preference starts a real Gmail check.
+Scripts that open `App()` for testing must patch `app.pestana_gmail.RUTA_PREFERENCIAS_GMAIL`/
+`CARPETA_GASTOS_CORREO` (they moved there from `app.main` on 2026-10-08), or the user's real
+"revisar al abrir" preference starts a real Gmail check.
+
+**`app/` layout (split 2026-10-08; `main.py` was 2,200 lines)**: `main.py` = `App` (main window,
+`PARSERS`, colors) + `main()`; `logica.py` = everything without widgets (`leer_estado_de_cuenta`,
+`detectar_banco`, `crear_parser`, manual-row/category recovery, `mover_a_procesados_junto_al_pdf`,
+`hash_pdf`, `PREFIJO_RENGLON_MANUAL`), tested in `tests/test_logica_app.py`; `ventanas.py` = the
+dialogs (`VentanaReglas`, `VentanaInspeccion`, `VentanaRenglonManual`, `VentanaCategoriaManual`);
+`pestana_gmail.py` = the Gmail tab and its preferences; `hilos.py` = `correr_en_hilo`. Checked
+by driving the real app under Xvfb (Python 3.12 + tkinter) with temp folders: a synthetic Invex PDF
+with an artificially slow extraction (the window kept processing events), save, reload recovering
+a manual category, sync against the in-memory fake client, bad login, unreadable PDF → `errores/`,
+every dialog opening, and the Gmail tab with a fake `revisar_gmail` reporting progress.
+
+**PDF read once per load (2026-10-08)**: `parsers/comun.py` holds what the parsers used to copy
+(`MESES`, `PATRON_PAGO_MINIMO`, `PATRON_INVEX`) and `textos_iniciales(ruta, n)`: the text of the
+first `PAGINAS_INICIALES` = 3 pages, extracted once and cached by (path, mtime, size). Bank
+detection tries every parser's `puede_procesar` and then `extraer_info_cuenta` runs — before, each
+opened the PDF and re-extracted the same pages (5–6 times per load); `puede_procesar` and
+`extraer_info_cuenta` of the three real parsers now read through it (`extraer` still opens the PDF
+itself, it needs the page objects). That text can include the full account number, so
+`leer_estado_de_cuenta` calls `olvidar_textos_iniciales()` in a `finally` — nothing stays in
+memory past the load (the "only the last 4 digits" rule).
 
 **Manual category on PDF-extracted rows (2026-10-05, user's request)**: double-click / "Editar..." on
 a row that came from the PDF opens `VentanaCategoriaManual` (several selected rows at once is fine):
@@ -286,7 +319,7 @@ creates **no rule** (for one-offs like "CIERRE COMPRA DIF" = Apple, where a rule
 deferred purchase). Overrides live in `App.categorias_manuales`, keyed by `(pagina, linea_cruda)` (the
 upsert key, unique per document); `recategorizar()` re-applies them after the rules so "Recargar
 reglas" never overwrites them; `guardar_procesado` marks those rows `"categoria_manual": true` in the
-JSON (the sync ignores that key) and `_recuperar_categorias_manuales` restores them when the same PDF
+JSON (the sync ignores that key) and `recuperar_categorias_manuales` restores them when the same PDF
 is reloaded. The table shows them as "✎ <categoría>"; "Volver a la regla" removes the override.
 A typed manual row still opens its full `VentanaRenglonManual` form.
 
@@ -354,7 +387,7 @@ statement from a bank you already support will look anything like the first one:
   `PATRON_PREFIJO_FECHAS` + `BaseParser.advertencias()` (new optional hook, default `[]`, same
   best-effort pattern as `puede_procesar`/`extraer_info_cuenta`) so a line matching the two-date
   prefix but not the full transaction pattern gets surfaced as a warning instead of silently
-  vanishing — `App.cargar_pdf` shows it in the resumen and a messagebox so the user knows to
+  vanishing — `App._al_leer_pdf` shows it in the resumen and a messagebox so the user knows to
   capture that row by hand before trusting the totals. This is the general escape
   hatch for "PDF renders this row as an image" cases in any future parser, not just this one.
 - **Older "2024 format" (statements up to 2024-10) — same parser, second variant (2026-10-05)**:
@@ -526,7 +559,10 @@ statement from a bank you already support will look anything like the first one:
   that, so `_detectar_tipo_tarjeta` falls back to the card number: `_ultimos_4_de_texto()` (the
   `"Número de tarjeta: ..."` line, `[-4:]` only) looked up in `TIPOS_POR_ULTIMOS_4` — same "known
   list, falls through if not listed" shape as `ROLES_TARJETA_CONOCIDOS` in `invex_tdc.py`, and just
-  as specific to this user's cards (each tier was reissued under a new number more than once: Conquista
+  as specific to this user's cards — **kept in the code on purpose (user's decision, 2026-10-09)**, same
+  for `ROLES_TARJETA_CONOCIDOS` (invex_tdc.py), `CIUDADES_CONFIRMADAS` (gmail_gastos.py) and
+  `NOMBRES_TARJETA`/`ORDEN_TARJETAS` (frontend `lib/gastosCorreo.ts`, which ships in the site's JS):
+  moving them to a gitignored config was offered and declined (each tier was reissued under a new number more than once: Conquista
   5482/1236/8423, Beyond 4391/4904, Platino 5491/6599/2989 — the last one confirmed by the user).
   A name in the text still wins over the number. Three ordering details that mattered: (1) `extraer_info_cuenta` keeps the
   `"Estado de Cuenta <Palabra>"` alias (`PATRON_ALIAS`) as a *last-resort* (`alias_respaldo`) applied
@@ -614,7 +650,7 @@ patterns per line (V1 first, then V2) so a document could in principle mix both 
   parsers key off "Pago mínimo" (exclusive to a credit-card statement over a checking account),
   but with two TDC issuers now sharing that marker, "Pago mínimo" alone stopped being enough —
   confirmed by testing the same synthetic PDF against both parsers and getting `True` from both
-  (which `App._detectar_banco` treats as an unresolvable tie, degrading *both* to manual selection
+  (which `detectar_banco` treats as an unresolvable tie, degrading *both* to manual selection
   instead of picking the right one). Unlike Banamex TDC's own history (where dropping the
   "BANAMEX" requirement was safe because no other TDC parser existed yet to collide with),
   `InvexTdcParser.puede_procesar` requires "INVEX" **and** "Pago mínimo" both present, and
@@ -642,7 +678,7 @@ patterns per line (V1 first, then V2) so a document could in principle mix both 
   to *the same bank's own earlier statement*, isn't guaranteed to hold — verify against the real
   document before trusting a hook that "should" work by analogy.
 
-**Manual row entry** (`VentanaRenglonManual` in `app/main.py`) is the other half of the
+**Manual row entry** (`VentanaRenglonManual` in `app/ventanas.py`) is the other half of the
 "transaction row rendered as an image" gap above — `advertencias()` only *flags* the unreadable
 row, it can't recover it, so the "Agregar renglón manual..." button (next to "Inspeccionar
 PDF...") lets the user type one in by hand: fecha, descripción, monto sin signo, tipo, and an
@@ -654,7 +690,7 @@ that the extractor found any real transactions first. **Defaults come from the p
 `[]`, parallel to `advertencias()` — one `SugerenciaRenglonManual(fecha_texto, pagina, tarjeta)`
 per warning that points at a missing transaction; `banamex.py`, `banamex_tdc.py` and `invex_tdc.py`
 fill it next to each `_advertencias.append`) feeds `App.sugerencias_renglon_manual` (dates
-converted to ISO with the parser's `formato_fecha`). The dialog's *Fecha* is an editable combo
+converted to ISO with the parser's `formato_fecha` by `leer_estado_de_cuenta` in `app/logica.py`). The dialog's *Fecha* is an editable combo
 listing those dates (first one preselected; today if the parser flagged nothing), choosing one
 prefills *Página* and *Tarjeta*, and saving a row consumes its suggestion and jumps to the next.
 *Tarjeta* is an editable combo (`(sin tarjeta)`, Titular, Adicional, Digital, plus any `tarjeta`
@@ -672,7 +708,7 @@ unreadable-image row this dialog exists for (typing it used to infer nothing, si
 equivalents in the load only carry the original text in `linea_cruda`); the dialog reaches the
 parser through `App.parser_actual`; once the user edits either combo by hand it stops
 being re-inferred, and leaving them empty saves the row uncategorized. Because the category of a
-manual row is no longer purely rule-derived, `App.recategorizar()` and `_recuperar_renglones_manuales`
+manual row is no longer purely rule-derived, `App.recategorizar()` and `recuperar_renglones_manuales`
 keep a manual row's existing categoría/comercio when no rule matches it (a matching rule still wins;
 extracted rows are unaffected and still go uncategorized when their rule disappears). (Before this,
 the dialog only ever applied `categorizar()` with no way to choose — "add/edit a rule instead".) `pagina`
@@ -685,7 +721,7 @@ to an extracted one — no special-casing anywhere downstream. Two rules added 2
 *identical* manual rows (same fecha/descripción/monto/tipo, e.g. two unreadable identical tolls)
 get `" (2)"`, `" (3)"`… appended to `linea_cruda`, same as `_desambiguar_renglones_duplicados` does
 for extracted rows — otherwise the upsert rejects the whole document; (2) reloading a PDF recovers
-its manual rows from its previous `data/procesados/<hash>.json` (`App._recuperar_renglones_manuales`,
+its manual rows from its previous `data/procesados/<hash>.json` (`recuperar_renglones_manuales` in `app/logica.py`,
 recognized by the `PREFIJO_RENGLON_MANUAL = "(manual) "` prefix, re-categorized with the current
 rules) — before, reloading to recategorize and re-saving silently dropped every row the user had
 typed in. **Editing/deleting manual rows (2026-10-02, user's request)**: manual rows show in yellow in the table (`manual` tag); double-click or "Editar renglón manual..." reopens `VentanaRenglonManual` with `editando=` (prefilled, "Guardar cambios" replaces the row in place, found by identity), and "Eliminar renglón manual" removes it after a confirmation. Extracted rows are refused (they come from the PDF — fix the rule instead). An edit **keeps the original `linea_cruda`** on purpose: with `pagina` it's the upsert key, so re-syncing updates the already-synced row instead of leaving the wrong one plus a new one (stale rows are never deleted); changing `pagina` does change the key, so that case warns. Deleting an already-synced manual row leaves it in Supabase — the confirmation says to remove it by hand there. Changes persist only after "Guardar archivo procesado".
@@ -717,22 +753,27 @@ Supabase Auth, not a replacement for it).
 **Frontend** (`frontend/`): React + Vite (TS) + Tailwind v4 + Recharts, talks to Supabase directly
 via `supabase-js` — no backend server in between. `src/App.tsx` gates on `supabase.auth`
 session state (`onAuthStateChange`) and renders `Login` or `Dashboard` — no routing library, just
-that one conditional. Every query in `src/lib/queries.ts` reads `transacciones` with nested
-selects (`categorias(nombre)`, `documentos(cuentas(alias, bancos(nombre)))`) and is deliberately
-**not** filtered by `user_id` in code — RLS is the only access boundary, by design, so a bug in
+that one conditional. Every query in `src/lib/queries.ts` (`transacciones` by foreign keys plus
+the `categorias`/`eventos`/`documentos(cuentas(alias, bancos(nombre)))` catalogs, joined in the
+browser — see "Data loading & writes") is deliberately **not** filtered by `user_id` in code — RLS is the only access boundary, by design, so a bug in
 the frontend query can't leak another user's rows. Aggregation (by-month, by-category, running
 balance per account) happens client-side in plain functions in `queries.ts`, kept separate from
-the React components so they're unit-testable without rendering anything.
+the React components so they're unit-testable without rendering anything (and are: see Tests).
+The README's "Qué muestra" section describes every tab for the user, in Spanish — **update it
+when a tab is added, removed or changes what it shows**; it went stale once already (it described
+the first dashboard until 2026-10-09).
 
-**Charts**: `IngresosGastosChart` (ingresos vs. gastos por mes), `GastoPorCategoriaChart`, and
-`GastoPorComercioChart` (added 2026-09-20, replacing an earlier `TendenciaSaldoChart` — see
-below). `GastoPorComercioChart` mirrors `GastoPorCategoriaChart`'s exact shape (top-8 horizontal
-bars, single hue, cross-filter) but deliberately has **no** "Sin comercio" fallback bucket and no
-"Otros" fold: `comercio` is optional by design (only rules that explicitly set it populate it —
-see the `comercio` bullet earlier in this doc), so `agruparGastoPorComercio` in `queries.ts` just
-skips transactions with `comercio === null` rather than lumping them into a noisy catch-all the
-way `categoriaDe()`'s `SIN_CATEGORIA` fallback does for categories (categorization is expected to
-eventually cover everything; comercio tagging isn't and that's fine).
+**Charts**: `IngresosGastosChart` (ingresos vs. gastos por mes) and "ingresos y gastos por
+categoría / comercio / evento", which since 2026-10-08 are ONE component,
+`IngresosGastosPorDimensionChart` (`dimension` prop; it replaced three near-identical
+`GastoPor{Categoria,Comercio,Evento}Chart` files), fed by the generic `agruparPor(transacciones,
+claveDe)` in `queries.ts` (`categoriaDe` / `comercioDe` / `eventoDe`). Top-8 horizontal bars,
+cross-filter. Only categoría folds the rest into a non-clickable "Otros" (`plegarResto`);
+comercio and evento have **no** "Sin comercio/evento" bucket and no fold: they are optional by
+design (only rules that explicitly set a comercio populate it — see the `comercio` bullet earlier
+in this doc), so `claveDe` returns null and those transactions are skipped rather than lumped
+into a noisy catch-all the way `categoriaDe()`'s `SIN_CATEGORIA` fallback does for categories.
+(The comercio chart was added 2026-09-20, replacing an earlier `TendenciaSaldoChart` — see below.)
 
 **Resumen tab = former Resumen + former Indicadores, merged (2026-09-26, user's request)**:
 `VistaResumen.tsx` is the single view for the "Resumen" tab *and* every non-credit-card account tab; the separate
@@ -782,7 +823,7 @@ differ on purpose** (user chose each one explicitly) — keep them this way:
   the chips says so). `aplicarFiltros(transacciones, filtros, excluir?)` — `excluir` (a key or an
   array) is the cross-filter trick: each chart is computed with every *other* active dimension but
   not its own, so it still shows the other options to click. Non-selected marks dim to ~0.3 via
-  `<Cell fillOpacity>`. The "Otros" fold in `GastoPorCategoriaChart` is not clickable.
+  `<Cell fillOpacity>`. The "Otros" fold of the category chart is not clickable.
 
 **Filter layout (2026-10-03, user's request — "se ve amontonado")**: the Resumen's pill rows live in
 one card, `PanelFiltros.tsx` (presentational only; every click handler stays in `VistaResumen`):
@@ -897,7 +938,9 @@ doesn't touch Supabase or the transactions and shows even with no synced data. D
 years) come from `frontend/functions/api/cotizaciones.ts`, a **Cloudflare Pages Function** (free,
 same domain → behind the same Cloudflare Access, no CORS problem) that proxies Yahoo Finance's
 public, unofficial chart endpoint — no API key; whitelisted to `SIMBOLOS_PERMITIDOS` so it isn't an
-open proxy. For it to deploy, `deploy.yml` runs `wrangler pages deploy dist` with
+open proxy. The upstream fetch uses `cf: { cacheTtl: 300, cacheEverything: true }` (2026-10-08) so
+Cloudflare's edge cache serves repeat requests for 5 minutes instead of hitting Yahoo every time
+(public data, same for everyone; ignored in `npm run dev`). For it to deploy, `deploy.yml` runs `wrangler pages deploy dist` with
 `workingDirectory: frontend` (wrangler picks up `functions/` from its cwd); in `npm run dev`,
 `vite.config.ts` mounts the same handler as middleware. If Yahoo ever changes/blocks it, only this
 tab shows an error. Indicators are pure functions in `src/lib/tecnico.ts` (SMA 50/200, Bollinger
@@ -1003,11 +1046,36 @@ CSS custom properties for the palette live in `src/index.css`, keyed by role (`-
 `[data-theme]` override — same pattern artifacts use. If you add a chart, re-run the dataviz
 skill's procedure (form → color → validate) rather than picking colors by eye.
 
-**Data loading & writes**: `obtenerTransacciones` pages with `.range()` ordered by `fecha` **and
-`id`** — ordering by date alone isn't stable for same-day rows, so offset paging could return a
-row twice and skip another at a 1000-row page boundary. Bulk updates (`actualizarCategoriaComercioYEvento`,
-`actualizarCuentaDeDocumentos`) send ids in batches of 150 (`enLotes`) because `.in("id", ids)` goes in
-the URL and hundreds of UUIDs exceeded the server's URL limit. `Dashboard` memoizes the
+**Data loading & writes (reworked 2026-10-08 for latency)**: `Dashboard` holds
+`DatosTransacciones` = the raw `transacciones` rows (foreign keys only:
+`categoria_id`/`evento_id`/`documento_id`) **plus** `Catalogos` (categorias, eventos, documentos
+with their cuenta + banco, fetched separately in parallel), and derives the nested `Transaccion[]`
+the rest of the app uses with `armarTransacciones` (same shape PostgREST used to return when the
+relations were nested per row — that nesting repeated the same alias/bank JSON thousands of times
+and was most of the payload; now every row of a document shares one object). Every list goes
+through `obtenerTodasLasPaginas` (also used by `obtenerGastosCorreo`): `.range()` ordered by a
+total key (`fecha` **and `id`** — ordering by date alone isn't stable for same-day rows, so offset
+paging could return a row twice and skip another at a page boundary), first page with
+`count: "estimated"` (cheap, unlike a full `COUNT(*)`), the estimated remaining pages in
+parallel, then one at a time while the last page came back full (the estimate can be short).
+**After an edit, only the edited rows are re-fetched**: `onActualizado(ids)` →
+`recargarTransacciones(ids)` re-reads the catalogs (a new categoría/evento or a document moved to
+another cuenta lives there) + those ids, and `reemplazarFilas` swaps them in; `onActualizado()`
+without ids reloads everything. A failed reload never unmounts the dashboard: it shows a
+"Los cambios se guardaron, pero no se pudo recargar la vista … Reintentar" banner (only the
+*initial* load failing shows the full-page error). Errors from PostgREST are wrapped into real
+`Error`s (`comoError`) so callers can show their message. Bulk updates
+(`actualizarCategoriaComercioYEvento`, `quitarEventoDeTransacciones`,
+`actualizarCuentaDeDocumentos`) send ids in batches of 150 (`enLotes`) because `.in("id", ids)`
+goes in the URL and hundreds of UUIDs exceeded the server's URL limit; `porLotes` sends up to
+`LOTES_EN_PARALELO` = 4 batches at a time. Tabs other than Resumen/per-account are `React.lazy`
+(own chunks, downloaded when first opened; `cargarPestana` reloads the page ONCE if a chunk fails
+to load — after a deploy Cloudflare no longer serves the previous version's files, so a dashboard
+left open would otherwise break on the next tab click; checked by 404-ing a chunk in Playwright)
+and Recharts is its own `recharts` chunk
+(`manualChunks` in `vite.config.ts`) so it stays cached across deploys. Number/date formatters
+live once in `src/lib/formato.ts` (`moneda`, `monedaConCentavos`, `compacto`, `porcentaje`,
+`decimal`, `fechaCorta`) — don't re-create `Intl.NumberFormat` per component. `Dashboard` memoizes the
 default-hidden categories and the per-account transaction lists so their identity is stable across
 renders — `VistaResumen` memoizes every calculation on those references. `EventosTab`'s own filters
 are local component state (unlike the per-tab `EstadoVista`), so they reset when leaving that tab.
@@ -1023,19 +1091,23 @@ rule is about the ingestion/storage pipeline (parsers/transform/sync), not every
 lists by accident), checks one or more rows (or "Seleccionar todas las coincidencias", which
 selects every match, not just the ones rendered under the `TOPE_RESULTADOS = 100` display cap),
 types a new categoría and/or comercio (either blank = "don't touch that field" — there's no UI
-for clearing a field to null, only reassigning it), and `actualizarCategoriaYComercio` in
+for clearing a field to null, only reassigning it), and `actualizarCategoriaComercioYEvento` in
 `queries.ts` applies it via `supabase.from("transacciones").update(...).in("id", ids)`. This
 relies entirely on the existing RLS `update` policy — same authenticated session as every read,
 no new credentials, no service_role, no new migration needed. `categoria` is a special case
-because `transacciones.categoria_id` is a FK, not free text: `buscarOCrearCategoriaId` mirrors
-`sync/sincronizador.py`'s Python find-or-create (select by `nombre`, insert if missing) so typing
+because `transacciones.categoria_id` is a FK, not free text: `buscarOCrearId("categorias" |
+"eventos", nombre)` does the find-or-create as ONE upsert on the unique `(user_id, nombre)`
+(`onConflict: "user_id,nombre"`, `user_id` from its `auth.uid()` default; race-free, one round
+trip — it used to be select-then-insert, same as `sync/sincronizador.py`) so typing
 a brand-new category name from the browser creates it in `categorias` on the fly, same as the
 desktop app does locally. Category/comercio autocomplete suggestions come from
 `Array.from(new Set(transacciones.map(...)))` over the already-loaded transacciones — no extra
-Supabase query for that. After a successful edit, `Dashboard` calls `obtenerTransacciones()` again
-(`recargarTransacciones`, extracted from the initial `useEffect` so both paths share it) rather
-than patching local state, trading a bit of latency for certainty that what's on screen matches
-what Supabase actually has.
+Supabase query for that. After a successful edit, `Dashboard` re-reads the edited rows (and the
+catalogs) from Supabase rather than patching local state by hand, so what's on screen is what
+Supabase actually has — see "Data loading & writes".
+
+**Account changes made here are not durable either**: since 2026-10-09 re-syncing a document
+moves it back to the account in its JSON (see `_buscar_o_crear_documento` under Sincronizador).
 
 **Known interaction, not a bug**: this write does *not* touch `documento_id`/`pagina`/`linea_cruda`
 — the audit trail back to the source PDF line stays intact, per the non-negotiable constraint. But
@@ -1068,8 +1140,8 @@ the GitHub Actions UI. It runs `supabase link` + `supabase db push` using three 
 `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_ID`, `SUPABASE_DB_PASSWORD`.
 
 Tables: `bancos` (shared catalog, no `user_id`) and `cuentas`/`categorias`/`documentos`/
-`transacciones`/`eventos` (all RLS-scoped to `user_id = auth.uid()`, four policies each —
-select/insert/update/delete). `eventos` (added in `20260922010000_add_eventos.sql`) is a per-user
+`transacciones`/`eventos`/`gastos_correo` (all RLS-scoped to the row's `user_id`, four policies
+each — select/insert/update/delete; `gastos_correo` is described under the Gmail tab above). `eventos` (added in `20260922010000_add_eventos.sql`) is a per-user
 catalog like `categorias` (find-or-create by `nombre`, unique per user) referenced by
 `transacciones.evento_id`; events are assigned from the frontend only (Eventos tab / bulk editor),
 never by the desktop pipeline, and the sync upsert doesn't send `evento_id`, so re-syncing a
@@ -1079,7 +1151,13 @@ through the REST API without logging in. Now authenticated users may select and 
 frontend's nested read and the sync's find-or-create need) and nobody may update/delete via the
 API. Known, accepted gap for a single-user app: the insert/update policies only check `user_id =
 auth.uid()` on the row itself, not that the referenced `documento_id`/`categoria_id`/`evento_id`/
-`cuenta_id` belong to the same user.
+`cuenta_id` belong to the same user. **Policies are written `user_id = (select auth.uid())`**, not
+`user_id = auth.uid()` (`20261008120000_rls_auth_uid_initplan.sql` altered all 24 in place): the
+subselect is evaluated once per query (an InitPlan) instead of potentially once per row, which
+matters for the dashboard's full-history reads — Supabase's advisor flags the bare form as
+`auth_rls_initplan`. Write any new policy the same way. Checked by applying every migration to a
+throwaway local Postgres 16 with a stub `auth.uid()`: plan shows the InitPlan, RLS still isolates
+users, and the frontend's `categorias` upsert on `(user_id, nombre)` works under it.
 `transacciones.comercio` (added in `20260920145914_add_comercio.sql`) and `transacciones.tarjeta`
 (added in `20260920180242_add_tarjeta.sql`) are both plain nullable text columns, not catalog
 tables with their own FK like `categoria_id` — see the `comercio` bullet in Architecture above
@@ -1099,6 +1177,14 @@ user over the simpler alternative — don't silently change these:
 - **Idempotency**: `bancos`/`cuentas`/`documentos`/`categorias` use a manual find-or-create
   (`_buscar_o_crear`: select by unique key, insert only if missing) rather than relying on
   `.upsert()`'s return-row semantics, which vary across supabase-py/PostgREST versions.
+  **Per-run cache + batched categories (2026-10-08)**: `sincronizar_todos` shares a `CacheIds`
+  dict across the documents of one run, so banco and cuenta ids are looked up once (dozens of
+  statements of the same card used to repeat the same selects), and categories go through
+  `_ids_de_categorias`: one `select(...).in_("nombre", [...])` for the names not yet cached and one
+  `insert([...])` with the missing ones — it used to be a select (and maybe an insert) per category
+  per document; `forzar_todos` over the whole history was hundreds of round trips. postgrest-py's
+  `in_` quotes names with commas/parentheses (checked against the installed library). The cache
+  lives only for one run.
   **`cuentas` is the one exception to "insert only if missing" (2026-10-02,
   `_buscar_o_crear_cuenta`)**: it finds by `(banco, últimos 4)`, but if the row exists with a
   *different* `alias` it updates the alias to the document's (last synced wins). The alias is what
@@ -1106,6 +1192,12 @@ user over the simpler alternative — don't silently change these:
   → "TDC Platino") must be able to rename accounts that already exist — before, the only way was
   editing Supabase by hand. Side effect to know: re-syncing an old document with a *different*
   alias typed in the app renames that account too.
+  **`documentos` follows the same rule (user's decision, 2026-10-09, `_buscar_o_crear_documento`)**:
+  found by `hash`, but if it already exists under a *different* `cuenta_id` it is moved to the
+  JSON's account — so fixing the last 4 digits (or bank) of an already-synced statement in the app
+  and re-syncing reassigns it (transactions keep their ids; no duplicates). Before, the document
+  stayed on the old account forever. Side effect: re-syncing a JSON undoes a "cambiar cuenta" made
+  in the dashboard's bulk editor for that document (same last-synced-wins as categories).
   `transacciones` uses real `.upsert(..., on_conflict="documento_id,pagina,linea_cruda")` since
   that's a bulk operation where per-row select-then-insert would be wasteful — the `on_conflict`
   columns match the table's actual unique constraint exactly. **This assumes `(pagina,
@@ -1129,7 +1221,8 @@ user over the simpler alternative — don't silently change these:
   (idempotent upsert) but slow, and it got noticeably worse as the folder accumulated one file
   per statement ever loaded. User reported syncing 4 new records took as long as syncing the
   entire history, because it *was* syncing the entire history. Fixed by skipping a file whose
-  content hash (sha256 of the raw JSON bytes, via `_hash_contenido`) matches what it was the last
+  content hash (sha256 of the raw JSON bytes, via `huella` in `sync/estado_incremental.py`, shared
+  with the gastos_correo upload) matches what it was the last
   time it synced *successfully* — tracked in `data/procesados/_estado_sync.json` (gitignored
   along with the rest of that folder; excluded from `sincronizar_todos`'s own `*.json` glob by an
   explicit name check, `NOMBRE_ARCHIVO_ESTADO_SYNC`, rather than relying on dotfile-glob
@@ -1172,13 +1265,13 @@ user over the simpler alternative — don't silently change these:
   entry fields for both ("Alias de cuenta" / "Últimos 4 dígitos", validated to be exactly 4
   digits) — `guardar_procesado()` refuses to write the JSON without them. `BaseParser` also has
   an optional `extraer_info_cuenta(ruta_pdf) -> (alias, ultimos_4) | (None, None)` hook (default:
-  unsupported) that `App.cargar_pdf` calls to pre-fill those fields automatically when a parser
+  unsupported) that `leer_estado_de_cuenta` (`app/logica.py`) calls to pre-fill those fields automatically when a parser
   implements it — `BanamexParser` does, reading "Cuenta <Tipo>" and "Número de cuenta de
   cheques <N>" off the cover page (page 1). **Hard rule for any implementation**: the full
   account number must never be stored in any variable, log, or return value beyond the `[-4:]`
   slice — take the last 4 digits and let the rest go out of scope immediately. Auto-fill always
   stays user-editable; the app labels it as "verify before saving," never silently trusted.
-  `App.cargar_pdf` **clears both fields on every load** before filling in whatever was detected
+  `App._al_leer_pdf` **clears both fields on every load** before filling in whatever was detected
   (2026-09-26): previously, loading a PDF whose account wasn't detected kept the *previous* PDF's
   alias/last-4 in the fields, so "Guardar" would silently attach the statement to the wrong account.
 - `monto`/`saldo` travel through the exported JSON and into the Supabase payload as decimal
@@ -1186,9 +1279,15 @@ user over the simpler alternative — don't silently change these:
 
 ## CI/CD
 
-Two independent GitHub Actions workflows, each gated by path filters so they don't fire on
-unrelated commits:
+Three GitHub Actions workflows, each gated by path filters so they don't fire on unrelated
+commits:
 
+- `.github/workflows/ci.yml` (added 2026-10-08) — triggers on every push (any branch) and PR
+  that touches `frontend/**` or the local pipeline (listed below); job `frontend`: `tsc -b`, `npm run lint`, `npm test`. `deploy.yml` doesn't lint or test, and
+  changes go straight to `main`, so this is the safety net. A second job (`python`, added the
+  same day) runs `python -m unittest discover -s tests -t .` on Python 3.12 with
+  `requirements.txt`; the workflow also triggers on `app/`, `parsers/`, `transform/`, `sync/`,
+  `tests/` and `requirements.txt`.
 - `.github/workflows/db-migrate.yml` — triggers on `supabase/migrations/**`. Applies pending Supabase migrations.
 - `.github/workflows/deploy.yml` — triggers on `frontend/**`. Builds the frontend and deploys to
   Cloudflare Pages via `wrangler pages deploy`, using secrets `CLOUDFLARE_API_TOKEN`,
@@ -1208,8 +1307,9 @@ unrelated commits:
   User confirmed the workflow now runs clean end to end (straight from Build to the real Deploy
   step, no failing step in between) after this was removed.
 
-Both workflows pin action versions that run natively on Node 24 (`actions/checkout@v5`,
-`actions/setup-node@v5`, `supabase/setup-cli@v3`, `cloudflare/wrangler-action@v4`) — when bumping
+All workflows pin action versions that run natively on Node 24 (`actions/checkout@v5`,
+`actions/setup-node@v5`, `actions/setup-python@v6`, `supabase/setup-cli@v3`,
+`cloudflare/wrangler-action@v4`) — when bumping
 any GitHub Action in this repo, check its `action.yml` `runs.using` value to avoid reintroducing
 the Node 20 deprecation warning.
 
@@ -1218,20 +1318,84 @@ Account-side setup (Cloudflare tokens, Supabase tokens, GitHub secrets) is docum
 
 ## Tests
 
-`tests/` (stdlib `unittest`, no extra dependency; added 2026-09-26) covers the transformer
-(signed amounts, deterministic duplicate-line suffixes, total validation), the sync against an
-in-memory fake Supabase client (corrupt JSON doesn't abort the run, unchanged files are skipped,
-re-sync is idempotent — the fake raises Postgres' error 21000 on duplicate upsert keys), and
-`BanamexParser`'s warnings. Run from the repo root (needs `requirements.txt` installed, for
-pdfplumber):
+`tests/` (stdlib `unittest`, no extra dependency; added 2026-09-26; 103 tests as of 2026-10-09,
+also run by CI) — one file per module:
+
+- `test_transformador.py` — signed amounts, deterministic duplicate-line suffixes, total validation.
+- `test_categorizador.py` — first-match rules, `inferir_categoria_comercio` (rules → same
+  description → substring incl. `linea_cruda`).
+- `test_sincronizador.py` — against an in-memory fake Supabase client: corrupt JSON doesn't abort
+  the run, unchanged files are skipped, re-sync is idempotent (the fake raises Postgres' error 21000
+  on duplicate upsert keys), alias rename, a document moving to its corrected account (and no
+  update when it's already right), and the per-run id cache / batched categories (counts the
+  calls per table).
+- `test_gastos_correo.py` — gastos_correo upload: Decimal amounts, validation, incremental state,
+  batching days into calls, a failing call marks all its days, duplicated message ids.
+- `test_gmail_gastos.py` — Gmail notice parsing, debit notices, quota/permission errors, the
+  `revisar_gmail` flow with fake Gmail and Supabase (2 tests skip without the Google libraries).
+- `test_banamex.py` — checking-account parser warnings.
+- `test_banamex_tdc.py` — tier detection (name / last 4), courtesy-line rewrite, 2024 format.
+- `test_invex_tdc.py` — V1 sign convention, V2 "CR" convention, card sections/roles, detection vs.
+  Banamex TDC, and that detection + account info open the PDF once (`parsers/comun.py` cache).
+- `test_glifos.py` — glyph decoding of image-rendered rows.
+- `test_logica_app.py` — `app/logica.py`: reading a PDF with a fake parser (detection, ambiguity,
+  extractor error, suggestions, manual rows/categories recovered, cache forgotten), moving to
+  `procesados/`.
+
+Run from the repo root (needs `requirements.txt` installed, for pdfplumber):
 
 ```
 python -m unittest discover -s tests -t .
 ```
 
 Real PDFs can't be fixtures (they never leave the laptop), so parser tests feed synthetic
-`(pagina, linea)` tuples to `_procesar_documento`. The Tkinter app itself has no tests. The
-frontend has no test runner either — `npm run build` (typecheck) and `npm run lint` are the checks.
+`(pagina, linea)` tuples to `_procesar_documento` or a fake `pdfplumber.open`. The Tkinter
+windows have no automated tests (CI has no display); their logic lives in `app/logica.py`, which
+does. To check the real window, run it under Xvfb (see "`app/` layout" above).
+
+**Desktop thresholds and rules (constants)** that change behavior and were only in the code:
+
+| Constant (file) | Value | Rule |
+|---|---|---|
+| `CATEGORIA_DISPOSICION_EFECTIVO` (app/main.py) | "Disposición de efectivo" | cargos of this category go to the "Disposición de efectivo" total, not "Cargos" — must match the rule's category exactly |
+| `PREFIJO_RENGLON_MANUAL` (app/logica.py) | "(manual) " | marks typed rows; recovered on reload |
+| `PAGINAS_INICIALES` (parsers/comun.py) | 3 | pages read for bank detection / account info |
+| `MAXIMO_POR_LLAMADA` (sync/gastos_correo.py) | 500 | rows per gastos_correo upsert |
+| `LOTE_GUARDADO` (sync/gmail_gastos.py) | 50 | Gmail messages read before saving to disk |
+| `CIUDADES_CONFIRMADAS` (sync/gmail_gastos.py) | MCA→McAllen, APO→Apodaca | built-in city codes; the rest come from the gitignored `ciudades.json` |
+| `MAXIMO_GLIFOS_SUELTOS` / `DISTANCIA_MAXIMA_SUELTOS` (parsers/glifos.py) | 3 / 6.0 pt | a group of ≤3 glyph boxes within 6 pt is merged into the nearest row ("$", ",", "-") |
+| `MINIMO_CARACTERES_COINCIDENCIA_PARCIAL` (transform/categorizador.py) | 3 | min typed chars for substring inference in the manual-row dialog |
+
+**Frontend** (added 2026-10-08): Vitest (dev dependency only), `cd frontend && npm test`;
+`vitest.config.ts` fills in fake `VITE_SUPABASE_*` because `supabase.ts` throws without them —
+no test touches the network (network helpers like `obtenerTodasLasPaginas` take the query as a
+parameter). Tests live next to their module as `src/lib/*.test.ts`, with a `transaccion()` factory
+in `src/test/fabrica.ts`: `queries` (agruparPor, cross-filter exclusion, month gap filling,
+armarTransacciones/reemplazarFilas, paging with short/over estimates and error wrapping),
+`indicadores` (resolverPeriodo incl. year crossing, rangoDeAnio, default-hidden categories,
+ladoDominante, gasto hormiga), `alertas` (duplicates, $0 echo lines, price change incl. the >50%
+and several-charges-a-month cases, new subscription), `gastosEstadoCuenta` (only TDC cargos of
+non-hidden categories add up; sinSumar reasons; day order; esTarjetaCredito) and `tecnico`
+(SMA, RSI edges). `npx tsc -b` and `npm run lint` are the other checks; CI runs all three.
+
+**Dashboard thresholds and rules (constants)** — the numbers that decide what the user sees,
+in one place (change the constant, not a copy of it):
+
+| Constant (file) | Value | Rule |
+|---|---|---|
+| `UMBRAL_GASTO_HORMIGA` (indicadores.ts) | 200 | cargo < $200 = gasto hormiga |
+| `VENTANA_RECURRENTES` / `MESES_MINIMOS_RECURRENTE` (indicadores.ts) | 6 / 3 | recurring = comercio in ≥3 of the 6 months ending at the period |
+| `MESES_PERIODO_POR_DEFECTO` (indicadores.ts) | 3 | default period = last 3 complete months |
+| `PATRON_EXCLUIDA_POR_DEFECTO` (indicadores.ts) | `pago tdc\|entre cuentas\|traspaso` | categories hidden by default |
+| `TOPE_SANKEY_INGRESOS` / `TOPE_SANKEY_GASTOS` (indicadores.ts) | 5 / 8 | Sankey nodes before folding |
+| `TOLERANCIA_MONTO_FIJO` (alertas.ts) | 2% | two charges count as "the same price" |
+| `CAMBIO_PRECIO_MINIMO` / `_PESOS` / `_MAXIMO` (alertas.ts) | 3% and $10 / 50% | price-change alert bounds |
+| `MESES_SUSCRIPCION_NUEVA` (alertas.ts) | 3 | "new" subscription window |
+| `MULTIPLO_INUSUAL` / `MONTO_MINIMO_INUSUAL` / `HISTORIAL_MINIMO_INUSUAL` / `TOPE_CARGOS_INUSUALES` (alertas.ts) | 3× / $1,000 / 6 / 3 | unusual-charge alert |
+| `ALERTAS_VISIBLES` (AlertasPanel.tsx) | 4 | alerts shown before "Ver N más" |
+| `TOPE_CATEGORIAS_TARJETAS` (tarjetas.ts) | 8 | categories in the per-card chart before "Otras" |
+| `DIAS_ESTADO_ATRASADO` (GastosEstadoCuentaTab.tsx) | 45 | ⚠ on "Datos hasta" |
+| `TAMANO_PAGINA` / `TAMANO_LOTE_IDS` / `LOTES_EN_PARALELO` (queries.ts) | 1000 / 150 / 4 | paging and write batches |
 
 ## Working locally with Supabase CLI
 

@@ -33,4 +33,16 @@ function apiLocal(): Plugin {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss(), apiLocal()],
+  build: {
+    rollupOptions: {
+      output: {
+        // Recharts (y sus dependencias d3) en su propio archivo: no cambia
+        // entre deploys, así que el navegador lo conserva en caché aunque
+        // cambie el código del tablero.
+        manualChunks(id) {
+          if (/node_modules\/(recharts|d3-|victory-vendor)/.test(id)) return 'recharts'
+        },
+      },
+    },
+  },
 })

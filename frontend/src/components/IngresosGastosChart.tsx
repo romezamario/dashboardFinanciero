@@ -10,15 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import type { PuntoIngresoGasto } from "../lib/queries";
-
-const formateadorEje = new Intl.NumberFormat("es-MX", {
-  notation: "compact",
-  maximumFractionDigits: 1,
-});
-const formateadorTooltip = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-});
+import { compacto as formateadorEje, monedaConCentavos as formateadorTooltip } from "../lib/formato";
 
 /** "recientes" = los últimos 13 meses (mes en curso incluido), la vista por
  * defecto; "meses" = todo el historial mes a mes; "anios" = por año. */

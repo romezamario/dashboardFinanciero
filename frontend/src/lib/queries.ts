@@ -1,69 +1,200 @@
 import { supabase } from "./supabase";
 import type { Transaccion } from "./types";
 
-/** PostgREST devuelve como máximo 1000 filas por consulta si no se pagina
- * explícitamente -- por debajo de ese límite `obtenerTransacciones` nunca
- * lo notó, pero al pasar de 1000 transacciones totales empezó a devolver
- * solo las 1000 más antiguas (orden ascendente por fecha), descartando en
- * silencio las más recientes. */
+/** PostgREST devuelve como máximo 1000 filas por consulta: más allá hay que
+ * paginar explícitamente (al pasar de 1000 transacciones, sin paginar, se
+ * descartaban en silencio las más recientes). */
 const TAMANO_PAGINA = 1000;
 
-const SELECT_TRANSACCIONES = `id, fecha, descripcion, monto, tipo, saldo, comercio, tarjeta,
-   categorias ( nombre ),
-   eventos ( nombre ),
-   documentos ( id, cuentas ( id, alias, bancos ( nombre ) ) )`;
-
-// Desempate por `id`: con solo `fecha`, Postgres no garantiza un orden
-// estable entre filas del mismo día, así que al paginar con offset una
-// transacción podía salir en dos páginas y otra en ninguna (justo en el
-// borde entre páginas, con más de 1000 transacciones).
-function consultaPagina(desde: number, hasta: number) {
-  return supabase
-    .from("transacciones")
-    .select(SELECT_TRANSACCIONES)
-    .order("fecha", { ascending: true })
-    .order("id", { ascending: true })
-    .range(desde, hasta);
+/** Los errores de PostgREST son objetos `{ message, code, ... }`; quien los
+ * atrapa espera un `Error` para mostrar su mensaje. */
+function comoError(error: unknown): Error {
+  if (error instanceof Error) return error;
+  const mensaje = (error as { message?: unknown } | null)?.message;
+  return new Error(typeof mensaje === "string" ? mensaje : String(error));
 }
 
+type RespuestaPagina = PromiseLike<{
+  data: unknown[] | null;
+  error: unknown;
+  count?: number | null;
+}>;
+
 /**
- * La primera página pide el total (`count: "exact"`) para saber cuántas
- * páginas más hacen falta, y esas se piden TODAS en paralelo -- ya no
- * dependen una de otra, así que esperarlas en serie (una API call tras
- * otra) solo sumaba latencia de red sin necesidad. Con 2000+ transacciones
- * (3 páginas) esto corta el tiempo de espera de ~3 round-trips seguidos a
- * ~1. El orden final se conserva igual: `Promise.all` respeta el orden del
- * arreglo de solicitudes, no el orden en que responden.
+ * Trae TODAS las filas de una consulta paginada con `.range()`. `pagina`
+ * debe ordenar por una llave total (p. ej. fecha **e id**): con solo fecha,
+ * Postgres no garantiza el orden entre filas del mismo día y el paginado por
+ * offset podía repetir una fila y saltarse otra en el borde de página.
+ *
+ * La primera página pide un conteo *estimado* (`count: "estimated"`, barato:
+ * exacto hasta el máximo de filas de PostgREST y por estadísticas del
+ * planificador más allá, en vez de un `COUNT(*)` completo en cada carga) y
+ * con él pide en PARALELO las páginas que probablemente faltan: esperarlas
+ * en serie solo sumaba un round-trip por página. Como el estimado puede
+ * quedarse corto, si la última página llegó llena se sigue pidiendo de una
+ * en una hasta que llegue una incompleta. `Promise.all` respeta el orden del
+ * arreglo, así que el orden final es el de la consulta.
  */
-export async function obtenerTransacciones(): Promise<Transaccion[]> {
-  const primera = await supabase
-    .from("transacciones")
-    .select(SELECT_TRANSACCIONES, { count: "exact" })
-    .order("fecha", { ascending: true })
-    .order("id", { ascending: true })
-    .range(0, TAMANO_PAGINA - 1);
+export async function obtenerTodasLasPaginas<T>(
+  pagina: (desde: number, hasta: number, contar: boolean) => RespuestaPagina
+): Promise<T[]> {
+  const primera = await pagina(0, TAMANO_PAGINA - 1, true);
+  if (primera.error) throw comoError(primera.error);
+  const filas = (primera.data ?? []) as T[];
+  if (filas.length < TAMANO_PAGINA) return filas;
 
-  if (primera.error) throw primera.error;
-  const primerasFilas = (primera.data ?? []) as unknown as Transaccion[];
-  const total = primera.count ?? primerasFilas.length;
-
-  if (primerasFilas.length < TAMANO_PAGINA || total <= TAMANO_PAGINA) {
-    return primerasFilas;
+  const estimadas = Math.max(0, Math.ceil(((primera.count ?? 0) - TAMANO_PAGINA) / TAMANO_PAGINA));
+  let desde = TAMANO_PAGINA;
+  const enParalelo = await Promise.all(
+    Array.from({ length: estimadas }, (_, i) => {
+      const inicio = desde + i * TAMANO_PAGINA;
+      return pagina(inicio, inicio + TAMANO_PAGINA - 1, false);
+    })
+  );
+  desde += estimadas * TAMANO_PAGINA;
+  let ultimaLlena = true;
+  for (const { data, error } of enParalelo) {
+    if (error) throw comoError(error);
+    const datos = (data ?? []) as T[];
+    filas.push(...datos);
+    ultimaLlena = datos.length === TAMANO_PAGINA;
   }
+  while (ultimaLlena) {
+    const { data, error } = await pagina(desde, desde + TAMANO_PAGINA - 1, false);
+    if (error) throw comoError(error);
+    const datos = (data ?? []) as T[];
+    filas.push(...datos);
+    ultimaLlena = datos.length === TAMANO_PAGINA;
+    desde += TAMANO_PAGINA;
+  }
+  return filas;
+}
 
-  const paginasRestantes = Math.ceil((total - TAMANO_PAGINA) / TAMANO_PAGINA);
-  const solicitudes = Array.from({ length: paginasRestantes }, (_, i) => {
-    const desde = TAMANO_PAGINA * (i + 1);
-    return consultaPagina(desde, desde + TAMANO_PAGINA - 1);
+/** Una fila de `transacciones` tal cual, con sus llaves foráneas en vez de
+ * las relaciones anidadas: categoría, evento y documento (con su cuenta y
+ * banco) se resuelven contra `Catalogos` en `armarTransacciones`. */
+export interface FilaTransaccion {
+  id: string;
+  fecha: string;
+  descripcion: string;
+  monto: number;
+  tipo: "cargo" | "abono";
+  saldo: number | null;
+  comercio: string | null;
+  tarjeta: string | null;
+  categoria_id: string | null;
+  evento_id: string | null;
+  documento_id: string;
+}
+
+const COLUMNAS_TRANSACCION =
+  "id, fecha, descripcion, monto, tipo, saldo, comercio, tarjeta, categoria_id, evento_id, documento_id";
+
+/** Categorías, eventos y documentos (con cuenta y banco) por id. Son unas
+ * decenas/cientos de filas: pedirlos aparte en vez de anidarlos en cada
+ * transacción evita repetir el mismo `{"alias": ..., "bancos": {...}}` miles
+ * de veces en la respuesta (era la mayor parte del JSON), y deja que todas
+ * las transacciones de un documento compartan el mismo objeto. */
+export interface Catalogos {
+  categorias: Map<string, NonNullable<Transaccion["categorias"]>>;
+  eventos: Map<string, NonNullable<Transaccion["eventos"]>>;
+  documentos: Map<string, Transaccion["documentos"]>;
+}
+
+export interface DatosTransacciones {
+  filas: FilaTransaccion[];
+  catalogos: Catalogos;
+}
+
+function porId<T extends { id: string }, V>(filas: T[], valor: (fila: T) => V): Map<string, V> {
+  return new Map(filas.map((f) => [f.id, valor(f)]));
+}
+
+export async function obtenerCatalogos(): Promise<Catalogos> {
+  const [categorias, eventos, documentos] = await Promise.all([
+    obtenerTodasLasPaginas<{ id: string; nombre: string }>((desde, hasta, contar) =>
+      supabase
+        .from("categorias")
+        .select("id, nombre", contar ? { count: "estimated" } : undefined)
+        .order("id")
+        .range(desde, hasta)
+    ),
+    obtenerTodasLasPaginas<{ id: string; nombre: string }>((desde, hasta, contar) =>
+      supabase
+        .from("eventos")
+        .select("id, nombre", contar ? { count: "estimated" } : undefined)
+        .order("id")
+        .range(desde, hasta)
+    ),
+    obtenerTodasLasPaginas<Transaccion["documentos"]>((desde, hasta, contar) =>
+      supabase
+        .from("documentos")
+        .select("id, cuentas ( id, alias, bancos ( nombre ) )", contar ? { count: "estimated" } : undefined)
+        .order("id")
+        .range(desde, hasta)
+    ),
+  ]);
+  return {
+    categorias: porId(categorias, (c) => ({ nombre: c.nombre })),
+    eventos: porId(eventos, (e) => ({ nombre: e.nombre })),
+    documentos: porId(documentos, (d) => d),
+  };
+}
+
+async function obtenerFilas(): Promise<FilaTransaccion[]> {
+  return obtenerTodasLasPaginas<FilaTransaccion>((desde, hasta, contar) =>
+    supabase
+      .from("transacciones")
+      .select(COLUMNAS_TRANSACCION, contar ? { count: "estimated" } : undefined)
+      .order("fecha", { ascending: true })
+      .order("id", { ascending: true })
+      .range(desde, hasta)
+  );
+}
+
+/** Todo el historial más los catálogos, en paralelo. */
+export async function obtenerDatosTransacciones(): Promise<DatosTransacciones> {
+  const [filas, catalogos] = await Promise.all([obtenerFilas(), obtenerCatalogos()]);
+  return { filas, catalogos };
+}
+
+/** Solo las filas con esos `id` -- para refrescar lo editado sin volver a
+ * bajar todo el historial. */
+export async function obtenerFilasPorIds(ids: string[]): Promise<FilaTransaccion[]> {
+  const filas: FilaTransaccion[] = [];
+  await porLotes(ids, async (lote) => {
+    const respuesta = await supabase.from("transacciones").select(COLUMNAS_TRANSACCION).in("id", lote);
+    if (!respuesta.error) filas.push(...((respuesta.data ?? []) as FilaTransaccion[]));
+    return respuesta;
   });
+  return filas;
+}
 
-  const resultados = await Promise.all(solicitudes);
-  const todas = primerasFilas;
-  for (const { data, error } of resultados) {
-    if (error) throw error;
-    todas.push(...((data ?? []) as unknown as Transaccion[]));
+/** `filas` con las de `nuevas` en lugar de las que tengan el mismo id (mismo
+ * orden; una edición no cambia la fecha). */
+export function reemplazarFilas(filas: FilaTransaccion[], nuevas: FilaTransaccion[]): FilaTransaccion[] {
+  if (nuevas.length === 0) return filas;
+  const porIdNueva = new Map(nuevas.map((f) => [f.id, f]));
+  return filas.map((f) => porIdNueva.get(f.id) ?? f);
+}
+
+/** Arma la `Transaccion` con sus relaciones anidadas (la forma que usa todo
+ * el frontend, la misma que devolvía PostgREST al anidar). Una fila cuyo
+ * documento no está en el catálogo (no debería pasar: la RLS deja ver ambos
+ * o ninguno) se omite en vez de romper `cuentaDe`. */
+export function armarTransacciones(filas: FilaTransaccion[], catalogos: Catalogos): Transaccion[] {
+  const resultado: Transaccion[] = [];
+  for (const { categoria_id, evento_id, documento_id, ...campos } of filas) {
+    const documentos = catalogos.documentos.get(documento_id);
+    if (!documentos) continue;
+    resultado.push({
+      ...campos,
+      categorias: (categoria_id && catalogos.categorias.get(categoria_id)) || null,
+      eventos: (evento_id && catalogos.eventos.get(evento_id)) || null,
+      documentos,
+    });
   }
-  return todas;
+  return resultado;
 }
 
 /** Filtros por clic (cross-filter). El tiempo NO es parte de ellos: lo
@@ -247,90 +378,48 @@ export function agruparIngresosGastosPorAnio(
   return Array.from(porAnio.values()).sort((a, b) => a.periodo.localeCompare(b.periodo));
 }
 
-export interface PuntoCategoria {
-  categoria: string;
+export interface PuntoDimension {
+  /** Categoría, comercio o evento. */
+  nombre: string;
   ingresos: number;
   gastos: number;
 }
 
 /**
- * Antes solo sumaba "cargo" (gasto); ahora acumula ambos tipos por
- * categoría -- una categoría puede tener ingresos (p. ej. "Transferencia
- * recibida") y gastos a la vez. El top-8 (aplicado en el componente) ya no
- * ordena solo por gasto sino por la magnitud combinada
- * (ingresos + gastos), para no dejar fuera una categoría que es
- * mayormente de ingresos.
+ * Suma ingresos y gastos por la dimensión que devuelva `claveDe` (categoría,
+ * comercio, evento...). Una dimensión puede tener ambos lados a la vez (p. ej.
+ * "Transferencia recibida" o "Pago TDC Beyond" solo del lado de ingresos), así
+ * que se ordena por la magnitud combinada (ingresos + gastos) para que el
+ * top-N de las gráficas no deje fuera una que es mayormente de ingresos.
+ *
+ * `claveDe` devuelve null para "no participa": comercio y evento son
+ * opcionales por diseño (solo los asignan las reglas que los definen, o el
+ * usuario a mano), así que una transacción sin ellos no infla un bucket
+ * "Sin comercio"/"Sin evento" poco informativo. Categoría sí tiene fallback
+ * (`categoriaDe` → "Sin categoría").
  */
-export function agruparPorCategoria(transacciones: Transaccion[]): PuntoCategoria[] {
-  const porCategoria = new Map<string, { ingresos: number; gastos: number }>();
-
+export function agruparPor(
+  transacciones: Transaccion[],
+  claveDe: (t: Transaccion) => string | null
+): PuntoDimension[] {
+  const porClave = new Map<string, PuntoDimension>();
   for (const t of transacciones) {
-    const nombre = categoriaDe(t);
-    const acumulado = porCategoria.get(nombre) ?? { ingresos: 0, gastos: 0 };
-    if (t.tipo === "abono") acumulado.ingresos += t.monto;
-    else acumulado.gastos += t.monto;
-    porCategoria.set(nombre, acumulado);
+    const nombre = claveDe(t);
+    if (!nombre) continue;
+    let punto = porClave.get(nombre);
+    if (!punto) {
+      punto = { nombre, ingresos: 0, gastos: 0 };
+      porClave.set(nombre, punto);
+    }
+    if (t.tipo === "abono") punto.ingresos += t.monto;
+    else punto.gastos += t.monto;
   }
-
-  return Array.from(porCategoria.entries())
-    .map(([categoria, { ingresos, gastos }]) => ({ categoria, ingresos, gastos }))
-    .sort((a, b) => b.ingresos + b.gastos - (a.ingresos + a.gastos));
+  return Array.from(porClave.values()).sort(
+    (a, b) => b.ingresos + b.gastos - (a.ingresos + a.gastos)
+  );
 }
 
-export interface PuntoComercio {
-  comercio: string;
-  ingresos: number;
-  gastos: number;
-}
-
-export function agruparPorComercio(transacciones: Transaccion[]): PuntoComercio[] {
-  // A diferencia de categoría, comercio no tiene un fallback "Sin comercio"
-  // -- es opcional por diseño (solo lo asignan las reglas que lo definen
-  // explícitamente), así que una transacción sin comercio simplemente no
-  // participa en este agrupado en vez de inflar un bucket poco informativo.
-  // Acumula ingresos y gastos por separado -- un comercio como "Pago TDC
-  // Beyond" solo aparece del lado de ingresos (es un abono), mientras que
-  // uno de compra normal solo del lado de gastos.
-  const porComercio = new Map<string, { ingresos: number; gastos: number }>();
-
-  for (const t of transacciones) {
-    if (!t.comercio) continue;
-    const acumulado = porComercio.get(t.comercio) ?? { ingresos: 0, gastos: 0 };
-    if (t.tipo === "abono") acumulado.ingresos += t.monto;
-    else acumulado.gastos += t.monto;
-    porComercio.set(t.comercio, acumulado);
-  }
-
-  return Array.from(porComercio.entries())
-    .map(([comercio, { ingresos, gastos }]) => ({ comercio, ingresos, gastos }))
-    .sort((a, b) => b.ingresos + b.gastos - (a.ingresos + a.gastos));
-}
-
-export interface PuntoEvento {
-  evento: string;
-  ingresos: number;
-  gastos: number;
-}
-
-/** Mismo patrón que `agruparPorComercio`: un evento es opcional (solo lo
- * asignan manualmente desde `EventosTab`), así que no hay un fallback "Sin
- * evento" -- las transacciones sin evento simplemente no participan. */
-export function agruparPorEvento(transacciones: Transaccion[]): PuntoEvento[] {
-  const porEvento = new Map<string, { ingresos: number; gastos: number }>();
-
-  for (const t of transacciones) {
-    const evento = eventoDe(t);
-    if (!evento) continue;
-    const acumulado = porEvento.get(evento) ?? { ingresos: 0, gastos: 0 };
-    if (t.tipo === "abono") acumulado.ingresos += t.monto;
-    else acumulado.gastos += t.monto;
-    porEvento.set(evento, acumulado);
-  }
-
-  return Array.from(porEvento.entries())
-    .map(([evento, { ingresos, gastos }]) => ({ evento, ingresos, gastos }))
-    .sort((a, b) => b.ingresos + b.gastos - (a.ingresos + a.gastos));
-}
+export const comercioDe = (t: Transaccion): string | null => t.comercio;
 
 
 function anoMes(anio: number, mes: number): string {
@@ -363,50 +452,21 @@ export function buscarPorDescripcion(
   return transacciones.filter((t) => t.descripcion.toUpperCase().includes(normalizado));
 }
 
-/** Busca una categoría por nombre (RLS ya la acota al usuario); si no
- * existe la crea. Mismo find-or-create que usa sync/sincronizador.py del
- * lado de Python -- aquí hace falta porque `categoria_id` es un FK, no
- * texto libre, así que escribir una categoría nueva desde el frontend
- * requiere resolver (o crear) su fila en `categorias` primero. */
-async function buscarOCrearCategoriaId(nombre: string): Promise<string> {
-  const { data: existente, error: errorSelect } = await supabase
-    .from("categorias")
-    .select("id")
-    .eq("nombre", nombre)
-    .maybeSingle();
-  if (errorSelect) throw errorSelect;
-  if (existente) return existente.id as string;
-
-  const { data: creada, error: errorInsert } = await supabase
-    .from("categorias")
-    .insert({ nombre })
+/** Id de la fila de `categorias` o `eventos` con ese nombre, creándola si no
+ * existe -- `categoria_id`/`evento_id` son FK, no texto libre, así que
+ * escribir un nombre nuevo desde el frontend necesita resolver (o crear) su
+ * fila primero (mismo find-or-create que sync/sincronizador.py). Un upsert
+ * sobre la llave única (user_id, nombre) lo hace en UN viaje y sin la
+ * carrera de "buscar y luego insertar" (dos pestañas creando el mismo
+ * nombre); `user_id` lo pone el default `auth.uid()` y la RLS lo acota. */
+async function buscarOCrearId(tabla: "categorias" | "eventos", nombre: string): Promise<string> {
+  const { data, error } = await supabase
+    .from(tabla)
+    .upsert({ nombre }, { onConflict: "user_id,nombre" })
     .select("id")
     .single();
-  if (errorInsert) throw errorInsert;
-  return creada.id as string;
-}
-
-/** Mismo find-or-create que `buscarOCrearCategoriaId`, para `eventos` --
- * `evento_id` también es un FK, así que escribir "Viaje a Cancún" desde el
- * frontend necesita resolver (o crear) su fila en `eventos` primero, para
- * que dos transacciones con el mismo nombre de evento de verdad compartan
- * la misma fila en vez de fragmentarse por variaciones de texto. */
-async function buscarOCrearEventoId(nombre: string): Promise<string> {
-  const { data: existente, error: errorSelect } = await supabase
-    .from("eventos")
-    .select("id")
-    .eq("nombre", nombre)
-    .maybeSingle();
-  if (errorSelect) throw errorSelect;
-  if (existente) return existente.id as string;
-
-  const { data: creado, error: errorInsert } = await supabase
-    .from("eventos")
-    .insert({ nombre })
-    .select("id")
-    .single();
-  if (errorInsert) throw errorInsert;
-  return creado.id as string;
+  if (error) throw comoError(error);
+  return data.id as string;
 }
 
 /**
@@ -423,22 +483,17 @@ export async function actualizarCategoriaComercioYEvento(
 ): Promise<void> {
   if (ids.length === 0) return;
 
+  const [categoriaId, eventoId] = await Promise.all([
+    cambios.categoria ? buscarOCrearId("categorias", cambios.categoria) : undefined,
+    cambios.evento ? buscarOCrearId("eventos", cambios.evento) : undefined,
+  ]);
   const payload: Record<string, unknown> = {};
-  if (cambios.categoria) {
-    payload.categoria_id = await buscarOCrearCategoriaId(cambios.categoria);
-  }
-  if (cambios.comercio) {
-    payload.comercio = cambios.comercio;
-  }
-  if (cambios.evento) {
-    payload.evento_id = await buscarOCrearEventoId(cambios.evento);
-  }
+  if (categoriaId) payload.categoria_id = categoriaId;
+  if (cambios.comercio) payload.comercio = cambios.comercio;
+  if (eventoId) payload.evento_id = eventoId;
   if (Object.keys(payload).length === 0) return;
 
-  for (const lote of enLotes(ids)) {
-    const { error } = await supabase.from("transacciones").update(payload).in("id", lote);
-    if (error) throw error;
-  }
+  await porLotes(ids, (lote) => supabase.from("transacciones").update(payload).in("id", lote));
 }
 
 /**
@@ -452,10 +507,9 @@ export async function actualizarCategoriaComercioYEvento(
  */
 export async function quitarEventoDeTransacciones(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
-  for (const lote of enLotes(ids)) {
-    const { error } = await supabase.from("transacciones").update({ evento_id: null }).in("id", lote);
-    if (error) throw error;
-  }
+  await porLotes(ids, (lote) =>
+    supabase.from("transacciones").update({ evento_id: null }).in("id", lote)
+  );
 }
 
 /** `.in("id", ids)` viaja en la URL de la petición (?id=in.(...)): con
@@ -464,10 +518,28 @@ export async function quitarEventoDeTransacciones(ids: string[]): Promise<void> 
  * completa fallaba. ~150 UUIDs por petición dejan la URL en ~6 KB. */
 const TAMANO_LOTE_IDS = 150;
 
+/** Lotes que viajan a la vez: en paralelo para no sumar un round-trip por
+ * lote, pero acotado para no abrir decenas de conexiones de golpe. */
+const LOTES_EN_PARALELO = 4;
+
 function enLotes<T>(elementos: T[], tamano = TAMANO_LOTE_IDS): T[][] {
   const lotes: T[][] = [];
   for (let i = 0; i < elementos.length; i += tamano) lotes.push(elementos.slice(i, i + tamano));
   return lotes;
+}
+
+/** Corre `peticion` sobre cada lote de `ids`, `LOTES_EN_PARALELO` a la vez;
+ * el primer error se lanza. */
+async function porLotes<T>(
+  ids: string[],
+  peticion: (lote: string[]) => PromiseLike<{ error: T | null }>
+): Promise<void> {
+  const lotes = enLotes(ids);
+  for (let i = 0; i < lotes.length; i += LOTES_EN_PARALELO) {
+    const resultados = await Promise.all(lotes.slice(i, i + LOTES_EN_PARALELO).map(peticion));
+    const conError = resultados.find((r) => r.error);
+    if (conError) throw comoError(conError.error);
+  }
 }
 
 export interface ImpactoCambioDeCuenta {
@@ -514,12 +586,8 @@ export async function actualizarCuentaDeDocumentos(
   cuentaId: string
 ): Promise<void> {
   if (documentoIds.length === 0) return;
-  for (const lote of enLotes(documentoIds)) {
-    const { error } = await supabase
-      .from("documentos")
-      .update({ cuenta_id: cuentaId })
-      .in("id", lote);
-    if (error) throw error;
-  }
+  await porLotes(documentoIds, (lote) =>
+    supabase.from("documentos").update({ cuenta_id: cuentaId }).in("id", lote)
+  );
 }
 

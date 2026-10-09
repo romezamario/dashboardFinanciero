@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import {
-  agruparPorCategoria,
-  agruparPorComercio,
+  agruparPor,
   aplicarFiltros,
   categoriaDe,
+  comercioDe,
   type Filtros,
 } from "../lib/queries";
 import {
@@ -15,21 +15,11 @@ import {
 } from "../lib/indicadores";
 import type { Transaccion } from "../lib/types";
 import { GastoConPromedioMovilChart } from "./GastoConPromedioMovilChart";
-import { GastoPorCategoriaChart } from "./GastoPorCategoriaChart";
-import { GastoPorComercioChart } from "./GastoPorComercioChart";
 import { Tabla } from "./IndicadoresUI";
+import { IngresosGastosPorDimensionChart } from "./IngresosGastosPorDimensionChart";
+import { MENSAJE_SIN_COMERCIO } from "../lib/texto";
 import { TransaccionesTabla } from "./TransaccionesTabla";
-
-const moneda = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-const formateadorFecha = new Intl.DateTimeFormat("es-MX", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-});
+import { moneda, fechaCorta } from "../lib/formato";
 
 type DimensionDetalle = "categoria" | "comercio";
 
@@ -133,11 +123,11 @@ export function DetalleDimensionTab({ transacciones }: DetalleDimensionTabProps)
     [transacciones, mes]
   );
   const gastoPorCategoria = useMemo(
-    () => agruparPorCategoria(aplicarFiltros(transaccionesDelMes, filtros, "categoria")),
+    () => agruparPor(aplicarFiltros(transaccionesDelMes, filtros, "categoria"), categoriaDe),
     [transaccionesDelMes, filtros]
   );
   const gastoPorComercio = useMemo(
-    () => agruparPorComercio(aplicarFiltros(transaccionesDelMes, filtros, "comercio")),
+    () => agruparPor(aplicarFiltros(transaccionesDelMes, filtros, "comercio"), comercioDe),
     [transaccionesDelMes, filtros]
   );
   // Sin el filtro de mes: es lo que grafica la gráfica mensual (que resalta el
@@ -271,15 +261,19 @@ export function DetalleDimensionTab({ transacciones }: DetalleDimensionTabProps)
         }`}
       />
 
-      <GastoPorCategoriaChart
+      <IngresosGastosPorDimensionChart
+        dimension="categoría"
+        plegarResto
         datos={gastoPorCategoria}
-        categoriaSeleccionada={filtros.categoria}
-        onClickCategoria={(categoria) => alternarFiltro("categoria", categoria)}
+        seleccionado={filtros.categoria}
+        onClickElemento={(categoria) => alternarFiltro("categoria", categoria)}
       />
-      <GastoPorComercioChart
+      <IngresosGastosPorDimensionChart
+        dimension="comercio"
+        mensajeVacio={MENSAJE_SIN_COMERCIO}
         datos={gastoPorComercio}
-        comercioSeleccionado={filtros.comercio}
-        onClickComercio={(comercio) => alternarFiltro("comercio", comercio)}
+        seleccionado={filtros.comercio}
+        onClickElemento={(comercio) => alternarFiltro("comercio", comercio)}
       />
 
       <Tabla
@@ -288,7 +282,7 @@ export function DetalleDimensionTab({ transacciones }: DetalleDimensionTabProps)
         encabezados={["Descripción", "Fecha", "Monto"]}
         filas={topGastos.map((t) => [
           t.descripcion,
-          formateadorFecha.format(new Date(`${t.fecha}T00:00:00`)),
+          fechaCorta(t.fecha),
           moneda.format(t.monto),
         ])}
       />

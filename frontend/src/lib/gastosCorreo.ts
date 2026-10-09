@@ -1,3 +1,4 @@
+import { obtenerTodasLasPaginas } from "./queries";
 import { supabase } from "./supabase";
 
 /** Fila de `gastos_correo`: un cargo reportado por un aviso de compra de
@@ -18,32 +19,23 @@ export interface GastoCorreo {
   moneda: string;
 }
 
-/** Filas por página: PostgREST corta en 1,000 por consulta, y con la carga
- * inicial de todo el historial de correos (años) hay muchas más. */
-const TAMANO_PAGINA = 1000;
-
-/** Todos los gastos de correo. Se pagina con `.range()` ordenando por fecha,
- * hora **e id**: sin un orden total (varios avisos a la misma hora) el
- * paginado por offset podría repetir una fila y saltarse otra en el corte
- * de página (mismo cuidado que `obtenerTransacciones`). */
-export async function obtenerGastosCorreo(): Promise<GastoCorreo[]> {
-  const todos: GastoCorreo[] = [];
-  for (let desde = 0; ; desde += TAMANO_PAGINA) {
-    const { data, error } = await supabase
+/** Todos los gastos de correo (con la carga inicial de todo el historial
+ * son años de avisos). Mismo paginado que las transacciones: orden total por
+ * fecha, hora **e id** (varios avisos a la misma hora) y páginas en
+ * paralelo -- ver `obtenerTodasLasPaginas`. */
+export function obtenerGastosCorreo(): Promise<GastoCorreo[]> {
+  return obtenerTodasLasPaginas<GastoCorreo>((desde, hasta, contar) =>
+    supabase
       .from("gastos_correo")
       .select(
-        "id, mensaje_id, fecha, hora, tarjeta, comercio, categoria, establecimiento, ciudad_cod, ciudad, monto, moneda"
+        "id, mensaje_id, fecha, hora, tarjeta, comercio, categoria, establecimiento, ciudad_cod, ciudad, monto, moneda",
+        contar ? { count: "estimated" } : undefined
       )
       .order("fecha", { ascending: false })
       .order("hora", { ascending: true })
       .order("id", { ascending: true })
-      .range(desde, desde + TAMANO_PAGINA - 1);
-    if (error) throw new Error(error.message);
-    const pagina = (data ?? []) as GastoCorreo[];
-    todos.push(...pagina);
-    if (pagina.length < TAMANO_PAGINA) break;
-  }
-  return todos;
+      .range(desde, hasta)
+  );
 }
 
 // Nombres de las tarjetas por terminación. Cualquier otra se muestra como

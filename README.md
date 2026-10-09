@@ -18,8 +18,7 @@ normaliza y categoriza las transacciones, y sincroniza solo los datos ya normali
 
 **Pipeline local** — a diferencia del plan original (un watcher 100% automático sobre
 `data/nuevos/`), el punto de entrada es una **app de escritorio (Tkinter)**: tú cargas el PDF a
-mano, la app te deja revisar y corregir antes de que nada se sincronice. Esto da control y permite
-validar montos contra el total real del estado de cuenta antes de confiar en el resultado.
+mano, la app te deja revisar y corregir antes de que nada se sincronice.
 
 ```
 Tú abres la app (python -m app.main) y cargas un PDF
@@ -36,9 +35,8 @@ Transformador (transform/transformador.py, agnóstico de banco)
 Categorizador (transform/categorizador.py, reglas de palabra clave editables
       │        desde la propia app — "Reglas de categorización...")
       ▼
-Validación de totales EN LA APP: suma calculada vs. el total que tú
-      │   escribes desde el resumen impreso en el PDF — detecta renglones
-      │   faltantes o mal interpretados antes de guardar nada
+Revisión EN LA APP: tabla, totales (cargos, efectivo, abonos), avisos de
+      │   filas que el PDF imprime como imagen, categorías a mano
       ▼
 "Guardar archivo procesado" → data/procesados/<hash>.json
       │   (transacciones normalizadas + categorizadas, listas para subir)
@@ -58,45 +56,64 @@ como capa extra antes de siquiera llegar a la pantalla de login de Supabase Auth
 
 ## Modelo de datos
 
-Cinco tablas en Supabase (definidas en `supabase/migrations/`):
+Tablas en Supabase (definidas en `supabase/migrations/`):
 
-- **`bancos`** — catálogo compartido (ej. "BBVA", "Santander"), sin `user_id`, sin RLS: es
-  información pública, no datos personales.
+- **`bancos`** — catálogo compartido (ej. "BBVA", "Santander"), sin `user_id`. Los usuarios con
+  sesión pueden leer y agregar bancos, nadie puede modificarlos ni borrarlos por la API.
 - **`cuentas`** — tus cuentas bancarias, identificadas solo por alias + últimos 4 dígitos.
 - **`categorias`** — categorías de gasto/ingreso, definidas por ti (reglas en el Categorizador).
 - **`documentos`** — un registro por PDF procesado (hash para detectar duplicados, periodo, ruta local).
-- **`transacciones`** — cada movimiento, con su categoría, monto (`numeric`, nunca float),
-  y los campos de auditoría (`pagina`, `linea_cruda`) que lo atan a su línea exacta de origen.
+- **`transacciones`** — cada movimiento, con su categoría, comercio, tarjeta, evento, monto
+  (`numeric`, nunca float), y los campos de auditoría (`pagina`, `linea_cruda`) que lo atan a su
+  línea exacta de origen.
+- **`eventos`** — viajes, fiestas, etc. que asignas desde el dashboard a varias transacciones.
+- **`gastos_correo`** — los cargos de los avisos de compra de Banamex por correo (ver "Gastos
+  recientes" abajo), aparte de `transacciones`.
 
-Las últimas cuatro tienen Row Level Security: cada política restringe select/insert/update/delete
-a `user_id = auth.uid()`, así que aunque el frontend hable directo con Postgres, cada usuario solo
-puede ver y tocar sus propios datos.
+Todas menos `bancos` tienen Row Level Security: cada política restringe select/insert/update/delete
+a `user_id = (select auth.uid())`, así que aunque el frontend hable directo con Postgres, cada
+usuario solo puede ver y tocar sus propios datos. (El `select` alrededor de `auth.uid()` hace que
+Postgres lo calcule una vez por consulta y no por fila — escribe así cualquier política nueva.)
 
 ## CI/CD
 
-Dos pipelines de GitHub Actions, cada uno disparado solo por los archivos que le corresponden:
+Tres pipelines de GitHub Actions, cada uno disparado solo por los archivos que le corresponden:
+
+- **`ci.yml`** — en cada push (cualquier rama) o PR que toque `frontend/` o el pipeline local
+  (`app/`, `parsers/`, `transform/`, `sync/`, `tests/`, `requirements.txt`): typecheck, lint y
+  pruebas del frontend (Vitest), y las pruebas de Python. Es la red de seguridad antes de `main`,
+  que despliega solo. Ver "Pruebas" abajo.
 
 - **`db-migrate.yml`** — cuando cambia algo en `supabase/migrations/`, aplica esas migraciones
   al proyecto remoto. El esquema de la base de datos se versiona como código: todo cambio es un
   archivo de migración nuevo, nunca un `ALTER TABLE` manual en el dashboard de Supabase.
 - **`deploy.yml`** — cuando cambia algo en `frontend/`, compila y publica el sitio a Cloudflare Pages.
 
-Cada uno solo corre cuando le toca, así que trabajar en el pipeline local (parsers/transform/sync)
-no dispara ninguno de los dos.
+Cada uno solo corre cuando le toca: un cambio en el pipeline local solo dispara `ci.yml`.
 
 ## Estructura
 
 ```
 parsers/    # BaseParser + un extractor por banco
+  comun.py           # meses, patrones y lectura (una sola vez) del texto inicial del PDF
+  glifos.py          # lee las filas que el PDF imprime como imágenes de letras
 transform/  # normalización al esquema canónico + categorización (reglas editables desde la app)
-app/        # app de escritorio (Tkinter) — carga PDF, valida totales, categoriza, exporta
+app/        # app de escritorio (Tkinter) — carga PDF, revisa, categoriza, exporta, sincroniza
+  main.py            # ventana principal (App) y registro de bancos (PARSERS)
+  logica.py          # lo que no toca la interfaz: leer un PDF, recuperar lo hecho a mano, mover archivos
+  ventanas.py        # diálogos: reglas, inspeccionar PDF, renglón manual, categoría manual
+  pestana_gmail.py   # pestaña "Gastos recientes (Gmail)"
+  hilos.py           # correr trabajo largo en segundo plano sin congelar la ventana
   icono.ico          # ícono del .exe (generado por generar_icono.py, versionado)
   generar_icono.py   # utilidad para regenerar/cambiar app/icono.ico
 DashboardFinanciero.spec  # config del build de PyInstaller (dist/*.exe, no versionado)
-sync/       # cliente de Supabase, upsert idempotente
+sync/       # Supabase: estados de cuenta (sincronizador.py), avisos de Gmail (gmail_gastos.py,
+            # gastos_correo.py); estado_incremental.py = qué archivos ya se subieron
+tests/      # pruebas de Python (unittest), sin PDFs reales
 supabase/
   migrations/  # schema + políticas de RLS, aplicadas vía GitHub Actions
 frontend/   # React + Vite + TS + Tailwind + Recharts — login + dashboard, habla directo con Supabase
+  src/lib/*.test.ts  # pruebas del frontend (Vitest)
 data/
   nuevos/       # (ya no lo usa un watcher — puedes cargar PDFs desde cualquier ruta en la app)
   procesados/   # salida de la app: <hash>.json por cada PDF revisado y guardado
@@ -127,6 +144,18 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+## Pruebas
+
+```bash
+python -m unittest discover -s tests -t .   # pipeline local (desde la raíz, con requirements.txt instalado)
+cd frontend && npm test                     # frontend (Vitest); también: npx tsc -b y npm run lint
+```
+
+Las pruebas nunca usan PDFs reales (no salen de la laptop): los extractores se prueban con texto
+sintético, y la sincronización contra un Supabase falso en memoria. Las ventanas de Tkinter no
+tienen pruebas automáticas, pero su lógica vive en `app/logica.py`, que sí. CI corre todo en
+cada push.
+
 ## Usar la app de escritorio
 
 ```powershell
@@ -147,7 +176,9 @@ texto, no toca nada más. Si tu banco imprime la fecha en un formato distinto a 
 para escribir su patrón de fecha.
 
 Para que ese banco se detecte solo (en vez de tener que elegirlo del dropdown), sobreescribe
-también `puede_procesar(ruta_pdf) -> bool` — una heurística barata y conservadora. Ojo: el nombre
+también `puede_procesar(ruta_pdf) -> bool` — una heurística barata y conservadora. Lee el texto
+con `textos_iniciales(ruta_pdf, n)` de `parsers/comun.py` (no abras el PDF otra vez: la app lo
+lee una sola vez para todos los extractores y la cuenta). Ojo: el nombre
 del banco solo no basta si ese banco tiene más de un tipo de documento (ver `BanamexParser` y
 `BanamexTdcParser`, que distinguen cuenta de cheques vs. tarjeta de crédito por un encabezado/
 término exclusivo de cada tipo de estado de cuenta, no solo por "BANAMEX"). Si agregas un segundo
@@ -165,7 +196,9 @@ Flujo completo una vez que el extractor de tu banco existe:
    PDF (`puede_procesar`) y usa el que matchee; si ninguno o más de uno matchean, cae de vuelta a
    lo que tengas seleccionado en el dropdown "Banco". El resumen te dice si el banco quedó
    "detectado" o "manual". Luego corre el extractor + Transformador + Categorizador y llena la
-   tabla. Si el extractor lo soporta (Banamex cuenta de cheques y Banamex TDC, tarjeta de
+   tabla. Todo eso corre en segundo plano ("Leyendo …" en el resumen): la ventana sigue
+   respondiendo aunque el PDF tarde, y los botones de cargar, guardar y sincronizar se desactivan
+   mientras tanto. Si el extractor lo soporta (Banamex cuenta de cheques y Banamex TDC, tarjeta de
    crédito, ambos sí), también autocompleta **Alias de cuenta** y **Últimos 4 dígitos** leyéndolos
    de la portada del PDF, y para `BanamexParser` (cuenta de cheques, el único que necesita año
    porque el PDF no lo imprime por renglón) el resumen te avisa qué año detectó — no hay campo
@@ -180,9 +213,8 @@ Flujo completo una vez que el extractor de tu banco existe:
    categorizar**, junto a la tabla, lista las descripciones únicas que quedaron sin categoría —
    botón "Copiar todo" para pegarlas directo en un chat con Claude y pedir una propuesta de
    reglas nuevas.
-3. **Validación de totales**: escribe el neto del periodo tal como lo imprime el estado de cuenta
-   (saldo actual − saldo anterior) y da **Validar** — si no cuadra, hay algo mal parseado o un
-   renglón faltante antes de confiar en el resultado.
+3. Compara los **totales** de abajo (cargos, disposición de efectivo, abonos) contra los que
+   imprime el estado de cuenta: si no cuadran, falta un renglón o hay algo mal leído.
 4. **Reglas de categorización...** para agregar/editar/borrar reglas — se aplican de inmediato a
    la tabla ya cargada y se guardan en `transform/reglas_categorizacion.json` (no se sube a git).
    Cada regla asigna una **Categoría** (obligatoria) y opcionalmente un **Comercio** (ej. patrón
@@ -193,7 +225,8 @@ Flujo completo una vez que el extractor de tu banco existe:
    del proyecto, esa es para los JSON) — reutiliza esa carpeta si ya existe, y si el PDF ya está
    adentro de una carpeta `procesados/` no lo mueve de nuevo. Así vas viendo de un vistazo, en tu
    propia carpeta de descargas, cuáles estados de cuenta ya cargaste.
-6. **Sincronizar a Supabase...** — sube todo lo pendiente en `data/procesados/`.
+6. **Sincronizar a Supabase...** — sube todo lo pendiente en `data/procesados/`, también en
+   segundo plano ("Sincronizando…").
 
 ## Empaquetar como ejecutable (.exe con ícono)
 
@@ -259,10 +292,16 @@ mismo usuario con el que después entras al frontend):
    sincronizado sin cambios). Es seguro correrlo varias veces: cada entidad se busca antes de
    insertarse, y las transacciones usan upsert sobre el mismo constraint único de la tabla
    (`documento_id, pagina, linea_cruda`), así que reintentar o repetir un archivo no duplica nada.
+   Banco, cuenta y categorías se buscan una sola vez por sincronización (y las categorías todas
+   juntas), así que subir muchos estados de cuenta a la vez ya no hace cientos de consultas.
+5. **Corregir la cuenta de un estado de cuenta ya subido**: cambia el alias o los últimos 4
+   dígitos en la app, guarda y vuelve a sincronizar. Un alias distinto renombra la cuenta; otros
+   últimos 4 dígitos mueven el documento (con sus transacciones) a esa cuenta. Gana lo último que
+   sincronizaste: también deshace un "cambiar cuenta" hecho en el dashboard para ese documento.
 
 ## Frontend (fase 5)
 
-Dashboard de solo lectura: login con Supabase Auth (el mismo usuario del Sincronizador) y luego
+Dashboard web: login con Supabase Auth (el mismo usuario del Sincronizador) y luego
 todo lo que RLS deje ver a ese usuario — sin backend intermedio, `supabase-js` habla directo con
 Postgres.
 
@@ -277,48 +316,77 @@ npm run dev
 
 Abre `http://localhost:5173`, inicia sesión con el usuario que creaste para el Sincronizador.
 
-**Qué muestra:**
-- KPIs: saldo actual (siempre sin filtrar — es un hecho de la cuenta, no una suma que deba
-  encogerse), ingresos del mes, gastos del mes
-- Ingresos vs. gastos por mes (barras agrupadas)
-- Gasto por categoría (barras horizontales, top 8 + "Otros")
-- Gasto por comercio (barras horizontales, top 8 — solo transacciones con comercio asignado,
-  ver "Reglas de categorización..." en la app de escritorio)
-- Tabla de transacciones completa, con columna **Tarjeta** (Titular/Adicional/Digital) para
-  estados de cuenta que agrupan sus movimientos por tarjeta dentro del mismo documento — vacía
-  para bancos/documentos sin ese concepto
-- **Editar categoría/comercio en lote**: busca transacciones por un texto en la descripción
-  (ej. "TELEVIA"), selecciona una o varias (o "Seleccionar todas las coincidencias" para
-  seleccionar de golpe todo lo que matchee, no solo lo que se ve en pantalla), y asígnales una
-  categoría y/o comercio nuevos — ambos campos quedan como sugerencia autocompletada con lo que
-  ya existe, pero aceptan texto libre (una categoría nueva se crea al vuelo). Deja un campo en
-  blanco para no tocarlo. Es la única escritura que hace el frontend directo a Supabase (todo lo
-  demás es solo lectura) — usa las mismas políticas de RLS que ya protegen las lecturas, sin
-  credenciales nuevas. Ojo: si vuelves a cargar y sincronizar el mismo PDF desde la app de
-  escritorio más adelante, el upsert por `(documento_id, pagina, linea_cruda)` va a
-  sobreescribir categoría/comercio con lo que digan las reglas en ese momento — una edición aquí
-  no sobrevive un resync del mismo documento. Para una corrección que sí debe persistir, agrega o
-  ajusta una regla en "Reglas de categorización..." en vez de (o además de) editar aquí.
+**Cómo carga los datos:** todo el historial al entrar, en páginas de 1,000 pedidas en paralelo;
+cuentas, categorías y eventos llegan aparte una sola vez (no repetidos en cada transacción).
+Después de editar algo solo se vuelven a pedir las transacciones editadas. Si esa recarga falla,
+aparece un aviso con **Reintentar** sin perder lo que tenías filtrado. Las pestañas que no son la
+de inicio se descargan la primera vez que las abres; si el sitio se actualizó mientras lo tenías
+abierto, la página se recarga sola una vez.
 
-**Cross-filter estilo Power BI**: da clic en una barra de mes, una categoría, o un comercio,
-y el resto del dashboard (KPIs, las otras gráficas, la tabla) se filtra a eso —
-seleccionado en color completo, lo demás atenuado. Clic otra vez sobre lo mismo lo quita; los
-chips arriba muestran qué filtros están activos, con botón para quitar cada uno o todos. Cada
-gráfica se sigue mostrando completa (para poder cambiar la selección) excepto por los filtros de
-las *otras* dimensiones — es decir, filtrar por mes no oculta meses en su propia gráfica, pero sí
-reduce qué categorías/comercios aparecen en las demás. La categoría "Otros" (la cola de gasto por
-categoría plegada) no es clicable — agrupa varias categorías reales, no hay un solo nombre que
-filtrar.
+**Qué muestra** — una pestaña por tema; cada pestaña recuerda sus propios filtros al cambiar de
+una a otra. Botón de modo claro/oscuro arriba a la derecha.
 
-**Ocultar categorías (lo inverso del cross-filter)**: la fila de chips "Ocultar categorías:"
-arriba de los KPIs deja quitar una o varias categorías de *todo* el dashboard a la vez —
-distinto de dar clic en una barra, que aísla una sola categoría sin tocar las demás. Clic en una
-categoría la tacha y la quita de todos lados (incluida su propia gráfica de Gasto por categoría);
-clic otra vez la regresa. "Mostrar todas" limpia todo lo oculto de un golpe. Si tenías una
-categoría aislada por clic y la ocultas (o viceversa), el otro filtro se quita solo para no
-quedar en un estado contradictorio. El editor de categoría/comercio en lote no respeta lo
-oculto — sigue buscando sobre todas las transacciones, porque ocultar es una preferencia de
-vista, no una restricción de qué puedes editar.
+- **Resumen** — la vista principal:
+  - **Periodo** ("Desde/Hasta", por meses): todo lo de la pestaña se calcula sobre él. Sin elegir
+    nada son los últimos 3 meses completos (el mes en curso no cuenta: los estados de cuenta
+    llegan a mes vencido). Las comparaciones son contra el periodo anterior de la misma duración.
+  - **Indicadores de salud**: tasa de ahorro del periodo (y la de 12 meses como referencia),
+    flujo neto, gasto mensual vs. tu promedio previo, meses cubiertos con tu saldo, gastos
+    recurrentes, gasto hormiga (cargos de menos de $200) y categorías gastando más de lo normal.
+  - **Gráficas**: ingresos vs. gastos por mes (13 meses, todo el historial o por años — clic en
+    un mes o un año lo vuelve el periodo), flujo de dinero (Sankey: de dónde entra y en qué se
+    va), ingresos y gastos por categoría y por comercio, y flujo neto mensual.
+  - **Tablas**: categorías al alza (con tendencia de 12 meses), gastos recurrentes y todas las
+    transacciones del periodo.
+  - **Editar en lote** (ver abajo) y **alertas** al final: posibles cargos duplicados,
+    suscripciones que cambiaron de precio o son nuevas, cargos inusualmente grandes para su
+    categoría y cambios fuertes en la tasa de ahorro. "Ver movimientos" filtra la tabla a eso.
+- **Eventos** — viajes, fiestas, etc.: cuánto gastaste en cada uno, en qué categorías y comercios,
+  sus transacciones, y un buscador para asignar (o quitar) un evento a varias transacciones.
+- **Categorías y Comercios** — el detalle de una categoría y/o un comercio: gasto mensual con
+  promedio móvil de 3 meses (o ingreso, si lo elegido solo tiene abonos), sus movimientos más
+  grandes y sus transacciones. Clic en un mes filtra lo de abajo a ese mes.
+- **Tarjetas de crédito** — todas las tarjetas comparadas en el mismo periodo: cómo se reparte
+  el gasto entre ellas, una tabla por tarjeta (gasto, compras, ticket promedio, cambio vs. el
+  periodo anterior, pagos y abonos, categoría principal), gasto mensual por tarjeta y para qué
+  usas cada una (gasto por categoría y tarjeta). "Gasto" son solo cargos; los pagos van aparte.
+- **Gastos recientes** — un calendario con el gasto de cada día coloreado de verde a rojo. Dos
+  fuentes: **por correo** (los avisos de compra de Banamex, llegan el mismo día) y **por estado
+  de cuenta** (las transacciones sincronizadas, que llegan semanas después; solo suman los cargos
+  de tarjetas de crédito). Clic en un día abre su detalle, con **Descargar Excel**; en la vista
+  por estado de cuenta cada movimiento se puede editar ahí mismo.
+- **Una pestaña por cada cuenta que no es tarjeta** (p. ej. la de cheques) — la misma vista
+  que el Resumen, solo con esa cuenta.
+- **QQQ / TQQQ** — análisis técnico (velas, medias móviles, Bollinger, RSI, MACD, comparación
+  QQQ vs. TQQQ) y un tablero de indicadores macro de EE. UU. (Fed, inflación, empleo, tasas,
+  VIX) con las fechas de los próximos datos. No usa tus finanzas; solo vive aquí para tener todo
+  junto.
+
+**Filtros por clic (estilo Power BI)**: en el Resumen y en Tarjetas de crédito, un clic en una
+barra (categoría, comercio, tarjeta) o en las filas de Cuenta/Tarjeta/Evento filtra el resto de
+la pestaña a eso; lo no seleccionado se atenúa. Clic otra vez lo quita, y los chips de arriba
+muestran qué está activo. Cada gráfica sigue mostrando todas sus opciones (solo la filtran las
+*otras* selecciones), para poder cambiar de elección. Los filtros por clic afectan el detalle del
+gasto, **no** los indicadores de salud ni las alertas: una tasa de ahorro "solo de Comida" no
+significa nada. "Otros" (la cola plegada de categorías) no es clicable.
+
+**Excluir del análisis**: en el Resumen, el panel "Excluir del análisis" quita categorías o
+eventos de *todo* (indicadores, gráficas, tabla). Por defecto excluye los movimientos entre tus
+propias cuentas (Pago TDC, traspasos): pagar la tarjeta desde la cuenta de cheques contaría como
+gasto en una y como ingreso en la otra. Es lo inverso del filtro por clic, que aísla una sola.
+
+**Editar categoría/comercio/cuenta en lote** (Resumen y pestañas de cuenta): busca transacciones
+por un texto de la descripción (ej. "TELEVIA"), selecciona una o varias (o "Seleccionar todas las
+coincidencias", no solo las que se ven), y asígnales categoría, comercio y/o cuenta nuevos. Las
+sugerencias salen de lo que ya existe, pero aceptan texto libre (una categoría nueva se crea al
+vuelo); un campo en blanco no se toca. Cambiar la cuenta mueve el estado de cuenta completo (te
+avisa cuántas transacciones son). Junto con la edición dentro de Gastos recientes y la asignación
+de eventos, son las únicas escrituras del frontend, con las mismas políticas de RLS que las
+lecturas. Ojo: si vuelves a cargar y sincronizar el mismo PDF desde la app de escritorio, el
+upsert por `(documento_id, pagina, linea_cruda)` regresa categoría/comercio a lo que digan las
+reglas, y la cuenta a la del JSON — una edición aquí no sobrevive un resync del mismo documento.
+Para una corrección que sí debe persistir, agrega o ajusta una regla en "Reglas de
+categorización..." en vez de (o además de) editar aquí.
 
 Todas las consultas van sin filtrar por `user_id` explícitamente — las políticas de RLS ya
 garantizan que cada usuario solo ve sus propias filas, así que el filtro nunca depende de que el
@@ -422,6 +490,8 @@ no se suman como gastos ni se suben; se guardan aparte en `data/gastos_correo/de
 pestaña solo dice cuántos hubo y por cuánto.
 
 Es idempotente: se puede correr todos los días (o varias veces al día) sin duplicar nada. Solo
+sube los días que cambiaron desde la última subida, y los manda juntos (hasta 500 gastos por
+llamada) en vez de uno por uno. Solo
 descarga de Gmail los correos que todavía no están en `data/gastos_correo/`; los ya guardados se
 recategorizan en tu computadora con las reglas actuales (así una regla nueva corrige también los
 gastos viejos). Si Gmail limita las consultas por minuto, reintenta solo con esperas crecientes; si

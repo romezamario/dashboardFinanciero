@@ -182,6 +182,39 @@ class SubirGastosCorreoTest(unittest.TestCase):
         self.assertEqual([r.ok for r in resultados], [True])
         self.assertEqual(len(cliente.llamadas), 1)
 
+    def test_varios_dias_viajan_en_una_sola_llamada(self) -> None:
+        for dia in range(1, 31):
+            fecha = f"2026-09-{dia:02d}"
+            _escribir(self.carpeta, f"{fecha}.json", fecha, [_gasto(f"g{dia}", dia), _gasto(f"h{dia}", 1)])
+        cliente = ClienteFalso()
+        resultados = subir_todos(cliente, self.carpeta)
+        self.assertEqual(len(cliente.llamadas), 1)
+        self.assertEqual(len(cliente.llamadas[0][1]), 60)
+        self.assertEqual([r.gastos_enviados for r in resultados], [2] * 30)
+
+    def test_las_tandas_no_parten_un_dia_ni_pasan_de_500(self) -> None:
+        _escribir(self.carpeta, "2026-09-01.json", "2026-09-01", [_gasto(f"a{i}", 1) for i in range(300)])
+        _escribir(self.carpeta, "2026-09-02.json", "2026-09-02", [_gasto(f"b{i}", 1) for i in range(300)])
+        cliente = ClienteFalso()
+        subir_todos(cliente, self.carpeta)
+        self.assertEqual([len(filas) for _, filas, _ in cliente.llamadas], [300, 300])
+
+    def test_una_tanda_que_falla_marca_todos_sus_dias_y_se_reintentan(self) -> None:
+        _escribir(self.carpeta, "2026-09-01.json", "2026-09-01", [_gasto("g1", 1)])
+        _escribir(self.carpeta, "2026-09-02.json", "2026-09-02", [_gasto("g2", 1)])
+        resultados = subir_todos(ClienteFalso(falla=True), self.carpeta)
+        self.assertEqual([r.ok for r in resultados], [False, False])
+        self.assertTrue(all("row-level security" in r.error for r in resultados))
+        self.assertEqual(len(subir_todos(ClienteFalso(), self.carpeta)), 2)
+
+    def test_un_mensaje_repetido_entre_dias_viaja_una_vez(self) -> None:
+        _escribir(self.carpeta, "2026-09-01.json", "2026-09-01", [_gasto("g1", 100)])
+        _escribir(self.carpeta, "2026-09-02.json", "2026-09-02", [_gasto("g1", 200)])
+        cliente = ClienteFalso()
+        subir_todos(cliente, self.carpeta)
+        filas = cliente.llamadas[0][1]
+        self.assertEqual([(f["mensaje_id"], f["monto"]) for f in filas], [("g1", "200.00")])
+
     def test_forzar_sube_todo_otra_vez(self) -> None:
         _escribir(self.carpeta, "2026-09-05.json", "2026-09-05", [_gasto("g1", 100)])
         subir_todos(ClienteFalso(), self.carpeta)

@@ -13,6 +13,7 @@ from sync.sincronizador import NOMBRE_ARCHIVO_ESTADO_SYNC, sincronizar_todos
 class _Consulta:
     def __init__(self, cliente: "ClienteFalso", tabla: str) -> None:
         self.cliente, self.tabla, self.filtros = cliente, tabla, {}
+        self.filtros_in: dict[str, set] = {}
         self._accion: tuple | None = None
 
     def select(self, _columnas: str) -> "_Consulta":
@@ -22,6 +23,15 @@ class _Consulta:
     def eq(self, campo, valor) -> "_Consulta":
         self.filtros[campo] = valor
         return self
+
+    def in_(self, campo, valores) -> "_Consulta":
+        self.filtros_in[campo] = set(valores)
+        return self
+
+    def _coincide(self, fila) -> bool:
+        return all(fila.get(k) == v for k, v in self.filtros.items()) and all(
+            fila.get(k) in v for k, v in self.filtros_in.items()
+        )
 
     def insert(self, fila) -> "_Consulta":
         self._accion = ("insert", fila)
@@ -36,16 +46,20 @@ class _Consulta:
         return self
 
     def execute(self):
+        self.cliente.llamadas.append((self.tabla, self._accion[0]))
         filas = self.cliente.tablas.setdefault(self.tabla, [])
         tipo = self._accion[0]
         if tipo == "select":
-            data = [f for f in filas if all(f.get(k) == v for k, v in self.filtros.items())]
+            data = [f for f in filas if self._coincide(f)]
         elif tipo == "insert":
-            nueva = {**self._accion[1], "id": f"{self.tabla}-{len(filas) + 1}"}
-            filas.append(nueva)
-            data = [nueva]
+            lote = self._accion[1] if isinstance(self._accion[1], list) else [self._accion[1]]
+            data = []
+            for fila in lote:
+                nueva = {**fila, "id": f"{self.tabla}-{len(filas) + 1}"}
+                filas.append(nueva)
+                data.append(nueva)
         elif tipo == "update":
-            data = [f for f in filas if all(f.get(k) == v for k, v in self.filtros.items())]
+            data = [f for f in filas if self._coincide(f)]
             for fila in data:
                 fila.update(self._accion[1])
         else:
@@ -68,6 +82,7 @@ class _Consulta:
 class ClienteFalso:
     def __init__(self) -> None:
         self.tablas: dict[str, list[dict]] = {}
+        self.llamadas: list[tuple[str, str]] = []  # (tabla, acción) por execute()
 
     def table(self, nombre: str) -> _Consulta:
         return _Consulta(self, nombre)
@@ -130,6 +145,65 @@ class SincronizarTodosTest(unittest.TestCase):
         self._escribir("b.json", json.dumps(nuevo))
         sincronizar_todos(cliente, self.carpeta)
         self.assertEqual([c["alias"] for c in cliente.tablas["cuentas"]], ["TDC Platino"])
+
+    def test_documento_se_mueve_a_la_cuenta_corregida(self) -> None:
+        documento = _documento("a", ["L1"])
+        self._escribir("a.json", json.dumps(documento))
+        cliente = ClienteFalso()
+        sincronizar_todos(cliente, self.carpeta)
+
+        documento["cuenta_ultimos_4_digitos"] = "9876"  # corregido en la app
+        self._escribir("a.json", json.dumps(documento))
+        sincronizar_todos(cliente, self.carpeta)
+
+        cuentas = {c["id"]: c["ultimos_4_digitos"] for c in cliente.tablas["cuentas"]}
+        self.assertEqual(len(cliente.tablas["documentos"]), 1)
+        self.assertEqual(cuentas[cliente.tablas["documentos"][0]["cuenta_id"]], "9876")
+        self.assertEqual(len(cliente.tablas["transacciones"]), 1)  # sin duplicar
+
+    def test_documento_en_su_cuenta_no_se_actualiza(self) -> None:
+        self._escribir("a.json", json.dumps(_documento("a", ["L1"])))
+        cliente = ClienteFalso()
+        sincronizar_todos(cliente, self.carpeta)
+        cliente.llamadas.clear()
+        sincronizar_todos(cliente, self.carpeta, forzar_todos=True)
+        self.assertNotIn(("documentos", "update"), cliente.llamadas)
+
+    def test_ids_se_reusan_entre_documentos_y_categorias_van_en_lote(self) -> None:
+        a = _documento("a", ["L1", "L2"])
+        a["transacciones"][1]["categoria"] = "Transporte"
+        b = _documento("b", ["L3"])
+        b["transacciones"][0]["categoria"] = "Salud"  # nueva en el 2o documento
+        self._escribir("a.json", json.dumps(a))
+        self._escribir("b.json", json.dumps(b))
+        cliente = ClienteFalso()
+
+        self.assertTrue(all(r.ok for r in sincronizar_todos(cliente, self.carpeta)))
+
+        por_tabla: dict[str, list[str]] = {}
+        for tabla, accion in cliente.llamadas:
+            por_tabla.setdefault(tabla, []).append(accion)
+        # Banco y cuenta: se resuelven una vez para los dos documentos.
+        self.assertEqual(por_tabla["bancos"], ["select", "insert"])
+        self.assertEqual(por_tabla["cuentas"], ["select", "insert"])
+        # Categorías: un select + un insert en lote por documento con nuevas.
+        self.assertEqual(por_tabla["categorias"], ["select", "insert", "select", "insert"])
+        self.assertEqual(
+            sorted(c["nombre"] for c in cliente.tablas["categorias"]), ["Comida", "Salud", "Transporte"]
+        )
+        ids = {c["nombre"]: c["id"] for c in cliente.tablas["categorias"]}
+        self.assertEqual(
+            sorted(t["categoria_id"] for t in cliente.tablas["transacciones"]),
+            sorted([ids["Comida"], ids["Transporte"], ids["Salud"]]),
+        )
+
+    def test_categorias_existentes_no_se_duplican(self) -> None:
+        cliente = ClienteFalso()
+        cliente.tablas["categorias"] = [{"id": "cat-x", "nombre": "Comida"}]
+        self._escribir("a.json", json.dumps(_documento("a", ["L1"])))
+        sincronizar_todos(cliente, self.carpeta)
+        self.assertEqual(len(cliente.tablas["categorias"]), 1)
+        self.assertEqual(cliente.tablas["transacciones"][0]["categoria_id"], "cat-x")
 
     def test_resincronizar_es_idempotente(self) -> None:
         self._escribir("a.json", json.dumps(_documento("a", ["L1", "L2"])))

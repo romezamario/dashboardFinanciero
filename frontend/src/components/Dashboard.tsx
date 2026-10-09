@@ -1,16 +1,70 @@
-import { useEffect, useMemo, useState } from "react";
-import { categoriaDe, cuentaDe, obtenerTransacciones, type Filtros } from "../lib/queries";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import {
+  armarTransacciones,
+  categoriaDe,
+  cuentaDe,
+  obtenerCatalogos,
+  obtenerDatosTransacciones,
+  obtenerFilasPorIds,
+  reemplazarFilas,
+  type DatosTransacciones,
+  type Filtros,
+} from "../lib/queries";
 import { categoriasExcluidasPorDefecto, RANGO_MESES_VACIO, type RangoMeses } from "../lib/indicadores";
 import type { Transaccion } from "../lib/types";
 import { supabase } from "../lib/supabase";
 import { esTarjetaCredito } from "../lib/tarjetas";
-import { AnalisisTecnicoTab } from "./AnalisisTecnicoTab";
-import { DetalleDimensionTab } from "./DetalleDimensionTab";
-import { EventosTab } from "./EventosTab";
-import { GastosRecientesTab } from "./GastosRecientesTab";
-import { TarjetasCreditoTab } from "./TarjetasCreditoTab";
 import type { VistaTiempo } from "./IngresosGastosChart";
 import { VistaResumen } from "./VistaResumen";
+
+// Cada pestaña que no es la de inicio se baja al abrirla por primera vez:
+// el análisis técnico/macro, el calendario de gastos, eventos y tarjetas
+// juntos eran la mayor parte del bundle y casi nunca se usan al entrar.
+//
+// Si el tablero quedó abierto durante un deploy, el archivo de la pestaña de
+// la versión anterior ya no existe (Cloudflare solo sirve la última): en vez
+// de romper la vista, se recarga la página UNA vez para tomar la nueva.
+const CLAVE_RECARGA_POR_VERSION = "recargado-por-version-nueva";
+
+function cargarPestana<T>(importar: () => Promise<T>): Promise<T> {
+  return importar().then(
+    (modulo) => {
+      try {
+        sessionStorage.removeItem(CLAVE_RECARGA_POR_VERSION);
+      } catch {
+        // sin sessionStorage no hay nada que limpiar
+      }
+      return modulo;
+    },
+    (error: unknown) => {
+      try {
+        if (!sessionStorage.getItem(CLAVE_RECARGA_POR_VERSION)) {
+          sessionStorage.setItem(CLAVE_RECARGA_POR_VERSION, "1");
+          window.location.reload();
+          return new Promise<T>(() => {});
+        }
+      } catch {
+        // sin sessionStorage no se puede evitar un ciclo de recargas: falla
+      }
+      throw error;
+    }
+  );
+}
+const AnalisisTecnicoTab = lazy(() =>
+  cargarPestana(() => import("./AnalisisTecnicoTab")).then((m) => ({ default: m.AnalisisTecnicoTab }))
+);
+const DetalleDimensionTab = lazy(() =>
+  cargarPestana(() => import("./DetalleDimensionTab")).then((m) => ({ default: m.DetalleDimensionTab }))
+);
+const EventosTab = lazy(() =>
+  cargarPestana(() => import("./EventosTab")).then((m) => ({ default: m.EventosTab }))
+);
+const GastosRecientesTab = lazy(() =>
+  cargarPestana(() => import("./GastosRecientesTab")).then((m) => ({ default: m.GastosRecientesTab }))
+);
+const TarjetasCreditoTab = lazy(() =>
+  cargarPestana(() => import("./TarjetasCreditoTab")).then((m) => ({ default: m.TarjetasCreditoTab }))
+);
 
 /** Estado de filtros de UNA pestaña -- cada pestaña (Resumen y una por
  * tarjeta) tiene el suyo, guardado en `estadosPorPestana`, para que
@@ -69,9 +123,12 @@ function temaEfectivoInicial(): Tema {
 }
 
 export function Dashboard() {
-  const [transacciones, setTransacciones] = useState<Transaccion[]>([]);
-  const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [datos, setDatos] = useState<DatosTransacciones | null>(null);
+  // Error de la carga inicial (sin datos no hay tablero que mostrar) vs. de
+  // una recarga tras editar: esa se avisa arriba sin desmontar la vista, para
+  // no perder filtros/selección por un fallo de red momentáneo.
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
+  const [errorRecarga, setErrorRecarga] = useState<string | null>(null);
   const [estadosPorPestana, setEstadosPorPestana] = useState<Record<string, EstadoVista>>({});
   const [vista, setVista] = useState<string>(PESTANA_RESUMEN);
   const [tema, setTema] = useState<Tema>(temaEfectivoInicial);
@@ -85,18 +142,41 @@ export function Dashboard() {
     });
   }
 
-  async function recargarTransacciones() {
+  /** Tras una edición: con `ids`, solo esas filas más los catálogos (una
+   * categoría/evento nuevo, o un documento que cambió de cuenta, viven ahí)
+   * en vez de volver a bajar todo el historial; sin `ids`, todo. Nunca lanza:
+   * los cambios ya se guardaron, un fallo aquí solo deja la vista desfasada. */
+  async function recargarTransacciones(ids?: string[]) {
     try {
-      const datos = await obtenerTransacciones();
-      setTransacciones(datos);
+      if (ids === undefined) {
+        setDatos(await obtenerDatosTransacciones());
+      } else {
+        const [catalogos, filas] = await Promise.all([obtenerCatalogos(), obtenerFilasPorIds(ids)]);
+        setDatos((anteriores) =>
+          anteriores && { catalogos, filas: reemplazarFilas(anteriores.filas, filas) }
+        );
+      }
+      setErrorRecarga(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setErrorRecarga(e instanceof Error ? e.message : String(e));
     }
   }
 
   useEffect(() => {
-    recargarTransacciones().finally(() => setCargando(false));
+    let vigente = true;
+    obtenerDatosTransacciones().then(
+      (cargados) => vigente && setDatos(cargados),
+      (e) => vigente && setErrorCarga(e instanceof Error ? e.message : String(e))
+    );
+    return () => {
+      vigente = false;
+    };
   }, []);
+
+  const transacciones = useMemo<Transaccion[]>(
+    () => (datos ? armarTransacciones(datos.filas, datos.catalogos) : []),
+    [datos]
+  );
 
   // Las tarjetas de crédito comparten UNA pestaña de comparación
   // ("Tarjetas de crédito", ver TarjetasCreditoTab); solo las cuentas que no
@@ -153,20 +233,20 @@ export function Dashboard() {
   // documentos de una cuenta a otra desde el editor), vuelve al Resumen.
   const vistaActiva = pestanas.some((p) => p.id === vista) ? vista : PESTANA_RESUMEN;
 
-  if (cargando) {
+  if (errorCarga) {
     return (
       <CentroDePagina>
-        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Cargando…</p>
+        <p className="text-sm" style={{ color: "var(--status-critical)" }}>
+          No se pudieron cargar las transacciones: {errorCarga}
+        </p>
       </CentroDePagina>
     );
   }
 
-  if (error) {
+  if (!datos) {
     return (
       <CentroDePagina>
-        <p className="text-sm" style={{ color: "var(--status-critical)" }}>
-          No se pudieron cargar las transacciones: {error}
-        </p>
+        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Cargando…</p>
       </CentroDePagina>
     );
   }
@@ -253,6 +333,24 @@ export function Dashboard() {
       </header>
 
       <main className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6">
+        {errorRecarga && (
+          <div
+            role="alert"
+            className="flex flex-wrap items-center gap-3 rounded-md px-4 py-2 text-xs"
+            style={{ border: "1px solid var(--status-critical)", color: "var(--text-primary)" }}
+          >
+            <span>
+              Los cambios se guardaron, pero no se pudo recargar la vista: {errorRecarga}
+            </span>
+            <button
+              onClick={() => recargarTransacciones()}
+              className="rounded-md px-3 py-1 font-medium"
+              style={{ border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+            >
+              Reintentar
+            </button>
+          </div>
+        )}
         <div
           className="flex gap-1 overflow-x-auto"
           style={{ borderBottom: "1px solid var(--border)" }}
@@ -274,6 +372,11 @@ export function Dashboard() {
           ))}
         </div>
 
+        <Suspense
+          fallback={
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Cargando…</p>
+          }
+        >
         {vistaActiva === PESTANA_TECNICO ? (
           <AnalisisTecnicoTab />
         ) : vistaActiva === PESTANA_GASTOS_CORREO ? (
@@ -325,6 +428,7 @@ export function Dashboard() {
         ) : (
           renderVistaResumen(vistaActiva, transaccionesPorCuenta.get(vistaActiva) ?? [])
         )}
+        </Suspense>
       </main>
     </div>
   );

@@ -1,0 +1,71 @@
+name: CI
+
+# Red de seguridad antes de llegar a main (que despliega solo): typecheck,
+# lint y pruebas del frontend, y las pruebas del pipeline local (Python), en
+# cada push y PR. deploy.yml solo construye en main y no corre ni lint ni
+# pruebas. Los dos jobs corren juntos: el de Python tarda ~1 min.
+on:
+  push:
+    paths:
+      - "frontend/**"
+      - "app/**"
+      - "parsers/**"
+      - "transform/**"
+      - "sync/**"
+      - "tests/**"
+      - "requirements.txt"
+      - ".github/workflows/ci.yml"
+  pull_request:
+    paths:
+      - "frontend/**"
+      - "app/**"
+      - "parsers/**"
+      - "transform/**"
+      - "sync/**"
+      - "tests/**"
+      - "requirements.txt"
+      - ".github/workflows/ci.yml"
+
+jobs:
+  frontend:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - name: Typecheck
+        run: npx tsc -b
+      - name: Lint
+        run: npm run lint
+      - name: Pruebas
+        run: npm test
+
+  python:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - run: pip install -r requirements.txt
+      # Sin PDFs reales (nunca salen de la laptop): las pruebas usan texto
+      # sintético. La interfaz Tkinter no se prueba aquí (app/logica.py sí).
+      - name: Pruebas
+        run: python -m unittest discover -s tests -t .

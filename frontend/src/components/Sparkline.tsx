@@ -1,10 +1,5 @@
 import { nombreMes } from "../lib/indicadores";
-
-const moneda = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
+import { moneda } from "../lib/formato";
 
 const ANCHO = 96;
 const ALTO = 28;

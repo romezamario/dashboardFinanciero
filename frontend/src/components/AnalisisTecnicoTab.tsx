@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Area,
   Bar,
@@ -107,22 +107,37 @@ function VistaTecnica() {
   const [tipo, setTipo] = useState<"velas" | "linea">("velas");
   const [capas, setCapas] = useState({ sma50: true, sma200: true, bollinger: false });
 
-  const cargar = useCallback(async (forzar: boolean) => {
+  // Las velas se piden juntas; el estado se actualiza solo al terminar.
+  const traer = (forzar: boolean) =>
+    Promise.all(SIMBOLOS.map((s) => obtenerCotizaciones(s, forzar))).then(
+      (datos) => Object.fromEntries(datos.map((d) => [d.simbolo, d])),
+      (e: unknown) => {
+        throw e instanceof Error ? e : new Error(String(e));
+      }
+    );
+
+  function cargar(forzar: boolean) {
     setCargando(true);
     setError(null);
-    try {
-      const datos = await Promise.all(SIMBOLOS.map((s) => obtenerCotizaciones(s, forzar)));
-      setSeries(Object.fromEntries(datos.map((d) => [d.simbolo, d])));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setCargando(false);
-    }
-  }, []);
+    traer(forzar)
+      .then(setSeries, (e: Error) => setError(e.message))
+      .finally(() => setCargando(false));
+  }
 
+  // Carga inicial: `cargando` ya arranca en true, así que el efecto solo
+  // escribe estado cuando llega la respuesta (y no si se desmontó antes).
   useEffect(() => {
-    void cargar(false);
-  }, [cargar]);
+    let vigente = true;
+    traer(false)
+      .then(
+        (datos) => vigente && setSeries(datos),
+        (e: Error) => vigente && setError(e.message)
+      )
+      .finally(() => vigente && setCargando(false));
+    return () => {
+      vigente = false;
+    };
+  }, []);
 
   const tecnicos = useMemo(() => {
     const salida: Partial<Record<Simbolo, PuntoTecnico[]>> = {};
@@ -186,7 +201,7 @@ function VistaTecnica() {
             })}
           </span>
           <button
-            onClick={() => void cargar(true)}
+            onClick={() => cargar(true)}
             disabled={cargando}
             className="underline disabled:opacity-50"
           >

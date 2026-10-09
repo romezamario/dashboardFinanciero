@@ -52,12 +52,7 @@ from pathlib import Path
 import pdfplumber
 
 from parsers.base import BaseParser, RenglonCrudo, SugerenciaRenglonManual
-
-MESES = {
-    "ENE": "01", "FEB": "02", "MAR": "03", "ABR": "04",
-    "MAY": "05", "JUN": "06", "JUL": "07", "AGO": "08",
-    "SEP": "09", "OCT": "10", "NOV": "11", "DIC": "12",
-}
+from parsers.comun import MESES, textos_iniciales
 
 # Fecha al INICIO de la línea, seguida del resto del contenido de esa
 # misma línea (a diferencia de una celda de tabla, aquí todo va en una
@@ -150,10 +145,10 @@ class BanamexParser(BaseParser):
         alias: str | None = None
         ultimos_4: str | None = None
 
-        with pdfplumber.open(ruta_pdf) as pdf:
-            if not pdf.pages:
-                return None, None
-            texto_portada = pdf.pages[0].extract_text() or ""
+        textos = textos_iniciales(ruta_pdf, 1)
+        if not textos:
+            return None, None
+        texto_portada = textos[0]
 
         for linea in texto_portada.splitlines():
             linea = linea.strip()
@@ -187,12 +182,10 @@ class BanamexParser(BaseParser):
         # esas columnas). El logo de la portada (página 1) es una imagen,
         # no texto seleccionable, así que no basta con mirar solo esa página.
         try:
-            with pdfplumber.open(ruta_pdf) as pdf:
-                for pagina in pdf.pages[:3]:
-                    texto = pagina.extract_text() or ""
-                    texto_mayus = texto.upper()
-                    if "BANAMEX" in texto_mayus and "FECHA CONCEPTO RETIROS" in texto_mayus:
-                        return True
+            for texto in textos_iniciales(ruta_pdf, 3):
+                texto_mayus = texto.upper()
+                if "BANAMEX" in texto_mayus and "FECHA CONCEPTO RETIROS" in texto_mayus:
+                    return True
         except Exception:  # noqa: BLE001 — un PDF ilegible simplemente no matchea
             return False
         return False
@@ -231,7 +224,7 @@ class BanamexParser(BaseParser):
                     bloque_concepto,
                     bloque_fecha,
                 )
-            mes = MESES.get(mes_abrev, "01")
+            mes = MESES.get(mes_abrev.lower(), "01")
             bloque_fecha = f"{dia}/{mes}/{self.ano_estado_de_cuenta}"
             bloque_pagina = pagina
             bloque_concepto = []

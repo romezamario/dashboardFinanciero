@@ -25,13 +25,7 @@ import {
 import { Delta, SelectorPeriodo, Tabla } from "./IndicadoresUI";
 import { Sparkline } from "./Sparkline";
 import { TransaccionesTabla } from "./TransaccionesTabla";
-
-const moneda = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  maximumFractionDigits: 0,
-});
-const porcentaje = new Intl.NumberFormat("es-MX", { style: "percent", maximumFractionDigits: 0 });
+import { moneda, porcentaje } from "../lib/formato";
 
 interface TarjetasCreditoTabProps {
   /** Solo transacciones de cuentas que son tarjeta de crédito

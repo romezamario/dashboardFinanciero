@@ -12,15 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import type { LadoMovimiento, PuntoGastoConPromedioMovil } from "../lib/indicadores";
-
-const formateadorEje = new Intl.NumberFormat("es-MX", {
-  notation: "compact",
-  maximumFractionDigits: 1,
-});
-const formateadorTooltip = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-});
+import { compacto as formateadorEje, monedaConCentavos as formateadorTooltip } from "../lib/formato";
 
 interface GastoConPromedioMovilChartProps {
   datos: PuntoGastoConPromedioMovil[];
