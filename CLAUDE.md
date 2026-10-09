@@ -1005,6 +1005,34 @@ domain and the pixels drift); `separarEtiquetas` pushes overlapping labels apart
 the visible price range ±3% are drawn (a TQQQ support 25% below would squash the chart); all are
 listed in the "Soportes y resistencias" table, which is also how a phone sees the names (no label
 column there). Toggle "Soportes y resistencias", on by default.
+**Volume, levels audit and chart patterns (2026-10-08, user's request; branch `feature/patrones-chartistas`)**:
+all detection lives in `src/lib/patrones/` and **every parameter is in one file, `config.ts`
+(`CONFIG_DETECCION`)** — pivot window (5 each side), ATR period, volume window (20) and threshold (1.5×),
+level tolerances (`niveles.*`; `calcularNiveles` moved to `patrones/niveles.ts` and is re-exported by
+`tecnico.ts`), quality cut-offs and each pattern's rules. Detectors take the config as a parameter so tests
+can vary it. Data: OHLCV already comes from the Yahoo Pages Function (volume included, no key), so no provider
+was added. **Volume panel**: bars colored vs. the *previous close* (`PuntoTecnico.alzaDelDia`, blue up /
+orange down), the 20-session average line, a dot on days above 1.5× (`volumenAlto`, also said in the
+tooltip) and a legend. **Levels are auditable**: each `NivelTecnico` keeps its `pivotes` (date, price,
+candle), `velasOrigen` and a `motivo` (distance in % and ATR, touches, SMA coincidence); the "Soporte
+estructural" is the floor of the latest lateral range (rectangle detector) when there is one, else the
+zone with the most touches. Hovering a label shows the pivot dates (a floating card), clicking pins it and
+opens a *Trazabilidad* panel with the exact candles (fecha, OHLC, volumen); the table has a "Pivotes
+(fechas)" column and "Ver velas" (phones). **Patterns** (`rectangulo`, `hch` + inverted, `bandera` bull/bear,
+`taza` with handle, `murcielago`, `dobles`): all work on alternated fractal pivots; a pattern exists only if
+ALL its *obligatory* rules pass (the quality rules never block it, they only set `puntaje` → alta/media/baja
+and show as ✓/✗ in the card). H-C-H and double top/bottom require the breakout to be *confirmed by a close*;
+rectangle and flag allow "en formación". Detection runs on the **visible range** (user's choice — it changes
+with the 3M…10A zoom, unlike the levels) and at most `maximoPorFamilia` = 4 latest per family are kept; chips
+enable each family and show "No detectado" (disabled) when none passes. Interpretations worth knowing:
+bat tolerance is ±3% *relative* on each ratio, "BC 1.618–2.618" is read as **CD = 1.618–2.618 × BC** (user
+confirmed), D = 0.886 of XA measured from A, and its "objetivo" is the 0.618 retracement of A→D; the cup
+adds a *round base* rule (`baseRedondaMax`) because a parabola also fits a "V" with R² ≈ 0.94. Drawing is
+`components/dibujoPatrones.tsx` (Recharts `ReferenceArea/Line/Dot` from the pivots' dates and prices; labels
+in Spanish; rectangle touches are dots without text), cards/panel in `PanelPatrones.tsx`, generic floating
+card `TarjetaFlotante.tsx` (also used by the statement↔correo match). Tests: `lib/patrones/*.test.ts` with
+synthetic series from `src/test/series.ts` (rectangle, H-C-H both ways, flag both ways, cup, bat, doubles,
+and series with no patterns). Not verified in a real phone-width viewport (emulation doesn't apply here).
 **Macro EE.UU. section (2026-10-02, user's request)**: a "Análisis técnico | Macro EE.UU." switch at
 the top of the same tab. `frontend/scripts/fred.ts` downloads the fixed `SERIES_MACRO` list from
 FRED's public `fredgraph.csv` endpoint — no API key (the JSON API needs one) — **with its own

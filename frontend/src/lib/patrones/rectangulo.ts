@@ -1,7 +1,7 @@
 import type { PuntoTecnico } from "../tecnico";
 import { CONFIG_DETECCION, type ConfigDeteccion } from "./config";
 import { alternarPivotes, detectarPivotes } from "./pivotes";
-import type { Patron, Pivote, Regla, Segmento } from "./tipos";
+import type { Patron, Pivote, PuntoClave, Regla, Segmento } from "./tipos";
 import {
   armarPatron,
   clavePivote,
@@ -162,9 +162,13 @@ function armar(
     });
   }
 
-  const marcadores = tramo.map((p, i) =>
-    clavePivote(p, `${p.tipo === "maximo" ? "Techo" : "Piso"} ${tramo.slice(0, i + 1).filter((q) => q.tipo === p.tipo).length}`)
-  );
+  const marcadores: PuntoClave[] = tramo.map((p, i) => ({
+    ...clavePivote(
+      p,
+      `${p.tipo === "maximo" ? "Techo" : "Piso"} ${tramo.slice(0, i + 1).filter((q) => q.tipo === p.tipo).length}`
+    ),
+    silencioso: true,
+  }));
   if (rompe) marcadores.push(clavePunto(puntos, rompe.indice, puntos[rompe.indice].cierre, "Ruptura"));
   return armarPatron(
     {

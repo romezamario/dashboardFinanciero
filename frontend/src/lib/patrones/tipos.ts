@@ -32,6 +32,10 @@ export interface PuntoClave {
   precio: number;
   /** Texto corto que se dibuja junto al punto ("Cabeza", "X", "B"...). */
   etiqueta: string;
+  /** Solo se dibuja el punto, sin su texto (los toques de un rectángulo: la zona
+   * ya dice su rango y la gráfica se llenaría de "Techo 1, Piso 2..."). El texto
+   * sigue en el tooltip nativo y en el panel de trazabilidad. */
+  silencioso?: boolean;
   vela: Vela;
 }
 

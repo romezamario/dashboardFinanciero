@@ -56,6 +56,8 @@ function agruparEnZonas(pivotes: Pivote[], tolerancia: number, medioAnchoMinimo:
 }
 
 const porcentaje = (v: number) => `${(Math.abs(v) * 100).toFixed(1)}%`;
+const fechaLarga = (iso: string) =>
+  new Date(`${iso}T12:00:00Z`).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
 /**
  * Soportes y resistencias de las últimas `niveles.sesiones` sesiones, para
@@ -153,7 +155,7 @@ export function calcularNiveles(
       toques: 0,
       pivotes: [],
       velasOrigen: [velaMaxima],
-      motivo: `Máximo de las últimas ${ventana.length} sesiones (${velaMaxima.fecha}): el precio está en máximos y no hay zona por encima`,
+      motivo: `Máximo de las últimas ${ventana.length} sesiones (${fechaLarga(velaMaxima.fecha)}): el precio está en máximos y no hay zona por encima`,
     });
   }
 
@@ -189,7 +191,7 @@ export function calcularNiveles(
       toques: pivotes.length,
       pivotes,
       velasOrigen: velasDistintas([], pivotes.map((p) => p.vela)),
-      motivo: `Piso del rango lateral del ${rango.fechaInicio} al ${rango.fechaFin} (${pisosDelRango.length} toques), ${distancia((desde + hasta) / 2)}`,
+      motivo: `Piso del rango lateral del ${fechaLarga(rango.fechaInicio)} al ${fechaLarga(rango.fechaFin)} (${pisosDelRango.length} toques del rango${pivotes.length > pisosDelRango.length ? ` + ${pivotes.length - pisosDelRango.length} pivotes cercanos` : ""}), ${distancia((desde + hasta) / 2)}`,
     };
   }
 

@@ -14,6 +14,7 @@ import {
   YAxis,
 } from "recharts";
 import { useEsMovil } from "../hooks/useEsMovil";
+import { CONFIG_DETECCION, detectarPatrones, FAMILIAS, type FamiliaPatron, type Patron } from "../lib/patrones";
 import {
   calcularNiveles,
   calcularSerieTecnica,
@@ -34,9 +35,12 @@ import {
   type SerieCotizaciones,
   type Simbolo,
 } from "../lib/tecnico";
+import { elementosDePatrones, type EventosPatron, type Seleccion } from "./dibujoPatrones";
 import { Tabla, Tile } from "./IndicadoresUI";
 import { MacroEeuu } from "./MacroEeuu";
+import { ChipPatron, ContenidoNivel, ContenidoPatron, DetalleTrazabilidad } from "./PanelPatrones";
 import { Segmentado } from "./Segmentado";
+import { TarjetaFlotante } from "./TarjetaFlotante";
 
 // Colores: los mismos 4 slots de la paleta categórica ya validada (dataviz).
 // Velas, volumen e histograma del MACD son polaridad (sube/baja): azul/naranja,
@@ -113,6 +117,11 @@ function VistaTecnica() {
   const [rango, setRango] = useState<RangoTecnico>("1A");
   const [tipo, setTipo] = useState<"velas" | "linea">("velas");
   const [capas, setCapas] = useState({ sma50: true, sma200: true, bollinger: false, niveles: true });
+  // Patrones chartistas: familias que se dibujan, tarjeta flotante (al pasar el
+  // ratón; con un clic queda fija) y el panel con las velas que originan lo elegido.
+  const [patronesActivos, setPatronesActivos] = useState<Set<FamiliaPatron>>(new Set());
+  const [tarjeta, setTarjeta] = useState<{ seleccion: Seleccion; x: number; y: number; fija: boolean } | null>(null);
+  const [detalle, setDetalle] = useState<Seleccion | null>(null);
 
   // Las velas se piden juntas; el estado se actualiza solo al terminar.
   const traer = (forzar: boolean) =>
@@ -170,6 +179,14 @@ function VistaTecnica() {
     [series, desde]
   );
 
+  // Los patrones se buscan en lo que se ve (el rango elegido): al cambiar el
+  // rango, cambian las detecciones. Los parámetros están en lib/patrones/config.ts.
+  const patrones = useMemo(() => detectarPatrones(visibles), [visibles]);
+  const patronesDibujados = useMemo(
+    () => FAMILIAS.flatMap((f) => (patronesActivos.has(f.id) ? patrones[f.id] : [])),
+    [patrones, patronesActivos]
+  );
+
   // Más de ~1 año de velas diarias quedan de 1-2 px: ilegibles.
   const velasDisponibles = rango === "3M" || rango === "6M" || rango === "1A";
   const tipoEfectivo = velasDisponibles ? tipo : "linea";
@@ -186,6 +203,27 @@ function VistaTecnica() {
   }
 
   const serie = series[simbolo]!;
+
+  // Pasar el ratón abre la tarjeta (sin capturar el ratón); un clic la deja fija
+  // y abre el panel de trazabilidad. Con una tarjeta fija, pasar sobre otra cosa no la cambia.
+  const cerrarTarjeta = () => setTarjeta(null);
+  const abrirSobre = (seleccion: Seleccion, e: { clientX: number; clientY: number }) =>
+    setTarjeta((t) => (t?.fija ? t : { seleccion, x: e.clientX, y: e.clientY, fija: false }));
+  const fijar = (seleccion: Seleccion, e: { clientX: number; clientY: number }) => {
+    setTarjeta({ seleccion, x: e.clientX, y: e.clientY, fija: true });
+    setDetalle(seleccion);
+  };
+  const quitarSiNoFija = () => setTarjeta((t) => (t?.fija ? t : null));
+  const eventosPatron: EventosPatron = {
+    alEntrar: (patron, e) => abrirSobre({ tipo: "patron", patron }, e),
+    alSalir: quitarSiNoFija,
+    alHacerClic: (patron, e) => fijar({ tipo: "patron", patron }, e),
+  };
+  const eventosNivel = {
+    alEntrar: (nivel: NivelTecnico, e: { clientX: number; clientY: number }) => abrirSobre({ tipo: "nivel", nivel }, e),
+    alSalir: quitarSiNoFija,
+    alHacerClic: (nivel: NivelTecnico, e: { clientX: number; clientY: number }) => fijar({ tipo: "nivel", nivel }, e),
+  };
 
   return (
     <div className="space-y-6">
@@ -274,17 +312,49 @@ function VistaTecnica() {
             />
           </div>
         </div>
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+          <span style={{ color: "var(--text-muted)" }}>Patrones en el rango {rango}:</span>
+          {FAMILIAS.map((f) => (
+            <ChipPatron
+              key={f.id}
+              etiqueta={f.etiqueta}
+              cantidad={patrones[f.id].length}
+              activo={patronesActivos.has(f.id)}
+              onClick={() =>
+                setPatronesActivos((previo) => {
+                  const nuevo = new Set(previo);
+                  if (nuevo.has(f.id)) nuevo.delete(f.id);
+                  else nuevo.add(f.id);
+                  return nuevo;
+                })
+              }
+            />
+          ))}
+        </div>
         <GraficaPrecio
           puntos={visibles}
           tipo={tipoEfectivo}
           capas={capas}
           niveles={capas.niveles ? niveles : []}
+          patrones={patronesDibujados}
+          eventosPatron={eventosPatron}
+          eventosNivel={eventosNivel}
+          resaltadoId={tarjeta?.seleccion.tipo === "patron" ? tarjeta.seleccion.patron.id : null}
         />
         <GraficaVolumen puntos={visibles} conEtiquetas={capas.niveles && niveles.length > 0} />
+        <p className="mt-3 text-[11px]" style={{ color: "var(--text-muted)" }}>
+          Lectura técnica automática, no es una recomendación de inversión.
+        </p>
       </div>
 
+      {detalle && <DetalleTrazabilidad seleccion={detalle} onCerrar={() => setDetalle(null)} />}
+
       {niveles.length > 0 && (
-        <TablaNiveles niveles={niveles} precio={completos[completos.length - 1].cierre} />
+        <TablaNiveles
+          niveles={niveles}
+          precio={completos[completos.length - 1].cierre}
+          onVer={(nivel) => setDetalle({ tipo: "nivel", nivel })}
+        />
       )}
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -302,6 +372,23 @@ function VistaTecnica() {
         Lecturas mecánicas de indicadores sobre precios diarios de Yahoo Finance (pueden tener
         retraso). Son información, no recomendaciones de inversión.
       </p>
+
+      {tarjeta && (
+        <TarjetaFlotante
+          x={tarjeta.x}
+          y={tarjeta.y}
+          fija={tarjeta.fija}
+          ancho="w-96"
+          etiqueta={tarjeta.seleccion.tipo === "patron" ? tarjeta.seleccion.patron.nombre : tarjeta.seleccion.nivel.nombre}
+          onCerrar={cerrarTarjeta}
+        >
+          {tarjeta.seleccion.tipo === "patron" ? (
+            <ContenidoPatron patron={tarjeta.seleccion.patron} conPista={!tarjeta.fija} />
+          ) : (
+            <ContenidoNivel nivel={tarjeta.seleccion.nivel} conPista={!tarjeta.fija} />
+          )}
+        </TarjetaFlotante>
+      )}
     </div>
   );
 }
@@ -501,16 +588,31 @@ function separarEtiquetas(ys: number[], alto: number): number[] {
   return salida;
 }
 
+interface EventosNivel {
+  alEntrar: (nivel: NivelTecnico, e: { clientX: number; clientY: number }) => void;
+  alSalir: () => void;
+  alHacerClic: (nivel: NivelTecnico, e: { clientX: number; clientY: number }) => void;
+}
+
 function GraficaPrecio({
   puntos,
   tipo,
   capas,
   niveles: todosLosNiveles,
+  patrones,
+  eventosPatron,
+  eventosNivel,
+  resaltadoId,
 }: {
   puntos: PuntoTecnico[];
   tipo: "velas" | "linea";
   capas: { sma50: boolean; sma200: boolean; bollinger: boolean };
   niveles: NivelTecnico[];
+  /** Patrones activos a dibujar sobre el precio. */
+  patrones: Patron[];
+  eventosPatron: EventosPatron;
+  eventosNivel: EventosNivel;
+  resaltadoId: string | null;
 }) {
   const esMovil = useEsMovil();
   const alto = esMovil ? 256 : 320;
@@ -533,10 +635,25 @@ function GraficaPrecio({
       (n) => n.valor >= loPrecio * 0.97 && n.valor <= hiPrecio * 1.03
     );
     for (const n of visibles) valores.push(n.desde, n.hasta);
+    // Los patrones activos tienen que verse enteros (puntos, zonas, necklines,
+    // llaves); su objetivo solo si no está lejísimos (si no, aplastaría la
+    // gráfica: queda en la tarjeta del patrón).
+    const cercaDeLaVista = (v: number) => {
+      const margen = (hiPrecio - loPrecio) * 0.25;
+      return v >= loPrecio - margen && v <= hiPrecio + margen;
+    };
+    for (const pa of patrones) {
+      for (const pt of pa.puntos) valores.push(pt.precio);
+      for (const z of pa.zonas) valores.push(z.minimo, z.maximo);
+      for (const sg of pa.segmentos) {
+        if (sg.estilo === "objetivo" && !cercaDeLaVista(sg.desde.precio)) continue;
+        valores.push(sg.desde.precio, sg.hasta.precio);
+      }
+    }
     const [lo, hi] = [Math.min(...valores), Math.max(...valores)];
     const holgura = (hi - lo || 1) * 0.04;
     return { minimo: lo - holgura, maximo: hi + holgura, niveles: visibles };
-  }, [puntos, tipo, capas, todosLosNiveles]);
+  }, [puntos, tipo, capas, todosLosNiveles, patrones]);
   const aPixel = (v: number) =>
     MARGEN_SUPERIOR_PRECIO + ((maximo - v) / (maximo - minimo)) * (alto - MARGEN_SUPERIOR_PRECIO);
   const posiciones = separarEtiquetas(
@@ -674,6 +791,7 @@ function GraficaPrecio({
                   strokeOpacity={0.85}
                 />
               ))}
+            {elementosDePatrones(patrones, eventosPatron, resaltadoId, puntos.length)}
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -682,9 +800,11 @@ function GraficaPrecio({
           {niveles.map((n, i) => (
             <div
               key={n.nombre}
-              className="absolute left-2 right-0 flex gap-1.5 text-xs leading-tight"
+              className="absolute left-2 right-0 flex cursor-pointer gap-1.5 text-xs leading-tight"
               style={{ top: posiciones[i] - 7 }}
-              title={`${n.nombre}: ${textoRango(n)}`}
+              onMouseEnter={(e) => eventosNivel.alEntrar(n, e)}
+              onMouseLeave={eventosNivel.alSalir}
+              onClick={(e) => eventosNivel.alHacerClic(n, e)}
             >
               <span
                 className="mt-0.5 inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
@@ -708,7 +828,15 @@ function GraficaPrecio({
   );
 }
 
-function TablaNiveles({ niveles, precio }: { niveles: NivelTecnico[]; precio: number }) {
+function TablaNiveles({
+  niveles,
+  precio,
+  onVer,
+}: {
+  niveles: NivelTecnico[];
+  precio: number;
+  onVer: (nivel: NivelTecnico) => void;
+}) {
   const base = (n: NivelTecnico) => {
     const giros = n.toques > 0 ? `${n.toques} giro${n.toques === 1 ? "" : "s"} del precio en la zona` : "";
     if (n.origen === "sma50") return ["Media móvil de 50 días", giros].filter(Boolean).join(" + ");
@@ -720,7 +848,7 @@ function TablaNiveles({ niveles, precio }: { niveles: NivelTecnico[]; precio: nu
     <Tabla
       titulo={`Soportes y resistencias (últimas ${SESIONES_NIVELES} sesiones, ~6 meses)`}
       vacio="Sin niveles."
-      encabezados={["Nivel", "Rango", "Distancia al cierre", "Base"]}
+      encabezados={["Nivel", "Rango", "Distancia al cierre", "Base", "Pivotes (fechas)", ""]}
       filas={niveles.map((n) => [
         <span key="n" className="inline-flex items-center gap-1.5">
           <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: colorNivel(n) }} />
@@ -729,6 +857,21 @@ function TablaNiveles({ niveles, precio }: { niveles: NivelTecnico[]; precio: nu
         textoRango(n),
         pct.format(n.valor / precio - 1),
         base(n),
+        n.pivotes.length > 0
+          ? [...n.pivotes]
+              .sort((a, b) => a.fecha.localeCompare(b.fecha))
+              .map((p) => nombreFecha(p.fecha))
+              .join(" · ")
+          : "—",
+        <button
+          key="ver"
+          type="button"
+          onClick={() => onVer(n)}
+          className="text-xs underline"
+          style={{ color: "var(--series-1)" }}
+        >
+          Ver velas
+        </button>,
       ])}
     />
   );
@@ -746,9 +889,10 @@ function GraficaVolumen({
   const esMovil = useEsMovil();
   return (
     <div
-      className="mt-1 h-24"
+      className="mt-1"
       style={{ paddingRight: conEtiquetas && !esMovil ? ANCHO_ETIQUETAS : 0 }}
     >
+      <div className="h-24">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={puntos} syncId="tecnico" margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
           {ejeX(puntos)}
@@ -770,9 +914,18 @@ function GraficaVolumen({
                 <div className="rounded-lg px-3 py-2 text-xs" style={estiloTooltip}>
                   <div className="font-medium">{nombreFecha(p.fecha)}</div>
                   <div style={{ color: "var(--text-secondary)" }}>
-                    Volumen {compacto.format(p.volumen)}
-                    {p.volumenPromedio20 != null &&
-                      ` · ${decimal.format(p.volumen / p.volumenPromedio20)}× su promedio de 20 días`}
+                    Volumen {compacto.format(p.volumen)} · cierre {p.alzaDelDia ? "≥" : "<"} cierre previo
+                    {p.volumenPromedio20 != null && (
+                      <div>
+                        Promedio de 20 sesiones: {compacto.format(p.volumenPromedio20)}
+                        {p.volumenRelativo != null && ` (${decimal.format(p.volumenRelativo)}×)`}
+                      </div>
+                    )}
+                    {p.volumenAlto && (
+                      <div className="font-medium" style={{ color: "var(--text-primary)" }}>
+                        ● Volumen alto: más de {decimal.format(CONFIG_DETECCION.volumen.umbralAlto)}× el promedio
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -782,7 +935,7 @@ function GraficaVolumen({
             {puntos.map((p) => (
               <Cell
                 key={p.fecha}
-                fill={p.cierre >= p.apertura ? COLOR_SUBE : COLOR_BAJA}
+                fill={p.alzaDelDia ? COLOR_SUBE : COLOR_BAJA}
                 fillOpacity={0.45}
               />
             ))}
@@ -795,8 +948,27 @@ function GraficaVolumen({
             activeDot={false}
             isAnimationActive={false}
           />
+          {/* Marca (punto sobre la barra) en los días de volumen alto. */}
+          <Line
+            dataKey={(p: PuntoTecnico) => (p.volumenAlto ? p.volumen : null)}
+            stroke="none"
+            dot={{ r: 3, fill: "var(--text-primary)", stroke: "var(--surface-1)", strokeWidth: 1 }}
+            activeDot={false}
+            isAnimationActive={false}
+            legendType="none"
+          />
         </ComposedChart>
       </ResponsiveContainer>
+      </div>
+      <div
+        className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]"
+        style={{ color: "var(--text-muted)" }}
+      >
+        <span><span style={{ color: COLOR_SUBE }}>■</span> cierre ≥ cierre previo</span>
+        <span><span style={{ color: COLOR_BAJA }}>■</span> cierre &lt; cierre previo</span>
+        <span>— promedio de {CONFIG_DETECCION.volumen.ventanaPromedio} sesiones</span>
+        <span><span style={{ color: "var(--text-primary)" }}>●</span> volumen &gt; {decimal.format(CONFIG_DETECCION.volumen.umbralAlto)}× el promedio</span>
+      </div>
     </div>
   );
 }

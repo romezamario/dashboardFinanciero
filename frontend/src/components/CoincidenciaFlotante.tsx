@@ -1,8 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Coincidencia } from "../lib/conciliarCorreo";
 import { nombreTarjeta } from "../lib/gastosCorreo";
 import type { MovimientoDia } from "../lib/gastosEstadoCuenta";
 import { formatoMoneda } from "../lib/gastosUI";
+import { TarjetaFlotante } from "./TarjetaFlotante";
 
 /** Estado de la carga de los avisos de correo (con lo que se empareja). */
 export type EstadoCorreo =
@@ -19,14 +19,10 @@ const formatoFecha = new Intl.DateTimeFormat("es-MX", {
 });
 const fechaLarga = (fecha: string) => formatoFecha.format(new Date(`${fecha}T12:00:00Z`));
 
-const MARGEN = 8;
-
 /**
- * Tarjetita flotante, del estilo de los tooltips de las gráficas, con la
- * posible coincidencia en el correo de un movimiento del estado de cuenta. Se
- * abre junto al clic (`x`, `y`: coordenadas de la ventana) y se cierra con
- * Escape, con un clic fuera de ella, con la ×, o al hacer scroll/cambiar el
- * tamaño de la ventana (ya no estaría junto a su fila).
+ * Tarjetita flotante (`TarjetaFlotante`, del estilo de los tooltips de las
+ * gráficas) con la posible coincidencia en el correo de un movimiento del
+ * estado de cuenta. Se abre junto al clic (`x`, `y`).
  */
 export function CoincidenciaFlotante({
   mov,
@@ -43,69 +39,9 @@ export function CoincidenciaFlotante({
   correo: EstadoCorreo;
   onCerrar: () => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [posicion, setPosicion] = useState({ left: x + 12, top: y + 12 });
-
-  // Dentro de la ventana: si no cabe a la derecha o abajo, se corre hacia
-  // adentro / se abre hacia arriba del clic.
-  useLayoutEffect(() => {
-    const caja = ref.current?.getBoundingClientRect();
-    if (!caja) return;
-    let left = x + 12;
-    let top = y + 12;
-    if (left + caja.width > window.innerWidth - MARGEN) {
-      left = Math.max(MARGEN, window.innerWidth - caja.width - MARGEN);
-    }
-    if (top + caja.height > window.innerHeight - MARGEN) {
-      top = Math.max(MARGEN, y - caja.height - 12);
-    }
-    setPosicion({ left, top });
-  }, [x, y, mov.id, coincidencia, correo]);
-
-  useEffect(() => {
-    const alTeclear = (e: KeyboardEvent) => e.key === "Escape" && onCerrar();
-    const alPulsarFuera = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) onCerrar();
-    };
-    document.addEventListener("keydown", alTeclear);
-    document.addEventListener("mousedown", alPulsarFuera);
-    window.addEventListener("scroll", onCerrar, true);
-    window.addEventListener("resize", onCerrar);
-    return () => {
-      document.removeEventListener("keydown", alTeclear);
-      document.removeEventListener("mousedown", alPulsarFuera);
-      window.removeEventListener("scroll", onCerrar, true);
-      window.removeEventListener("resize", onCerrar);
-    };
-  }, [onCerrar]);
-
   return (
-    <div
-      ref={ref}
-      role="dialog"
-      aria-label="Posible coincidencia en el correo"
-      className="fixed z-50 w-80 max-w-[calc(100vw-16px)] rounded-lg p-3 text-xs"
-      style={{
-        left: posicion.left,
-        top: posicion.top,
-        background: "var(--surface-1)",
-        border: "1px solid var(--border)",
-        color: "var(--text-primary)",
-        boxShadow: "0 4px 16px rgba(0, 0, 0, 0.25)",
-      }}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <p className="font-semibold">Posible coincidencia en el correo</p>
-        <button
-          type="button"
-          onClick={onCerrar}
-          aria-label="Cerrar"
-          className="-mt-1 px-1 text-base leading-none"
-          style={{ color: "var(--text-muted)" }}
-        >
-          ×
-        </button>
-      </div>
+    <TarjetaFlotante x={x} y={y} etiqueta="Posible coincidencia en el correo" onCerrar={onCerrar}>
+      <p className="pr-5 font-semibold">Posible coincidencia en el correo</p>
 
       <p className="mt-1 truncate" style={{ color: "var(--text-secondary)" }} title={mov.descripcion}>
         Estado de cuenta: {mov.descripcion} · {formatoMoneda.format(mov.centavos / 100)} ·{" "}
@@ -119,7 +55,7 @@ export function CoincidenciaFlotante({
           <SinCoincidencia mov={mov} correo={correo} />
         )}
       </div>
-    </div>
+    </TarjetaFlotante>
   );
 }
 
