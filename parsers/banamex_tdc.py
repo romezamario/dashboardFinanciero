@@ -40,13 +40,8 @@ from pathlib import Path
 import pdfplumber
 
 from parsers.base import BaseParser, RenglonCrudo, SugerenciaRenglonManual
+from parsers.comun import MESES, PATRON_INVEX, PATRON_PAGO_MINIMO, textos_iniciales
 from parsers.glifos import completar_lineas_con_imagenes
-
-MESES = {
-    "ene": "01", "feb": "02", "mar": "03", "abr": "04",
-    "may": "05", "jun": "06", "jul": "07", "ago": "08",
-    "sep": "09", "oct": "10", "nov": "11", "dic": "12",
-}
 
 # "DD-mon-AAAA DD-mon-AAAA CONCEPTO...REFERENCIA +$1,234.56" -- el final
 # tolera puntos/espacios sueltos después del monto (`[\s.]*$` en vez de
@@ -176,8 +171,8 @@ PATRON_LINEA_TARJETA = re.compile(r"n[uú]mero de tarjeta", re.IGNORECASE)
 
 # "Pago mínimo" es específico de un estado de cuenta de TDC -- la cuenta de
 # cheques no lo trae. Acepta con y sin acento por si pdfplumber no extrae
-# bien el carácter según la fuente del PDF.
-PATRON_PAGO_MINIMO = re.compile(r"pago\s+m[ií]nimo", re.IGNORECASE)
+# bien el carácter según la fuente del PDF. (`PATRON_PAGO_MINIMO`, en
+# parsers/comun.py.)
 
 # Desde que se agregó parsers/invex_tdc.py (2026-09-21), "Pago mínimo" solo
 # ya NO alcanza para identificar un TDC como de Banamex -- ambos emisores lo
@@ -191,7 +186,7 @@ PATRON_PAGO_MINIMO = re.compile(r"pago\s+m[ií]nimo", re.IGNORECASE)
 # emisores de TDC soportados sea chico; si se agrega un tercero que también
 # comparta "Pago mínimo" sin nombre de banco seleccionable, este patrón de
 # exclusión cruzada hay que repetirlo (o repensarlo) para cada par.
-PATRON_INVEX = re.compile(r"invex", re.IGNORECASE)
+# (`PATRON_INVEX`, en parsers/comun.py.)
 
 # Un estado de cuenta con tarjetas adicionales agrupa las transacciones bajo
 # encabezados "Tarjeta Titular: ...", "Tarjeta Adicional: ...", "Tarjeta
@@ -654,25 +649,22 @@ class BanamexTdcParser(BaseParser):
         # estados de 2024-11 en adelante con alias "TDC Mensual".
         alias_respaldo: str | None = None
 
-        with pdfplumber.open(ruta_pdf) as pdf:
-            for pagina in pdf.pages[:3]:
-                texto = pagina.extract_text() or ""
+        for texto in textos_iniciales(ruta_pdf, 3):
+            if alias is None:
+                alias = _detectar_tipo_tarjeta(texto)
 
-                if alias is None:
-                    alias = _detectar_tipo_tarjeta(texto)
+            if ultimos_4 is None:
+                ultimos_4 = _ultimos_4_de_texto(texto)
 
-                if ultimos_4 is None:
-                    ultimos_4 = _ultimos_4_de_texto(texto)
+            if alias_respaldo is None:
+                for linea in texto.splitlines():
+                    coincidencia = PATRON_ALIAS.match(linea.strip())
+                    if coincidencia:
+                        alias_respaldo = f"TDC {coincidencia.group(1)}"
+                        break
 
-                if alias_respaldo is None:
-                    for linea in texto.splitlines():
-                        coincidencia = PATRON_ALIAS.match(linea.strip())
-                        if coincidencia:
-                            alias_respaldo = f"TDC {coincidencia.group(1)}"
-                            break
-
-                if alias is not None and ultimos_4 is not None:
-                    return alias, ultimos_4
+            if alias is not None and ultimos_4 is not None:
+                return alias, ultimos_4
 
         return alias or alias_respaldo, ultimos_4
 
@@ -689,10 +681,7 @@ class BanamexTdcParser(BaseParser):
         # estado de cuenta de tarjeta de crédito (la cuenta de cheques no lo
         # trae), así que basta como único marcador.
         try:
-            with pdfplumber.open(ruta_pdf) as pdf:
-                texto_acumulado = "\n".join(
-                    pagina.extract_text() or "" for pagina in pdf.pages[:2]
-                )
+            texto_acumulado = "\n".join(textos_iniciales(ruta_pdf, 2))
         except Exception:  # noqa: BLE001 — un PDF ilegible simplemente no matchea
             return False
         return bool(

@@ -123,12 +123,7 @@ from pathlib import Path
 import pdfplumber
 
 from parsers.base import BaseParser, RenglonCrudo, SugerenciaRenglonManual
-
-MESES = {
-    "ene": "01", "feb": "02", "mar": "03", "abr": "04",
-    "may": "05", "jun": "06", "jul": "07", "ago": "08",
-    "sep": "09", "oct": "10", "nov": "11", "dic": "12",
-}
+from parsers.comun import MESES, PATRON_INVEX, PATRON_PAGO_MINIMO, textos_iniciales
 
 # V1: "DD-Mon-AAAA DD-Mon-AAAA CONCEPTO...CIUDAD +$1,234.56" -- igual que en
 # Banamex TDC, el final tolera puntos/espacios sueltos después del monto
@@ -169,13 +164,10 @@ PATRON_TRANSACCION_V2 = re.compile(
 # una sola fecha.
 PATRON_PREFIJO_FECHA_V2 = re.compile(r"^\d{2}/\d{2}/\d{4}\s")
 
-# Bank name -- ver el riesgo documentado en el docstring del módulo.
-PATRON_INVEX = re.compile(r"invex", re.IGNORECASE)
-
-# "Pago mínimo" es específico de un estado de cuenta de tarjeta de crédito.
-# Por sí solo NO es suficiente para distinguir Invex de Banamex TDC (los
-# dos lo traen) -- por eso puede_procesar exige también PATRON_INVEX.
-PATRON_PAGO_MINIMO = re.compile(r"pago\s+m[ií]nimo", re.IGNORECASE)
+# `PATRON_INVEX` (nombre del banco -- ver el riesgo documentado en el
+# docstring del módulo) y `PATRON_PAGO_MINIMO` viven en parsers/comun.py.
+# "Pago mínimo" por sí solo NO distingue Invex de Banamex TDC (los dos lo
+# traen) -- por eso puede_procesar exige también PATRON_INVEX.
 
 # Fuente PRIMARIA de últimos 4 dígitos -- confirmada presente en AMBOS
 # formatos de documento (V1 y V2) en la tabla de movimientos, a diferencia
@@ -376,31 +368,28 @@ class InvexTdcParser(BaseParser):
     def extraer_info_cuenta(self, ruta_pdf: Path) -> tuple[str | None, str | None]:
         ultimos_4: str | None = None
 
-        with pdfplumber.open(ruta_pdf) as pdf:
-            for pagina in pdf.pages[:3]:
-                texto = pagina.extract_text() or ""
+        for texto in textos_iniciales(ruta_pdf, 3):
+            for linea in texto.splitlines():
+                linea = linea.strip()
 
-                for linea in texto.splitlines():
-                    linea = linea.strip()
+                # Fuente primaria (V1 y V2): ver docstring del módulo.
+                if ultimos_4 is None:
+                    coincidencia_mascara = PATRON_TARJETA_ENMASCARADA.search(linea)
+                    if coincidencia_mascara:
+                        ultimos_4 = coincidencia_mascara.group(1)
 
-                    # Fuente primaria (V1 y V2): ver docstring del módulo.
-                    if ultimos_4 is None:
-                        coincidencia_mascara = PATRON_TARJETA_ENMASCARADA.search(linea)
-                        if coincidencia_mascara:
-                            ultimos_4 = coincidencia_mascara.group(1)
+                # Fuente de respaldo, solo aplica a V1 -- ver docstring.
+                if ultimos_4 is None and PATRON_LINEA_TARJETA.search(linea):
+                    digitos = re.findall(r"\d+", linea)
+                    if digitos:
+                        numero_completo = max(digitos, key=len)
+                        if len(numero_completo) >= 4:
+                            ultimos_4 = numero_completo[-4:]
+                        # numero_completo no se guarda en ningún otro
+                        # lado ni se propaga fuera de este bloque.
 
-                    # Fuente de respaldo, solo aplica a V1 -- ver docstring.
-                    if ultimos_4 is None and PATRON_LINEA_TARJETA.search(linea):
-                        digitos = re.findall(r"\d+", linea)
-                        if digitos:
-                            numero_completo = max(digitos, key=len)
-                            if len(numero_completo) >= 4:
-                                ultimos_4 = numero_completo[-4:]
-                            # numero_completo no se guarda en ningún otro
-                            # lado ni se propaga fuera de este bloque.
-
-                if ultimos_4 is not None:
-                    break
+            if ultimos_4 is not None:
+                break
 
         # Sin tiers conocidos (a diferencia de Banamex TDC Platino/Beyond) --
         # alias fijo mientras no se confirme lo contrario contra otro estado
@@ -410,10 +399,7 @@ class InvexTdcParser(BaseParser):
 
     def puede_procesar(self, ruta_pdf: Path) -> bool:
         try:
-            with pdfplumber.open(ruta_pdf) as pdf:
-                texto_acumulado = "\n".join(
-                    pagina.extract_text() or "" for pagina in pdf.pages[:2]
-                )
+            texto_acumulado = "\n".join(textos_iniciales(ruta_pdf, 2))
         except Exception:  # noqa: BLE001 — un PDF ilegible simplemente no matchea
             return False
         return bool(
