@@ -7,6 +7,7 @@ import {
   tituloMes,
 } from "../lib/gastosCorreo";
 import { formatoMoneda, type VistaCalendario } from "../lib/gastosUI";
+import { META_GASTO_DIARIO, resumenDeSemana, type ResumenSemana } from "../lib/metaDiaria";
 
 // Para las celdas del calendario en pantallas angostas, donde no cabe el monto completo.
 const formatoCompacto = new Intl.NumberFormat("es-MX", {
@@ -77,6 +78,7 @@ export function CalendarioMensual({
   renderPanel,
   vista,
   onCambiarVista,
+  fechaCorte,
 }: {
   dias: ResumenDia[];
   etiquetaFuente: [singular: string, plural: string];
@@ -86,6 +88,10 @@ export function CalendarioMensual({
    * sobrevivan al cambio entre "Por correo" y "Por estado de cuenta". */
   vista: VistaCalendario;
   onCambiarVista: (cambio: (anterior: VistaCalendario) => VistaCalendario) => void;
+  /** Hasta qué día se conoce el gasto (ISO): hoy si los datos llegan casi en
+   * tiempo real, la última fecha cargada si llegan con atraso. Los días de
+   * una semana después de esta fecha no entran al promedio diario. */
+  fechaCorte: string;
 }) {
   const { seleccion, mesElegido } = vista;
   const setSeleccion = (s: string | null) => onCambiarVista((v) => ({ ...v, seleccion: s }));
@@ -100,6 +106,10 @@ export function CalendarioMensual({
     if (totales.length === 0) return null;
     return { minimo: Math.min(...totales), maximo: Math.max(...totales) };
   }, [dias]);
+  // Gasto por día (centavos) para el promedio diario de cada semana; el primer
+  // día con datos es donde empieza a contar (antes no se sabe qué se gastó).
+  const totalesPorFecha = useMemo(() => new Map(dias.map((d) => [d.fecha, d.total])), [dias]);
+  const primeraFecha = dias[dias.length - 1].fecha;
   const mesMasReciente = mesDe(dias[0].fecha);
   const mesMasAntiguo = mesDe(dias[dias.length - 1].fecha);
   // El mes elegido puede caer fuera de los datos de esta fuente (p. ej. un
@@ -170,6 +180,10 @@ export function CalendarioMensual({
       {extremos && (
         <LeyendaCalor minimo={extremos.minimo} maximo={extremos.maximo} etiqueta={etiquetaTotal} />
       )}
+      <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+        Meta: {formatoMoneda.format(META_GASTO_DIARIO)} de gasto al día. Debajo de cada semana
+        (domingo a sábado) está su promedio diario.
+      </p>
 
       <div className="grid grid-cols-7 gap-1 sm:gap-2" aria-hidden="true">
         {DIAS_SEMANA.map((d) => (
@@ -207,10 +221,86 @@ export function CalendarioMensual({
                 )
               )}
             </div>
+            <FranjaSemana
+              resumen={resumenDeSemana(
+                semana.find((f) => f !== null) ?? "",
+                totalesPorFecha,
+                primeraFecha,
+                fechaCorte
+              )}
+            />
             {fechaAbierta && renderPanel(fechaAbierta)}
           </Fragment>
         );
       })}
+    </div>
+  );
+}
+
+const formatoDiaCorto = new Intl.DateTimeFormat("es-MX", {
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+});
+const diaCorto = (fecha: string) => formatoDiaCorto.format(new Date(`${fecha}T12:00:00Z`)).replace(".", "");
+
+/**
+ * Promedio de gasto diario de una semana frente a la meta (`META_GASTO_DIARIO`):
+ * una barra que se llena hasta el 100% de la meta -- con una marca en la meta y
+ * desbordándose en rojo si se pasa -- y el texto con el monto y la diferencia
+ * (nunca solo color). Una semana a medias (la actual, o la que sigue al último
+ * estado de cuenta) promedia solo sus días conocidos y lo dice.
+ */
+function FranjaSemana({ resumen }: { resumen: ResumenSemana | null }) {
+  if (!resumen) return null;
+  const meta = META_GASTO_DIARIO * 100; // centavos
+  const sobre = resumen.promedio > meta;
+  const diferencia = Math.abs(resumen.promedio - meta);
+  const color = sobre ? "var(--status-critical)" : "var(--status-good)";
+  // La barra llega a 100% en la meta; hasta 150% para ver cuánto se pasó.
+  const proporcion = Math.min(resumen.promedio / meta, 1.5);
+  const rango =
+    resumen.desde === resumen.hasta
+      ? diaCorto(resumen.desde)
+      : `${diaCorto(resumen.desde)} – ${diaCorto(resumen.hasta)}`;
+  return (
+    <div
+      className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md px-3 py-2 text-xs"
+      style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
+      role="group"
+      aria-label={`Semana del ${rango}: promedio diario ${formatoMoneda.format(resumen.promedio / 100)}, ${
+        sobre ? "sobre" : "dentro de"
+      } la meta de ${formatoMoneda.format(META_GASTO_DIARIO)}`}
+    >
+      <span style={{ color: "var(--text-secondary)" }}>
+        Semana {rango}
+        {resumen.dias < 7 && ` (${resumen.dias} ${resumen.dias === 1 ? "día" : "días"})`}
+      </span>
+      <span className="font-semibold tabular-nums" style={{ color: "var(--text-primary)" }}>
+        {formatoMoneda.format(resumen.promedio / 100)} al día
+      </span>
+      <span
+        className="relative h-2 w-28 rounded-full sm:w-44"
+        style={{ background: "var(--gridline)" }}
+        aria-hidden="true"
+      >
+        <span
+          className="absolute inset-y-0 left-0 rounded-full"
+          style={{ width: `${(proporcion / 1.5) * 100}%`, background: color }}
+        />
+        {/* Marca de la meta (100%). */}
+        <span
+          className="absolute -inset-y-0.5 w-0.5"
+          style={{ left: `${(1 / 1.5) * 100}%`, background: "var(--text-primary)" }}
+        />
+      </span>
+      <span className="font-medium" style={{ color }}>
+        {sobre ? "▲" : "✓"} {formatoMoneda.format(diferencia / 100)} {sobre ? "sobre" : "por debajo de"} la
+        meta
+      </span>
+      <span className="tabular-nums" style={{ color: "var(--text-muted)" }}>
+        total {formatoMoneda.format(resumen.total / 100)}
+      </span>
     </div>
   );
 }

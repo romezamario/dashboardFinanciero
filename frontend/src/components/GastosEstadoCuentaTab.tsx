@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { descargarDiaEstadoExcel } from "../lib/exportarGastosEstadoCuenta";
 import { tituloDia } from "../lib/gastosCorreo";
+import { hoyIso } from "../lib/metaDiaria";
 import {
   agruparEstadosPorDia,
   diasEntre,
@@ -39,13 +40,6 @@ const formatoFechaCorta = new Intl.DateTimeFormat("es-MX", {
   timeZone: "UTC",
 });
 const fechaCorta = (fecha: string) => formatoFechaCorta.format(new Date(`${fecha}T12:00:00Z`));
-
-/** Fecha de hoy en la zona del navegador, como ISO (no UTC: de noche en CDMX
- * UTC ya es "mañana"). */
-function hoyIso(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 interface Sugerencias {
   categorias: string[];
@@ -245,6 +239,9 @@ export function GastosEstadoCuentaTab({
         etiquetaTotal="gasto por día"
         vista={vista}
         onCambiarVista={onCambiarVista}
+        // Los estados de cuenta llegan con atraso: el promedio semanal cuenta
+        // hasta el último día con movimientos cargados, no hasta hoy.
+        fechaCorte={dias[0].fecha}
         renderPanel={(fecha) => {
           const dia = porFecha.get(fecha);
           return dia ? (

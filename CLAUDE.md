@@ -250,6 +250,19 @@ built); not checked in a real phone-width viewport. **Not done on purpose (phase
 two sources (matching a correo charge to its statement row) / a combined view that fills the days after
 the last cutoff with correo data.
 
+**Weekly daily-average vs. goal (2026-10-08, user's request: "el objetivo es tener un gasto diario de 1000")**: under each
+week row of the calendar (both sources; `FranjaSemana` in `CalendarioMensual.tsx`, math in `lib/metaDiaria.ts`) a strip
+shows the week's range (Sunday–Saturday, may cross months — the grid only draws the in-month days but the average uses all
+7), the **average spend per day**, a bar filled to the goal `META_GASTO_DIARIO` = $1,000 (tick at 100%, green below / red
+above, up to 150%), the difference in words ("✓ $200 por debajo" / "▲ $143 sobre la meta" — never color alone) and the
+week total. A day with no movements *inside the known range* counts as a $0 day; days outside it are not counted:
+`resumenDeSemana(fecha, totales, primera, corte)` counts only days between the first loaded day and `fechaCorte`, so the
+current week (or the one after the last statement) averages its known days and says "(N días)" instead of looking cheap.
+`fechaCorte` is **today** for "Por correo" (notices arrive almost live: no notices = a real $0 day) and the **latest
+loaded movement date** for "Por estado de cuenta" (statements arrive weeks late). "Spend" is exactly each day's total
+shown in the cell (so for statements: TDC cargos of non-hidden categories only, Priority/abonos excluded). The goal is a
+constant (no UI to change it). Checked with synthetic data (averages, partial weeks, cutoff per source, over/under).
+
 **Main window layout (2026-10-04, user's request to improve look & usability)**: `_construir_ui`
 packs the header (`_construir_encabezado`: bank → "Cargar PDF..." → "Inspeccionar PDF...", rules on
 the right; account row below) and the footer (`_construir_pie`: summary, totals as three "cards" —

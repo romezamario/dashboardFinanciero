@@ -9,6 +9,7 @@ import {
   type GastoCorreo,
 } from "../lib/gastosCorreo";
 import { type VistaCalendario, formatoMoneda, useDescargaExcel, ESTILO_CABECERA, ESTILO_SUBTOTAL_CATEGORIA, ESTILO_SUBTOTAL_COMERCIO, ESTILO_TOTAL } from "../lib/gastosUI";
+import { hoyIso } from "../lib/metaDiaria";
 import { CalendarioMensual, type ResumenDia } from "./CalendarioMensual";
 import {
   CabeceraColumnas,
@@ -88,6 +89,9 @@ export function GastosCorreoTab({
         etiquetaTotal="gasto por día"
         vista={vista}
         onCambiarVista={onCambiarVista}
+        // Los avisos llegan casi en tiempo real: un día sin avisos hasta hoy es
+        // un día de $0 de verdad.
+        fechaCorte={hoyIso()}
         renderPanel={(fecha) => {
           const dia = porFecha.get(fecha);
           return dia ? <PanelDia dia={dia} /> : null;
