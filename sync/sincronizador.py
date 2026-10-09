@@ -37,12 +37,13 @@ re-subir bytes idénticos.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
+
+from sync.estado_incremental import cargar_estado, guardar_estado, huella
 
 CARPETA_PROCESADOS = Path(__file__).parent.parent / "data" / "procesados"
 
@@ -69,6 +70,14 @@ class ResultadoSincronizacion:
     error: str | None = None
 
 
+# Ids ya resueltos en esta corrida, por (tabla, clave única): banco,
+# cuenta y categorías se repiten entre documentos (decenas de estados de la
+# misma tarjeta), así que sin esto cada archivo volvía a preguntar por los
+# mismos ids -- con `forzar_todos` sobre todo el historial eran cientos de
+# viajes a Supabase. Vive solo durante un `sincronizar_todos`.
+CacheIds = dict[tuple[str, Any], Any]
+
+
 def _buscar_o_crear(
     client: ClienteSupabase, tabla: str, filtro: dict[str, Any], datos_si_no_existe: dict[str, Any]
 ) -> str:
@@ -85,8 +94,15 @@ def _buscar_o_crear(
     return insertado.data[0]["id"]
 
 
+def _buscar_o_crear_banco(client: ClienteSupabase, nombre: str, cache: CacheIds) -> str:
+    clave = ("bancos", nombre)
+    if clave not in cache:
+        cache[clave] = _buscar_o_crear(client, "bancos", {"nombre": nombre}, {"nombre": nombre})
+    return cache[clave]
+
+
 def _buscar_o_crear_cuenta(
-    client: ClienteSupabase, banco_id: str, ultimos_4: str, alias: str
+    client: ClienteSupabase, banco_id: str, ultimos_4: str, alias: str, cache: CacheIds | None = None
 ) -> str:
     """Find-or-create de `cuentas` por (banco, últimos 4), como las demás
     tablas, con una diferencia: si la cuenta ya existe pero con OTRO alias, se
@@ -97,6 +113,15 @@ def _buscar_o_crear_cuenta(
     poder renombrar las cuentas ya creadas con el alias viejo; antes solo se
     insertaba en la primera vez y no había forma de corregirlo salvo a mano en
     Supabase. Gana el último documento sincronizado."""
+    cache = {} if cache is None else cache
+    clave = ("cuentas", (banco_id, ultimos_4))
+    if clave in cache:
+        cuenta_id, alias_actual = cache[clave]
+        if alias_actual != alias:
+            client.table("cuentas").update({"alias": alias}).eq("id", cuenta_id).execute()
+            cache[clave] = (cuenta_id, alias)
+        return cuenta_id
+
     resultado = (
         client.table("cuentas")
         .select("id, alias")
@@ -108,6 +133,7 @@ def _buscar_o_crear_cuenta(
         fila = resultado.data[0]
         if fila.get("alias") != alias:
             client.table("cuentas").update({"alias": alias}).eq("id", fila["id"]).execute()
+        cache[clave] = (fila["id"], alias)
         return fila["id"]
 
     insertado = (
@@ -115,20 +141,44 @@ def _buscar_o_crear_cuenta(
         .insert({"banco_id": banco_id, "alias": alias, "ultimos_4_digitos": ultimos_4})
         .execute()
     )
+    cache[clave] = (insertado.data[0]["id"], alias)
     return insertado.data[0]["id"]
 
 
-def sincronizar_documento(client: ClienteSupabase, datos: dict[str, Any]) -> ResultadoSincronizacion:
-    """Sincroniza un único documento (el contenido de un data/procesados/*.json)."""
+def _ids_de_categorias(client: ClienteSupabase, nombres: set[str], cache: CacheIds) -> dict[str, str]:
+    """{nombre: id} de las categorías, creando las que falten. En lote: UN
+    select con `in_` para todas las que aún no están en `cache` y UN insert
+    con todas las que no existen -- antes era un select (y a veces un
+    insert) por categoría y por documento."""
+    faltan = sorted(n for n in nombres if ("categorias", n) not in cache)
+    if faltan:
+        encontradas = (
+            client.table("categorias").select("id, nombre").in_("nombre", faltan).execute().data
+        )
+        for fila in encontradas:
+            cache[("categorias", fila["nombre"])] = fila["id"]
+        nuevas = [n for n in faltan if ("categorias", n) not in cache]
+        if nuevas:
+            insertadas = (
+                client.table("categorias").insert([{"nombre": n} for n in nuevas]).execute().data
+            )
+            for fila in insertadas:
+                cache[("categorias", fila["nombre"])] = fila["id"]
+    return {n: cache[("categorias", n)] for n in nombres}
 
-    banco_id = _buscar_o_crear(
-        client, "bancos",
-        {"nombre": datos["banco"]},
-        {"nombre": datos["banco"]},
-    )
+
+def sincronizar_documento(
+    client: ClienteSupabase, datos: dict[str, Any], cache: CacheIds | None = None
+) -> ResultadoSincronizacion:
+    """Sincroniza un único documento (el contenido de un data/procesados/*.json).
+    `cache` se comparte entre los documentos de una misma corrida (ver
+    `CacheIds`); sin él, cada llamada resuelve sus ids desde cero."""
+    cache = {} if cache is None else cache
+
+    banco_id = _buscar_o_crear_banco(client, datos["banco"], cache)
 
     cuenta_id = _buscar_o_crear_cuenta(
-        client, banco_id, datos["cuenta_ultimos_4_digitos"], datos["cuenta_alias"]
+        client, banco_id, datos["cuenta_ultimos_4_digitos"], datos["cuenta_alias"], cache
     )
 
     documento_id = _buscar_o_crear(
@@ -144,12 +194,7 @@ def sincronizar_documento(client: ClienteSupabase, datos: dict[str, Any]) -> Res
     nombres_categoria = {
         t["categoria"] for t in datos["transacciones"] if t.get("categoria")
     }
-    categoria_ids: dict[str, str] = {
-        nombre: _buscar_o_crear(
-            client, "categorias", {"nombre": nombre}, {"nombre": nombre}
-        )
-        for nombre in nombres_categoria
-    }
+    categoria_ids = _ids_de_categorias(client, nombres_categoria, cache)
 
     filas_transacciones = [
         {
@@ -184,30 +229,6 @@ def sincronizar_documento(client: ClienteSupabase, datos: dict[str, Any]) -> Res
     )
 
 
-def _hash_contenido(ruta: Path) -> str:
-    return hashlib.sha256(ruta.read_bytes()).hexdigest()
-
-
-def _cargar_estado_sync(ruta_estado: Path) -> dict[str, str]:
-    """Mapa {nombre_archivo: hash_sha256} de la última sincronización
-    exitosa de cada archivo. Cualquier problema leyéndolo (no existe,
-    corrupto) se trata igual que "no hay estado guardado" -- en el peor
-    caso eso solo hace que se re-sincronice todo una vez, nunca que se
-    pierda una actualización."""
-    if not ruta_estado.exists():
-        return {}
-    try:
-        return json.loads(ruta_estado.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return {}
-
-
-def _guardar_estado_sync(ruta_estado: Path, estado: dict[str, str]) -> None:
-    ruta_estado.write_text(
-        json.dumps(estado, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
-
-
 def sincronizar_todos(
     client: ClienteSupabase,
     carpeta: Path = CARPETA_PROCESADOS,
@@ -216,7 +237,7 @@ def sincronizar_todos(
 ) -> list[ResultadoSincronizacion]:
     """Sincroniza cada *.json en `carpeta` que sea nuevo o haya cambiado
     desde la última sincronización *exitosa* -- comparado por hash de
-    contenido (ver `_hash_contenido`), no por fecha de modificación ni por
+    contenido (ver `sync/estado_incremental.py`), no por fecha de modificación ni por
     nombre, así que recargar/regenerar un archivo con el mismo nombre pero
     contenido distinto sí se vuelve a sincronizar. El estado se guarda en
     `<carpeta>/_estado_sync.json` según se van sincronizando archivos con
@@ -226,9 +247,10 @@ def sincronizar_todos(
     ignora el estado guardado y re-sincroniza todo, por si hace falta un
     re-push completo o el estado se corrompió de forma irrecuperable."""
     ruta_estado = carpeta / NOMBRE_ARCHIVO_ESTADO_SYNC
-    estado_previo = {} if forzar_todos else _cargar_estado_sync(ruta_estado)
+    estado_previo = {} if forzar_todos else cargar_estado(ruta_estado)
     estado_nuevo = dict(estado_previo)
     resultados: list[ResultadoSincronizacion] = []
+    cache: CacheIds = {}
 
     archivos = sorted(
         p for p in carpeta.glob("*.json") if p.name != NOMBRE_ARCHIVO_ESTADO_SYNC
@@ -240,7 +262,7 @@ def sincronizar_todos(
     # vuelven a subir en la próxima corrida.
     try:
         for ruta_json in archivos:
-            hash_actual = _hash_contenido(ruta_json)
+            hash_actual = huella(ruta_json)
             if estado_previo.get(ruta_json.name) == hash_actual:
                 continue  # sin cambios desde la última sincronización exitosa
 
@@ -250,7 +272,7 @@ def sincronizar_todos(
             datos: dict[str, Any] = {}
             try:
                 datos = json.loads(ruta_json.read_text(encoding="utf-8"))
-                resultado = sincronizar_documento(client, datos)
+                resultado = sincronizar_documento(client, datos, cache)
                 resultado.archivo = ruta_json.name
                 estado_nuevo[ruta_json.name] = hash_actual
             except Exception as error:  # noqa: BLE001 — se reporta, no se aborta el resto
@@ -263,7 +285,7 @@ def sincronizar_todos(
                 )
             resultados.append(resultado)
     finally:
-        _guardar_estado_sync(ruta_estado, estado_nuevo)
+        guardar_estado(ruta_estado, estado_nuevo)
     return resultados
 
 

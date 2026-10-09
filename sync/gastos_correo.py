@@ -26,12 +26,13 @@ poder probarlas con uno falso, sin red ni credenciales reales.
 
 from __future__ import annotations
 
-import hashlib
 import json
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Protocol
+
+from sync.estado_incremental import cargar_estado, guardar_estado, huella
 
 CARPETA_GASTOS_CORREO = Path(__file__).parent.parent / "data" / "gastos_correo"
 MAXIMO_POR_LLAMADA = 500  # filas por upsert
@@ -97,32 +98,34 @@ def id_usuario(client: ClienteSupabase) -> str:
     return str(usuario.id)
 
 
+def _filas_del_archivo(ruta: Path, user_id: str) -> list[dict[str, Any]]:
+    """Las filas de un día, validadas. Un día sin movimientos
+    (`transacciones: []`) es válido y no aporta filas."""
+    datos = json.loads(ruta.read_text(encoding="utf-8"))
+    fecha = datos["fecha"]
+    return [_a_fila(fecha, t, user_id) for t in datos.get("transacciones", [])]
+
+
+def _subir_filas(client: ClienteSupabase, filas: list[dict[str, Any]]) -> None:
+    """Upsert en llamadas de hasta `MAXIMO_POR_LLAMADA` filas. Un mismo
+    mensaje repetido en la tanda (no debería pasar: cada aviso vive en un solo
+    día) se manda una vez -- gana el último --, porque Postgres rechaza la
+    llamada entera si dos filas comparten la llave del upsert (error 21000)."""
+    unicas = list({f["mensaje_id"]: f for f in filas}.values())
+    for i in range(0, len(unicas), MAXIMO_POR_LLAMADA):
+        client.table("gastos_correo").upsert(
+            unicas[i : i + MAXIMO_POR_LLAMADA], on_conflict="user_id,mensaje_id"
+        ).execute()
+
+
 def subir_archivo(client: ClienteSupabase, ruta: Path, user_id: str) -> ResultadoGastosCorreo:
-    """Sube un día. Un día sin movimientos (`transacciones: []`) es válido y
-    no llama a Supabase."""
+    """Sube un día por su cuenta (sin juntarlo con otros)."""
     try:
-        datos = json.loads(ruta.read_text(encoding="utf-8"))
-        fecha = datos["fecha"]
-        filas = [_a_fila(fecha, t, user_id) for t in datos.get("transacciones", [])]
-        for i in range(0, len(filas), MAXIMO_POR_LLAMADA):
-            client.table("gastos_correo").upsert(
-                filas[i : i + MAXIMO_POR_LLAMADA], on_conflict="user_id,mensaje_id"
-            ).execute()
+        filas = _filas_del_archivo(ruta, user_id)
+        _subir_filas(client, filas)
     except Exception as e:  # un archivo malo no debe frenar a los demás
         return ResultadoGastosCorreo(ruta.name, 0, False, str(e))
     return ResultadoGastosCorreo(ruta.name, len(filas), True)
-
-
-def _hash_archivo(ruta: Path) -> str:
-    return hashlib.sha256(ruta.read_bytes()).hexdigest()
-
-
-def _leer_estado(carpeta: Path) -> dict[str, str]:
-    try:
-        datos = json.loads((carpeta / NOMBRE_ARCHIVO_ESTADO).read_text(encoding="utf-8"))
-        return {str(k): str(v) for k, v in datos.items()}
-    except (OSError, ValueError, AttributeError):
-        return {}
 
 
 def subir_todos(
@@ -131,35 +134,64 @@ def subir_todos(
     """Sube los `AAAA-MM-DD.json` de la carpeta (no `ciudades.json`, `debitos.json`
     ni `preferencias.json`), del más antiguo al más nuevo, con la sesión de
     `client`. Salta los archivos cuyo contenido es el mismo de la última subida
-    exitosa (`_estado_subida.json`); un archivo que falla no se registra, así
-    que la próxima vez se reintenta. `forzar=True` los sube todos otra vez
-    (p. ej. si se borraron filas en Supabase a mano). Solo devuelve los que se
-    intentaron subir. Sigue siendo idempotente: el upsert no duplica."""
+    exitosa (`_estado_subida.json`, ver `sync/estado_incremental.py`); un archivo
+    que falla no se registra, así que la próxima vez se reintenta. `forzar=True`
+    los sube todos otra vez (p. ej. si se borraron filas en Supabase a mano).
+    Solo devuelve los que se intentaron subir. Sigue siendo idempotente: el
+    upsert no duplica.
+
+    Los días que cambiaron se juntan en tandas de hasta `MAXIMO_POR_LLAMADA`
+    filas (sin partir un día entre tandas): con la carga de todo el historial
+    son cientos de días de unos pocos gastos, y antes iba una llamada por día.
+    Si una tanda falla, todos sus días se reportan con ese error y se
+    reintentan la próxima vez; un día con datos inválidos falla solo, sin
+    enviarse."""
     user_id = id_usuario(client)
-    estado = {} if forzar else _leer_estado(carpeta)
+    ruta_estado = carpeta / NOMBRE_ARCHIVO_ESTADO
+    estado = {} if forzar else cargar_estado(ruta_estado)
     resultados: list[ResultadoGastosCorreo] = []
+    # Días listos para subir: (nombre, huella, filas).
+    tanda: list[tuple[str, str, list[dict[str, Any]]]] = []
+
+    def subir_tanda() -> None:
+        if not tanda:
+            return
+        try:
+            _subir_filas(client, [f for _, _, filas in tanda for f in filas])
+            error = None
+        except Exception as e:  # noqa: BLE001 -- se reporta por día, no se aborta
+            error = str(e)
+        for nombre, huella_dia, filas in tanda:
+            if error is None:
+                resultados.append(ResultadoGastosCorreo(nombre, len(filas), True))
+                estado[nombre] = huella_dia
+            else:
+                resultados.append(ResultadoGastosCorreo(nombre, 0, False, error))
+                estado.pop(nombre, None)
+        tanda.clear()
+
     try:
         for ruta in sorted(carpeta.glob("????-??-??.json")):
             try:
-                huella = _hash_archivo(ruta)
+                huella_dia = huella(ruta)
             except OSError as e:
                 resultados.append(ResultadoGastosCorreo(ruta.name, 0, False, str(e)))
                 continue
-            if estado.get(ruta.name) == huella:
+            if estado.get(ruta.name) == huella_dia:
                 continue
-            resultado = subir_archivo(client, ruta, user_id)
-            resultados.append(resultado)
-            if resultado.ok:
-                estado[ruta.name] = huella
-            else:
+            try:
+                filas = _filas_del_archivo(ruta, user_id)
+            except Exception as e:  # noqa: BLE001 -- un archivo malo no frena a los demás
+                resultados.append(ResultadoGastosCorreo(ruta.name, 0, False, str(e)))
                 estado.pop(ruta.name, None)
+                continue
+            if tanda and sum(len(f) for _, _, f in tanda) + len(filas) > MAXIMO_POR_LLAMADA:
+                subir_tanda()
+            tanda.append((ruta.name, huella_dia, filas))
+        subir_tanda()
     finally:
         # Aunque algo corte el ciclo, lo que ya se subió queda registrado.
-        try:
-            carpeta.mkdir(parents=True, exist_ok=True)
-            (carpeta / NOMBRE_ARCHIVO_ESTADO).write_text(json.dumps(estado, indent=2), encoding="utf-8")
-        except OSError:
-            pass
+        guardar_estado(ruta_estado, estado)
     return resultados
 
 
