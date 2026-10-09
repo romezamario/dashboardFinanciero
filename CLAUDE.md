@@ -756,6 +756,27 @@ needing new call sites. Deliberately just descriptions, no categoria/comercio/mo
 point is a minimal paste-ready list, not a second view of the table (that's what the other tab is
 for).
 
+**"Sugerir reglas con Claude..." (2026-10-08, user's request: stop pasting the list into a chat)**:
+same tab. `transform/sugerencias_ia.py` (no tkinter, tested in `tests/test_sugerencias_ia.py`) runs
+**Claude Code's CLI** headless (`claude -p --output-format json`, prompt on stdin, `cwd` = temp dir so
+it doesn't load this CLAUDE.md, `CREATE_NO_WINDOW`) — the user chose it over the Anthropic API (per-use
+cost, breaks the $0 budget) and Ollama (weak at Mexican merchants/RFCs): it uses their Claude
+subscription. `buscar_claude` also checks `~/.local/bin` and `%APPDATA%
+pm` because the app is
+opened from a desktop shortcut (`pythonw -m app.main`) that may not inherit a console's PATH. What
+leaves the laptop: the unique uncategorized descriptions + all current rules (as style examples) —
+same as pasting into the chat. The prompt encodes the user's conventions (literal distinctive
+pattern/RFC, existing categories, bank movements comercio = categoría except Domiciliación, GBM →
+"GBM", **null when unsure instead of guessing**). Runs in `correr_en_hilo`; results open
+`VentanaSugerenciasIA` (`app/ventanas.py`): one row per description, preselected if acceptable and
+confidence ≠ "baja"; `problema_de` greys out unknown merchant, pattern not literally in the
+description, < `MINIMO_CARACTERES_PATRON` = 4 chars, or duplicate pattern; each row can be edited
+below the table, which also shows the note and "también atraparía" (other pending descriptions the
+pattern matches). `App.agregar_reglas` re-reads the rules file from disk, **appends** the accepted
+rules (appending can only catch currently-uncategorized rows — earlier rules still win, so no
+regression check is needed), saves, recategorizes, enables "Guardar". Refuses while `VentanaReglas`
+is open (same reason as "Recargar reglas"). Not done: the Gmail tab's uncategorized merchants.
+
 The app can be packaged as a standalone `.exe` via `DashboardFinanciero.spec` (PyInstaller,
 `--windowed`, icon from `app/icono.ico` — see README's "Empaquetar como ejecutable"). Build deps
 (pyinstaller, pillow) live in `requirements-dev.txt`, not `requirements.txt` — they're not needed
@@ -1350,7 +1371,7 @@ Account-side setup (Cloudflare tokens, Supabase tokens, GitHub secrets) is docum
 
 ## Tests
 
-`tests/` (stdlib `unittest`, no extra dependency; added 2026-09-26; 103 tests as of 2026-10-09,
+`tests/` (stdlib `unittest`, no extra dependency; added 2026-09-26; 113 tests as of 2026-10-08,
 also run by CI) — one file per module:
 
 - `test_transformador.py` — signed amounts, deterministic duplicate-line suffixes, total validation.
@@ -1370,6 +1391,7 @@ also run by CI) — one file per module:
 - `test_invex_tdc.py` — V1 sign convention, V2 "CR" convention, card sections/roles, detection vs.
   Banamex TDC, and that detection + account info open the PDF once (`parsers/comun.py` cache).
 - `test_glifos.py` — glyph decoding of image-rendered rows.
+- `test_sugerencias_ia.py` — Claude rule proposals: prompt, parsing a fenced/wrapped answer, unacceptable proposals, CLI errors (fake `subprocess.run`).
 - `test_logica_app.py` — `app/logica.py`: reading a PDF with a fake parser (detection, ambiguity,
   extractor error, suggestions, manual rows/categories recovered, cache forgotten), moving to
   `procesados/`.

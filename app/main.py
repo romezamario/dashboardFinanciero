@@ -39,8 +39,14 @@ from parsers.banamex import BanamexParser
 from parsers.banamex_tdc import BanamexTdcParser
 from parsers.invex_tdc import InvexTdcParser
 from app.pestana_gmail import PestanaGastosGmail
-from app.ventanas import VentanaCategoriaManual, VentanaInspeccion, VentanaReglas, VentanaRenglonManual
-from transform.categorizador import Regla, cargar_reglas, categorizar
+from app.ventanas import (
+    VentanaCategoriaManual,
+    VentanaInspeccion,
+    VentanaReglas,
+    VentanaRenglonManual,
+    VentanaSugerenciasIA,
+)
+from transform.categorizador import Regla, cargar_reglas, categorizar, guardar_reglas
 from transform.transformador import TransaccionCanonica
 
 RAIZ = Path(__file__).parent.parent
@@ -98,6 +104,9 @@ class App(tk.Tk):
         self.categorias_manuales: dict[tuple[int, str], tuple[str, str | None]] = {}
         # Hay un PDF leyéndose o una sincronización en curso (en un hilo).
         self._ocupado = False
+        # Claude está pensando las propuestas de reglas (en un hilo).
+        self._pidiendo_sugerencias = False
+        self.descripciones_sin_categoria: list[str] = []
 
         self._construir_ui()
         # Opcional (casilla en la pestaña de Gmail, apagada por defecto).
@@ -160,6 +169,17 @@ class App(tk.Tk):
             text="Copiar todo",
             command=self._copiar_sin_categorizar,
         ).pack(side="right")
+        # Pide a Claude Code (la CLI, con la suscripción del usuario) una
+        # propuesta de reglas -- lo que antes se hacía pegando esta lista en un
+        # chat. Ver transform/sugerencias_ia.py y VentanaSugerenciasIA.
+        self.boton_sugerir_ia = ttk.Button(
+            marco_sin_categorizar_top,
+            text="Sugerir reglas con Claude...",
+            style="Primario.TButton",
+            command=self.sugerir_reglas_con_ia,
+            state="disabled",
+        )
+        self.boton_sugerir_ia.pack(side="right", padx=(0, 6))
 
         self.texto_sin_categorizar = tk.Text(
             self.pestana_sin_categorizar, wrap="none", height=10, state="disabled",
@@ -666,10 +686,88 @@ class App(tk.Tk):
         else:
             texto_etiqueta = "Todas las transacciones tienen categoría."
         self.etiqueta_sin_categorizar.config(text=texto_etiqueta)
+        self.descripciones_sin_categoria = descripciones_unicas
+        if not self._pidiendo_sugerencias:
+            self.boton_sugerir_ia.config(state="normal" if descripciones_unicas else "disabled")
         self.notebook.tab(
             self.pestana_sin_categorizar,
             text=f"Sin categorizar ({len(descripciones_unicas)})" if descripciones_unicas else "Sin categorizar",
         )
+
+    def sugerir_reglas_con_ia(self) -> None:
+        descripciones = list(self.descripciones_sin_categoria)
+        if not descripciones or self._pidiendo_sugerencias:
+            return
+        self._pidiendo_sugerencias = True
+        self.boton_sugerir_ia.config(state="disabled")
+        texto_previo = self.etiqueta_sin_categorizar.cget("text")
+        self.etiqueta_sin_categorizar.config(
+            text=f"Claude está revisando {len(descripciones)} descripción(es)… (puede tardar un par de minutos)"
+        )
+        reglas = list(self.reglas)
+
+        def trabajo(_progreso):
+            from transform.sugerencias_ia import pedir_sugerencias
+
+            return pedir_sugerencias(descripciones, reglas)
+
+        def terminar() -> None:
+            self._pidiendo_sugerencias = False
+            self._refrescar_sin_categorizar()
+
+        def al_terminar(sugerencias) -> None:
+            terminar()
+            VentanaSugerenciasIA(self, sugerencias)
+
+        def al_fallar(error: Exception) -> None:
+            terminar()
+            self.etiqueta_sin_categorizar.config(text=texto_previo)
+            from transform.sugerencias_ia import ErrorSugerenciasIA
+
+            mensaje = str(error) if isinstance(error, ErrorSugerenciasIA) else f"{type(error).__name__}: {error}"
+            messagebox.showerror("No se pudieron obtener propuestas", mensaje)
+
+        correr_en_hilo(self, trabajo, al_terminar, al_fallar)
+
+    def agregar_reglas(self, nuevas: list[Regla], parent: tk.Misc | None = None) -> bool:
+        """Agrega `nuevas` al final de reglas_categorizacion.json (al final:
+        solo atrapan lo que hoy no tiene categoría, nunca cambian lo ya
+        categorizado) y recategoriza lo cargado. True si se guardaron."""
+        parent = parent or self
+        if any(isinstance(w, VentanaReglas) for w in self.winfo_children()):
+            messagebox.showwarning(
+                "Cierra el editor de reglas",
+                "La ventana \"Reglas de categorización\" está abierta: ciérrala primero "
+                "(al guardar ahí reemplazaría el archivo con su copia).",
+                parent=parent,
+            )
+            return False
+        try:
+            # Del disco, no self.reglas: por si el archivo se editó fuera de la app.
+            reglas = cargar_reglas()
+        except (OSError, ValueError, KeyError, TypeError) as error:
+            messagebox.showerror("No se pudieron leer las reglas", str(error), parent=parent)
+            return False
+        existentes = {r.patron.upper() for r in reglas}
+        agregadas = [r for r in nuevas if r.patron.upper() not in existentes]
+        try:
+            guardar_reglas(reglas + agregadas)
+        except OSError as error:
+            messagebox.showerror("No se pudieron guardar las reglas", str(error), parent=parent)
+            return False
+        self.reglas = reglas + agregadas
+        sin_categoria_antes = sum(1 for t in self.transacciones if t.categoria is None)
+        if self.transacciones:
+            self.recategorizar()
+            self.boton_guardar.config(state="normal")
+        sin_categoria = sum(1 for t in self.transacciones if t.categoria is None)
+        messagebox.showinfo(
+            "Reglas agregadas",
+            f"{len(agregadas)} regla(s) nueva(s). Sin categoría: {sin_categoria_antes} → "
+            f"{sin_categoria}.\n\nGuarda el archivo procesado para conservar los cambios.",
+            parent=parent,
+        )
+        return True
 
     def _copiar_sin_categorizar(self) -> None:
         self.clipboard_clear()

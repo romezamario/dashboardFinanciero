@@ -211,8 +211,18 @@ Flujo completo una vez que el extractor de tu banco existe:
    sin signo, tipo, y la página si la conoces) — se agrega a la tabla igual que cualquier otro
    renglón, con categoría/comercio asignados por las mismas reglas. La pestaña **Sin
    categorizar**, junto a la tabla, lista las descripciones únicas que quedaron sin categoría —
-   botón "Copiar todo" para pegarlas directo en un chat con Claude y pedir una propuesta de
-   reglas nuevas.
+   botón "Copiar todo" para pegarlas en un chat, o **Sugerir reglas con Claude...**, que le
+   pregunta directo a Claude Code y abre una ventana con una propuesta por descripción (patrón,
+   categoría, comercio, confianza y su razonamiento). Marcas las que aceptas, corriges las que
+   haga falta y "Agregar reglas" las guarda al final de `reglas_categorizacion.json` y recategoriza
+   la tabla. Las que Claude no reconoce quedan sin marcar, para categorizarlas a mano. Usa tu
+   suscripción de Claude (sin API key ni costo extra) y solo envía las descripciones sin
+   categoría y tus reglas actuales, nunca el PDF. Requiere instalar Claude Code una vez e iniciar
+   sesión:
+   ```
+   npm install -g @anthropic-ai/claude-code
+   claude
+   ```
 3. Compara los **totales** de abajo (cargos, disposición de efectivo, abonos) contra los que
    imprime el estado de cuenta: si no cuadran, falta un renglón o hay algo mal leído.
 4. **Reglas de categorización...** para agregar/editar/borrar reglas — se aplican de inmediato a
