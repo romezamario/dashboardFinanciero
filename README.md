@@ -357,8 +357,8 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
   por estado de cuenta cada movimiento se puede editar ahí mismo.
 - **Una pestaña por cada cuenta que no es tarjeta** (p. ej. la de cheques) — la misma vista
   que el Resumen, solo con esa cuenta.
-- **QQQ / TQQQ** — análisis técnico (velas, medias móviles, Bollinger, RSI, MACD, comparación
-  QQQ vs. TQQQ) y un tablero de indicadores macro de EE. UU. (Fed, inflación, empleo, tasas,
+- **QQQ / TQQQ** — análisis técnico (velas, medias móviles, Bollinger, soportes y resistencias
+  calculados de los últimos 6 meses, RSI, MACD, comparación QQQ vs. TQQQ) y un tablero de indicadores macro de EE. UU. (Fed, inflación, empleo, tasas,
   VIX) con las fechas de los próximos datos. No usa tus finanzas; solo vive aquí para tener todo
   junto.
 

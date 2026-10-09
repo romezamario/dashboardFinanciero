@@ -958,6 +958,22 @@ visible range so the SMA 200 has history from the first visible day. UI in `Anal
 1–2 px wide). Colors reuse palette slots 1–4: up/down polarity = series-1/2 (like
 `FlujoNetoChart`), SMA 50 = series-3, SMA 200 = series-4. Readings are
 phrased as indicator states, never as buy/sell recommendations.
+**Support/resistance levels (2026-10-08, user's request, from a reference image)**:
+`calcularNiveles` (`tecnico.ts`, tested) works on the last `SESIONES_NIVELES` = 126 sessions of the
+*full* series (not the visible range, so zooming doesn't move them): pivots (high/low of ±5
+sessions) clustered within 0.75 ATR into zones (min half-width ±0.25% of price); resistance = the
+nearest zone above the close, or the 6-month high when the price is at highs; supports below =
+"inmediato" and "intermedio" (two nearest) and "estructural" (most touches among the rest, ≥2);
+SMA 50 / SMA 200 become "Soporte mayor"/"Soporte largo plazo" (or resistance if above) and absorb a
+pivot zone within 0.5 ATR. Drawn as dashed `ReferenceLine`s (resistance `--status-critical`,
+supports `--status-good`, the SMA levels in their own color and only dashed when that SMA layer is
+off) plus an HTML label column to the right (`ANCHO_ETIQUETAS`; the volume chart reserves the same
+padding so the bars stay aligned). To place labels on the same scale as the lines, `GraficaPrecio`
+computes the Y domain itself and passes it with `allowDataOverflow` (otherwise Recharts "nices" the
+domain and the pixels drift); `separarEtiquetas` pushes overlapping labels apart. Only levels within
+the visible price range ±3% are drawn (a TQQQ support 25% below would squash the chart); all are
+listed in the "Soportes y resistencias" table, which is also how a phone sees the names (no label
+column there). Toggle "Soportes y resistencias", on by default.
 **Macro EE.UU. section (2026-10-02, user's request)**: a "Análisis técnico | Macro EE.UU." switch at
 the top of the same tab. `frontend/scripts/fred.ts` downloads the fixed `SERIES_MACRO` list from
 FRED's public `fredgraph.csv` endpoint — no API key (the JSON API needs one) — **with its own
