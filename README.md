@@ -18,8 +18,7 @@ normaliza y categoriza las transacciones, y sincroniza solo los datos ya normali
 
 **Pipeline local** — a diferencia del plan original (un watcher 100% automático sobre
 `data/nuevos/`), el punto de entrada es una **app de escritorio (Tkinter)**: tú cargas el PDF a
-mano, la app te deja revisar y corregir antes de que nada se sincronice. Esto da control y permite
-validar montos contra el total real del estado de cuenta antes de confiar en el resultado.
+mano, la app te deja revisar y corregir antes de que nada se sincronice.
 
 ```
 Tú abres la app (python -m app.main) y cargas un PDF
@@ -36,9 +35,8 @@ Transformador (transform/transformador.py, agnóstico de banco)
 Categorizador (transform/categorizador.py, reglas de palabra clave editables
       │        desde la propia app — "Reglas de categorización...")
       ▼
-Validación de totales EN LA APP: suma calculada vs. el total que tú
-      │   escribes desde el resumen impreso en el PDF — detecta renglones
-      │   faltantes o mal interpretados antes de guardar nada
+Revisión EN LA APP: tabla, totales (cargos, efectivo, abonos), avisos de
+      │   filas que el PDF imprime como imagen, categorías a mano
       ▼
 "Guardar archivo procesado" → data/procesados/<hash>.json
       │   (transacciones normalizadas + categorizadas, listas para subir)
@@ -58,48 +56,64 @@ como capa extra antes de siquiera llegar a la pantalla de login de Supabase Auth
 
 ## Modelo de datos
 
-Cinco tablas en Supabase (definidas en `supabase/migrations/`):
+Tablas en Supabase (definidas en `supabase/migrations/`):
 
-- **`bancos`** — catálogo compartido (ej. "BBVA", "Santander"), sin `user_id`, sin RLS: es
-  información pública, no datos personales.
+- **`bancos`** — catálogo compartido (ej. "BBVA", "Santander"), sin `user_id`. Los usuarios con
+  sesión pueden leer y agregar bancos, nadie puede modificarlos ni borrarlos por la API.
 - **`cuentas`** — tus cuentas bancarias, identificadas solo por alias + últimos 4 dígitos.
 - **`categorias`** — categorías de gasto/ingreso, definidas por ti (reglas en el Categorizador).
 - **`documentos`** — un registro por PDF procesado (hash para detectar duplicados, periodo, ruta local).
-- **`transacciones`** — cada movimiento, con su categoría, monto (`numeric`, nunca float),
-  y los campos de auditoría (`pagina`, `linea_cruda`) que lo atan a su línea exacta de origen.
+- **`transacciones`** — cada movimiento, con su categoría, comercio, tarjeta, evento, monto
+  (`numeric`, nunca float), y los campos de auditoría (`pagina`, `linea_cruda`) que lo atan a su
+  línea exacta de origen.
+- **`eventos`** — viajes, fiestas, etc. que asignas desde el dashboard a varias transacciones.
+- **`gastos_correo`** — los cargos de los avisos de compra de Banamex por correo (ver "Gastos
+  recientes" abajo), aparte de `transacciones`.
 
-Las últimas cuatro tienen Row Level Security: cada política restringe select/insert/update/delete
-a `user_id = auth.uid()`, así que aunque el frontend hable directo con Postgres, cada usuario solo
-puede ver y tocar sus propios datos.
+Todas menos `bancos` tienen Row Level Security: cada política restringe select/insert/update/delete
+a `user_id = (select auth.uid())`, así que aunque el frontend hable directo con Postgres, cada
+usuario solo puede ver y tocar sus propios datos. (El `select` alrededor de `auth.uid()` hace que
+Postgres lo calcule una vez por consulta y no por fila — escribe así cualquier política nueva.)
 
 ## CI/CD
 
 Tres pipelines de GitHub Actions, cada uno disparado solo por los archivos que le corresponden:
 
-- **`ci.yml`** — cuando cambia algo en `frontend/` (cualquier rama o PR), corre typecheck, lint y
-  las pruebas del frontend (`npm test`, Vitest).
+- **`ci.yml`** — en cada push (cualquier rama) o PR que toque `frontend/` o el pipeline local
+  (`app/`, `parsers/`, `transform/`, `sync/`, `tests/`, `requirements.txt`): typecheck, lint y
+  pruebas del frontend (Vitest), y las pruebas de Python. Es la red de seguridad antes de `main`,
+  que despliega solo. Ver "Pruebas" abajo.
 
 - **`db-migrate.yml`** — cuando cambia algo en `supabase/migrations/`, aplica esas migraciones
   al proyecto remoto. El esquema de la base de datos se versiona como código: todo cambio es un
   archivo de migración nuevo, nunca un `ALTER TABLE` manual en el dashboard de Supabase.
 - **`deploy.yml`** — cuando cambia algo en `frontend/`, compila y publica el sitio a Cloudflare Pages.
 
-Cada uno solo corre cuando le toca, así que trabajar en el pipeline local (parsers/transform/sync)
-no dispara ninguno.
+Cada uno solo corre cuando le toca: un cambio en el pipeline local solo dispara `ci.yml`.
 
 ## Estructura
 
 ```
 parsers/    # BaseParser + un extractor por banco
+  comun.py           # meses, patrones y lectura (una sola vez) del texto inicial del PDF
+  glifos.py          # lee las filas que el PDF imprime como imágenes de letras
 transform/  # normalización al esquema canónico + categorización (reglas editables desde la app)
-app/        # app de escritorio (Tkinter) — carga PDF, valida totales, categoriza, exporta
+app/        # app de escritorio (Tkinter) — carga PDF, revisa, categoriza, exporta, sincroniza
+  main.py            # ventana principal (App) y registro de bancos (PARSERS)
+  logica.py          # lo que no toca la interfaz: leer un PDF, recuperar lo hecho a mano, mover archivos
+  ventanas.py        # diálogos: reglas, inspeccionar PDF, renglón manual, categoría manual
+  pestana_gmail.py   # pestaña "Gastos recientes (Gmail)"
+  hilos.py           # correr trabajo largo en segundo plano sin congelar la ventana
   icono.ico          # ícono del .exe (generado por generar_icono.py, versionado)
   generar_icono.py   # utilidad para regenerar/cambiar app/icono.ico
 DashboardFinanciero.spec  # config del build de PyInstaller (dist/*.exe, no versionado)
-sync/       # cliente de Supabase, upsert idempotente
+sync/       # Supabase: estados de cuenta (sincronizador.py), avisos de Gmail (gmail_gastos.py,
+            # gastos_correo.py); estado_incremental.py = qué archivos ya se subieron
+tests/      # pruebas de Python (unittest), sin PDFs reales
 supabase/
   migrations/  # schema + políticas de RLS, aplicadas vía GitHub Actions
 frontend/   # React + Vite + TS + Tailwind + Recharts — login + dashboard, habla directo con Supabase
+  src/lib/*.test.ts  # pruebas del frontend (Vitest)
 data/
   nuevos/       # (ya no lo usa un watcher — puedes cargar PDFs desde cualquier ruta en la app)
   procesados/   # salida de la app: <hash>.json por cada PDF revisado y guardado
@@ -130,6 +144,18 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+## Pruebas
+
+```bash
+python -m unittest discover -s tests -t .   # pipeline local (desde la raíz, con requirements.txt instalado)
+cd frontend && npm test                     # frontend (Vitest); también: npx tsc -b y npm run lint
+```
+
+Las pruebas nunca usan PDFs reales (no salen de la laptop): los extractores se prueban con texto
+sintético, y la sincronización contra un Supabase falso en memoria. Las ventanas de Tkinter no
+tienen pruebas automáticas, pero su lógica vive en `app/logica.py`, que sí. CI corre todo en
+cada push.
+
 ## Usar la app de escritorio
 
 ```powershell
@@ -150,7 +176,9 @@ texto, no toca nada más. Si tu banco imprime la fecha en un formato distinto a 
 para escribir su patrón de fecha.
 
 Para que ese banco se detecte solo (en vez de tener que elegirlo del dropdown), sobreescribe
-también `puede_procesar(ruta_pdf) -> bool` — una heurística barata y conservadora. Ojo: el nombre
+también `puede_procesar(ruta_pdf) -> bool` — una heurística barata y conservadora. Lee el texto
+con `textos_iniciales(ruta_pdf, n)` de `parsers/comun.py` (no abras el PDF otra vez: la app lo
+lee una sola vez para todos los extractores y la cuenta). Ojo: el nombre
 del banco solo no basta si ese banco tiene más de un tipo de documento (ver `BanamexParser` y
 `BanamexTdcParser`, que distinguen cuenta de cheques vs. tarjeta de crédito por un encabezado/
 término exclusivo de cada tipo de estado de cuenta, no solo por "BANAMEX"). Si agregas un segundo
@@ -168,7 +196,9 @@ Flujo completo una vez que el extractor de tu banco existe:
    PDF (`puede_procesar`) y usa el que matchee; si ninguno o más de uno matchean, cae de vuelta a
    lo que tengas seleccionado en el dropdown "Banco". El resumen te dice si el banco quedó
    "detectado" o "manual". Luego corre el extractor + Transformador + Categorizador y llena la
-   tabla. Si el extractor lo soporta (Banamex cuenta de cheques y Banamex TDC, tarjeta de
+   tabla. Todo eso corre en segundo plano ("Leyendo …" en el resumen): la ventana sigue
+   respondiendo aunque el PDF tarde, y los botones de cargar, guardar y sincronizar se desactivan
+   mientras tanto. Si el extractor lo soporta (Banamex cuenta de cheques y Banamex TDC, tarjeta de
    crédito, ambos sí), también autocompleta **Alias de cuenta** y **Últimos 4 dígitos** leyéndolos
    de la portada del PDF, y para `BanamexParser` (cuenta de cheques, el único que necesita año
    porque el PDF no lo imprime por renglón) el resumen te avisa qué año detectó — no hay campo
@@ -183,9 +213,8 @@ Flujo completo una vez que el extractor de tu banco existe:
    categorizar**, junto a la tabla, lista las descripciones únicas que quedaron sin categoría —
    botón "Copiar todo" para pegarlas directo en un chat con Claude y pedir una propuesta de
    reglas nuevas.
-3. **Validación de totales**: escribe el neto del periodo tal como lo imprime el estado de cuenta
-   (saldo actual − saldo anterior) y da **Validar** — si no cuadra, hay algo mal parseado o un
-   renglón faltante antes de confiar en el resultado.
+3. Compara los **totales** de abajo (cargos, disposición de efectivo, abonos) contra los que
+   imprime el estado de cuenta: si no cuadran, falta un renglón o hay algo mal leído.
 4. **Reglas de categorización...** para agregar/editar/borrar reglas — se aplican de inmediato a
    la tabla ya cargada y se guardan en `transform/reglas_categorizacion.json` (no se sube a git).
    Cada regla asigna una **Categoría** (obligatoria) y opcionalmente un **Comercio** (ej. patrón
@@ -196,7 +225,8 @@ Flujo completo una vez que el extractor de tu banco existe:
    del proyecto, esa es para los JSON) — reutiliza esa carpeta si ya existe, y si el PDF ya está
    adentro de una carpeta `procesados/` no lo mueve de nuevo. Así vas viendo de un vistazo, en tu
    propia carpeta de descargas, cuáles estados de cuenta ya cargaste.
-6. **Sincronizar a Supabase...** — sube todo lo pendiente en `data/procesados/`.
+6. **Sincronizar a Supabase...** — sube todo lo pendiente en `data/procesados/`, también en
+   segundo plano ("Sincronizando…").
 
 ## Empaquetar como ejecutable (.exe con ícono)
 
@@ -262,6 +292,12 @@ mismo usuario con el que después entras al frontend):
    sincronizado sin cambios). Es seguro correrlo varias veces: cada entidad se busca antes de
    insertarse, y las transacciones usan upsert sobre el mismo constraint único de la tabla
    (`documento_id, pagina, linea_cruda`), así que reintentar o repetir un archivo no duplica nada.
+   Banco, cuenta y categorías se buscan una sola vez por sincronización (y las categorías todas
+   juntas), así que subir muchos estados de cuenta a la vez ya no hace cientos de consultas.
+5. **Corregir la cuenta de un estado de cuenta ya subido**: cambia el alias o los últimos 4
+   dígitos en la app, guarda y vuelve a sincronizar. Un alias distinto renombra la cuenta; otros
+   últimos 4 dígitos mueven el documento (con sus transacciones) a esa cuenta. Gana lo último que
+   sincronizaste: también deshace un "cambiar cuenta" hecho en el dashboard para ese documento.
 
 ## Frontend (fase 5)
 
@@ -279,6 +315,13 @@ npm run dev
 ```
 
 Abre `http://localhost:5173`, inicia sesión con el usuario que creaste para el Sincronizador.
+
+**Cómo carga los datos:** todo el historial al entrar, en páginas de 1,000 pedidas en paralelo;
+cuentas, categorías y eventos llegan aparte una sola vez (no repetidos en cada transacción).
+Después de editar algo solo se vuelven a pedir las transacciones editadas. Si esa recarga falla,
+aparece un aviso con **Reintentar** sin perder lo que tenías filtrado. Las pestañas que no son la
+de inicio se descargan la primera vez que las abres; si el sitio se actualizó mientras lo tenías
+abierto, la página se recarga sola una vez.
 
 **Qué muestra:**
 - KPIs: saldo actual (siempre sin filtrar — es un hecho de la cuenta, no una suma que deba
@@ -300,8 +343,9 @@ Abre `http://localhost:5173`, inicia sesión con el usuario que creaste para el 
   credenciales nuevas. Ojo: si vuelves a cargar y sincronizar el mismo PDF desde la app de
   escritorio más adelante, el upsert por `(documento_id, pagina, linea_cruda)` va a
   sobreescribir categoría/comercio con lo que digan las reglas en ese momento — una edición aquí
-  no sobrevive un resync del mismo documento. Para una corrección que sí debe persistir, agrega o
-  ajusta una regla en "Reglas de categorización..." en vez de (o además de) editar aquí.
+  no sobrevive un resync del mismo documento (lo mismo con un cambio de cuenta). Para una
+  corrección que sí debe persistir, agrega o ajusta una regla en "Reglas de categorización..." en
+  vez de (o además de) editar aquí.
 
 **Cross-filter estilo Power BI**: da clic en una barra de mes, una categoría, o un comercio,
 y el resto del dashboard (KPIs, las otras gráficas, la tabla) se filtra a eso —
@@ -425,6 +469,8 @@ no se suman como gastos ni se suben; se guardan aparte en `data/gastos_correo/de
 pestaña solo dice cuántos hubo y por cuánto.
 
 Es idempotente: se puede correr todos los días (o varias veces al día) sin duplicar nada. Solo
+sube los días que cambiaron desde la última subida, y los manda juntos (hasta 500 gastos por
+llamada) en vez de uno por uno. Solo
 descarga de Gmail los correos que todavía no están en `data/gastos_correo/`; los ya guardados se
 recategorizan en tu computadora con las reglas actuales (así una regla nueva corrige también los
 gastos viejos). Si Gmail limita las consultas por minuto, reintenta solo con esperas crecientes; si
