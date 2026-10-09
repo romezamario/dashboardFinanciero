@@ -31,7 +31,11 @@ export interface MovimientoDia {
   esDebito: boolean;
 }
 
-export type MotivoSinSumar = "Es un abono" | "Cuenta de cheques" | "Categoría oculta";
+export type MotivoSinSumar =
+  | "Es un abono"
+  | "Cuenta de cheques"
+  | "Categoría oculta"
+  | "Evento oculto";
 
 export interface MovimientoSinSumar {
   mov: MovimientoDia;
@@ -98,13 +102,15 @@ function aMovimiento(t: Transaccion): MovimientoDia | null {
 /**
  * Agrupa las transacciones por día (del más reciente al más antiguo).
  * Solo suman los CARGOS de cuentas de crédito cuya categoría no esté en
- * `categoriasOcultas`. Los abonos nunca suman (pagos recibidos, ingresos o
+ * `categoriasOcultas` y que no pertenezcan a un evento de `eventosOcultos`.
+ * Los abonos nunca suman (pagos recibidos, ingresos o
  * devoluciones: restarlos cancelaría el gasto que pagaron) y la cuenta de
  * cheques tampoco; todo eso queda en `sinSumar`, visible en el detalle.
  */
 export function agruparEstadosPorDia(
   transacciones: Transaccion[],
-  categoriasOcultas: Set<string>
+  categoriasOcultas: Set<string>,
+  eventosOcultos: Set<string> = new Set()
 ): DiaEstadoCuenta[] {
   const porFecha = new Map<string, MovimientoDia[]>();
   for (const t of transacciones) {
@@ -116,13 +122,14 @@ export function agruparEstadosPorDia(
   }
   return Array.from(porFecha.entries())
     .sort(([a], [b]) => (a < b ? 1 : a > b ? -1 : 0))
-    .map(([fecha, movs]) => armarDia(fecha, movs, categoriasOcultas));
+    .map(([fecha, movs]) => armarDia(fecha, movs, categoriasOcultas, eventosOcultos));
 }
 
 function armarDia(
   fecha: string,
   movs: MovimientoDia[],
-  categoriasOcultas: Set<string>
+  categoriasOcultas: Set<string>,
+  eventosOcultos: Set<string>
 ): DiaEstadoCuenta {
   const gastos: MovimientoDia[] = [];
   const sinSumar: MovimientoSinSumar[] = [];
@@ -131,13 +138,17 @@ function armarDia(
     if (mov.tipo === "abono") {
       sinSumar.push({ mov, motivo: "Es un abono" });
       // Pagar la tarjeta (o un traspaso entre tus cuentas) no es un ingreso.
-      if (!categoriasOcultas.has(mov.categoria)) hayAbonos = true;
+      if (!categoriasOcultas.has(mov.categoria) && !(mov.evento && eventosOcultos.has(mov.evento))) {
+        hayAbonos = true;
+      }
     } else if (mov.esDebito) {
       // La cuenta de cheques (Priority) se ve en el día pero no suma: sus
       // compras ya cuentan por las tarjetas, y sus pagos/traspasos no son gasto.
       sinSumar.push({ mov, motivo: "Cuenta de cheques" });
     } else if (categoriasOcultas.has(mov.categoria)) {
       sinSumar.push({ mov, motivo: "Categoría oculta" });
+    } else if (mov.evento && eventosOcultos.has(mov.evento)) {
+      sinSumar.push({ mov, motivo: "Evento oculto" });
     } else {
       gastos.push(mov);
     }

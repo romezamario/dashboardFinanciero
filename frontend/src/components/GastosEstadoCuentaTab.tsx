@@ -51,6 +51,8 @@ interface GastosEstadoCuentaTabProps {
   transacciones: Transaccion[];
   categoriasOcultas: Set<string>;
   onCambiarCategoriasOcultas: (cambio: (anteriores: Set<string>) => Set<string>) => void;
+  eventosOcultos: Set<string>;
+  onCambiarEventosOcultos: (cambio: (anteriores: Set<string>) => Set<string>) => void;
   onActualizado: (ids?: string[]) => void | Promise<void>;
   vista: VistaCalendario;
   onCambiarVista: (cambio: (anterior: VistaCalendario) => VistaCalendario) => void;
@@ -69,6 +71,8 @@ export function GastosEstadoCuentaTab({
   transacciones,
   categoriasOcultas,
   onCambiarCategoriasOcultas,
+  eventosOcultos,
+  onCambiarEventosOcultos,
   onActualizado,
   vista,
   onCambiarVista,
@@ -76,8 +80,8 @@ export function GastosEstadoCuentaTab({
   const [verOcultas, setVerOcultas] = useState(false);
 
   const dias = useMemo(
-    () => agruparEstadosPorDia(transacciones, categoriasOcultas),
-    [transacciones, categoriasOcultas]
+    () => agruparEstadosPorDia(transacciones, categoriasOcultas, eventosOcultos),
+    [transacciones, categoriasOcultas, eventosOcultos]
   );
   const porFecha = useMemo(() => new Map(dias.map((d) => [d.fecha, d])), [dias]);
   const resumenes = useMemo<ResumenDia[]>(
@@ -112,6 +116,15 @@ export function GastosEstadoCuentaTab({
     () => Array.from(new Set(transacciones.map(categoriaDe))).sort((a, b) => a.localeCompare(b, "es")),
     [transacciones]
   );
+  // Eventos que existen (de TODAS las transacciones, para que un evento oculto
+  // no desaparezca de su propia lista).
+  const eventos = useMemo(
+    () =>
+      Array.from(
+        new Set(transacciones.map(eventoDe).filter((e): e is string => e !== null))
+      ).sort((a, b) => a.localeCompare(b, "es")),
+    [transacciones]
+  );
   const sugerencias = useMemo<Sugerencias>(() => {
     const ordenado = (valores: (string | null)[]) =>
       Array.from(new Set(valores.filter((v): v is string => !!v))).sort((a, b) =>
@@ -134,7 +147,10 @@ export function GastosEstadoCuentaTab({
   }
 
   const hoy = hoyIso();
-  const ocultasOrdenadas = categorias.filter((c) => categoriasOcultas.has(c));
+  const ocultasOrdenadas = [
+    ...categorias.filter((c) => categoriasOcultas.has(c)),
+    ...eventos.filter((e) => eventosOcultos.has(e)),
+  ];
 
   function alternarCategoria(categoria: string) {
     onCambiarCategoriasOcultas((anteriores) => {
@@ -145,12 +161,21 @@ export function GastosEstadoCuentaTab({
     });
   }
 
+  function alternarEvento(evento: string) {
+    onCambiarEventosOcultos((anteriores) => {
+      const nuevos = new Set(anteriores);
+      if (nuevos.has(evento)) nuevos.delete(evento);
+      else nuevos.add(evento);
+      return nuevos;
+    });
+  }
+
   return (
     <div className="space-y-4">
       <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
         Movimientos de tus estados de cuenta, de todas las cuentas. Elige un día para ver su
         detalle. Solo los <strong>cargos de tus tarjetas</strong> suman al total y al color del día; los abonos,
-        la cuenta de cheques (Priority) y las categorías ocultas se listan aparte. Montos en MXN.
+        la cuenta de cheques (Priority), las categorías y los eventos ocultos se listan aparte. Montos en MXN.
       </p>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs" style={{ color: "var(--text-secondary)" }}>
@@ -194,7 +219,7 @@ export function GastosEstadoCuentaTab({
           <span aria-hidden="true" style={{ color: "var(--text-muted)" }}>
             {verOcultas ? "▾" : "▸"}
           </span>
-          <span className="font-medium">Ocultar categorías</span>
+          <span className="font-medium">Ocultar categorías y eventos</span>
           <span style={{ color: "var(--text-muted)" }}>
             {ocultasOrdenadas.length === 0 ? "· ninguna" : `· ${ocultasOrdenadas.join(", ")}`}
           </span>
@@ -224,10 +249,33 @@ export function GastosEstadoCuentaTab({
                 </EnlaceTexto>
               )}
             </Fila>
+            {eventos.length > 0 && (
+              <Fila etiqueta="Eventos">
+                {eventos.map((evento) => (
+                  <PildoraExclusion
+                    key={evento}
+                    texto={evento}
+                    excluida={eventosOcultos.has(evento)}
+                    onClick={() => alternarEvento(evento)}
+                    titulo={
+                      eventosOcultos.has(evento)
+                        ? "Volver a sumarlo al gasto del día"
+                        : "No sumarlo al gasto del día"
+                    }
+                  />
+                ))}
+                {eventosOcultos.size > 0 && (
+                  <EnlaceTexto onClick={() => onCambiarEventosOcultos(() => new Set())}>
+                    Mostrar todos
+                  </EnlaceTexto>
+                )}
+              </Fila>
+            )}
             <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-              Los cargos de tarjeta de estas categorías no suman al total del día ni al color del calendario,
-              pero siguen apareciendo en el detalle del día. Por defecto: pagos de tarjeta y
-              traspasos entre tus propias cuentas. Es independiente de la misma opción del Resumen.
+              Los cargos de tarjeta de estas categorías o de estos eventos (un viaje, una boda...) no suman
+              al total del día ni al color del calendario ni a los promedios, pero siguen apareciendo en
+              el detalle del día. Por defecto se ocultan los pagos de tarjeta y traspasos entre tus
+              propias cuentas, y ningún evento. Es independiente de las mismas opciones del Resumen.
             </p>
           </>
         )}

@@ -242,7 +242,9 @@ abonos, **everything of the non-TDC account (Priority, `MovimientoDia.esDebito`;
 same day: its movements are shown but never counted)** and hidden categories (default:
 `categoriasExcluidasPorDefecto`, i.e. Pago TDC/traspasos) go in a separate "No suman al total" table with the reason, and
 the cell shows "+N sin sumar"; a day with only those has no heat color ("sin gasto"). **Own "Ocultar
-categorías" row** (collapsed disclosure, independent from the Resumen's; stored in
+categorías y eventos" row** (2026-10-08: events added at the user's request; a hidden event's cargos go to "No suman"
+with the reason "Evento oculto", don't count in the day total/color/averages, and a refund of a hidden event doesn't mark the day
+"Abono"; `eventosOcultos` stored in the same `estadosPorPestana["gastos-correo"]`, default none) (collapsed disclosure, independent from the Resumen's; stored in
 `estadosPorPestana["gastos-correo"].categoriasOcultas`, `null` = default). Cell badges: one per
 non-TDC account with movements that day ("Priority", `nombreCorto`) and "Abono" when there are abonos
 of non-hidden categories (a card payment is not income). `$0` cargos (Invex V2 echo lines) are
@@ -271,7 +273,10 @@ week total. A day with no movements *inside the known range* counts as a $0 day;
 current week (or the one after the last statement) averages its known days and says "(N días)" instead of looking cheap.
 `fechaCorte` is **today** for "Por correo" (notices arrive almost live: no notices = a real $0 day) and the **latest
 loaded movement date** for "Por estado de cuenta" (statements arrive weeks late). "Spend" is exactly each day's total
-shown in the cell (so for statements: TDC cargos of non-hidden categories only, Priority/abonos excluded). The goal is a
+shown in the cell (so for statements: TDC cargos of non-hidden categories only, Priority/abonos excluded). **The same strip also shows the whole
+month's average** (2026-10-08, user's request; blue border, above the weekday header, for the month on screen, "(N días de M)"
+while the month is still partial; `resumenDeMes`/`resumenDeDias`) — it counts the month's days within the same
+first-day..`fechaCorte` range, so a month spanning the cutoff averages only its known days. The goal is a
 constant (no UI to change it). Covered by `lib/metaDiaria.test.ts` (Vitest: week boundaries, partial weeks, first week, no countable days)
 and checked in the browser with synthetic data (cutoff per source, over/under).
 

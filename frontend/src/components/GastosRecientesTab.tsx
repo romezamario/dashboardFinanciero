@@ -10,6 +10,8 @@ interface GastosRecientesTabProps {
   transacciones: Transaccion[];
   categoriasOcultas: Set<string>;
   onCambiarCategoriasOcultas: (cambio: (anteriores: Set<string>) => Set<string>) => void;
+  eventosOcultos: Set<string>;
+  onCambiarEventosOcultos: (cambio: (anteriores: Set<string>) => Set<string>) => void;
   onActualizado: (ids?: string[]) => void | Promise<void>;
 }
 

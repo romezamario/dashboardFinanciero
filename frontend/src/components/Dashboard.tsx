@@ -394,6 +394,13 @@ export function Dashboard() {
                 categoriasOcultas: cambio(e.categoriasOcultas ?? categoriasOcultasPorDefecto),
               }))
             }
+            eventosOcultos={(estadosPorPestana[PESTANA_GASTOS_CORREO] ?? ESTADO_VACIO).eventosOcultos}
+            onCambiarEventosOcultos={(cambio) =>
+              actualizarEstado(PESTANA_GASTOS_CORREO, (e) => ({
+                ...e,
+                eventosOcultos: cambio(e.eventosOcultos),
+              }))
+            }
             onActualizado={recargarTransacciones}
           />
         ) : transacciones.length === 0 ? (

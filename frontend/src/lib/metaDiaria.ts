@@ -23,11 +23,11 @@ export function diasDeLaSemana(fecha: string): string[] {
   return Array.from({ length: 7 }, (_, i) => aIso(domingo + i * DIA_MS));
 }
 
-export interface ResumenSemana {
-  /** Primer y último día CONTADOS de la semana (una semana a medias no cubre los 7). */
+export interface ResumenPromedio {
+  /** Primer y último día CONTADOS (un periodo a medias no los cubre todos). */
   desde: string;
   hasta: string;
-  /** Días que entran al promedio: de 1 a 7. */
+  /** Días que entran al promedio. */
   dias: number;
   /** Centavos gastados en esos días. */
   total: number;
@@ -36,22 +36,23 @@ export interface ResumenSemana {
 }
 
 /**
- * Promedio de gasto diario de la semana (domingo a sábado) de `fecha`.
- * Cuentan los días entre `primera` (el primer día con datos) y `corte` (hasta
- * dónde se conoce el gasto: hoy en los correos, la última fecha cargada en los
- * estados de cuenta): un día sin movimientos DENTRO de ese rango es un día de
- * $0 y baja el promedio, pero uno fuera de él no se sabe -- contarlo como $0
- * haría ver la semana en curso (o la que sigue al último estado de cuenta)
- * mucho más barata de lo que es. Sin ningún día contable devuelve null.
- * `totales`: centavos por fecha ISO (solo hace falta que estén los días con gasto).
+ * Promedio de gasto diario sobre `candidatos` (las fechas ISO de una semana o
+ * de un mes). Cuentan los días entre `primera` (el primer día con datos) y
+ * `corte` (hasta dónde se conoce el gasto: hoy en los correos, la última fecha
+ * cargada en los estados de cuenta): un día sin movimientos DENTRO de ese
+ * rango es un día de $0 y baja el promedio, pero uno fuera de él no se sabe --
+ * contarlo como $0 haría ver la semana o el mes en curso (o lo que sigue al
+ * último estado de cuenta) mucho más barato de lo que es. Sin ningún día
+ * contable devuelve null. `totales`: centavos por fecha ISO (solo hace falta
+ * que estén los días con gasto).
  */
-export function resumenDeSemana(
-  fecha: string,
+export function resumenDeDias(
+  candidatos: string[],
   totales: Map<string, number>,
   primera: string,
   corte: string
-): ResumenSemana | null {
-  const contables = diasDeLaSemana(fecha).filter((d) => d >= primera && d <= corte);
+): ResumenPromedio | null {
+  const contables = candidatos.filter((d) => d >= primera && d <= corte).sort();
   if (contables.length === 0) return null;
   const total = contables.reduce((suma, d) => suma + (totales.get(d) ?? 0), 0);
   return {
@@ -61,4 +62,31 @@ export function resumenDeSemana(
     total,
     promedio: Math.round(total / contables.length),
   };
+}
+
+/** Promedio diario de la semana (domingo a sábado) de `fecha`; ver `resumenDeDias`. */
+export function resumenDeSemana(
+  fecha: string,
+  totales: Map<string, number>,
+  primera: string,
+  corte: string
+): ResumenPromedio | null {
+  return resumenDeDias(diasDeLaSemana(fecha), totales, primera, corte);
+}
+
+/** Todos los días ISO del mes "YYYY-MM". */
+export function diasDelMes(mes: string): string[] {
+  const [anio, m] = mes.split("-").map(Number);
+  const cantidad = new Date(Date.UTC(anio, m, 0)).getUTCDate();
+  return Array.from({ length: cantidad }, (_, i) => `${mes}-${String(i + 1).padStart(2, "0")}`);
+}
+
+/** Promedio diario del mes "YYYY-MM"; ver `resumenDeDias`. */
+export function resumenDeMes(
+  mes: string,
+  totales: Map<string, number>,
+  primera: string,
+  corte: string
+): ResumenPromedio | null {
+  return resumenDeDias(diasDelMes(mes), totales, primera, corte);
 }
