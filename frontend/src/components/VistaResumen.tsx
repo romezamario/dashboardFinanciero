@@ -93,6 +93,9 @@ interface VistaResumenProps {
   vistaTiempo: VistaTiempo;
   onCambiarVistaTiempo: (vista: VistaTiempo) => void;
   onActualizado: (ids?: string[]) => void | Promise<void>;
+  /** Oculta la tarjeta grande de "Tasa de ahorro" (la pestaña Shophunters no la
+   * quiere: son solo gastos de un evento, no tiene sentido hablar de ahorro). */
+  sinTasaDeAhorro?: boolean;
 }
 
 /**
@@ -128,6 +131,7 @@ export function VistaResumen({
   vistaTiempo,
   onCambiarVistaTiempo,
   onActualizado,
+  sinTasaDeAhorro = false,
 }: VistaResumenProps) {
   // Todas las categorías que existen, sin importar si están ocultas -- así
   // el control de "Ocultar categorías" no pierde de vista una categoría una
@@ -509,43 +513,45 @@ export function VistaResumen({
       {hayFiltrosActivos && (
         <p className="text-xs" style={{ color: "var(--text-muted)" }}>
           Los filtros por clic afectan el detalle de gasto (gráficas, Sankey, gasto hormiga,
-          categorías al alza y tabla). Tasa de ahorro, flujo neto, gasto promedio, meses
+          categorías al alza y tabla). {sinTasaDeAhorro ? "Flujo" : "Tasa de ahorro, flujo"} neto, gasto promedio, meses
           cubiertos y recurrentes siguen mostrando tus finanzas completas del periodo.
         </p>
       )}
 
-      <section
-        className="rounded-lg p-5"
-        style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
-      >
-        <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
-          Tasa de ahorro, {nombreDelPeriodo}
-        </div>
-        <div
-          className="mt-1 font-semibold"
-          style={{ fontSize: 48, lineHeight: 1.1, color: "var(--text-primary)" }}
+      {!sinTasaDeAhorro && (
+        <section
+          className="rounded-lg p-5"
+          style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
         >
-          {tasaAhorro === null ? "—" : porcentaje.format(tasaAhorro)}
-        </div>
-        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-          {cambioAhorroPuntos !== null && (
-            <Delta
-              texto={`${cambioAhorroPuntos >= 0 ? "+" : ""}${decimal.format(cambioAhorroPuntos)} pts vs. ${nombreDelAnterior}`}
-              sube={cambioAhorroPuntos >= 0}
-              favorable={cambioAhorroPuntos >= 0}
-            />
-          )}
-          <span style={{ color: "var(--text-secondary)" }}>
-            12 meses hasta {nombreMes(ultimoMes, true)}:{" "}
-            {tasaAhorro12m === null ? "—" : porcentaje.format(tasaAhorro12m)}
-          </span>
-        </div>
-        <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
-          {tasaAhorro === null
-            ? "Sin ingresos en el periodo (normal en una tarjeta de crédito), así que no hay tasa de ahorro que calcular."
-            : "Qué parte de lo que entra te queda después de gastar. Una referencia común es ahorrar al menos 10–20% de tus ingresos."}
-        </p>
-      </section>
+          <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            Tasa de ahorro, {nombreDelPeriodo}
+          </div>
+          <div
+            className="mt-1 font-semibold"
+            style={{ fontSize: 48, lineHeight: 1.1, color: "var(--text-primary)" }}
+          >
+            {tasaAhorro === null ? "—" : porcentaje.format(tasaAhorro)}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+            {cambioAhorroPuntos !== null && (
+              <Delta
+                texto={`${cambioAhorroPuntos >= 0 ? "+" : ""}${decimal.format(cambioAhorroPuntos)} pts vs. ${nombreDelAnterior}`}
+                sube={cambioAhorroPuntos >= 0}
+                favorable={cambioAhorroPuntos >= 0}
+              />
+            )}
+            <span style={{ color: "var(--text-secondary)" }}>
+              12 meses hasta {nombreMes(ultimoMes, true)}:{" "}
+              {tasaAhorro12m === null ? "—" : porcentaje.format(tasaAhorro12m)}
+            </span>
+          </div>
+          <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
+            {tasaAhorro === null
+              ? "Sin ingresos en el periodo (normal en una tarjeta de crédito), así que no hay tasa de ahorro que calcular."
+              : "Qué parte de lo que entra te queda después de gastar. Una referencia común es ahorrar al menos 10–20% de tus ingresos."}
+          </p>
+        </section>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Tile

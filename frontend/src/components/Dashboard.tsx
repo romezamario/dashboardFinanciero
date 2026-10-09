@@ -282,7 +282,11 @@ export function Dashboard() {
     }));
   }
 
-  function renderVistaResumen(pestana: string, transaccionesVista: Transaccion[]) {
+  function renderVistaResumen(
+    pestana: string,
+    transaccionesVista: Transaccion[],
+    opciones: { sinTasaDeAhorro?: boolean } = {}
+  ) {
     const estado = estadosPorPestana[pestana] ?? ESTADO_VACIO;
     const categoriasOcultas = estado.categoriasOcultas ?? categoriasOcultasPorDefecto;
     return (
@@ -317,6 +321,7 @@ export function Dashboard() {
           actualizarEstado(pestana, (e) => ({ ...e, vistaTiempo }))
         }
         onActualizado={recargarTransacciones}
+        sinTasaDeAhorro={opciones.sinTasaDeAhorro}
       />
     );
   }
@@ -458,7 +463,7 @@ export function Dashboard() {
         ) : vistaActiva === PESTANA_CATEGORIAS_COMERCIOS ? (
           <DetalleDimensionTab transacciones={transacciones} />
         ) : vistaActiva === PESTANA_SHOPHUNTERS ? (
-          renderVistaResumen(PESTANA_SHOPHUNTERS, transaccionesShophunters)
+          renderVistaResumen(PESTANA_SHOPHUNTERS, transaccionesShophunters, { sinTasaDeAhorro: true })
         ) : vistaActiva === PESTANA_RESUMEN ? (
           renderVistaResumen(PESTANA_RESUMEN, transacciones)
         ) : (
