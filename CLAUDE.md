@@ -272,7 +272,8 @@ current week (or the one after the last statement) averages its known days and s
 `fechaCorte` is **today** for "Por correo" (notices arrive almost live: no notices = a real $0 day) and the **latest
 loaded movement date** for "Por estado de cuenta" (statements arrive weeks late). "Spend" is exactly each day's total
 shown in the cell (so for statements: TDC cargos of non-hidden categories only, Priority/abonos excluded). The goal is a
-constant (no UI to change it). Checked with synthetic data (averages, partial weeks, cutoff per source, over/under).
+constant (no UI to change it). Covered by `lib/metaDiaria.test.ts` (Vitest: week boundaries, partial weeks, first week, no countable days)
+and checked in the browser with synthetic data (cutoff per source, over/under).
 
 **Main window layout (2026-10-04, user's request to improve look & usability)**: `_construir_ui`
 packs the header (`_construir_encabezado`: bank → "Cargar PDF..." → "Inspeccionar PDF...", rules on
