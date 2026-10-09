@@ -177,9 +177,15 @@ export function GastosEstadoCuentaTab({
   }
 
   const hoy = hoyIso();
-  const ocultasOrdenadas = [
-    ...categorias.filter((c) => categoriasOcultas.has(c)),
-    ...eventos.filter((e) => eventosOcultos.has(e)),
+  // Los eventos empiezan todos ocultos: en el resumen plegado van como conteo (no como
+  // una lista larga de nombres); los nombres se ven al desplegar.
+  const categoriasOcultasOrdenadas = categorias.filter((c) => categoriasOcultas.has(c));
+  const eventosOcultosCantidad = eventos.filter((e) => eventosOcultos.has(e)).length;
+  const resumenOcultas = [
+    ...categoriasOcultasOrdenadas,
+    ...(eventosOcultosCantidad > 0
+      ? [`${eventosOcultosCantidad} ${eventosOcultosCantidad === 1 ? "evento" : "eventos"}`]
+      : []),
   ];
 
   function alternarCategoria(categoria: string) {
@@ -251,7 +257,7 @@ export function GastosEstadoCuentaTab({
           </span>
           <span className="font-medium">Ocultar categorías y eventos</span>
           <span style={{ color: "var(--text-muted)" }}>
-            {ocultasOrdenadas.length === 0 ? "· ninguna" : `· ${ocultasOrdenadas.join(", ")}`}
+            {resumenOcultas.length === 0 ? "· ninguna" : `· ${resumenOcultas.join(", ")}`}
           </span>
           <span className="underline" style={{ color: "var(--text-muted)" }}>
             {verOcultas ? "Listo" : "Editar"}
@@ -305,7 +311,8 @@ export function GastosEstadoCuentaTab({
               Los cargos de tarjeta de estas categorías o de estos eventos (un viaje, una boda...) no suman
               al total del día ni al color del calendario ni a los promedios, pero siguen apareciendo en
               el detalle del día. Por defecto se ocultan los pagos de tarjeta y traspasos entre tus
-              propias cuentas, y ningún evento. Es independiente de las mismas opciones del Resumen.
+              propias cuentas y TODOS los eventos (un evento nuevo también empieza oculto): toca un
+              evento para volver a sumarlo. Es independiente de las mismas opciones del Resumen.
             </p>
           </>
         )}

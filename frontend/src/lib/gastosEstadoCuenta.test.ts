@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agruparEstadosPorDia } from "./gastosEstadoCuenta";
+import { agruparEstadosPorDia, eventosOcultosPorDefecto, eventosVisiblesTras } from "./gastosEstadoCuenta";
 import { esTarjetaCredito } from "./tarjetas";
 import { transaccion } from "../test/fabrica";
 
@@ -55,5 +55,45 @@ describe("agruparEstadosPorDia", () => {
       new Set()
     );
     expect(dias.map((d) => d.fecha)).toEqual(["2026-08-03", "2026-08-01"]);
+  });
+});
+
+describe("eventos ocultos por defecto", () => {
+  const existentes = ["Boda", "Viaje"];
+
+  it("sin nada elegido, todos los eventos están ocultos", () => {
+    expect([...eventosOcultosPorDefecto(existentes, new Set())].sort()).toEqual(["Boda", "Viaje"]);
+  });
+
+  it("un evento que el usuario volvió a mostrar deja de estar oculto; los demás siguen", () => {
+    expect([...eventosOcultosPorDefecto(existentes, new Set(["Viaje"]))]).toEqual(["Boda"]);
+  });
+
+  it("un evento NUEVO nace oculto aunque el usuario ya haya mostrado otros", () => {
+    const visibles = new Set(["Viaje"]);
+    expect([...eventosOcultosPorDefecto([...existentes, "Mudanza"], visibles)].sort()).toEqual(["Boda", "Mudanza"]);
+  });
+
+  it("alternar un evento (ocultos -> visibles) es consistente en los dos sentidos", () => {
+    // Estado inicial: todo oculto. El usuario quita "Viaje" de los ocultos.
+    let ocultos = eventosOcultosPorDefecto(existentes, new Set());
+    ocultos = new Set([...ocultos].filter((e) => e !== "Viaje"));
+    const visibles = eventosVisiblesTras(existentes, ocultos);
+    expect([...visibles]).toEqual(["Viaje"]);
+    expect([...eventosOcultosPorDefecto(existentes, visibles)]).toEqual(["Boda"]);
+    // "Mostrar todos" = ningún evento oculto.
+    expect([...eventosVisiblesTras(existentes, new Set())].sort()).toEqual(["Boda", "Viaje"]);
+  });
+
+  it("con esos ocultos, los cargos de los eventos ocultos no suman al día (pero se listan)", () => {
+    const movs = [
+      transaccion({ monto: 100, categoria: "Comida" }),
+      transaccion({ monto: 900, categoria: "Hospedaje", evento: "Viaje" }),
+    ];
+    const [dia] = agruparEstadosPorDia(movs, new Set(), eventosOcultosPorDefecto(["Viaje"], new Set()));
+    expect(dia.total.total).toBe(10000);
+    expect(dia.sinSumar.map((x) => x.motivo)).toEqual(["Evento oculto"]);
+    const [conViaje] = agruparEstadosPorDia(movs, new Set(), eventosOcultosPorDefecto(["Viaje"], new Set(["Viaje"])));
+    expect(conViaje.total.total).toBe(100000);
   });
 });

@@ -244,7 +244,10 @@ same day: its movements are shown but never counted)** and hidden categories (de
 the cell shows "+N sin sumar"; a day with only those has no heat color ("sin gasto"). **Own "Ocultar
 categorías y eventos" row** (2026-10-08: events added at the user's request; a hidden event's cargos go to "No suman"
 with the reason "Evento oculto", don't count in the day total/color/averages, and a refund of a hidden event doesn't mark the day
-"Abono"; `eventosOcultos` stored in the same `estadosPorPestana["gastos-correo"]`, default none) (collapsed disclosure, independent from the Resumen's; stored in
+"Abono"; **hidden by default: ALL events** (user's request 2026-10-09; the pills only exist to bring one back).
+The state stores what the user *re-showed* (`EstadoVista.eventosVisibles`, tab key `"gastos-correo"`), and
+the hidden set is derived (`eventosOcultosPorDefecto(existentes, visibles)`), so an event created later is
+hidden too; the collapsed summary shows them as a count ("· Pago TDC, 3 eventos") (collapsed disclosure, independent from the Resumen's; stored in
 `estadosPorPestana["gastos-correo"].categoriasOcultas`, `null` = default). Cell badges: one per
 non-TDC account with movements that day ("Priority", `nombreCorto`) and "Abono" when there are abonos
 of non-hidden categories (a card payment is not income). `$0` cargos (Invex V2 echo lines) are

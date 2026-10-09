@@ -246,3 +246,17 @@ export function diasEntre(a: string, b: string): number {
 
 /** Nombre corto para la insignia del calendario: "Cuenta Priority" -> "Priority". */
 export const nombreCorto = (cuenta: string) => cuenta.replace(/^cuenta\s+/i, "");
+
+/**
+ * Eventos ocultos en "Gastos recientes": TODOS los que existen, salvo los que
+ * el usuario volvió a mostrar (`visibles`). Se guarda lo que se muestra (y no
+ * lo que se oculta) para que un evento nuevo nazca oculto sin tocar nada.
+ */
+export function eventosOcultosPorDefecto(existentes: string[], visibles: Set<string>): Set<string> {
+  return new Set(existentes.filter((e) => !visibles.has(e)));
+}
+
+/** Lo contrario: dado el conjunto de ocultos que quedó, los que se muestran. */
+export function eventosVisiblesTras(existentes: string[], ocultos: Set<string>): Set<string> {
+  return new Set(existentes.filter((e) => !ocultos.has(e)));
+}

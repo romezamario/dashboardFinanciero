@@ -3,6 +3,7 @@ import {
   armarTransacciones,
   categoriaDe,
   cuentaDe,
+  eventoDe,
   obtenerCatalogos,
   obtenerDatosTransacciones,
   obtenerFilasPorIds,
@@ -10,6 +11,7 @@ import {
   type DatosTransacciones,
   type Filtros,
 } from "../lib/queries";
+import { eventosOcultosPorDefecto, eventosVisiblesTras } from "../lib/gastosEstadoCuenta";
 import { categoriasExcluidasPorDefecto, RANGO_MESES_VACIO, type RangoMeses } from "../lib/indicadores";
 import type { Transaccion } from "../lib/types";
 import { supabase } from "../lib/supabase";
@@ -81,6 +83,10 @@ interface EstadoVista {
   /** A diferencia de categoriasOcultas, sin default -- ningún evento se
    * descarta hasta que el usuario lo elige explícitamente. */
   eventosOcultos: Set<string>;
+  /** Solo "Gastos recientes" (por estado de cuenta): los eventos que el usuario VOLVIÓ a
+   * mostrar. Todos los demás -- también los eventos nuevos -- empiezan ocultos (ver
+   * eventosOcultosPorDefecto); por eso se guarda lo visible y no lo oculto. */
+  eventosVisibles: Set<string>;
   rangoMeses: RangoMeses;
   vistaTiempo: VistaTiempo;
 }
@@ -89,6 +95,7 @@ const ESTADO_VACIO: EstadoVista = {
   filtros: {},
   categoriasOcultas: null,
   eventosOcultos: new Set(),
+  eventosVisibles: new Set(),
   rangoMeses: RANGO_MESES_VACIO,
   vistaTiempo: "recientes",
 };
@@ -202,6 +209,16 @@ export function Dashboard() {
   const categoriasOcultasPorDefecto = useMemo(
     () => categoriasExcluidasPorDefecto(Array.from(new Set(transacciones.map(categoriaDe)))),
     [transacciones]
+  );
+  // "Gastos recientes" (por estado de cuenta): los eventos empiezan TODOS ocultos.
+  const eventosExistentes = useMemo(
+    () => Array.from(new Set(transacciones.map(eventoDe).filter((e): e is string => e !== null))),
+    [transacciones]
+  );
+  const eventosVisiblesGastos = (estadosPorPestana[PESTANA_GASTOS_CORREO] ?? ESTADO_VACIO).eventosVisibles;
+  const eventosOcultosGastos = useMemo(
+    () => eventosOcultosPorDefecto(eventosExistentes, eventosVisiblesGastos),
+    [eventosExistentes, eventosVisiblesGastos]
   );
   const transaccionesPorCuenta = useMemo(() => {
     const porCuenta = new Map<string, Transaccion[]>();
@@ -394,11 +411,14 @@ export function Dashboard() {
                 categoriasOcultas: cambio(e.categoriasOcultas ?? categoriasOcultasPorDefecto),
               }))
             }
-            eventosOcultos={(estadosPorPestana[PESTANA_GASTOS_CORREO] ?? ESTADO_VACIO).eventosOcultos}
+            eventosOcultos={eventosOcultosGastos}
             onCambiarEventosOcultos={(cambio) =>
               actualizarEstado(PESTANA_GASTOS_CORREO, (e) => ({
                 ...e,
-                eventosOcultos: cambio(e.eventosOcultos),
+                eventosVisibles: eventosVisiblesTras(
+                  eventosExistentes,
+                  cambio(eventosOcultosPorDefecto(eventosExistentes, e.eventosVisibles))
+                ),
               }))
             }
             onActualizado={recargarTransacciones}
