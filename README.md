@@ -217,7 +217,10 @@ Flujo completo una vez que el extractor de tu banco existe:
    haga falta y "Agregar reglas" las guarda al final de `reglas_categorizacion.json` y recategoriza
    la tabla. Las que Claude no reconoce quedan sin marcar, para categorizarlas a mano. Usa tu
    suscripción de Claude (sin API key ni costo extra) y solo envía las descripciones sin
-   categoría y tus reglas actuales, nunca el PDF. La primera vez, si Claude Code no está
+   categoría y tus reglas actuales, nunca el PDF; los números largos (8 dígitos o más, como una
+   CLABE o un número de cuenta) se mandan enmascarados a sus últimos 4. Claude corre sin acceso a
+   herramientas (no puede leer ni modificar archivos de tu computadora), en una carpeta temporal
+   vacía. La primera vez, si Claude Code no está
    instalado, la app ofrece instalarlo (con npm o, si no hay, con el instalador oficial) y luego
    abre una ventana para iniciar sesión con tu cuenta en el navegador; al cerrarla, pide las
    propuestas sola. No hay que correr comandos.
@@ -351,6 +354,11 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
     categoría y cambios fuertes en la tasa de ahorro. "Ver movimientos" filtra la tabla a eso.
 - **Eventos** — viajes, fiestas, etc.: cuánto gastaste en cada uno, en qué categorías y comercios,
   sus transacciones, y un buscador para asignar (o quitar) un evento a varias transacciones.
+- **Shophunters** — aparece solo si hay movimientos con un evento cuyo nombre contiene
+  "Shophunters" (p. ej. "2026-09 Shophunters"; los meses nuevos entran solos). Es la vista del
+  Resumen con solo esos movimientos, sin tasa de ahorro ni tarjetas de indicadores (es el gasto de
+  un evento, no tus finanzas), y la gráfica mensual lleva el promedio móvil de 3 meses y los
+  promedios de 3 y 12 meses, contados desde el primer mes con gasto.
 - **Categorías y Comercios** — el detalle de una categoría y/o un comercio: gasto mensual con
   promedio móvil de 3 meses (o ingreso, si lo elegido solo tiene abonos), sus movimientos más
   grandes y sus transacciones. Clic en un mes filtra lo de abajo a ese mes.
@@ -368,12 +376,25 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
   «Heredar eventos» o desde la tarjeta del movimiento; nunca pisa un evento ya asignado). En la
   vista por estado de cuenta también puedes marcar varios movimientos del día y asignarles (o
   quitarles) un evento de una vez, con el bloque «Asignar evento» al final de las tablas.
+  - **Meta de gasto diario ($1,000)**: arriba del calendario, el promedio por día del mes, y debajo
+    de cada semana (domingo a sábado) el de esa semana, con una barra contra la meta y cuánto
+    quedaste por debajo o por encima. Solo cuentan los días que ya están cargados (hasta hoy en
+    "por correo"; hasta el último movimiento en "por estado de cuenta").
+  - **Posible coincidencia con el correo**: en la vista por estado de cuenta, un clic en un
+    movimiento abre una tarjeta con el aviso de correo que probablemente es el mismo cargo (mismo
+    monto al centavo, ±1 día) o dice por qué no hay. Es una pista, no una conciliación: no hay un
+    identificador común entre las dos fuentes. Los movimientos con coincidencia llevan ✉.
 - **Una pestaña por cada cuenta que no es tarjeta** (p. ej. la de cheques) — la misma vista
   que el Resumen, solo con esa cuenta.
 - **QQQ / TQQQ** — análisis técnico (velas, medias móviles, Bollinger, soportes y resistencias
-  calculados de los últimos 6 meses, RSI, MACD, comparación QQQ vs. TQQQ) y un tablero de indicadores macro de EE. UU. (Fed, inflación, empleo, tasas,
+  calculados de los últimos 6 meses con las velas que los originan, volumen contra su promedio,
+  patrones chartistas —rectángulo, hombro-cabeza-hombro, bandera, taza con asa, murciélago,
+  doble techo/piso— con las reglas que cumple cada uno, RSI, MACD, comparación QQQ vs. TQQQ) y un tablero de indicadores macro de EE. UU. (Fed, inflación, empleo, tasas,
   VIX) con las fechas de los próximos datos. No usa tus finanzas; solo vive aquí para tener todo
   junto.
+
+Si una pestaña falla al dibujarse (un dato inesperado), solo esa pestaña muestra el error con
+**Reintentar**; las demás siguen funcionando.
 
 **Filtros por clic (estilo Power BI)**: en el Resumen y en Tarjetas de crédito, un clic en una
 barra (categoría, comercio, tarjeta) o en las filas de Cuenta/Tarjeta/Evento filtra el resto de
