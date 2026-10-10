@@ -362,7 +362,10 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
   fuentes: **por correo** (los avisos de compra de Banamex, llegan el mismo día) y **por estado
   de cuenta** (las transacciones sincronizadas, que llegan semanas después; solo suman los cargos
   de tarjetas de crédito). Clic en un día abre su detalle, con **Descargar Excel**; en la vista
-  por estado de cuenta cada movimiento se puede editar ahí mismo.
+  por estado de cuenta cada movimiento se puede editar ahí mismo. En la vista por correo puedes
+  **asignar un evento** a los gastos del día (casillas + «Asignar evento») sin esperar al estado de
+  cuenta; cuando llega, el cargo que se empareja con ese aviso puede **heredar el evento** (botón
+  «Heredar eventos» o desde la tarjeta del movimiento; nunca pisa un evento ya asignado).
 - **Una pestaña por cada cuenta que no es tarjeta** (p. ej. la de cheques) — la misma vista
   que el Resumen, solo con esa cuenta.
 - **QQQ / TQQQ** — análisis técnico (velas, medias móviles, Bollinger, soportes y resistencias
@@ -459,7 +462,9 @@ Esto se configura fuera del código, en el dashboard de Cloudflare Zero Trust:
 La pestaña **Gastos recientes** muestra los cargos que Banamex avisa por correo, un día por
 sección, con ciudad y subtotales. Vive en su propia tabla (`gastos_correo`, migración
 `20261004210000_add_gastos_correo.sql`), aparte de `transacciones`: el aviso llega el mismo día y
-el estado de cuenta semanas después, y mezclarlos duplicaría cargos.
+el estado de cuenta semanas después, y mezclarlos duplicaría cargos. Cada aviso puede llevar un
+evento (`gastos_correo.evento_id`, migración `20261010120000_gastos_correo_evento.sql`), el mismo
+catálogo `eventos` de las transacciones.
 
 Todo el flujo corre en tu computadora (la nube nunca ve tu Gmail ni tus reglas). Se usa desde la
 app de escritorio, pestaña **Gastos recientes (Gmail)**:

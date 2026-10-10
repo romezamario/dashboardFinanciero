@@ -107,7 +107,7 @@ function hojaDetalle(dia: DiaGastos): SheetData {
  * tablas dinámicas. La fecha va como texto ISO para que la zona horaria no
  * la corra un día. */
 function hojaMovimientos(dia: DiaGastos): SheetData {
-  const columnas = ["Fecha", "Hora", "Tarjeta", "Categoría", "Comercio", "Establecimiento", "Ciudad"];
+  const columnas = ["Fecha", "Hora", "Tarjeta", "Categoría", "Comercio", "Establecimiento", "Ciudad", "Evento"];
   const filas: SheetData = [
     [
       ...columnas.map((c) => texto(c, { ...CABECERA, align: "left" })),
@@ -124,6 +124,7 @@ function hojaMovimientos(dia: DiaGastos): SheetData {
       texto(g.comercio),
       texto(g.establecimiento ?? ""),
       texto(g.ciudad ?? g.ciudad_cod ?? ""),
+      texto(g.evento ?? ""),
       monto(Math.round(g.monto * 100)),
     ]);
   }
@@ -152,7 +153,7 @@ export function hojasDelDia(dia: DiaGastos) {
       data: hojaMovimientos(dia),
       columns: [
         { width: 12 }, { width: 8 }, { width: 24 }, { width: 18 },
-        { width: 28 }, { width: 28 }, { width: 14 }, { width: 14 },
+        { width: 28 }, { width: 28 }, { width: 14 }, { width: 18 }, { width: 14 },
       ],
       stickyRowsCount: 1,
     },

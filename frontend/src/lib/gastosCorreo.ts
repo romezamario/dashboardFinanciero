@@ -17,6 +17,18 @@ export interface GastoCorreo {
   ciudad: string | null;
   monto: number;
   moneda: string;
+  /** Evento asignado desde "Gastos recientes" (viaje, Shophunters...): se asigna el mismo día,
+   * sin esperar al estado de cuenta, y se puede heredar al cargo que lo empareje. */
+  evento: string | null;
+}
+
+/** La fila como la devuelve PostgREST: el evento llega anidado (`eventos(nombre)`). */
+export interface FilaGastoCorreo extends Omit<GastoCorreo, "evento"> {
+  eventos: { nombre: string } | null;
+}
+
+export function filaAGastoCorreo({ eventos, ...resto }: FilaGastoCorreo): GastoCorreo {
+  return { ...resto, evento: eventos?.nombre ?? null };
 }
 
 /** Todos los gastos de correo (con la carga inicial de todo el historial
@@ -24,18 +36,18 @@ export interface GastoCorreo {
  * fecha, hora **e id** (varios avisos a la misma hora) y páginas en
  * paralelo -- ver `obtenerTodasLasPaginas`. */
 export function obtenerGastosCorreo(): Promise<GastoCorreo[]> {
-  return obtenerTodasLasPaginas<GastoCorreo>((desde, hasta, contar) =>
+  return obtenerTodasLasPaginas<FilaGastoCorreo>((desde, hasta, contar) =>
     supabase
       .from("gastos_correo")
       .select(
-        "id, mensaje_id, fecha, hora, tarjeta, comercio, categoria, establecimiento, ciudad_cod, ciudad, monto, moneda",
+        "id, mensaje_id, fecha, hora, tarjeta, comercio, categoria, establecimiento, ciudad_cod, ciudad, monto, moneda, eventos(nombre)",
         contar ? { count: "estimated" } : undefined
       )
       .order("fecha", { ascending: false })
       .order("hora", { ascending: true })
       .order("id", { ascending: true })
       .range(desde, hasta)
-  );
+  ).then((filas) => filas.map(filaAGastoCorreo));
 }
 
 // Nombres de las tarjetas por terminación. Cualquier otra se muestra como

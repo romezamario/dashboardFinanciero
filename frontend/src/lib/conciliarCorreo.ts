@@ -90,3 +90,24 @@ export function conciliarConCorreo(
 export function primeraFechaCorreo(gastos: GastoCorreo[]): string | null {
   return gastos.reduce<string | null>((min, g) => (min === null || g.fecha < min ? g.fecha : min), null);
 }
+
+/**
+ * Eventos que se pueden HEREDAR del correo: movimientos del estado de cuenta SIN evento cuyo
+ * aviso emparejado SÍ tiene uno -> `evento -> ids de los movimientos`. Los que ya tienen un
+ * evento (el mismo o uno distinto) no se tocan: el emparejamiento es una pista (monto y
+ * fecha), y no debe pisar algo que el usuario ya asignó.
+ */
+export function eventosHeredables(
+  movimientos: MovimientoDia[],
+  coincidencias: Map<string, Coincidencia>
+): Map<string, string[]> {
+  const porEvento = new Map<string, string[]>();
+  for (const m of movimientos) {
+    const evento = coincidencias.get(m.id)?.gasto.evento;
+    if (!evento || m.evento) continue;
+    const ids = porEvento.get(evento);
+    if (ids) ids.push(m.id);
+    else porEvento.set(evento, [m.id]);
+  }
+  return porEvento;
+}

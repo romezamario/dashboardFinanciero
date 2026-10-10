@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { obtenerGastosCorreo, type GastoCorreo } from "../lib/gastosCorreo";
+import { asignarEventoAGastosCorreo, eventoDe } from "../lib/queries";
 import type { Transaccion } from "../lib/types";
 import { GastosCorreoTab } from "./GastosCorreoTab";
 import { GastosEstadoCuentaTab } from "./GastosEstadoCuentaTab";
@@ -36,6 +37,30 @@ export function GastosRecientesTab(props: GastosRecientesTabProps) {
       .catch((e) => setErrorCorreo(e instanceof Error ? e.message : String(e)));
   }, []);
   const cambiarVista = (cambio: (anterior: VistaCalendario) => VistaCalendario) => setVista(cambio);
+
+  // Eventos que ya existen (en los estados de cuenta o en avisos), para sugerirlos al asignar.
+  const eventosExistentes = useMemo(() => {
+    const nombres = new Set<string>();
+    for (const t of props.transacciones) {
+      const evento = eventoDe(t);
+      if (evento) nombres.add(evento);
+    }
+    for (const g of gastosCorreo ?? []) if (g.evento) nombres.add(g.evento);
+    return Array.from(nombres).sort((a, b) => a.localeCompare(b, "es"));
+  }, [props.transacciones, gastosCorreo]);
+
+  // Asigna (o quita, con null) un evento a avisos del correo. Se guarda en Supabase y se
+  // refleja al instante en lo ya cargado (sin volver a pedir todos los avisos); el
+  // `onActualizado([])` relee solo los catálogos, para que un evento NUEVO aparezca en el
+  // resto del dashboard.
+  async function asignarEvento(ids: string[], evento: string | null) {
+    await asignarEventoAGastosCorreo(ids, evento);
+    const afectados = new Set(ids);
+    setGastosCorreo((previos) =>
+      previos && previos.map((g) => (afectados.has(g.id) ? { ...g, evento } : g))
+    );
+    await props.onActualizado([]);
+  }
   return (
     <div className="space-y-6">
       <Segmentado
@@ -50,7 +75,11 @@ export function GastosRecientesTab(props: GastosRecientesTabProps) {
         <GastosCorreoTab
           gastos={gastosCorreo}
           error={errorCorreo}
-          vista={vista} onCambiarVista={cambiarVista} />
+          eventosExistentes={eventosExistentes}
+          onAsignarEvento={asignarEvento}
+          vista={vista}
+          onCambiarVista={cambiarVista}
+        />
       ) : (
         <GastosEstadoCuentaTab
           {...props}

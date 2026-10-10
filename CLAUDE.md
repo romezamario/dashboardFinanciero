@@ -276,6 +276,17 @@ The correo data is the one `GastosRecientesTab` already loads (passed down as `g
 context (`ContextoCoincidencia`) so the description cell is a button (keyboard) and "Editar" stops propagation. **Still not
 done on purpose**: a combined view that fills the days after the last cutoff with correo data, and persisting/confirming matches.
 
+**Events on correo notices, inherited by the statement (2026-10-10, user's request: categorize as soon as the charge happens, reuse it when the statement arrives)**:
+`gastos_correo.evento_id` (FK to the same `eventos` catalog; migration `20261010120000_gastos_correo_evento.sql`; the desktop upload upsert doesn't send it, so
+re-uploading a day keeps it). In "Por correo" the day panel has checkboxes + an "Asignar evento" block (`AsignarEvento` in `GastosCorreoTab.tsx`: type/pick an event,
+"Asignar a N", "Quitar evento", "Seleccionar todo el día") calling `asignarEventoAGastosCorreo` (queries.ts, same `buscarOCrearId("eventos")` + `porLotes`);
+`GastosRecientesTab` patches its loaded `gastosCorreo` and calls `onActualizado([])` so a brand-new event reaches the catalogs. `GastoCorreo.evento` is flattened from
+PostgREST's `eventos(nombre)` by `filaAGastoCorreo`. **Inheritance is manual and never overwrites**: `eventosHeredables` (conciliarCorreo.ts) lists statement
+movements WITHOUT an event whose matched notice HAS one; `HerenciaDeEventos` (GastosEstadoCuentaTab) shows the counts per event and a "Heredar eventos" button with
+inline confirmation, the match card (`CoincidenciaFlotante`) offers it per movement, and event cells show a muted "↳ evento" hint. Events are hidden by default in this view,
+so inherited cargos stop adding to the day until the event is re-shown (the success message says so). The match is still only a hint (amount + ±1 day), hence the confirmation.
+Covered by `conciliarCorreo.test.ts` (`eventosHeredables`, `filaAGastoCorreo`); the UI was type-checked/built but not driven in a browser.
+
 **Weekly daily-average vs. goal (2026-10-08, user's request: "el objetivo es tener un gasto diario de 1000")**: under each
 week row of the calendar (both sources; `FranjaSemana` in `CalendarioMensual.tsx`, math in `lib/metaDiaria.ts`) a strip
 shows the week's range (Sunday–Saturday, may cross months — the grid only draws the in-month days but the average uses all

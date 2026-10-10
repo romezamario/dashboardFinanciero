@@ -512,6 +512,21 @@ export async function quitarEventoDeTransacciones(ids: string[]): Promise<void> 
   );
 }
 
+/**
+ * Asigna (o, con `null`, quita) un evento a gastos del correo (`gastos_correo`).
+ * Sirve para categorizar el gasto el mismo día que llega el aviso: cuando el estado
+ * de cuenta llega y su cargo se empareja con este aviso, el evento se puede heredar
+ * (ver `eventosHeredables`). Mismo find-or-create del catálogo `eventos` que usan las
+ * transacciones, así que es el MISMO evento. RLS ya limita el update a filas propias.
+ */
+export async function asignarEventoAGastosCorreo(ids: string[], evento: string | null): Promise<void> {
+  if (ids.length === 0) return;
+  const eventoId = evento ? await buscarOCrearId("eventos", evento) : null;
+  await porLotes(ids, (lote) =>
+    supabase.from("gastos_correo").update({ evento_id: eventoId }).in("id", lote)
+  );
+}
+
 /** `.in("id", ids)` viaja en la URL de la petición (?id=in.(...)): con
  * cientos de ids seleccionados ("Seleccionar todas las coincidencias" sobre
  * años de historial) la URL rebasaba el límite del servidor y la edición

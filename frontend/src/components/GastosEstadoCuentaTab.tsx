@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { descargarDiaEstadoExcel } from "../lib/exportarGastosEstadoCuenta";
-import { conciliarConCorreo, primeraFechaCorreo, type Coincidencia } from "../lib/conciliarCorreo";
+import { conciliarConCorreo, eventosHeredables, primeraFechaCorreo, type Coincidencia } from "../lib/conciliarCorreo";
 import { tituloDia, type GastoCorreo } from "../lib/gastosCorreo";
 import { hoyIso } from "../lib/metaDiaria";
 import {
@@ -95,16 +95,13 @@ export function GastosEstadoCuentaTab({
   // Posible coincidencia de cada cargo con un aviso de correo (mismo monto, ±1
   // día). Se calcula sobre TODAS las transacciones, no sobre `dias`: ocultar
   // categorías o eventos no debe cambiar qué aviso le toca a cada cargo.
+  const movimientos = useMemo(() => transacciones.flatMap((t) => aMovimiento(t) ?? []), [transacciones]);
   const coincidencias = useMemo(
-    () =>
-      gastosCorreo
-        ? conciliarConCorreo(
-            transacciones.flatMap((t) => aMovimiento(t) ?? []),
-            gastosCorreo
-          )
-        : new Map<string, Coincidencia>(),
-    [transacciones, gastosCorreo]
+    () => (gastosCorreo ? conciliarConCorreo(movimientos, gastosCorreo) : new Map<string, Coincidencia>()),
+    [movimientos, gastosCorreo]
   );
+  // Eventos que el correo ya tiene y el cargo emparejado todavía no (evento -> ids).
+  const heredables = useMemo(() => eventosHeredables(movimientos, coincidencias), [movimientos, coincidencias]);
   const correo = useMemo<EstadoCorreo>(
     () =>
       errorCorreo
@@ -241,6 +238,8 @@ export function GastosEstadoCuentaTab({
         porque no hayas gastado.
       </p>
 
+      <HerenciaDeEventos heredables={heredables} onActualizado={onActualizado} />
+
       <div
         className="flex flex-col gap-2 rounded-lg p-3"
         style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
@@ -373,6 +372,10 @@ function PanelDiaEstado({
   // Tarjetita de la posible coincidencia en el correo (junto al clic).
   const [flotante, setFlotante] = useState<{ mov: MovimientoDia; x: number; y: number } | null>(null);
   const cerrarFlotante = useCallback(() => setFlotante(null), []);
+  async function heredar(id: string, evento: string) {
+    await actualizarCategoriaComercioYEvento([id], { evento });
+    await onActualizado([id]);
+  }
   const contextoCoincidencia = useMemo<ContextoCoincidencias>(
     () => ({
       coincidencias,
@@ -470,6 +473,7 @@ function PanelDiaEstado({
           y={flotante.y}
           coincidencia={coincidencias.get(flotante.mov.id)}
           correo={correo}
+          onHeredar={(evento) => heredar(flotante.mov.id, evento)}
           onCerrar={cerrarFlotante}
         />
       )}
@@ -578,9 +582,7 @@ function TablaDetalleEstado({
                 <td className="whitespace-nowrap px-3 py-1.5" style={{ color: "var(--text-secondary)" }}>
                   {g.tarjeta ?? ""}
                 </td>
-                <td className="whitespace-nowrap px-3 py-1.5" style={{ color: "var(--text-secondary)" }}>
-                  {g.evento ?? ""}
-                </td>
+                <CeldaEvento mov={g} />
                 <CeldasSumas sumas={sumarUnoEstado(g, dia.cuentas)} columnas={dia.cuentas} />
                 <td className="px-3 py-1.5 text-right">
                   <BotonEditar id={g.id} onEditar={onEditar} />
@@ -670,9 +672,7 @@ function TablaSinSumar({
               {mov.cuenta}
               {mov.tarjeta ? ` · ${mov.tarjeta}` : ""}
             </td>
-            <td className="whitespace-nowrap px-3 py-1.5" style={{ color: "var(--text-secondary)" }}>
-              {mov.evento ?? ""}
-            </td>
+            <CeldaEvento mov={mov} />
             <td className="whitespace-nowrap px-3 py-1.5" style={{ color: "var(--text-secondary)" }}>
               {motivo}
             </td>
@@ -690,6 +690,25 @@ function TablaSinSumar({
         ))}
       </tbody>
     </SeccionTabla>
+  );
+}
+
+/** Evento del movimiento; si no tiene y su aviso de correo sí, lo muestra como pista ("↳ evento"), sin guardarlo. */
+function CeldaEvento({ mov }: { mov: MovimientoDia }) {
+  const contexto = useContext(ContextoCoincidencia);
+  const delCorreo = mov.evento ? null : (contexto?.coincidencias.get(mov.id)?.gasto.evento ?? null);
+  return (
+    <td className="whitespace-nowrap px-3 py-1.5" style={{ color: "var(--text-secondary)" }}>
+      {mov.evento ??
+        (delCorreo && (
+          <span
+            style={{ color: "var(--text-muted)", fontStyle: "italic" }}
+            title="El aviso de correo emparejado tiene este evento; aún no se asigna al movimiento (clic en la fila para hacerlo)"
+          >
+            ↳ {delCorreo}
+          </span>
+        ))}
+    </td>
   );
 }
 
@@ -915,5 +934,109 @@ function Campo({
         style={ESTILO_CAMPO}
       />
     </label>
+  );
+}
+
+/**
+ * Cargos sin evento cuyo aviso de correo emparejado sí tiene uno (asignado el mismo día desde
+ * "Por correo"). Es una pista (mismo monto, ±1 día), así que nada se asigna solo: se muestra
+ * cuántos son y el usuario los hereda de una vez o uno por uno desde la tarjeta del movimiento.
+ * Nunca se pisa un evento ya asignado (`eventosHeredables`).
+ */
+function HerenciaDeEventos({
+  heredables,
+  onActualizado,
+}: {
+  heredables: Map<string, string[]>;
+  onActualizado: (ids?: string[]) => void | Promise<void>;
+}) {
+  const [confirmando, setConfirmando] = useState(false);
+  const [trabajando, setTrabajando] = useState(false);
+  const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
+  const total = Array.from(heredables.values()).reduce((suma, ids) => suma + ids.length, 0);
+
+  async function heredarTodos() {
+    setTrabajando(true);
+    setMensaje(null);
+    const ids: string[] = [];
+    try {
+      for (const [evento, delEvento] of heredables) {
+        await actualizarCategoriaComercioYEvento(delEvento, { evento });
+        ids.push(...delEvento);
+      }
+      setConfirmando(false);
+      setMensaje({
+        tipo: "ok",
+        texto: `Se asignó el evento a ${ids.length} movimiento(s). Los eventos empiezan ocultos: si quieres que sus cargos sumen al día, muéstralos en «Ocultar categorías y eventos».`,
+      });
+    } catch (e) {
+      setMensaje({
+        tipo: "error",
+        texto: `${e instanceof Error ? e.message : "No se pudo guardar."} ${ids.length > 0 ? `(Ya se asignaron ${ids.length}.)` : ""}`,
+      });
+    } finally {
+      if (ids.length > 0) await onActualizado(ids);
+      setTrabajando(false);
+    }
+  }
+
+  if (total === 0 && !mensaje) return null;
+  return (
+    <div
+      className="space-y-2 rounded-lg p-3 text-xs"
+      style={{ background: "var(--surface-1)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+    >
+      {total > 0 && (
+        <>
+          <p>
+            <span className="font-medium" style={{ color: "var(--text-primary)" }}>
+              {total} {total === 1 ? "cargo puede" : "cargos pueden"} heredar un evento del correo
+            </span>{" "}
+            ({Array.from(heredables).map(([evento, ids]) => `${evento}: ${ids.length}`).join(" · ")}). Se
+            emparejan por monto y fecha (±1 día), así que revisa; los que ya tienen evento no se tocan.
+          </p>
+          {confirmando ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span>¿Asignar el evento a {total} movimiento(s)?</span>
+              <button
+                type="button"
+                onClick={heredarTodos}
+                disabled={trabajando}
+                className="rounded-md px-3 py-1.5 font-medium text-white disabled:opacity-50"
+                style={{ background: "var(--series-1)" }}
+              >
+                {trabajando ? "Guardando…" : "Sí, asignar"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmando(false)}
+                disabled={trabajando}
+                className="underline"
+                style={{ color: "var(--text-muted)" }}
+              >
+                Cancelar
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmando(true)}
+              className="rounded-md px-3 py-1.5 font-medium"
+              style={{ border: "1px solid var(--series-1)", color: "var(--series-1)" }}
+            >
+              Heredar eventos
+            </button>
+          )}
+        </>
+      )}
+      {mensaje && (
+        <p
+          role="status"
+          style={{ color: mensaje.tipo === "ok" ? "var(--status-good)" : "var(--status-critical)" }}
+        >
+          {mensaje.texto}
+        </p>
+      )}
+    </div>
   );
 }

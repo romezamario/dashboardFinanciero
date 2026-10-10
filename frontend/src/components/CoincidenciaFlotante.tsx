@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Coincidencia } from "../lib/conciliarCorreo";
 import { nombreTarjeta } from "../lib/gastosCorreo";
 import type { MovimientoDia } from "../lib/gastosEstadoCuenta";
@@ -30,6 +31,7 @@ export function CoincidenciaFlotante({
   y,
   coincidencia,
   correo,
+  onHeredar,
   onCerrar,
 }: {
   mov: MovimientoDia;
@@ -37,6 +39,8 @@ export function CoincidenciaFlotante({
   y: number;
   coincidencia: Coincidencia | undefined;
   correo: EstadoCorreo;
+  /** Asigna al movimiento el evento del aviso (guarda en Supabase). */
+  onHeredar: (evento: string) => Promise<void>;
   onCerrar: () => void;
 }) {
   return (
@@ -50,7 +54,7 @@ export function CoincidenciaFlotante({
 
       <div className="mt-2 border-t pt-2" style={{ borderColor: "var(--border)" }}>
         {coincidencia ? (
-          <DetalleAviso coincidencia={coincidencia} />
+          <DetalleAviso mov={mov} coincidencia={coincidencia} onHeredar={onHeredar} />
         ) : (
           <SinCoincidencia mov={mov} correo={correo} />
         )}
@@ -59,7 +63,15 @@ export function CoincidenciaFlotante({
   );
 }
 
-function DetalleAviso({ coincidencia }: { coincidencia: Coincidencia }) {
+function DetalleAviso({
+  mov,
+  coincidencia,
+  onHeredar,
+}: {
+  mov: MovimientoDia;
+  coincidencia: Coincidencia;
+  onHeredar: (evento: string) => Promise<void>;
+}) {
   const { gasto, diasDeDiferencia, otrosCandidatos } = coincidencia;
   const lugar = gasto.ciudad ?? gasto.ciudad_cod;
   return (
@@ -75,7 +87,9 @@ function DetalleAviso({ coincidencia }: { coincidencia: Coincidencia }) {
         <Dato etiqueta="Tarjeta" valor={nombreTarjeta(gasto.tarjeta)} />
         <Dato etiqueta="Categoría" valor={gasto.categoria} />
         <Dato etiqueta="Monto" valor={formatoMoneda.format(gasto.monto)} fuerte />
+        {gasto.evento && <Dato etiqueta="Evento" valor={gasto.evento} fuerte />}
       </dl>
+      {gasto.evento && <HerenciaEvento mov={mov} evento={gasto.evento} onHeredar={onHeredar} />}
       {otrosCandidatos > 0 && (
         <p className="mt-2" style={{ color: "var(--text-muted)" }}>
           Hay {otrosCandidatos} {otrosCandidatos === 1 ? "aviso más" : "avisos más"} con el mismo monto en
@@ -112,4 +126,68 @@ function SinCoincidencia({ mov, correo }: { mov: MovimientoDia; correo: EstadoCo
     texto = `Sin coincidencia: no hay un aviso por ${formatoMoneda.format(mov.centavos / 100)} el ${fechaLarga(mov.fecha)} ni un día antes o después.`;
   }
   return <p style={{ color: "var(--text-secondary)" }}>{texto}</p>;
+}
+
+/** El aviso tiene evento: si el cargo no tiene ninguno se ofrece heredarlo (nunca se pisa uno ya asignado). */
+function HerenciaEvento({
+  mov,
+  evento,
+  onHeredar,
+}: {
+  mov: MovimientoDia;
+  evento: string;
+  onHeredar: (evento: string) => Promise<void>;
+}) {
+  const [estado, setEstado] = useState<"reposo" | "trabajando" | "hecho">("reposo");
+  const [error, setError] = useState<string | null>(null);
+
+  if (estado === "hecho") {
+    return (
+      <p className="mt-2 font-medium" style={{ color: "var(--status-good)" }}>
+        ✓ Se asignó «{evento}» a este movimiento.
+      </p>
+    );
+  }
+  if (mov.evento === evento) {
+    return (
+      <p className="mt-2" style={{ color: "var(--text-secondary)" }}>
+        ✓ Este movimiento ya tiene ese evento.
+      </p>
+    );
+  }
+  if (mov.evento) {
+    return (
+      <p className="mt-2" style={{ color: "var(--text-muted)" }}>
+        Este movimiento ya tiene el evento «{mov.evento}»: no se cambia.
+      </p>
+    );
+  }
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        disabled={estado === "trabajando"}
+        onClick={async () => {
+          setEstado("trabajando");
+          setError(null);
+          try {
+            await onHeredar(evento);
+            setEstado("hecho");
+          } catch (e) {
+            setError(e instanceof Error ? e.message : "No se pudo guardar.");
+            setEstado("reposo");
+          }
+        }}
+        className="rounded-md px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+        style={{ background: "var(--series-1)" }}
+      >
+        {estado === "trabajando" ? "Guardando…" : `Asignar «${evento}» a este movimiento`}
+      </button>
+      {error && (
+        <p className="mt-1" style={{ color: "var(--status-critical)" }}>
+          {error}
+        </p>
+      )}
+    </div>
+  );
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { conciliarConCorreo, primeraFechaCorreo } from "./conciliarCorreo";
-import type { GastoCorreo } from "./gastosCorreo";
+import { conciliarConCorreo, eventosHeredables, primeraFechaCorreo } from "./conciliarCorreo";
+import { filaAGastoCorreo, type GastoCorreo } from "./gastosCorreo";
 import { aMovimiento } from "./gastosEstadoCuenta";
 import { transaccion } from "../test/fabrica";
 
@@ -10,7 +10,7 @@ function aviso(parcial: Partial<GastoCorreo> = {}): GastoCorreo {
   return {
     id: `g${n}`, mensaje_id: `m${n}`, fecha: "2026-08-14", hora: "12:00", tarjeta: "904", comercio: "Starbucks",
     categoria: "Restaurantes", establecimiento: "STARBUCKS CENTRO", ciudad_cod: "MTY", ciudad: "Monterrey",
-    monto: 100, moneda: "MXN", ...parcial,
+    monto: 100, moneda: "MXN", evento: null, ...parcial,
   };
 }
 const mov = (parcial: Parameters<typeof transaccion>[0] = {}) => aMovimiento(transaccion(parcial))!;
@@ -76,5 +76,46 @@ describe("primeraFechaCorreo", () => {
   it("la fecha más antigua, o null sin avisos", () => {
     expect(primeraFechaCorreo([aviso({ fecha: "2026-09-02" }), aviso({ fecha: "2026-07-20" })])).toBe("2026-07-20");
     expect(primeraFechaCorreo([])).toBeNull();
+  });
+});
+
+describe("eventosHeredables", () => {
+  it("hereda el evento del aviso emparejado a un movimiento sin evento", () => {
+    const m = mov({ monto: 300 });
+    const g = aviso({ monto: 300, evento: "2026-10 Viaje" });
+    const r = eventosHeredables([m], conciliarConCorreo([m], [g]));
+    expect(Array.from(r)).toEqual([["2026-10 Viaje", [m.id]]]);
+  });
+
+  it("no pisa un evento que el movimiento ya tiene (igual o distinto)", () => {
+    const igual = mov({ monto: 310, evento: "Viaje" });
+    const distinto = mov({ monto: 320, evento: "Otro" });
+    const avisos = [aviso({ monto: 310, evento: "Viaje" }), aviso({ monto: 320, evento: "Viaje" })];
+    expect(eventosHeredables([igual, distinto], conciliarConCorreo([igual, distinto], avisos)).size).toBe(0);
+  });
+
+  it("ignora avisos sin evento y movimientos sin pareja; agrupa por evento", () => {
+    const a = mov({ monto: 410 });
+    const b = mov({ monto: 420 });
+    const c = mov({ monto: 430 });
+    const sinPareja = mov({ monto: 999 });
+    const avisos = [
+      aviso({ monto: 410, evento: "Viaje" }),
+      aviso({ monto: 420, evento: "Viaje" }),
+      aviso({ monto: 430 }),
+    ];
+    const r = eventosHeredables([a, b, c, sinPareja], conciliarConCorreo([a, b, c, sinPareja], avisos));
+    expect(r.get("Viaje")).toEqual([a.id, b.id]);
+    expect(r.size).toBe(1);
+  });
+});
+
+describe("filaAGastoCorreo", () => {
+  it("aplana el evento anidado de PostgREST", () => {
+    const { evento: _e, ...base } = aviso();
+    expect(filaAGastoCorreo({ ...base, eventos: { nombre: "Viaje" } }).evento).toBe("Viaje");
+    const sin = filaAGastoCorreo({ ...base, eventos: null });
+    expect(sin.evento).toBeNull();
+    expect("eventos" in sin).toBe(false);
   });
 });
