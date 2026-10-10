@@ -13,7 +13,7 @@ jobs:
   migrate:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: supabase/setup-cli@v3
         with:
