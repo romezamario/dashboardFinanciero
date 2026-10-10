@@ -3,6 +3,8 @@
 // puras, sin React, igual que tecnico.ts.
 
 import type { DatosMacro, SerieMacro } from "../../scripts/fred";
+import { hoyIso } from "./fechas";
+import { decimalFijo1 as dec1, decimalFijo2 as dec2, entero } from "./formato";
 
 export type { DatosMacro, SerieMacro };
 
@@ -67,10 +69,6 @@ export function nombrePeriodo(fecha: string, frecuencia: Frecuencia): string {
   if (frecuencia === "mensual") return `${MESES_CORTOS[mes - 1]} ${anio}`;
   return `${dia} ${MESES_CORTOS[mes - 1]} ${anio}`;
 }
-
-const dec1 = new Intl.NumberFormat("es-MX", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-const dec2 = new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const entero = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 });
 
 const porcentaje1 = (v: number) => `${dec1.format(v)}%`;
 const porcentaje2 = (v: number) => `${dec2.format(v)}%`;
@@ -507,7 +505,7 @@ function lecturasFed(datos: DatosMacro): LecturaMacro[] {
   return salida;
 }
 
-export function calcularLecturasMacro(datos: DatosMacro, hoy = fechaLocalHoy()): LecturaMacro[] {
+export function calcularLecturasMacro(datos: DatosMacro, hoy = hoyIso()): LecturaMacro[] {
   const lecturas = [...lecturasFed(datos)];
   for (const def of DEFINICIONES) {
     const lectura = lecturaDeSerie(def, observaciones(datos, def.serie));
@@ -540,13 +538,6 @@ export interface ProximaPublicacion {
 }
 
 export const DIAS_PUBLICACION_CERCANA = 5;
-
-/** Fecha local de hoy (YYYY-MM-DD), no la UTC: de noche en México, UTC ya va
- * en el día siguiente. */
-export function fechaLocalHoy(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 function proximaPublicacion(
   fecha: string,
@@ -625,7 +616,7 @@ function sumarDias(fecha: string, dias: number): string {
   return new Date(Date.parse(`${fecha}T00:00:00Z`) + dias * 86_400_000).toISOString().slice(0, 10);
 }
 
-export function eventosCalendario(datos: DatosMacro, hoy = fechaLocalHoy()): EventoCalendario[] {
+export function eventosCalendario(datos: DatosMacro, hoy = hoyIso()): EventoCalendario[] {
   const eventos: EventoCalendario[] = [];
   const minutas = (datos.reunionesFomc ?? []).map((f) => sumarDias(f, 21)).find((f) => f >= hoy);
   if (minutas) {

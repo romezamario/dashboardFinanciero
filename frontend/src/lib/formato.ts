@@ -40,3 +40,44 @@ const formatoFechaCorta = new Intl.DateTimeFormat("es-MX", {
 export function fechaCorta(fechaIso: string): string {
   return formatoFechaCorta.format(new Date(`${fechaIso}T00:00:00`));
 }
+
+/** "$1.2 mil" -- pesos en celdas angostas (calendario en teléfono). */
+export const monedaCompacta = new Intl.NumberFormat("es-MX", {
+  style: "currency",
+  currency: "MXN",
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
+/** "US$612.34" -- cotizaciones (QQQ/TQQQ). */
+export const dolares = new Intl.NumberFormat("es-MX", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+/** "+1.2 %" / "−0.4 %" -- cambios con signo, un decimal. */
+export const porcentajeConSigno1 = new Intl.NumberFormat("es-MX", {
+  style: "percent",
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+  signDisplay: "exceptZero",
+});
+
+/** "12.5 %" -- un decimal, sin signo. */
+export const porcentaje1 = new Intl.NumberFormat("es-MX", {
+  style: "percent",
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
+
+/** "1.25" -- hasta dos decimales. */
+export const decimal2 = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 2 });
+
+/** "4.3" / "4.30" -- siempre con 1 o 2 decimales (tasas, precios). */
+export const decimalFijo1 = new Intl.NumberFormat("es-MX", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+export const decimalFijo2 = new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** "1,235" -- sin decimales. */
+export const entero = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 });

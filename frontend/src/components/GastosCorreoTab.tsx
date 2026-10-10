@@ -10,7 +10,7 @@ import {
   type GastoCorreo,
 } from "../lib/gastosCorreo";
 import { type VistaCalendario, formatoMoneda, useDescargaExcel, ESTILO_CABECERA, ESTILO_SUBTOTAL_CATEGORIA, ESTILO_SUBTOTAL_COMERCIO, ESTILO_TOTAL } from "../lib/gastosUI";
-import { hoyIso } from "../lib/metaDiaria";
+import { hoyIso } from "../lib/fechas";
 import { CalendarioMensual, type ResumenDia } from "./CalendarioMensual";
 import {
   CabeceraColumnas,

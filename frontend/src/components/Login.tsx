@@ -23,8 +23,7 @@ export function Login() {
     >
       <form
         onSubmit={iniciarSesion}
-        className="w-full max-w-sm rounded-lg p-6"
-        style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
+        className="w-full max-w-sm rounded-lg p-6 tarjeta"
       >
         <h1
           className="text-lg font-semibold"

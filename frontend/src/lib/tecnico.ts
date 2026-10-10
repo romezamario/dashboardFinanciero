@@ -354,3 +354,20 @@ export async function obtenerCotizaciones(
   cache.set(simbolo, { cuando: Date.now(), serie: cuerpo });
   return cuerpo;
 }
+
+/** "2026-08-14" → "14 ago 2026" (sin día: "ago 2026"), para títulos y etiquetas. */
+export function nombreFecha(fecha: string, conDia = true): string {
+  return new Date(`${fecha}T12:00:00Z`).toLocaleDateString("es-MX", {
+    day: conDia ? "numeric" : undefined,
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/** Zona del RSI 14 en palabras, para la lectura técnica. */
+export function zonaRsi(valor: number): string {
+  if (valor >= 70) return "Sobrecompra (≥ 70)";
+  if (valor <= 30) return "Sobreventa (≤ 30)";
+  return "Zona neutral";
+}

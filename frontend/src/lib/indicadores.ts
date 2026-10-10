@@ -1,5 +1,6 @@
 import { categoriaDe, cuentaDe, eventoDe } from "./queries";
 import type { Transaccion } from "./types";
+import { mesActual } from "./fechas";
 
 // Cálculos de los indicadores de la pestaña Resumen (VistaResumen). Todo se
 // mide sobre un PERIODO: una lista de meses de calendario. Sin filtro, el
@@ -63,10 +64,6 @@ export function mesesHasta(ultimo: string, cantidad: number): string[] {
   return Array.from({ length: Math.max(cantidad, 0) }, (_, i) => mesDeIndice(fin - cantidad + 1 + i));
 }
 
-/** El mes de calendario de `hoy` ("YYYY-MM"). */
-export function mesActual(hoy = new Date()): string {
-  return mesDeIndice(hoy.getFullYear() * 12 + hoy.getMonth());
-}
 
 /** Los `cantidad` meses completos anteriores al mes en curso (el último es
  * el mes pasado). */

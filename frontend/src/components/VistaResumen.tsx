@@ -21,7 +21,6 @@ import {
   categoriasEnAlza,
   enMeses,
   gastoMensualPorCategoria,
-  mesActual,
   MESES_MINIMOS_RECURRENTE,
   MESES_PERIODO_POR_DEFECTO,
   mesesHasta,
@@ -49,6 +48,7 @@ import { AlertasPanel } from "./AlertasPanel";
 import { PanelFiltros } from "./PanelFiltros";
 import { calcularAlertas } from "../lib/alertas";
 import { moneda, porcentaje, decimal } from "../lib/formato";
+import { mesActual } from "../lib/fechas";
 
 /** Meses de la vista por defecto de "Ingresos vs. gastos" (mes en curso incluido). */
 const MESES_GRAFICA_RECIENTES = 13;
@@ -529,8 +529,7 @@ export function VistaResumen({
 
       {!sinTasaDeAhorro && (
         <section
-          className="rounded-lg p-5"
-          style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
+          className="rounded-lg p-5 tarjeta"
         >
           <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
             Tasa de ahorro, {nombreDelPeriodo}

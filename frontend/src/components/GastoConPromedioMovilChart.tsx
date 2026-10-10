@@ -16,6 +16,7 @@ import type { LadoMovimiento, PuntoGastoConPromedioMovil } from "../lib/indicado
 import { compacto as formateadorEje, monedaConCentavos as formateadorTooltip } from "../lib/formato";
 import { ANCHO_COLUMNA_PROMEDIOS, promediosDesdeElPrimerGasto } from "../lib/promedios";
 import { EtiquetasPromedios } from "./EtiquetasPromedios";
+import { estiloTooltip } from "../lib/estilos";
 
 interface GastoConPromedioMovilChartProps {
   datos: PuntoGastoConPromedioMovil[];
@@ -79,8 +80,7 @@ export function GastoConPromedioMovilChart({
 
   return (
     <div
-      className="rounded-lg p-4"
-      style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
+      className="rounded-lg p-4 tarjeta"
     >
       <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
         {titulo}
@@ -120,12 +120,7 @@ export function GastoConPromedioMovilChart({
             />
             <Tooltip
               formatter={(value) => formateadorTooltip.format(Number(value))}
-              contentStyle={{
-                background: "var(--surface-1)",
-                border: "1px solid var(--border)",
-                borderRadius: 8,
-                color: "var(--text-primary)",
-              }}
+              contentStyle={estiloTooltip}
             />
             <Legend
               formatter={(value) => (

@@ -111,11 +111,14 @@ describe("eventosHeredables", () => {
 });
 
 describe("filaAGastoCorreo", () => {
-  it("aplana el evento anidado de PostgREST", () => {
+  it("resuelve el evento_id con el catálogo de eventos", () => {
     const { evento: _e, ...base } = aviso();
-    expect(filaAGastoCorreo({ ...base, eventos: { nombre: "Viaje" } }).evento).toBe("Viaje");
-    const sin = filaAGastoCorreo({ ...base, eventos: null });
+    const catalogo = new Map([["ev1", { nombre: "Viaje" }]]);
+    expect(filaAGastoCorreo({ ...base, evento_id: "ev1" }, catalogo).evento).toBe("Viaje");
+    const sin = filaAGastoCorreo({ ...base, evento_id: null }, catalogo);
     expect(sin.evento).toBeNull();
-    expect("eventos" in sin).toBe(false);
+    expect("evento_id" in sin).toBe(false);
+    // Un id que aún no está en el catálogo (recién creado) queda sin nombre, no truena.
+    expect(filaAGastoCorreo({ ...base, evento_id: "nuevo" }, catalogo).evento).toBeNull();
   });
 });

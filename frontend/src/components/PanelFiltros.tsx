@@ -56,8 +56,7 @@ export function PanelFiltros({
 
   return (
     <div
-      className="flex flex-col gap-3 rounded-lg p-4"
-      style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
+      className="flex flex-col gap-3 rounded-lg p-4 tarjeta"
     >
       {hayFiltrosPorClic && (
         <div className="flex flex-col gap-2">

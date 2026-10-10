@@ -14,19 +14,13 @@ import { colorTarjeta, OTRAS_CATEGORIAS, type FilaPorTarjeta } from "../lib/tarj
 import { truncar } from "../lib/texto";
 import { useEsMovil } from "../hooks/useEsMovil";
 import { moneda, compacto, porcentaje } from "../lib/formato";
+import { estiloTooltip } from "../lib/estilos";
 
-const estiloTooltip = {
-  background: "var(--surface-1)",
-  border: "1px solid var(--border)",
-  borderRadius: 8,
-  color: "var(--text-primary)",
-};
 
 function Tarjeta({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
     <div
-      className="rounded-lg p-4"
-      style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
+      className="rounded-lg p-4 tarjeta"
     >
       <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
         {titulo}

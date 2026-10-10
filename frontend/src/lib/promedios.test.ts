@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { mesActual, promediosDeGastos, promediosDesdeElPrimerGasto } from "./promedios";
+import { promediosDeGastos, promediosDesdeElPrimerGasto } from "./promedios";
+import { hoyIso, mesActual } from "./fechas";
 
 const serie = (valores: number[], desde = 2026) =>
   valores.map((gastos, i) => ({ periodo: `${desde}-${String(i + 1).padStart(2, "0")}`, gastos }));
@@ -107,5 +108,6 @@ describe("mesActual", () => {
   it("YYYY-MM en la zona local", () => {
     expect(mesActual(new Date(2026, 9, 9))).toBe("2026-10");
     expect(mesActual(new Date(2026, 0, 31, 23, 30))).toBe("2026-01");
+    expect(hoyIso(new Date(2026, 0, 31, 23, 30))).toBe("2026-01-31");
   });
 });

@@ -5,12 +5,11 @@ import {
   colorDeSesgo,
   ETIQUETA_CALIDAD,
   fechaCorta,
-  precio2,
   RELLENO_CALIDAD,
-  volumenCompacto,
   type Seleccion,
 } from "./dibujoPatrones";
 import { Tabla } from "./IndicadoresUI";
+import { compacto as volumenCompacto, decimalFijo2 as precio2 } from "../lib/formato";
 
 // Chips para activar los patrones, contenido de las tarjetas (al pasar el
 // ratón o al hacer clic) y el panel de trazabilidad: las velas exactas
@@ -185,7 +184,7 @@ export function DetalleTrazabilidad({
         );
       });
   return (
-    <div className="space-y-3 rounded-lg p-4" style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}>
+    <div className="space-y-3 rounded-lg p-4 tarjeta">
       <div className="flex items-start justify-between gap-3">
         <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
           Trazabilidad: {titulo}

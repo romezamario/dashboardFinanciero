@@ -72,3 +72,12 @@ body {
   color: var(--text-primary);
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
+
+/* Fondo y borde de cada tarjeta del tablero (gráficas, tablas, paneles). En
+   la capa de componentes para que una utilidad de Tailwind pueda ajustarla. */
+@layer components {
+  .tarjeta {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+  }
+}

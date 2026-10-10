@@ -1,0 +1,32 @@
+# Actualizaciones de dependencias (gratis en GitHub). Una vez por semana,
+# agrupadas por ecosistema para no llenar de PRs. Cada PR corre ci.yml, así
+# que solo hay que revisar que pase y fusionarlo.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    groups:
+      frontend:
+        patterns: ["*"]
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      python:
+        patterns: ["*"]
+    open-pull-requests-limit: 3
+
+  # Las acciones de los workflows (checkout, setup-node, wrangler...). Al
+  # aceptar una, revisa que su action.yml siga en node24 (ver CLAUDE.md).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      acciones:
+        patterns: ["*"]

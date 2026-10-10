@@ -5,6 +5,7 @@ import { nombrePeriodo, type FlujoSankeyDatos } from "../lib/indicadores";
 import { useEsMovil } from "../hooks/useEsMovil";
 import { truncar } from "../lib/texto";
 import { moneda as formateadorMoneda } from "../lib/formato";
+import { estiloTooltip } from "../lib/estilos";
 
 // Mismos dos tonos ya validados del resto del dashboard (azul = ingresos,
 // naranja = gastos) -- ver la nota de "Chart colors/specs" en CLAUDE.md:
@@ -208,8 +209,7 @@ export function FlujoSankeyChart({
 
   return (
     <div
-      className="rounded-lg p-4"
-      style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
+      className="rounded-lg p-4 tarjeta"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
@@ -258,12 +258,7 @@ export function FlujoSankeyChart({
             >
               <Tooltip
                 formatter={(value: unknown) => formateadorMoneda.format(Number(value))}
-                contentStyle={{
-                  background: "var(--surface-1)",
-                  border: "1px solid var(--border)",
-                  borderRadius: 8,
-                  color: "var(--text-primary)",
-                }}
+                contentStyle={estiloTooltip}
                 // Recharts pinta cada línea del tooltip con `entry.color ||
                 // '#000'` (negro fijo) -- en las gráficas de barras eso cae
                 // en el color de la serie (azul/naranja), pero un nodo/

@@ -519,12 +519,16 @@ export async function quitarEventoDeTransacciones(ids: string[]): Promise<void> 
  * (ver `eventosHeredables`). Mismo find-or-create del catálogo `eventos` que usan las
  * transacciones, así que es el MISMO evento. RLS ya limita el update a filas propias.
  */
-export async function asignarEventoAGastosCorreo(ids: string[], evento: string | null): Promise<void> {
-  if (ids.length === 0) return;
+export async function asignarEventoAGastosCorreo(
+  ids: string[],
+  evento: string | null
+): Promise<string | null> {
   const eventoId = evento ? await buscarOCrearId("eventos", evento) : null;
+  if (ids.length === 0) return eventoId;
   await porLotes(ids, (lote) =>
     supabase.from("gastos_correo").update({ evento_id: eventoId }).in("id", lote)
   );
+  return eventoId;
 }
 
 /** `.in("id", ids)` viaja en la URL de la petición (?id=in.(...)): con

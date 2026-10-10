@@ -4,12 +4,12 @@
 import { useEsMovil } from "../hooks/useEsMovil";
 
 import {
-  mesActual,
   MESES_PERIODO_POR_DEFECTO,
   nombreMes,
   RANGO_MESES_VACIO,
   type RangoMeses,
 } from "../lib/indicadores";
+import { mesActual } from "../lib/fechas";
 
 export interface PropsDelta {
   texto: string;
@@ -42,8 +42,7 @@ export function Tile({
 }) {
   return (
     <div
-      className="rounded-lg p-4"
-      style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
+      className="rounded-lg p-4 tarjeta"
     >
       <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
         {etiqueta}
@@ -84,8 +83,7 @@ export function Tabla({
 
   return (
     <div
-      className="rounded-lg p-4"
-      style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
+      className="rounded-lg p-4 tarjeta"
     >
       <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
         {titulo}

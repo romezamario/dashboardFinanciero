@@ -2,6 +2,7 @@ import type { MouseEvent as EventoRaton, ReactNode } from "react";
 import { ReferenceArea, ReferenceDot, ReferenceLine } from "recharts";
 import type { NivelTecnico } from "../lib/tecnico";
 import type { Calidad, Patron, PuntoClave, Segmento } from "../lib/patrones";
+import { decimalFijo2 as precio2 } from "../lib/formato";
 
 // Lo que se dibuja de los patrones sobre la gráfica de precio (elementos de
 // Recharts) y los formatos que comparten con el panel (PanelPatrones.tsx).
@@ -13,9 +14,6 @@ const COLOR_NEUTRAL = "var(--text-secondary)";
 
 export const colorDeSesgo = (p: Patron) =>
   p.sesgo === "alcista" ? COLOR_ALCISTA : p.sesgo === "bajista" ? COLOR_BAJISTA : COLOR_NEUTRAL;
-
-export const precio2 = new Intl.NumberFormat("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-export const volumenCompacto = new Intl.NumberFormat("es-MX", { notation: "compact", maximumFractionDigits: 1 });
 
 export function fechaCorta(fecha: string): string {
   return new Date(`${fecha}T12:00:00Z`).toLocaleDateString("es-MX", {

@@ -1,4 +1,4 @@
-import { obtenerTodasLasPaginas } from "./queries";
+import { obtenerTodasLasPaginas, type Catalogos } from "./queries";
 import { supabase } from "./supabase";
 
 /** Fila de `gastos_correo`: un cargo reportado por un aviso de compra de
@@ -22,32 +22,37 @@ export interface GastoCorreo {
   evento: string | null;
 }
 
-/** La fila como la devuelve PostgREST: el evento llega anidado (`eventos(nombre)`). */
+/** La fila como la devuelve PostgREST: el evento llega como id y se resuelve
+ * contra el catálogo de eventos que el Dashboard ya cargó (mismo criterio que
+ * las transacciones: nada de repetir `eventos(nombre)` en cada fila). */
 export interface FilaGastoCorreo extends Omit<GastoCorreo, "evento"> {
-  eventos: { nombre: string } | null;
+  evento_id: string | null;
 }
 
-export function filaAGastoCorreo({ eventos, ...resto }: FilaGastoCorreo): GastoCorreo {
-  return { ...resto, evento: eventos?.nombre ?? null };
+export function filaAGastoCorreo(
+  { evento_id, ...resto }: FilaGastoCorreo,
+  eventos: Catalogos["eventos"]
+): GastoCorreo {
+  return { ...resto, evento: (evento_id && eventos.get(evento_id)?.nombre) || null };
 }
 
 /** Todos los gastos de correo (con la carga inicial de todo el historial
  * son años de avisos). Mismo paginado que las transacciones: orden total por
  * fecha, hora **e id** (varios avisos a la misma hora) y páginas en
  * paralelo -- ver `obtenerTodasLasPaginas`. */
-export function obtenerGastosCorreo(): Promise<GastoCorreo[]> {
+export function obtenerGastosCorreo(): Promise<FilaGastoCorreo[]> {
   return obtenerTodasLasPaginas<FilaGastoCorreo>((desde, hasta, contar) =>
     supabase
       .from("gastos_correo")
       .select(
-        "id, mensaje_id, fecha, hora, tarjeta, comercio, categoria, establecimiento, ciudad_cod, ciudad, monto, moneda, eventos(nombre)",
+        "id, mensaje_id, fecha, hora, tarjeta, comercio, categoria, establecimiento, ciudad_cod, ciudad, monto, moneda, evento_id",
         contar ? { count: "estimated" } : undefined
       )
       .order("fecha", { ascending: false })
       .order("hora", { ascending: true })
       .order("id", { ascending: true })
       .range(desde, hasta)
-  ).then((filas) => filas.map(filaAGastoCorreo));
+  );
 }
 
 // Nombres de las tarjetas por terminación. Cualquier otra se muestra como

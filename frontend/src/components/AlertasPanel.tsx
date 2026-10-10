@@ -28,8 +28,7 @@ export function AlertasPanel({ alertas, titulo, onVerDetalle }: AlertasPanelProp
 
   return (
     <section
-      className="rounded-lg p-4"
-      style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
+      className="rounded-lg p-4 tarjeta"
       aria-label="Alertas automáticas"
     >
       <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>

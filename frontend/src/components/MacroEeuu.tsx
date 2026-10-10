@@ -18,7 +18,6 @@ import {
   eventosCalendario,
   GRUPOS,
   DIAS_PUBLICACION_CERCANA,
-  fechaLocalHoy,
   nombreFechaPublicacion,
   nombrePeriodo,
   obtenerDatosMacro,
@@ -28,8 +27,8 @@ import {
   type LecturaMacro,
   type Observacion,
 } from "../lib/macro";
-
-const estiloTarjeta = { background: "var(--surface-1)", border: "1px solid var(--border)" };
+import { hoyIso } from "../lib/fechas";
+import { estiloTarjeta } from "../lib/estilos";
 
 /** Indicadores macro de EE.UU. que sigue la Fed (y que mueven al Nasdaq-100),
  * agrupados como recuadros con su último dato, el cambio vs. el anterior y una
@@ -46,7 +45,7 @@ export function MacroEeuu() {
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
   }, []);
 
-  const hoy = fechaLocalHoy();
+  const hoy = hoyIso();
   const lecturas = useMemo(() => (datos ? calcularLecturasMacro(datos, hoy) : []), [datos, hoy]);
   // Varias series salen en el mismo reporte (empleo, desempleo y salarios el
   // mismo viernes): en el resumen van juntas bajo una sola fecha.
@@ -95,7 +94,7 @@ export function MacroEeuu() {
         </p>
       )}
 
-      <div className="rounded-lg p-4" style={estiloTarjeta}>
+      <div className="tarjeta rounded-lg p-4">
         <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
           Publicaciones en los próximos {DIAS_PUBLICACION_CERCANA} días
         </h3>
@@ -156,7 +155,7 @@ export function MacroEeuu() {
           {eventos.map((e) => {
             const dias = diasHasta(e.fecha, hoy);
             return (
-              <div key={e.id} className="rounded-lg p-4" style={estiloTarjeta}>
+              <div key={e.id} className="tarjeta rounded-lg p-4">
                 <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
                   {e.titulo}
                 </div>
@@ -279,7 +278,7 @@ function InsigniaFecha({ fecha, dias, hoy }: { fecha: string; dias: number; hoy:
 }
 
 function LineaProxima({ proxima, diaria }: { proxima: ProximaPublicacion | null; diaria: boolean }) {
-  const hoy = fechaLocalHoy();
+  const hoy = hoyIso();
   if (!proxima) {
     return diaria ? (
       <div className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
@@ -419,7 +418,7 @@ function DetalleIndicador({ lectura, onCerrar }: { lectura: LecturaMacro; onCerr
     );
 
   return (
-    <div className="rounded-lg p-4" style={estiloTarjeta}>
+    <div className="tarjeta rounded-lg p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h4 className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>

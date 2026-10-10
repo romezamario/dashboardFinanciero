@@ -14,14 +14,9 @@ import {
   resumenDeSemana,
   type ResumenPromedio,
 } from "../lib/metaDiaria";
+import { monedaCompacta as formatoCompacto } from "../lib/formato";
 
 // Para las celdas del calendario en pantallas angostas, donde no cabe el monto completo.
-const formatoCompacto = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  notation: "compact",
-  maximumFractionDigits: 1,
-});
 
 const DIAS_SEMANA = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 

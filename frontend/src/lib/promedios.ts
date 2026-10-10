@@ -68,7 +68,3 @@ export function promediosDeGastos(
   return { ...r, movil: puntos.map((_, i) => (i < delPeriodo.length ? r.movil[i] : null)) };
 }
 
-/** "YYYY-MM" de hoy en la zona del navegador (no UTC: de noche en CDMX UTC ya es mañana). */
-export function mesActual(hoy: Date = new Date()): string {
-  return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`;
-}

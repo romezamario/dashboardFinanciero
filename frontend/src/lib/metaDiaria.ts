@@ -4,12 +4,6 @@
 /** Meta del usuario: gastar en promedio $1,000 al día (en pesos). */
 export const META_GASTO_DIARIO = 1000;
 
-/** Fecha de hoy en la zona del navegador, como ISO (no UTC: de noche en CDMX
- * UTC ya es "mañana"). */
-export function hoyIso(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 const DIA_MS = 86_400_000;
 const aMs = (fecha: string) => Date.parse(`${fecha}T00:00:00Z`);

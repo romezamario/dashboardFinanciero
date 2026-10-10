@@ -19,6 +19,7 @@ import { supabase } from "../lib/supabase";
 import { esTarjetaCredito } from "../lib/tarjetas";
 import type { VistaTiempo } from "./IngresosGastosChart";
 import { VistaResumen } from "./VistaResumen";
+import { LimiteDeError } from "./LimiteDeError";
 
 // Cada pestaña que no es la de inicio se baja al abrirla por primera vez:
 // el análisis técnico/macro, el calendario de gastos, eventos y tarjetas
@@ -147,7 +148,12 @@ export function Dashboard() {
     setTema((anterior) => {
       const siguiente: Tema = anterior === "dark" ? "light" : "dark";
       document.documentElement.setAttribute("data-theme", siguiente);
-      localStorage.setItem(CLAVE_TEMA, siguiente);
+      try {
+        localStorage.setItem(CLAVE_TEMA, siguiente);
+      } catch {
+        // Navegación privada / almacenamiento bloqueado: el tema cambia igual,
+        // solo no se recuerda para la próxima visita.
+      }
       return siguiente;
     });
   }
@@ -403,6 +409,10 @@ export function Dashboard() {
           ))}
         </div>
 
+        <LimiteDeError
+          key={vistaActiva}
+          nombre={`la pestaña ${pestanas.find((p) => p.id === vistaActiva)?.etiqueta ?? ""}`}
+        >
         <Suspense
           fallback={
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Cargando…</p>
@@ -413,6 +423,7 @@ export function Dashboard() {
         ) : vistaActiva === PESTANA_GASTOS_CORREO ? (
           <GastosRecientesTab
             transacciones={transacciones}
+            eventosCatalogo={datos.catalogos.eventos}
             // Su propio "Ocultar categorías": se guarda aparte del Resumen
             // (misma lógica de default `null` = categorías de pagos entre cuentas).
             categoriasOcultas={
@@ -476,6 +487,7 @@ export function Dashboard() {
           renderVistaResumen(vistaActiva, transaccionesPorCuenta.get(vistaActiva) ?? [])
         )}
         </Suspense>
+        </LimiteDeError>
       </main>
     </div>
   );

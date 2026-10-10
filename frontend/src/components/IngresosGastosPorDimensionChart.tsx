@@ -14,6 +14,7 @@ import type { PuntoDimension } from "../lib/queries";
 import { useEsMovil } from "../hooks/useEsMovil";
 import { truncar } from "../lib/texto";
 import { moneda } from "../lib/formato";
+import { estiloTooltip } from "../lib/estilos";
 
 const OTROS = "Otros";
 /** Más de ~8 barras saturan el eje vertical. */
@@ -106,8 +107,7 @@ export function IngresosGastosPorDimensionChart({
 
   return (
     <div
-      className="rounded-lg p-4"
-      style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
+      className="rounded-lg p-4 tarjeta"
     >
       <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
         Ingresos y gastos por {dimension}
@@ -142,12 +142,7 @@ export function IngresosGastosPorDimensionChart({
               />
               <Tooltip
                 formatter={(value) => moneda.format(Number(value))}
-                contentStyle={{
-                  background: "var(--surface-1)",
-                  border: "1px solid var(--border)",
-                  borderRadius: 8,
-                  color: "var(--text-primary)",
-                }}
+                contentStyle={estiloTooltip}
               />
               <Legend
                 formatter={(value) => (

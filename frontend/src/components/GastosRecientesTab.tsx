@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { obtenerGastosCorreo, type GastoCorreo } from "../lib/gastosCorreo";
-import { asignarEventoAGastosCorreo, eventoDe } from "../lib/queries";
+import { filaAGastoCorreo, obtenerGastosCorreo, type FilaGastoCorreo } from "../lib/gastosCorreo";
+import { asignarEventoAGastosCorreo, eventoDe, type Catalogos } from "../lib/queries";
 import type { Transaccion } from "../lib/types";
 import { GastosCorreoTab } from "./GastosCorreoTab";
 import { GastosEstadoCuentaTab } from "./GastosEstadoCuentaTab";
@@ -14,6 +14,8 @@ interface GastosRecientesTabProps {
   eventosOcultos: Set<string>;
   onCambiarEventosOcultos: (cambio: (anteriores: Set<string>) => Set<string>) => void;
   onActualizado: (ids?: string[]) => void | Promise<void>;
+  /** Catálogo de eventos del Dashboard: resuelve el `evento_id` de cada aviso. */
+  eventosCatalogo: Catalogos["eventos"];
 }
 
 /** Pestaña "Gastos recientes": el mismo calendario con dos fuentes. "Por
@@ -29,13 +31,18 @@ export function GastosRecientesTab(props: GastosRecientesTabProps) {
   // Los avisos de correo se cargan aquí, una vez al abrir la pestaña, y no en
   // GastosCorreoTab: esa vista se desmonta al cambiar de fuente y volvería a
   // consultar (y a mostrar "Cargando…") cada vez que se regresa a ella.
-  const [gastosCorreo, setGastosCorreo] = useState<GastoCorreo[] | null>(null);
+  const [filasCorreo, setFilasCorreo] = useState<FilaGastoCorreo[] | null>(null);
   const [errorCorreo, setErrorCorreo] = useState<string | null>(null);
   useEffect(() => {
     obtenerGastosCorreo()
-      .then(setGastosCorreo)
+      .then(setFilasCorreo)
       .catch((e) => setErrorCorreo(e instanceof Error ? e.message : String(e)));
   }, []);
+  const { eventosCatalogo } = props;
+  const gastosCorreo = useMemo(
+    () => filasCorreo && filasCorreo.map((f) => filaAGastoCorreo(f, eventosCatalogo)),
+    [filasCorreo, eventosCatalogo]
+  );
   const cambiarVista = (cambio: (anterior: VistaCalendario) => VistaCalendario) => setVista(cambio);
 
   // Eventos que ya existen (en los estados de cuenta o en avisos), para sugerirlos al asignar.
@@ -50,16 +57,15 @@ export function GastosRecientesTab(props: GastosRecientesTabProps) {
   }, [props.transacciones, gastosCorreo]);
 
   // Asigna (o quita, con null) un evento a avisos del correo. Se guarda en Supabase y se
-  // refleja al instante en lo ya cargado (sin volver a pedir todos los avisos); el
-  // `onActualizado([])` relee solo los catálogos, para que un evento NUEVO aparezca en el
-  // resto del dashboard.
+  // refleja en lo ya cargado (sin volver a pedir todos los avisos). Primero se releen los
+  // catálogos (`onActualizado([])`), para que un evento NUEVO ya tenga nombre al mostrarse.
   async function asignarEvento(ids: string[], evento: string | null) {
-    await asignarEventoAGastosCorreo(ids, evento);
-    const afectados = new Set(ids);
-    setGastosCorreo((previos) =>
-      previos && previos.map((g) => (afectados.has(g.id) ? { ...g, evento } : g))
-    );
+    const eventoId = await asignarEventoAGastosCorreo(ids, evento);
     await props.onActualizado([]);
+    const afectados = new Set(ids);
+    setFilasCorreo((previas) =>
+      previas && previas.map((f) => (afectados.has(f.id) ? { ...f, evento_id: eventoId } : f))
+    );
   }
   return (
     <div className="space-y-6">

@@ -14,8 +14,10 @@ import {
 import { useEsMovil } from "../hooks/useEsMovil";
 import type { PuntoIngresoGasto } from "../lib/queries";
 import { compacto as formateadorEje, monedaConCentavos as formateadorTooltip } from "../lib/formato";
-import { ANCHO_COLUMNA_PROMEDIOS, mesActual, promediosDeGastos } from "../lib/promedios";
+import { ANCHO_COLUMNA_PROMEDIOS, promediosDeGastos } from "../lib/promedios";
+import { mesActual } from "../lib/fechas";
 import { EtiquetasPromedios } from "./EtiquetasPromedios";
+import { estiloTooltip } from "../lib/estilos";
 
 /** "recientes" = los últimos 13 meses (mes en curso incluido), la vista por
  * defecto; "meses" = todo el historial mes a mes; "anios" = por año. */
@@ -77,8 +79,7 @@ export function IngresosGastosChart({
 
   return (
     <div
-      className="rounded-lg p-4"
-      style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
+      className="rounded-lg p-4 tarjeta"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
@@ -145,12 +146,7 @@ export function IngresosGastosChart({
             />
             <Tooltip
               formatter={(value) => formateadorTooltip.format(Number(value))}
-              contentStyle={{
-                background: "var(--surface-1)",
-                border: "1px solid var(--border)",
-                borderRadius: 8,
-                color: "var(--text-primary)",
-              }}
+              contentStyle={estiloTooltip}
             />
             <Legend
               formatter={(value) => (
