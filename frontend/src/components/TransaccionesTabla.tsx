@@ -1,8 +1,25 @@
+import { memo, useMemo, useState } from "react";
 import type { Transaccion } from "../lib/types";
 import { useEsMovil } from "../hooks/useEsMovil";
-import { monedaConCentavos as formateadorMoneda, fechaCorta } from "../lib/formato";
+import { monedaConCentavos as formateadorMoneda, fechaCorta, entero } from "../lib/formato";
 
-export function TransaccionesTabla({
+/** Filas que se dibujan de entrada (y que agrega cada "Mostrar más"). Montar
+ * todo el historial de golpe (8,000 filas × 8 celdas ≈ 70,000 nodos) tardaba
+ * ~3.5 s en abrir "Categorías y Comercios", que no tiene filtro de periodo. */
+export const FILAS_POR_TANDA = 100;
+
+const COLUMNAS: { titulo: string; derecha?: boolean }[] = [
+  { titulo: "Fecha" },
+  { titulo: "Descripción" },
+  { titulo: "Categoría" },
+  { titulo: "Comercio" },
+  { titulo: "Tarjeta" },
+  { titulo: "Cuenta" },
+  { titulo: "Evento" },
+  { titulo: "Monto", derecha: true },
+];
+
+export const TransaccionesTabla = memo(function TransaccionesTabla({
   transacciones,
   vacio = "No hay transacciones sincronizadas todavía.",
 }: {
@@ -12,9 +29,20 @@ export function TransaccionesTabla({
    * filtros", no "aún no hay datos". */
   vacio?: string;
 }) {
-  const ordenadas = [...transacciones].sort((a, b) =>
-    b.fecha.localeCompare(a.fecha)
+  const ordenadas = useMemo(
+    () => [...transacciones].sort((a, b) => b.fecha.localeCompare(a.fecha)),
+    [transacciones]
   );
+  // Cuántas se muestran. Vuelve a la primera tanda cuando cambia la lista
+  // (otro filtro), ajustando el estado durante el render en vez de un efecto.
+  const [visibles, setVisibles] = useState(FILAS_POR_TANDA);
+  const [listaAnterior, setListaAnterior] = useState(transacciones);
+  if (listaAnterior !== transacciones) {
+    setListaAnterior(transacciones);
+    setVisibles(FILAS_POR_TANDA);
+  }
+  const mostradas = ordenadas.length > visibles ? ordenadas.slice(0, visibles) : ordenadas;
+  const faltan = ordenadas.length - mostradas.length;
   // 8 columnas no caben en un teléfono ni encogiendo la letra -- en vez de
   // montar la tabla Y las tarjetas a la vez y ocultar una por CSS (el doble
   // de nodos DOM, y cada fila se renderiza dos veces), `useEsMovil` decide
@@ -31,7 +59,7 @@ export function TransaccionesTabla({
 
       {esMovil ? (
         <div className="mt-3 max-h-96 space-y-2 overflow-auto">
-          {ordenadas.map((t) => (
+          {mostradas.map((t) => (
             <div
               key={t.id}
               className="rounded-md p-3"
@@ -70,58 +98,19 @@ export function TransaccionesTabla({
           <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: "1px solid var(--gridline)" }}>
-                <th
-                  className="py-2 text-left font-medium"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  Fecha
-                </th>
-                <th
-                  className="py-2 text-left font-medium"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  Descripción
-                </th>
-                <th
-                  className="py-2 text-left font-medium"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  Categoría
-                </th>
-                <th
-                  className="py-2 text-left font-medium"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  Comercio
-                </th>
-                <th
-                  className="py-2 text-left font-medium"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  Tarjeta
-                </th>
-                <th
-                  className="py-2 text-left font-medium"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  Cuenta
-                </th>
-                <th
-                  className="py-2 text-left font-medium"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  Evento
-                </th>
-                <th
-                  className="py-2 text-right font-medium"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  Monto
-                </th>
+                {COLUMNAS.map((c) => (
+                  <th
+                    key={c.titulo}
+                    className={`py-2 font-medium ${c.derecha ? "text-right" : "text-left"}`}
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    {c.titulo}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {ordenadas.map((t) => (
+              {mostradas.map((t) => (
                 <tr key={t.id} style={{ borderBottom: "1px solid var(--gridline)" }}>
                   <td className="py-2" style={{ color: "var(--text-secondary)" }}>
                     {fechaCorta(t.fecha)}
@@ -164,6 +153,31 @@ export function TransaccionesTabla({
         </div>
       )}
 
+      {faltan > 0 && (
+        <div
+          className="mt-2 flex flex-wrap items-center gap-3 text-xs"
+          style={{ color: "var(--text-muted)" }}
+        >
+          <span>
+            Mostrando {entero.format(mostradas.length)} de {entero.format(ordenadas.length)}
+          </span>
+          <button
+            onClick={() => setVisibles((v) => v + FILAS_POR_TANDA)}
+            className="underline"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            Mostrar {entero.format(Math.min(FILAS_POR_TANDA, faltan))} más
+          </button>
+          <button
+            onClick={() => setVisibles(ordenadas.length)}
+            className="underline"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            Mostrar todas
+          </button>
+        </div>
+      )}
+
       {ordenadas.length === 0 && (
         <p className="py-6 text-center text-xs" style={{ color: "var(--text-muted)" }}>
           {vacio}
@@ -171,4 +185,4 @@ export function TransaccionesTabla({
       )}
     </div>
   );
-}
+});

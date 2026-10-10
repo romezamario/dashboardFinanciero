@@ -941,7 +941,12 @@ Reintentar" in that tab only instead of blanking the whole dashboard. `localStor
 remembered tab) is in try/catch (private windows can throw).
 Two big files were split (2026-10-10): `AnalisisTecnicoTab.tsx` → charts in `GraficasTecnicas.tsx`
 (`nombreFecha`/`zonaRsi` moved to `lib/tecnico.ts`); `GastosEstadoCuentaTab.tsx` → the day panel and
-its rows/editor in `PanelDiaEstado.tsx`. `Dashboard` memoizes the
+its rows/editor in `PanelDiaEstado.tsx`. **`TransaccionesTabla` renders 100 rows at a time** (`FILAS_POR_TANDA`;
+"Mostrar 100 más" / "Mostrar todas", back to 100 when the list changes; sort memoized, component
+`memo`): "Categorías y Comercios" has no period filter, so it mounted the whole history — measured
+with 8,000 synthetic rows in Playwright: 3.5 s to open the tab and ~72,600 DOM nodes, now 0.18 s and
+~1,500 (choosing/clearing a filter 0.4–1.6 s → ~0.1 s). The profile showed layout of that table,
+not the calculations, so don't reach for memoizing aggregations first when a tab feels slow. `Dashboard` memoizes the
 default-hidden categories and the per-account transaction lists so their identity is stable across
 renders — `VistaResumen` memoizes every calculation on those references. `EventosTab`'s own filters
 are local component state (unlike the per-tab `EstadoVista`), so they reset when leaving that tab.
@@ -1278,6 +1283,7 @@ in one place (change the constant, not a copy of it):
 | `TOPE_CATEGORIAS_TARJETAS` (tarjetas.ts) | 8 | categories in the per-card chart before "Otras" |
 | `DIAS_ESTADO_ATRASADO` (GastosEstadoCuentaTab.tsx) | 45 | ⚠ on "Datos hasta" |
 | `TAMANO_PAGINA` / `TAMANO_LOTE_IDS` / `LOTES_EN_PARALELO` (queries.ts) | 1000 / 150 / 4 | paging and write batches |
+| `FILAS_POR_TANDA` (TransaccionesTabla.tsx) | 100 | transaction-table rows drawn before "Mostrar más" |
 
 ## Working locally with Supabase CLI
 

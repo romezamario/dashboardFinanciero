@@ -362,6 +362,8 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
 - **Categorías y Comercios** — el detalle de una categoría y/o un comercio: gasto mensual con
   promedio móvil de 3 meses (o ingreso, si lo elegido solo tiene abonos), sus movimientos más
   grandes y sus transacciones. Clic en un mes filtra lo de abajo a ese mes.
+  Las tablas de transacciones (aquí y en las demás pestañas) muestran 100 filas a la vez, con
+  «Mostrar 100 más» y «Mostrar todas», para que la pestaña abra rápido con todo el historial.
 - **Tarjetas de crédito** — todas las tarjetas comparadas en el mismo periodo: cómo se reparte
   el gasto entre ellas, una tabla por tarjeta (gasto, compras, ticket promedio, cambio vs. el
   periodo anterior, pagos y abonos, categoría principal), gasto mensual por tarjeta y para qué
