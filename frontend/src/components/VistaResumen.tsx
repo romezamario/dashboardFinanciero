@@ -96,6 +96,8 @@ interface VistaResumenProps {
   /** Oculta la tarjeta grande de "Tasa de ahorro" (la pestaña Shophunters no la
    * quiere: son solo gastos de un evento, no tiene sentido hablar de ahorro). */
   sinTasaDeAhorro?: boolean;
+  /** Sin la cuadrícula de seis tarjetas (flujo neto, gasto promedio, meses cubiertos, recurrentes, hormiga, al alza). */
+  sinTarjetasIndicadores?: boolean;
   /** Dibuja en la gráfica de barras los promedios de gasto (móvil de 3 meses, últimos 3 y 12)
    * con sus etiquetas a la derecha: la pestaña Shophunters (ver `IngresosGastosChart`). */
   conPromediosEnGrafica?: boolean;
@@ -135,6 +137,7 @@ export function VistaResumen({
   onCambiarVistaTiempo,
   onActualizado,
   sinTasaDeAhorro = false,
+  sinTarjetasIndicadores = false,
   conPromediosEnGrafica = false,
 }: VistaResumenProps) {
   // Todas las categorías que existen, sin importar si están ocultas -- así
@@ -517,8 +520,10 @@ export function VistaResumen({
       {hayFiltrosActivos && (
         <p className="text-xs" style={{ color: "var(--text-muted)" }}>
           Los filtros por clic afectan el detalle de gasto (gráficas, Sankey, gasto hormiga,
-          categorías al alza y tabla). {sinTasaDeAhorro ? "Flujo" : "Tasa de ahorro, flujo"} neto, gasto promedio, meses
-          cubiertos y recurrentes siguen mostrando tus finanzas completas del periodo.
+          categorías al alza y tabla).
+          {sinTarjetasIndicadores
+            ? ""
+            : ` ${sinTasaDeAhorro ? "Flujo" : "Tasa de ahorro, flujo"} neto, gasto promedio, meses cubiertos y recurrentes siguen mostrando tus finanzas completas del periodo.`}
         </p>
       )}
 
@@ -557,6 +562,7 @@ export function VistaResumen({
         </section>
       )}
 
+      {!sinTarjetasIndicadores && (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Tile
           etiqueta={
@@ -623,6 +629,7 @@ export function VistaResumen({
           }
         />
       </div>
+      )}
 
       <IngresosGastosChart
         datos={ingresosGastos}
