@@ -1015,7 +1015,7 @@ document keeps its events. `bancos` had **no RLS** until `20260926120000_bancos_
 off, the `anon` role (whose key ships in the frontend bundle) could insert/rename/delete banks
 through the REST API without logging in. Now authenticated users may select and insert (what the
 frontend's nested read and the sync's find-or-create need) and nobody may update/delete via the
-API. Known, accepted gap for a single-user app: the insert/update policies only check `user_id =
+API. Its two policies are written `(select auth.uid()) is not null`, not `true` (`20261010140000_bancos_politicas_sin_true.sql`): same effect, but Supabase's advisor flags `rls_policy_always_true` on a literal `true`. The other advisor warning, "Leaked Password Protection Disabled" (Auth), is a dashboard setting (Pro plan only) and was left off. Known, accepted gap for a single-user app: the insert/update policies only check `user_id =
 auth.uid()` on the row itself, not that the referenced `documento_id`/`categoria_id`/`evento_id`/
 `cuenta_id` belong to the same user. **Policies are written `user_id = (select auth.uid())`**, not
 `user_id = auth.uid()` (`20261008120000_rls_auth_uid_initplan.sql` altered all 24 in place): the
