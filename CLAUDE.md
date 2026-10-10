@@ -898,7 +898,7 @@ the transactions whose **event name contains "shophunters"** (`lib/shophunters.t
 It sits right after "Eventos" and only appears when at least one such transaction exists. **It has no
 "Tasa de ahorro" hero card** (user's request 2026-10-09: it's only an event's spending, savings makes no sense
 there) — `VistaResumen` takes `sinTasaDeAhorro` and `Dashboard.renderVistaResumen` passes it for this tab only; the
-other tiles (net flow, spend, etc.) stay. Because every
+six indicator tiles (net flow, average spend, months covered, recurring, gasto hormiga, categories above normal) were removed too (user's request 2026-10-10; `sinTarjetasIndicadores`, same pattern; the detail sections below stay). Because every
 movement here has an event, the "recurring" block and the alert kinds that skip events (price changes, new
 subscriptions, unusual charges) are naturally empty; the "Evento" pill row lists just the Shophunters events.
 
