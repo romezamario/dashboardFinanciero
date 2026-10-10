@@ -65,7 +65,7 @@ export function GastoConPromedioMovilChart({
   // Promedios desde el primer mes con monto: los meses anteriores en $0 (una categoría o un
   // comercio nuevos) no son meses de gasto cero y no deben bajar los promedios.
   const promedios = useMemo(() => promediosDesdeElPrimerGasto(datos.map((punto) => punto.monto)), [datos]);
-  const { ultimos3: promedioUltimos3, ultimos12: promedioUltimos12, ultimoMovil: ultimoPromedioMovil } = promedios;
+  const { ultimos3: promedioUltimos3, ultimos12: promedioUltimos12 } = promedios;
   const datosConPromedios = useMemo(
     () =>
       datos.map((punto, i) => ({
@@ -176,9 +176,6 @@ export function GastoConPromedioMovilChart({
             {columnaAlLado && (
               <EtiquetasPromedios
                 items={[
-                  ...(ultimoPromedioMovil === null
-                    ? []
-                    : [{ nombre: "Promedio móvil (3 meses)", valor: ultimoPromedioMovil, color: colorPromedioMovil, ancho: 2 }]),
                   ...(promedioUltimos3 === null
                     ? []
                     : [{ nombre: "Promedio últimos 3 meses", valor: promedioUltimos3, color: "var(--text-secondary)", ancho: 1.5, trazo: "4 4" }]),

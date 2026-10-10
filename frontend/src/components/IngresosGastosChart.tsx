@@ -224,9 +224,6 @@ export function IngresosGastosChart({
             {columnaAlLado && promedios && (
               <EtiquetasPromedios
                 items={[
-                  ...(promedios.ultimoMovil === null
-                    ? []
-                    : [{ nombre: "Promedio móvil (3 meses)", valor: promedios.ultimoMovil, color: "var(--series-1)", ancho: 2 }]),
                   ...(promedios.ultimos3 === null
                     ? []
                     : [{ nombre: "Promedio últimos 3 meses", valor: promedios.ultimos3, color: "var(--text-secondary)", ancho: 1.5, trazo: "4 4" }]),

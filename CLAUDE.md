@@ -925,6 +925,7 @@ rule too** (user's follow-up, 2026-10-10): both charts use `promediosDesdeElPrim
 counts; the 3-month moving average starts once there are 3 months since that first spending. The chart no longer uses
 `PuntoGastoConPromedioMovil.promedioMovil` from `indicadores.ts` (it recomputes its own line). The month click-filter
 still works with the extra right margin (checked).
+**The 3-month moving average has NO label in that column** (user's request 2026-10-10: its value equals "Promedio últimos 3 meses" at the last point, so it only repeated it) — its line stays on both charts; labels are only the 3-month and 12-month flat averages (phones still list all three in the legend).
 
 **Filter layout (2026-10-03, user's request — "se ve amontonado")**: the Resumen's pill rows live in
 one card, `PanelFiltros.tsx` (presentational only; every click handler stays in `VistaResumen`):
