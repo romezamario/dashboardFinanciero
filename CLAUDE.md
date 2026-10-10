@@ -286,6 +286,11 @@ movements WITHOUT an event whose matched notice HAS one; `HerenciaDeEventos` (Ga
 inline confirmation, the match card (`CoincidenciaFlotante`) offers it per movement, and event cells show a muted "↳ evento" hint. Events are hidden by default in this view,
 so inherited cargos stop adding to the day until the event is re-shown (the success message says so). The match is still only a hint (amount + ±1 day), hence the confirmation.
 Covered by `conciliarCorreo.test.ts` (`eventosHeredables`, `filaAGastoCorreo`); the UI was type-checked/built but not driven in a browser.
+**Same bulk "Asignar evento" in "Por estado de cuenta" (2026-10-10, user's request)**: the block is the shared `AsignarEventoDia.tsx` (props: ids of the day, selection, count already
+with event, existing events, `onAsignarEvento(ids, evento|null)`, `idLista`, `nota`), placed at the END of the day panel (below the detail and "No suman" tables, as in "Por correo").
+Checkboxes (`CeldaSeleccion`, click doesn't open the match card) are in both tables; "Seleccionar todo el día" covers summed and non-summed movements. It saves with
+`actualizarCategoriaComercioYEvento(ids, {evento})` / `quitarEventoDeTransacciones(ids)` then `onActualizado(ids)`; the note reminds that events start hidden (their cargos stop adding
+to the day). Panels carry `key={fecha}` so the selection resets per day. Not driven in a browser.
 
 **Weekly daily-average vs. goal (2026-10-08, user's request: "el objetivo es tener un gasto diario de 1000")**: under each
 week row of the calendar (both sources; `FranjaSemana` in `CalendarioMensual.tsx`, math in `lib/metaDiaria.ts`) a strip

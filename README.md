@@ -365,7 +365,9 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
   por estado de cuenta cada movimiento se puede editar ahí mismo. En la vista por correo puedes
   **asignar un evento** a los gastos del día (casillas + «Asignar evento») sin esperar al estado de
   cuenta; cuando llega, el cargo que se empareja con ese aviso puede **heredar el evento** (botón
-  «Heredar eventos» o desde la tarjeta del movimiento; nunca pisa un evento ya asignado).
+  «Heredar eventos» o desde la tarjeta del movimiento; nunca pisa un evento ya asignado). En la
+  vista por estado de cuenta también puedes marcar varios movimientos del día y asignarles (o
+  quitarles) un evento de una vez, con el bloque «Asignar evento» al final de las tablas.
 - **Una pestaña por cada cuenta que no es tarjeta** (p. ej. la de cheques) — la misma vista
   que el Resumen, solo con esa cuenta.
 - **QQQ / TQQQ** — análisis técnico (velas, medias móviles, Bollinger, soportes y resistencias

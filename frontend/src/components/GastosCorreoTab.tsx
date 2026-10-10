@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { AsignarEventoDia } from "./AsignarEventoDia";
 import { descargarDiaExcel } from "../lib/exportarGastosDia";
 import {
   agruparPorDia,
@@ -177,12 +178,15 @@ function PanelDia({
       <div className="space-y-5 px-4 pb-4 pt-1">
         <TablaResumen dia={dia} />
         <TablaDetalle dia={dia} seleccion={seleccion} onAlternar={alternar} />
-        <AsignarEvento
-          dia={dia}
+        <AsignarEventoDia
+          idsDelDia={dia.gastos.map((g) => g.id)}
           seleccion={seleccion}
           onCambiarSeleccion={setSeleccion}
+          conEvento={dia.gastos.filter((g) => seleccion.has(g.id) && g.evento).length}
           eventosExistentes={eventosExistentes}
           onAsignarEvento={onAsignarEvento}
+          idLista="eventos-correo"
+          nota="Cuando llegue el estado de cuenta, el cargo que se empareje con el aviso podrá heredarlo."
         />
       </div>
     </section>
@@ -305,134 +309,5 @@ function TablaDetalle({
         </tr>
       </tbody>
     </SeccionTabla>
-  );
-}
-
-/**
- * Asignar un evento a los gastos del día (el mismo día que llega el aviso, sin esperar al
- * estado de cuenta). Se marcan casillas en el detalle -- o "todo el día", típico en un viaje
- * -- y se escribe (o elige) el evento; "Quitar evento" lo vacía. Un evento nuevo se crea en
- * el catálogo `eventos`, el mismo de los estados de cuenta, así que luego se puede heredar.
- */
-function AsignarEvento({
-  dia,
-  seleccion,
-  onCambiarSeleccion,
-  eventosExistentes,
-  onAsignarEvento,
-}: {
-  dia: DiaGastos;
-  seleccion: Set<string>;
-  onCambiarSeleccion: (seleccion: Set<string>) => void;
-  eventosExistentes: string[];
-  onAsignarEvento: (ids: string[], evento: string | null) => Promise<void>;
-}) {
-  const [evento, setEvento] = useState("");
-  const [trabajando, setTrabajando] = useState(false);
-  const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
-  const ids = Array.from(seleccion);
-  const conEvento = dia.gastos.filter((g) => seleccion.has(g.id) && g.evento).length;
-  const nombreEvento = evento.trim();
-
-  async function aplicar(valor: string | null) {
-    setTrabajando(true);
-    setMensaje(null);
-    try {
-      await onAsignarEvento(ids, valor);
-      setMensaje({
-        tipo: "ok",
-        texto:
-          valor === null
-            ? `Se quitó el evento de ${ids.length} gasto(s).`
-            : `Se asignó "${valor}" a ${ids.length} gasto(s).`,
-      });
-      onCambiarSeleccion(new Set());
-      if (valor !== null) setEvento("");
-    } catch (e) {
-      setMensaje({ tipo: "error", texto: e instanceof Error ? e.message : "No se pudo guardar." });
-    } finally {
-      setTrabajando(false);
-    }
-  }
-
-  return (
-    <section
-      className="rounded-md p-3"
-      style={{ background: "var(--page-plane)", border: "1px solid var(--border)" }}
-    >
-      <h3
-        className="text-[11px] font-semibold uppercase tracking-wider"
-        style={{ color: "var(--text-secondary)" }}
-      >
-        Asignar evento
-      </h3>
-      <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-        Marca los gastos del detalle (o todo el día) y asígnales un evento. Cuando llegue el
-        estado de cuenta, el cargo que se empareje con el aviso podrá heredarlo.
-      </p>
-      <div className="mt-2 flex flex-wrap items-end gap-2">
-        <label className="w-full text-xs sm:w-auto" style={{ color: "var(--text-secondary)" }}>
-          Evento
-          <input
-            type="text"
-            list="eventos-correo"
-            value={evento}
-            onChange={(e) => setEvento(e.target.value)}
-            placeholder="ej. 2026-10 Shophunters"
-            className="mt-1 block w-full rounded-md px-3 py-2 text-sm sm:w-64"
-            style={{
-              background: "var(--surface-1)",
-              border: "1px solid var(--border)",
-              color: "var(--text-primary)",
-            }}
-          />
-          <datalist id="eventos-correo">
-            {eventosExistentes.map((e) => (
-              <option key={e} value={e} />
-            ))}
-          </datalist>
-        </label>
-        <button
-          type="button"
-          onClick={() => aplicar(nombreEvento)}
-          disabled={trabajando || ids.length === 0 || !nombreEvento}
-          className="rounded-md px-3 py-2 text-xs font-medium text-white disabled:opacity-50"
-          style={{ background: "var(--series-1)" }}
-        >
-          {trabajando ? "Guardando…" : `Asignar a ${ids.length} seleccionado(s)`}
-        </button>
-        <button
-          type="button"
-          onClick={() => aplicar(null)}
-          disabled={trabajando || conEvento === 0}
-          className="rounded-md px-3 py-2 text-xs font-medium disabled:opacity-50"
-          style={{
-            background: "transparent",
-            border: "1px solid var(--status-critical)",
-            color: "var(--status-critical)",
-          }}
-          title="Vacía el evento de los gastos seleccionados que lo tengan"
-        >
-          Quitar evento
-        </button>
-        <button
-          type="button"
-          onClick={() => onCambiarSeleccion(new Set(seleccion.size === dia.gastos.length ? [] : dia.gastos.map((g) => g.id)))}
-          className="text-xs underline"
-          style={{ color: "var(--series-1)" }}
-        >
-          {seleccion.size === dia.gastos.length ? "Quitar la selección" : "Seleccionar todo el día"}
-        </button>
-      </div>
-      {mensaje && (
-        <p
-          className="mt-2 text-xs"
-          role="status"
-          style={{ color: mensaje.tipo === "ok" ? "var(--status-good)" : "var(--status-critical)" }}
-        >
-          {mensaje.texto}
-        </p>
-      )}
-    </section>
   );
 }

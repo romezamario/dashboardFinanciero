@@ -23,6 +23,7 @@ import {
 } from "../lib/queries";
 import type { Transaccion } from "../lib/types";
 import { type VistaCalendario, dinero, formatoMoneda, useDescargaExcel, ESTILO_CABECERA, ESTILO_SUBTOTAL_CATEGORIA, ESTILO_SUBTOTAL_COMERCIO, ESTILO_TOTAL } from "../lib/gastosUI";
+import { AsignarEventoDia } from "./AsignarEventoDia";
 import { CalendarioMensual, type ResumenDia } from "./CalendarioMensual";
 import { CoincidenciaFlotante, type EstadoCorreo } from "./CoincidenciaFlotante";
 import { EnlaceTexto, Fila, PildoraExclusion } from "./PanelFiltros";
@@ -330,6 +331,7 @@ export function GastosEstadoCuentaTab({
           const dia = porFecha.get(fecha);
           return dia ? (
             <PanelDiaEstado
+              key={dia.fecha}
               dia={dia}
               sugerencias={sugerencias}
               onActualizado={onActualizado}
@@ -369,6 +371,22 @@ function PanelDiaEstado({
   // Id del movimiento cuyo editor está abierto (uno a la vez) y último aviso.
   const [editando, setEditando] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  // Movimientos marcados para asignarles evento en bloque (ids de `transacciones`).
+  const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
+  function alternarSeleccion(id: string) {
+    setSeleccion((previa) => {
+      const nueva = new Set(previa);
+      if (nueva.has(id)) nueva.delete(id);
+      else nueva.add(id);
+      return nueva;
+    });
+  }
+  async function asignarEvento(ids: string[], evento: string | null) {
+    if (evento === null) await quitarEventoDeTransacciones(ids);
+    else await actualizarCategoriaComercioYEvento(ids, { evento });
+    await onActualizado(ids);
+  }
+  const movimientosDelDia = [...dia.gastos, ...dia.sinSumar.map((s) => s.mov)];
   // Tarjetita de la posible coincidencia en el correo (junto al clic).
   const [flotante, setFlotante] = useState<{ mov: MovimientoDia; x: number; y: number } | null>(null);
   const cerrarFlotante = useCallback(() => setFlotante(null), []);
@@ -448,6 +466,8 @@ function PanelDiaEstado({
               onEditar={abrirEditor}
               onCancelar={() => setEditando(null)}
               onGuardado={guardado}
+              seleccion={seleccion}
+              onAlternar={alternarSeleccion}
             />
           </>
         ) : (
@@ -463,8 +483,20 @@ function PanelDiaEstado({
             onEditar={abrirEditor}
             onCancelar={() => setEditando(null)}
             onGuardado={guardado}
+            seleccion={seleccion}
+            onAlternar={alternarSeleccion}
           />
         )}
+        <AsignarEventoDia
+          idsDelDia={movimientosDelDia.map((m) => m.id)}
+          seleccion={seleccion}
+          onCambiarSeleccion={setSeleccion}
+          conEvento={movimientosDelDia.filter((m) => seleccion.has(m.id) && m.evento).length}
+          eventosExistentes={sugerencias.eventos}
+          onAsignarEvento={asignarEvento}
+          idLista="eventos-estado"
+          nota="Los eventos empiezan ocultos: sus cargos dejan de sumar al día hasta que los muestres en «Ocultar categorías y eventos»."
+        />
       </div>
       {flotante && (
         <CoincidenciaFlotante
@@ -536,6 +568,8 @@ function TablaDetalleEstado({
   onEditar,
   onCancelar,
   onGuardado,
+  seleccion,
+  onAlternar,
 }: {
   dia: DiaEstadoCuenta;
   sugerencias: Sugerencias;
@@ -543,14 +577,17 @@ function TablaDetalleEstado({
   onEditar: (id: string) => void;
   onCancelar: () => void;
   onGuardado: (aviso: string) => void | Promise<void>;
+  seleccion: Set<string>;
+  onAlternar: (id: string) => void;
 }) {
   const vacias = (n: number) => Array.from({ length: n }, (_, i) => <td key={i} />);
-  // + Total + la columna del botón "Editar".
-  const columnasTotales = COLUMNAS_TEXTO_DETALLE + dia.cuentas.length + 2;
+  // + casilla + Total + la columna del botón "Editar".
+  const columnasTotales = COLUMNAS_TEXTO_DETALLE + dia.cuentas.length + 3;
   return (
     <SeccionTabla titulo="Detalle por transacción">
       <thead>
         <tr style={ESTILO_CABECERA}>
+          <th className="w-8 px-3 py-2" />
           <th className="px-3 py-2 text-left font-semibold">Categoría</th>
           <th className="px-3 py-2 text-left font-semibold">Comercio</th>
           <th className="px-3 py-2 text-left font-semibold">Descripción</th>
@@ -574,6 +611,7 @@ function TablaDetalleEstado({
                 onGuardado={onGuardado}
                 onCancelar={onCancelar}
               >
+                <CeldaSeleccion mov={g} seleccion={seleccion} onAlternar={onAlternar} />
                 <td className="whitespace-nowrap px-3 py-1.5">{g.categoria}</td>
                 <td className="whitespace-nowrap px-3 py-1.5">{g.comercio}</td>
                 <td className="max-w-64 px-3 py-1.5">
@@ -594,6 +632,7 @@ function TablaDetalleEstado({
             return (
               <tr key={`c-${i}`} style={ESTILO_SUBTOTAL_COMERCIO}>
                 <td />
+                <td />
                 <td className="whitespace-nowrap px-3 py-1.5">Subtotal {fila.comercio}</td>
                 {vacias(3)}
                 <CeldasSumas sumas={fila.sumas} columnas={dia.cuentas} />
@@ -603,6 +642,7 @@ function TablaDetalleEstado({
           }
           return (
             <tr key={`k-${i}`} style={ESTILO_SUBTOTAL_CATEGORIA}>
+              <td />
               <td className="whitespace-nowrap px-3 py-1.5">{fila.categoria}</td>
               <td className="px-3 py-1.5">Subtotal</td>
               {vacias(3)}
@@ -612,6 +652,7 @@ function TablaDetalleEstado({
           );
         })}
         <tr style={ESTILO_TOTAL}>
+          <td />
           <td className="px-3 py-1.5">Total</td>
           {vacias(4)}
           <CeldasSumas sumas={dia.total} columnas={dia.cuentas} />
@@ -629,6 +670,8 @@ function TablaSinSumar({
   onEditar,
   onCancelar,
   onGuardado,
+  seleccion,
+  onAlternar,
 }: {
   sinSumar: MovimientoSinSumar[];
   sugerencias: Sugerencias;
@@ -636,6 +679,8 @@ function TablaSinSumar({
   onEditar: (id: string) => void;
   onCancelar: () => void;
   onGuardado: (aviso: string) => void | Promise<void>;
+  seleccion: Set<string>;
+  onAlternar: (id: string) => void;
 }) {
   return (
     <SeccionTabla
@@ -644,6 +689,7 @@ function TablaSinSumar({
     >
       <thead>
         <tr style={ESTILO_CABECERA}>
+          <th className="w-8 px-3 py-2" />
           <th className="px-3 py-2 text-left font-semibold">Categoría</th>
           <th className="px-3 py-2 text-left font-semibold">Descripción</th>
           <th className="px-3 py-2 text-left font-semibold">Cuenta</th>
@@ -657,13 +703,14 @@ function TablaSinSumar({
         {sinSumar.map(({ mov, motivo }) => (
           <FilaMovimiento
             key={mov.id}
-            columnasTotales={7}
+            columnasTotales={8}
             abierta={editando === mov.id}
             mov={mov}
             sugerencias={sugerencias}
             onGuardado={onGuardado}
             onCancelar={onCancelar}
           >
+            <CeldaSeleccion mov={mov} seleccion={seleccion} onAlternar={onAlternar} />
             <td className="whitespace-nowrap px-3 py-1.5">{mov.categoria}</td>
             <td className="max-w-64 px-3 py-1.5">
               <DescripcionMovimiento mov={mov} />
@@ -690,6 +737,28 @@ function TablaSinSumar({
         ))}
       </tbody>
     </SeccionTabla>
+  );
+}
+
+/** Casilla para marcar el movimiento (asignación de evento en bloque); su clic no abre la coincidencia del correo. */
+function CeldaSeleccion({
+  mov,
+  seleccion,
+  onAlternar,
+}: {
+  mov: MovimientoDia;
+  seleccion: Set<string>;
+  onAlternar: (id: string) => void;
+}) {
+  return (
+    <td className="px-3 py-1.5" onClick={(e) => e.stopPropagation()}>
+      <input
+        type="checkbox"
+        checked={seleccion.has(mov.id)}
+        onChange={() => onAlternar(mov.id)}
+        aria-label={`Seleccionar ${mov.descripcion} para asignarle un evento`}
+      />
+    </td>
   );
 }
 
