@@ -351,10 +351,18 @@ def cargar_gastos_recientes(
     carpeta: Path = CARPETA_GASTOS_CORREO, limite: int = 200
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """(gastos más recientes primero, cada uno con su "fecha"; archivos que no
-    se pudieron leer). Para la tabla de la app de escritorio."""
+    se pudieron leer). Para la tabla de la app de escritorio.
+
+    Cada archivo es un día (`AAAA-MM-DD.json`), así que se leen del más nuevo al
+    más viejo y se para en cuanto hay `limite` gastos: los días que faltan son
+    todos más viejos y no entrarían. Con años de historial eran cientos de
+    archivos leídos para mostrar 200 filas. Un archivo ilegible solo se reporta
+    si se llegó a leer."""
     gastos: list[dict[str, Any]] = []
     ilegibles: list[str] = []
-    for ruta in carpeta.glob(PATRON_ARCHIVO_DIA):
+    for ruta in sorted(carpeta.glob(PATRON_ARCHIVO_DIA), reverse=True):
+        if len(gastos) >= limite:
+            break
         try:
             datos = json.loads(ruta.read_text(encoding="utf-8"))
             fecha = datos.get("fecha") or ruta.stem
@@ -501,7 +509,19 @@ def recategorizar_guardados(
     `establecimiento` guardado). Así, tras agregar una regla, la siguiente
     revisión corrige los gastos viejos sin volver a descargarlos. Devuelve
     cuántos gastos cambiaron; un archivo ilegible se deja como está."""
+    return _recategorizar_y_leer(reglas, ciudades_extra, carpeta)[0]
+
+
+def _recategorizar_y_leer(
+    reglas: list[Regla],
+    ciudades_extra: dict[str, str] | None,
+    carpeta: Path,
+) -> tuple[int, list[dict[str, Any]]]:
+    """`recategorizar_guardados` que además devuelve todos los gastos ya
+    recategorizados (cada uno con su "fecha"), para que `revisar_gmail` arme su
+    resumen sin volver a leer todos los archivos."""
     cambiados = 0
+    todos: list[dict[str, Any]] = []
     for ruta in sorted(carpeta.glob(PATRON_ARCHIVO_DIA)):
         try:
             datos = json.loads(ruta.read_text(encoding="utf-8"))
@@ -519,12 +539,13 @@ def recategorizar_guardados(
                 nuevos.append(nuevo)
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             continue
+        todos += [{**g, "fecha": datos["fecha"]} for g in nuevos]
         cambio = sum(1 for viejo, nuevo in zip(gastos, nuevos) if viejo != nuevo)
         if cambio:
             datos["transacciones"] = nuevos
             ruta.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
             cambiados += cambio
-    return cambiados
+    return cambiados, todos
 
 
 def _rutas_gmail() -> tuple[Path, Path]:
@@ -772,11 +793,12 @@ def revisar_gmail(
         raise error_lectura
 
     avisar("Recategorizando con las reglas actuales…")
-    resultado.recategorizados = recategorizar_guardados(reglas, ciudades, carpeta)
+    # La recategorización ya lee todos los días: el resumen sale de esa misma
+    # lectura (antes se volvían a leer todos los archivos una vez más).
+    resultado.recategorizados, guardados = _recategorizar_y_leer(reglas, ciudades, carpeta)
 
     # Resumen sobre TODO lo que hay en la ventana (lo nuevo y lo ya guardado).
     en_ventana = set(ids or [])
-    guardados, _ilegibles_archivo = cargar_gastos_recientes(carpeta, limite=10**9)
     gastos = [g for g in guardados if g.get("id") in en_ventana]
     resultado.avisos_leidos = len(gastos)
     resultado.nuevos = len(avisos)

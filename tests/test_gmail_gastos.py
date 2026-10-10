@@ -502,6 +502,22 @@ class GastosRecientesTest(unittest.TestCase):
             self.assertEqual(ids_guardados(carpeta), {"2026-10-02-09:00", "2026-10-03-08:00", "2026-10-03-21:30"})
 
 
+    def test_para_de_leer_en_cuanto_alcanza_el_limite(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            carpeta = Path(tmp)
+            for dia in range(1, 6):
+                fecha = f"2026-10-0{dia}"
+                (carpeta / f"{fecha}.json").write_text(json.dumps({
+                    "fecha": fecha, "transacciones": [{"id": fecha, "hora": "10:00", "monto": 1}],
+                }), encoding="utf-8")
+            # Un día viejo ilegible: si se leyera, aparecería en `ilegibles`.
+            (carpeta / "2026-09-01.json").write_text("{roto", encoding="utf-8")
+
+            gastos, ilegibles = cargar_gastos_recientes(carpeta, limite=2)
+            self.assertEqual([g["fecha"] for g in gastos], ["2026-10-05", "2026-10-04"])
+            self.assertEqual(ilegibles, [])
+
+
 class ServicioGmailTest(unittest.TestCase):
     """Rutas temporales: nunca toca data/gmail/credentials.json ni token.json."""
 

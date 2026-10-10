@@ -4,8 +4,14 @@ En vez de copiar la pestaña "Sin categorizar" y pegarla en un chat, la app le
 pregunta directamente a Claude Code (`claude -p`, la CLI en modo no
 interactivo), que usa la suscripción del usuario: sin API key ni costo extra.
 Lo único que sale de la laptop son las descripciones sin categoría (lo mismo
-que ya se pegaba en el chat) y las reglas actuales, como ejemplo del estilo;
-nunca el PDF ni su texto crudo.
+que ya se pegaba en el chat), con los números largos enmascarados
+(`enmascarar_numeros`), y las reglas actuales, como ejemplo del estilo; nunca
+el PDF ni su texto crudo.
+
+Claude corre SIN herramientas (`--tools ""`, sin servidores MCP) y en una
+carpeta temporal vacía: las descripciones son texto del banco, no del usuario,
+y solo hace falta que conteste texto -- no puede leer archivos, ejecutar
+comandos ni navegar aunque una descripción traiga instrucciones.
 
 Si Claude Code no está instalado o no tiene sesión, la app lo instala y abre
 el inicio de sesión ella misma (`instalar_claude`, `abrir_inicio_de_sesion`).
@@ -34,6 +40,10 @@ from transform.categorizador import Regla
 MINIMO_CARACTERES_PATRON = 4
 # Lo que puede tardar Claude en contestar una lista larga (p. ej. un viaje).
 TIEMPO_MAXIMO_SEGUNDOS = 600
+# Un número de 8+ dígitos en una descripción puede ser una CLABE, un número de
+# cuenta o de tarjeta (los SPEI de la cuenta de cheques los traen): a Claude
+# solo le llegan sus últimos 4. Un RFC ("OPP 010927SA5") tiene 6 y pasa igual.
+PATRON_NUMERO_LARGO = re.compile(r"\d{8,}")
 
 INSTRUCCIONES = """\
 Eres el asistente de categorización de gastos de un usuario en México. Te paso
@@ -100,6 +110,11 @@ class Sugerencia:
         return not self.problema
 
 
+def enmascarar_numeros(texto: str) -> str:
+    """'SPEI 012180001234567890 RENTA' -> 'SPEI ****7890 RENTA'."""
+    return PATRON_NUMERO_LARGO.sub(lambda m: "****" + m.group()[-4:], texto)
+
+
 def construir_prompt(descripciones: list[str], reglas: list[Regla]) -> str:
     categorias = sorted({r.categoria for r in reglas})
     ejemplos = "\n".join(
@@ -140,6 +155,9 @@ PAQUETE_NPM = "@anthropic-ai/claude-code"
 # Instalador oficial de Anthropic, para cuando no hay npm.
 INSTALADOR_OFICIAL = "irm https://claude.ai/install.ps1 | iex"
 TIEMPO_MAXIMO_INSTALACION = 900
+# Solo contestar texto: ninguna herramienta integrada (leer, editar, Bash, web)
+# ni servidores MCP configurados en la computadora.
+ARGUMENTOS_SIN_HERRAMIENTAS = ("--tools", "", "--strict-mcp-config")
 
 
 def _ejecutar_claude(prompt: str) -> str:
@@ -147,18 +165,20 @@ def _ejecutar_claude(prompt: str) -> str:
     if ejecutable is None:
         raise FaltaClaudeCode("Claude Code no está instalado.")
     try:
-        proceso = subprocess.run(
-            [ejecutable, "-p", "--output-format", "json"],
-            input=prompt,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=TIEMPO_MAXIMO_SEGUNDOS,
-            # Fuera del repo: así no carga el CLAUDE.md del proyecto (enorme e
-            # irrelevante para esto) ni puede tocar sus archivos.
-            cwd=tempfile.gettempdir(),
-            creationflags=_SIN_VENTANA,
-        )
+        # Carpeta propia y vacía (se borra al terminar): fuera del repo no
+        # carga su CLAUDE.md, y aunque Claude no tiene herramientas, ni
+        # siquiera "ve" lo que haya en la carpeta temporal del sistema.
+        with tempfile.TemporaryDirectory(prefix="sugerencias-ia-") as carpeta:
+            proceso = subprocess.run(
+                [ejecutable, "-p", "--output-format", "json", *ARGUMENTOS_SIN_HERRAMIENTAS],
+                input=prompt,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=TIEMPO_MAXIMO_SEGUNDOS,
+                cwd=carpeta,
+                creationflags=_SIN_VENTANA,
+            )
     except subprocess.TimeoutExpired as error:
         raise ErrorSugerenciasIA(
             f"Claude no contestó en {TIEMPO_MAXIMO_SEGUNDOS // 60} minutos. "
@@ -248,10 +268,18 @@ def _texto(valor) -> str | None:
 
 
 def revisar_sugerencias(
-    crudas: list[dict], descripciones: list[str], reglas: list[Regla]
+    crudas: list[dict],
+    descripciones: list[str],
+    reglas: list[Regla],
+    enviadas: list[str] | None = None,
 ) -> list[Sugerencia]:
     """Convierte la respuesta en `Sugerencia`s, una por descripción pedida (en
-    su orden), y marca las que no conviene aceptar tal cual."""
+    su orden), y marca las que no conviene aceptar tal cual. `enviadas` es lo
+    que de verdad vio Claude (enmascarado), en el mismo orden: su respuesta se
+    empareja por ese texto, pero la sugerencia se arma con la descripción real
+    -- y un patrón que copie un número enmascarado no aparece en ella, así que
+    queda marcado como no aceptable."""
+    enviadas = enviadas or descripciones
     por_descripcion = {}
     for d in crudas:
         clave = _texto(d.get("descripcion"))
@@ -261,8 +289,8 @@ def revisar_sugerencias(
 
     sugerencias = []
     patrones_propuestos: set[str] = set()
-    for descripcion in descripciones:
-        d = por_descripcion.get(descripcion.strip().upper(), {})
+    for descripcion, enviada in zip(descripciones, enviadas):
+        d = por_descripcion.get(enviada.strip().upper(), {})
         patron = _texto(d.get("patron")) or ""
         s = Sugerencia(
             descripcion=descripcion,
@@ -308,5 +336,6 @@ def pedir_sugerencias(
     recibe el prompt y devuelve el texto de la respuesta (en pruebas, un falso)."""
     if not descripciones:
         return []
-    texto = ejecutar(construir_prompt(descripciones, reglas))
-    return revisar_sugerencias(_extraer_arreglo(texto), descripciones, reglas)
+    enviadas = [enmascarar_numeros(d) for d in descripciones]
+    texto = ejecutar(construir_prompt(enviadas, reglas))
+    return revisar_sugerencias(_extraer_arreglo(texto), descripciones, reglas, enviadas)

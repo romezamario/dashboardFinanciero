@@ -75,6 +75,30 @@ class PedirSugerenciasTest(unittest.TestCase):
         with self.assertRaises(ErrorSugerenciasIA):
             pedir_sugerencias(["X"], REGLAS, ejecutar=lambda _p: "No sé.")
 
+    def test_numeros_largos_salen_enmascarados(self):
+        original = "SPEI 012180001234567890 RENTA DEPTO"
+        enviados = []
+
+        def ejecutar(prompt):
+            enviados.append(prompt)
+            return respuesta({
+                "descripcion": "SPEI ****7890 RENTA DEPTO", "patron": "RENTA DEPTO",
+                "categoria": "Vivienda", "comercio": "Renta",
+            })
+
+        [s] = pedir_sugerencias([original], REGLAS, ejecutar=ejecutar)
+        self.assertNotIn("012180001234567890", enviados[0])
+        self.assertIn("SPEI ****7890 RENTA DEPTO", enviados[0])
+        # La sugerencia conserva la descripción real y se puede aceptar.
+        self.assertEqual(s.descripcion, original)
+        self.assertTrue(s.aceptable)
+
+    def test_un_rfc_no_se_enmascara(self):
+        self.assertEqual(
+            sugerencias_ia.enmascarar_numeros("DP 11525 APODACA OPP 010927SA5"),
+            "DP 11525 APODACA OPP 010927SA5",
+        )
+
     def test_sin_descripciones_no_llama(self):
         ejecutar = mock.Mock()
         self.assertEqual(pedir_sugerencias([], REGLAS, ejecutar=ejecutar), [])
@@ -98,6 +122,11 @@ class EjecutarClaudeTest(unittest.TestCase):
         self.assertEqual(texto, "[]")
         self.assertEqual(run.call_args.kwargs["input"], "hola")
         self.assertIn("-p", run.call_args.args[0])
+        # Sin herramientas ni MCP, y en una carpeta temporal propia (no la del sistema).
+        argumentos = run.call_args.args[0]
+        self.assertEqual(argumentos[argumentos.index("--tools") + 1], "")
+        self.assertIn("--strict-mcp-config", argumentos)
+        self.assertIn("sugerencias-ia-", run.call_args.kwargs["cwd"])
 
     def test_sin_sesion(self):
         with self.assertRaises(FaltaIniciarSesion):
