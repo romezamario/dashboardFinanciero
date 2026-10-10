@@ -902,9 +902,12 @@ of data both flat averages are the same and the 3-month moving average (and its 
 `GastoConPromedioMovilChart` now writes its three lines' name + value in the right-hand column too, instead of the
 bottom legend (which keeps only the bars). The column is one shared component, `EtiquetasPromedios.tsx` (Recharts
 `useYAxisScale`/`usePlotArea`), with its measures in `lib/promedios.ts` (`ANCHO_COLUMNA_PROMEDIOS`,
-`ALTO_ETIQUETA_PROMEDIO`), used by both this chart and the Shophunters bar chart. Phones keep the legend. Only the *look*
-was unified: this chart still computes its averages its own way (12-month window ending at the last complete month,
-empty months count as $0), unlike `lib/promedios.ts`, which skips months before the first spending. The month click-filter
+`ALTO_ETIQUETA_PROMEDIO`), used by both this chart and the Shophunters bar chart. Phones keep the legend. **Same averages
+rule too** (user's follow-up, 2026-10-10): both charts use `promediosDesdeElPrimerGasto` (`lib/promedios.ts`): months
+*before the first month with spending* are ignored (a new category/comercio/event doesn't average empty months as $0 — the
+12-month average of something that started 4 months ago is over 4 months), while a $0 month *after* the first spending
+counts; the 3-month moving average starts once there are 3 months since that first spending. The chart no longer uses
+`PuntoGastoConPromedioMovil.promedioMovil` from `indicadores.ts` (it recomputes its own line). The month click-filter
 still works with the extra right margin (checked).
 
 **Filter layout (2026-10-03, user's request — "se ve amontonado")**: the Resumen's pill rows live in

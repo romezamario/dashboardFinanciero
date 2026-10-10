@@ -14,7 +14,7 @@ import {
 import { useEsMovil } from "../hooks/useEsMovil";
 import type { LadoMovimiento, PuntoGastoConPromedioMovil } from "../lib/indicadores";
 import { compacto as formateadorEje, monedaConCentavos as formateadorTooltip } from "../lib/formato";
-import { ANCHO_COLUMNA_PROMEDIOS } from "../lib/promedios";
+import { ANCHO_COLUMNA_PROMEDIOS, promediosDesdeElPrimerGasto } from "../lib/promedios";
 import { EtiquetasPromedios } from "./EtiquetasPromedios";
 
 interface GastoConPromedioMovilChartProps {
@@ -30,16 +30,6 @@ interface GastoConPromedioMovilChartProps {
   /** Clic en un mes (en cualquier punto de su columna, no solo sobre la barra,
    * que en los meses bajos es muy delgada). Sin él la gráfica no es clicable. */
   onClickMes?: (mes: string) => void;
-}
-
-/** Promedio plano del monto sobre los últimos `n` meses visibles en `datos`
- * (no una ventana móvil por mes, a diferencia de `promedioMovil`) -- una
- * sola línea horizontal de referencia para comparar el nivel actual contra
- * el corto y el largo plazo. */
-function promedioDeUltimosMeses(datos: PuntoGastoConPromedioMovil[], n: number): number | null {
-  if (datos.length === 0) return null;
-  const ventana = datos.slice(-n);
-  return ventana.reduce((suma, punto) => suma + punto.monto, 0) / ventana.length;
 }
 
 /**
@@ -72,16 +62,19 @@ export function GastoConPromedioMovilChart({
   const esIngreso = lado === "ingreso";
   const colorBarras = esIngreso ? "var(--series-1)" : "var(--series-2)";
   const colorPromedioMovil = esIngreso ? "var(--series-2)" : "var(--series-1)";
-  const promedioUltimos3 = useMemo(() => promedioDeUltimosMeses(datos, 3), [datos]);
-  const promedioUltimos12 = useMemo(() => promedioDeUltimosMeses(datos, 12), [datos]);
-  // Último valor del promedio móvil (los primeros meses de la ventana vienen en null).
-  const ultimoPromedioMovil = useMemo(
-    () => [...datos].reverse().find((punto) => punto.promedioMovil !== null)?.promedioMovil ?? null,
-    [datos]
-  );
+  // Promedios desde el primer mes con monto: los meses anteriores en $0 (una categoría o un
+  // comercio nuevos) no son meses de gasto cero y no deben bajar los promedios.
+  const promedios = useMemo(() => promediosDesdeElPrimerGasto(datos.map((punto) => punto.monto)), [datos]);
+  const { ultimos3: promedioUltimos3, ultimos12: promedioUltimos12, ultimoMovil: ultimoPromedioMovil } = promedios;
   const datosConPromedios = useMemo(
-    () => datos.map((punto) => ({ ...punto, promedioUltimos3, promedioUltimos12 })),
-    [datos, promedioUltimos3, promedioUltimos12]
+    () =>
+      datos.map((punto, i) => ({
+        ...punto,
+        promedioMovil: promedios.movil[i],
+        promedioUltimos3,
+        promedioUltimos12,
+      })),
+    [datos, promedios, promedioUltimos3, promedioUltimos12]
   );
 
   return (

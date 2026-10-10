@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mesActual, promediosDeGastos } from "./promedios";
+import { mesActual, promediosDeGastos, promediosDesdeElPrimerGasto } from "./promedios";
 
 const serie = (valores: number[], desde = 2026) =>
   valores.map((gastos, i) => ({ periodo: `${desde}-${String(i + 1).padStart(2, "0")}`, gastos }));
@@ -72,6 +72,34 @@ describe("promediosDeGastos", () => {
     expect(r.ultimos12).toBeNull();
     expect(r.ultimoMovil).toBeNull();
     expect(promediosDeGastos([], "2026-10").movil).toEqual([]);
+  });
+});
+
+describe("promediosDesdeElPrimerGasto", () => {
+  it("ignora los meses anteriores al primer gasto, pero no los $0 que vienen después", () => {
+    // 4 meses vacíos, luego 300, un mes sin gasto de verdad (0) y 600.
+    const r = promediosDesdeElPrimerGasto([0, 0, 0, 0, 300, 0, 600]);
+    expect(r.ultimos12).toBe(300); // (300 + 0 + 600) / 3, no / 7
+    expect(r.ultimos3).toBe(300);
+    expect(r.movil).toEqual([null, null, null, null, null, null, 300]);
+    expect(r.ultimoMovil).toBe(300);
+  });
+
+  it("sin ningún gasto no hay promedios", () => {
+    const r = promediosDesdeElPrimerGasto([0, 0, 0]);
+    expect(r.ultimos3).toBeNull();
+    expect(r.ultimos12).toBeNull();
+    expect(r.movil).toEqual([null, null, null]);
+    expect(promediosDesdeElPrimerGasto([]).ultimoMovil).toBeNull();
+  });
+
+  it("con 12 meses de historia completa promedia los últimos 12 y 3 (como antes)", () => {
+    const montos = Array.from({ length: 12 }, (_, i) => (i + 1) * 100);
+    const r = promediosDesdeElPrimerGasto(montos);
+    expect(r.ultimos12).toBe(650);
+    expect(r.ultimos3).toBe(1100);
+    expect(r.movil[1]).toBeNull();
+    expect(r.movil[2]).toBe(200);
   });
 });
 

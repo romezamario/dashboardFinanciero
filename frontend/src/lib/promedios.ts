@@ -25,14 +25,34 @@ export interface PromediosDeGastos {
 const media = (valores: number[]) => valores.reduce((a, b) => a + b, 0) / valores.length;
 
 /**
- * El mes en curso (`mesEnCurso`, "YYYY-MM") no entra a ningún promedio: sus
- * estados de cuenta aún no llegan, así que su gasto está a medias y bajaría el
- * promedio de los últimos meses (igual que el resto del dashboard, que cuenta
- * solo meses completos). Su barra sí se dibuja, sin promedio móvil.
- *
- * Tampoco cuentan los meses ANTERIORES al primer gasto: en un evento que empezó hace dos
- * meses, los diez meses previos en $0 no son meses de gasto cero sino meses en los que ese
- * gasto todavía no existía, y bajarían el promedio de "los últimos 12 meses" a la mitad.
+ * Promedios de una serie mensual de montos (el más antiguo primero) **desde el primer mes con
+ * gasto**: los meses anteriores en $0 no son meses de gasto cero sino meses en los que ese
+ * gasto todavía no existía (un evento que empezó hace dos meses, una categoría nueva), y
+ * bajarían el promedio de "los últimos 12 meses" a la mitad. Un mes en $0 *después* del primer
+ * gasto sí cuenta: ahí de verdad no se gastó. El promedio móvil (`ventana` meses) arranca
+ * cuando hay `ventana` meses desde ese primer gasto; antes es null. Sin ningún gasto, todo null.
+ */
+export function promediosDesdeElPrimerGasto(montos: number[], ventana = 3): PromediosDeGastos {
+  const primero = montos.findIndex((m) => m > 0);
+  const desdeElPrimero = primero < 0 ? [] : montos.slice(primero);
+  const movilDesdeElPrimero = desdeElPrimero.map((_, i) =>
+    i < ventana - 1 ? null : media(desdeElPrimero.slice(i - ventana + 1, i + 1))
+  );
+  return {
+    // Alineado con TODOS los meses: null antes del primer gasto.
+    movil: montos.map((_, i) => (primero >= 0 && i >= primero ? movilDesdeElPrimero[i - primero] : null)),
+    ultimos3: desdeElPrimero.length === 0 ? null : media(desdeElPrimero.slice(-3)),
+    ultimos12: desdeElPrimero.length === 0 ? null : media(desdeElPrimero.slice(-12)),
+    ultimoMovil:
+      movilDesdeElPrimero.length === 0 ? null : movilDesdeElPrimero[movilDesdeElPrimero.length - 1],
+  };
+}
+
+/**
+ * Lo mismo para una serie que llega hasta el mes en curso (`mesEnCurso`, "YYYY-MM"), que no
+ * entra a ningún promedio: sus estados de cuenta aún no llegan, así que su gasto está a medias y
+ * bajaría el promedio de los últimos meses (igual que el resto del dashboard, que cuenta solo
+ * meses completos). Su barra sí se dibuja, sin promedio móvil.
  */
 export function promediosDeGastos(
   puntos: { periodo: string; gastos: number }[],
@@ -40,23 +60,12 @@ export function promediosDeGastos(
   ventana = 3
 ): PromediosDeGastos {
   const delPeriodo = puntos.filter((p) => p.periodo < mesEnCurso);
-  const primero = delPeriodo.findIndex((p) => p.gastos > 0);
-  // Sin ningún mes con gasto no hay nada que promediar; si no, se parte del primero.
-  const completos = primero < 0 ? [] : delPeriodo.slice(primero).map((p) => p.gastos);
-  const movilCompletos = completos.map((_, i) =>
-    i < ventana - 1 ? null : media(completos.slice(i - ventana + 1, i + 1))
+  const r = promediosDesdeElPrimerGasto(
+    delPeriodo.map((p) => p.gastos),
+    ventana
   );
-  // Alinea el móvil con TODOS los puntos: null antes del primer gasto y en el mes en curso.
-  const inicio = primero < 0 ? delPeriodo.length : primero;
-  const movil = puntos.map((p, i) =>
-    p.periodo < mesEnCurso && i >= inicio && i - inicio < movilCompletos.length ? movilCompletos[i - inicio] : null
-  );
-  return {
-    movil,
-    ultimos3: completos.length === 0 ? null : media(completos.slice(-3)),
-    ultimos12: completos.length === 0 ? null : media(completos.slice(-12)),
-    ultimoMovil: movilCompletos.length === 0 ? null : movilCompletos[movilCompletos.length - 1],
-  };
+  // Los puntos del mes en curso en adelante no tienen promedio móvil.
+  return { ...r, movil: puntos.map((_, i) => (i < delPeriodo.length ? r.movil[i] : null)) };
 }
 
 /** "YYYY-MM" de hoy en la zona del navegador (no UTC: de noche en CDMX UTC ya es mañana). */
