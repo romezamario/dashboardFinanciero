@@ -176,6 +176,7 @@ function PanelDia({
       )}
       <div className="space-y-5 px-4 pb-4 pt-1">
         <TablaResumen dia={dia} />
+        <TablaDetalle dia={dia} seleccion={seleccion} onAlternar={alternar} />
         <AsignarEvento
           dia={dia}
           seleccion={seleccion}
@@ -183,7 +184,6 @@ function PanelDia({
           eventosExistentes={eventosExistentes}
           onAsignarEvento={onAsignarEvento}
         />
-        <TablaDetalle dia={dia} seleccion={seleccion} onAlternar={alternar} />
       </div>
     </section>
   );
