@@ -1021,7 +1021,7 @@ auth.uid()` on the row itself, not that the referenced `documento_id`/`categoria
 `user_id = auth.uid()` (`20261008120000_rls_auth_uid_initplan.sql` altered all 24 in place): the
 subselect is evaluated once per query (an InitPlan) instead of potentially once per row, which
 matters for the dashboard's full-history reads — Supabase's advisor flags the bare form as
-`auth_rls_initplan`. Write any new policy the same way. Checked by applying every migration to a
+`auth_rls_initplan`. Write any new policy the same way. **From 2026-10-30 Supabase no grants Data API access automatically to NEW tables in `public`** (existing ones are unaffected): any migration that creates a table must also `grant` to `anon`, `authenticated` and `service_role` (e.g. `grant select, insert, update, delete on <tabla> to authenticated;` — keep `anon` as narrow as the RLS policies imply; RLS is still mandatory on every table, see the `bancos` history above), or the table won't be reachable from the API. No migration in the repo creates a table without RLS today (checked 2026-10-10: `bancos` was the only one, fixed by `20260926120000_bancos_rls.sql`). Checked by applying every migration to a
 throwaway local Postgres 16 with a stub `auth.uid()`: plan shows the InitPlan, RLS still isolates
 users, and the frontend's `categorias` upsert on `(user_id, nombre)` works under it.
 `transacciones.comercio` (added in `20260920145914_add_comercio.sql`) and `transacciones.tarjeta`
