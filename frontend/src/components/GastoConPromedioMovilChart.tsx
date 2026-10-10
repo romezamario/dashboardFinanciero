@@ -11,8 +11,11 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useEsMovil } from "../hooks/useEsMovil";
 import type { LadoMovimiento, PuntoGastoConPromedioMovil } from "../lib/indicadores";
 import { compacto as formateadorEje, monedaConCentavos as formateadorTooltip } from "../lib/formato";
+import { ANCHO_COLUMNA_PROMEDIOS } from "../lib/promedios";
+import { EtiquetasPromedios } from "./EtiquetasPromedios";
 
 interface GastoConPromedioMovilChartProps {
   datos: PuntoGastoConPromedioMovil[];
@@ -50,7 +53,12 @@ function promedioDeUltimosMeses(datos: PuntoGastoConPromedioMovil[], n: number):
  * últimos 3 y de los últimos 12 meses) para comparar el nivel reciente
  * contra el de más largo plazo -- se inyectan como campos constantes en
  * cada punto para que Recharts las dibuje como líneas de ancho completo y
- * aparezcan en la leyenda/tooltip igual que las demás series.
+ * aparezcan en el tooltip igual que las demás series.
+ *
+ * Los nombres y valores de las tres líneas van en una columna a la derecha, a la
+ * altura de cada línea (`EtiquetasPromedios`, el mismo estilo que las etiquetas
+ * de QQQ y de la gráfica de Shophunters) en vez de la leyenda; en un teléfono no
+ * cabe la columna y los nombres se quedan en la leyenda.
  */
 export function GastoConPromedioMovilChart({
   datos,
@@ -59,11 +67,18 @@ export function GastoConPromedioMovilChart({
   mesSeleccionado,
   onClickMes,
 }: GastoConPromedioMovilChartProps) {
+  const esMovil = useEsMovil();
+  const columnaAlLado = !esMovil && datos.length > 0;
   const esIngreso = lado === "ingreso";
   const colorBarras = esIngreso ? "var(--series-1)" : "var(--series-2)";
   const colorPromedioMovil = esIngreso ? "var(--series-2)" : "var(--series-1)";
   const promedioUltimos3 = useMemo(() => promedioDeUltimosMeses(datos, 3), [datos]);
   const promedioUltimos12 = useMemo(() => promedioDeUltimosMeses(datos, 12), [datos]);
+  // Último valor del promedio móvil (los primeros meses de la ventana vienen en null).
+  const ultimoPromedioMovil = useMemo(
+    () => [...datos].reverse().find((punto) => punto.promedioMovil !== null)?.promedioMovil ?? null,
+    [datos]
+  );
   const datosConPromedios = useMemo(
     () => datos.map((punto) => ({ ...punto, promedioUltimos3, promedioUltimos12 })),
     [datos, promedioUltimos3, promedioUltimos12]
@@ -86,6 +101,7 @@ export function GastoConPromedioMovilChart({
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={datosConPromedios}
+            margin={{ top: 5, right: columnaAlLado ? ANCHO_COLUMNA_PROMEDIOS : 5, bottom: 5, left: 5 }}
             onClick={
               onClickMes
                 ? (estado) => {
@@ -144,6 +160,7 @@ export function GastoConPromedioMovilChart({
               strokeWidth={2}
               dot={false}
               connectNulls={false}
+              legendType={columnaAlLado ? "none" : "line"}
             />
             <Line
               dataKey="promedioUltimos3"
@@ -152,6 +169,7 @@ export function GastoConPromedioMovilChart({
               strokeWidth={1.5}
               strokeDasharray="4 4"
               dot={false}
+              legendType={columnaAlLado ? "none" : "line"}
             />
             <Line
               dataKey="promedioUltimos12"
@@ -160,7 +178,23 @@ export function GastoConPromedioMovilChart({
               strokeWidth={1.5}
               strokeDasharray="2 6"
               dot={false}
+              legendType={columnaAlLado ? "none" : "line"}
             />
+            {columnaAlLado && (
+              <EtiquetasPromedios
+                items={[
+                  ...(ultimoPromedioMovil === null
+                    ? []
+                    : [{ nombre: "Promedio móvil (3 meses)", valor: ultimoPromedioMovil, color: colorPromedioMovil, ancho: 2 }]),
+                  ...(promedioUltimos3 === null
+                    ? []
+                    : [{ nombre: "Promedio últimos 3 meses", valor: promedioUltimos3, color: "var(--text-secondary)", ancho: 1.5, trazo: "4 4" }]),
+                  ...(promedioUltimos12 === null
+                    ? []
+                    : [{ nombre: "Promedio últimos 12 meses", valor: promedioUltimos12, color: "var(--text-muted)", ancho: 1.5, trazo: "2 6" }]),
+                ]}
+              />
+            )}
           </ComposedChart>
         </ResponsiveContainer>
       </div>

@@ -1,7 +1,14 @@
 // Promedios de gasto mensual que se dibujan sobre la gráfica de barras de la
 // pestaña Shophunters (los mismos tres de la gráfica de "Categorías y
 // Comercios": promedio móvil de 3 meses y promedios planos de los últimos 3 y
-// 12 meses). Funciones puras, sin React.
+// 12 meses) y las medidas de la columna de etiquetas que comparten las dos
+// gráficas. Funciones puras, sin React.
+
+/** Ancho (px) de la columna de la derecha donde las gráficas con promedios escriben el
+ * nombre y el valor de cada línea (`EtiquetasPromedios`); la gráfica lo reserva como margen derecho. */
+export const ANCHO_COLUMNA_PROMEDIOS = 184;
+/** Separación vertical mínima (px) entre dos etiquetas de esa columna: dos renglones de texto. */
+export const ALTO_ETIQUETA_PROMEDIO = 30;
 
 export interface PromediosDeGastos {
   /** Promedio móvil de `ventana` meses completos, alineado con los puntos (null donde no hay
