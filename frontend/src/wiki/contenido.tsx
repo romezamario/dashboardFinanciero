@@ -216,7 +216,10 @@ export const SECCIONES: SeccionWiki[] = [
           tabla tiene políticas que solo dejan leer, crear, cambiar o borrar filas donde{" "}
           <C>user_id</C> es el usuario con sesión. El código del tablero a propósito{" "}
           <B>no filtra por usuario</B>: si la RLS no lo permite, la consulta simplemente no regresa
-          nada, así que un error en el tablero no puede mostrar datos de otra persona.
+          nada, así que un error en el tablero no puede mostrar datos de otra persona. Desde el 11
+          de octubre de 2026 las políticas también exigen que la cuenta, el documento, la categoría
+          o el evento a los que apunta una fila sean tuyos, y borrar un usuario borra todas sus
+          filas; una prueba automática en CI lo comprueba con dos usuarios.
         </P>
         <P>
           La app de escritorio también sube con tu usuario y contraseña (no con la llave de

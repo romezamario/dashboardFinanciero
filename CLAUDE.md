@@ -40,6 +40,17 @@ upsert key, so re-syncing would duplicate every affected row unless stale rows a
 
 ## Architecture
 
+**Two editions, one codebase (2026-10-11, user's decision — plan de suscripciones)**: the personal
+dashboard (this file's subject) and **FinanzasPersonales**, the paid product for customers, are built
+from the same `frontend/` and the same `supabase/migrations/`, but deployed to **separate** Supabase
+and Cloudflare Pages projects (the customer instance has no Cloudflare Access). `VITE_EDICION=producto`
+(`src/lib/edicion.ts`, tested) hides QQQ/TQQQ + Macro (Yahoo data can't be resold), Shophunters and the
+Wiki, and names the app "FinanzasPersonales"; unset = personal, exactly as before. `deploy-producto.yml`
+builds that edition (without `functions/`) to the Pages project `finanzaspersonales`, and
+`db-migrate.yml`'s `migrate-producto` job applies the migrations there; both skip with a notice until
+the `PRODUCTO_*` secrets exist (README, "Instancia de clientes"). The plan doc (tiers MXN 0/29/59,
+Mercado Pago, phases) lives outside the repo; the desktop app keeps syncing only the personal instance.
+
 **Local pipeline** — entry point is a **Tkinter desktop app** (`app/main.py`), not a folder
 watcher. The user explicitly redesigned this away from the original spec's automatic
 watcher-on-`data/nuevos/` design, to get a manual review/validation step before anything is
@@ -1038,9 +1049,7 @@ document keeps its events. `bancos` had **no RLS** until `20260926120000_bancos_
 off, the `anon` role (whose key ships in the frontend bundle) could insert/rename/delete banks
 through the REST API without logging in. Now authenticated users may select and insert (what the
 frontend's nested read and the sync's find-or-create need) and nobody may update/delete via the
-API. Its two policies are written `(select auth.uid()) is not null`, not `true` (`20261010140000_bancos_politicas_sin_true.sql`): same effect, but Supabase's advisor flags `rls_policy_always_true` on a literal `true`. The other advisor warning, "Leaked Password Protection Disabled" (Auth), is a dashboard setting (Pro plan only) and was left off. Known, accepted gap for a single-user app: the insert/update policies only check `user_id =
-auth.uid()` on the row itself, not that the referenced `documento_id`/`categoria_id`/`evento_id`/
-`cuenta_id` belong to the same user. **Policies are written `user_id = (select auth.uid())`**, not
+API. Its two policies are written `(select auth.uid()) is not null`, not `true` (`20261010140000_bancos_politicas_sin_true.sql`): same effect, but Supabase's advisor flags `rls_policy_always_true` on a literal `true`. The other advisor warning, "Leaked Password Protection Disabled" (Auth), is a dashboard setting (Pro plan only) and was left off. **References must be the user's own (2026-10-11, `20261011200000_aislamiento_y_borrado_de_cuenta.sql`, phase 0 of FinanzasPersonales)**: the insert/update `with check` of `documentos` (cuenta_id), `transacciones` (documento_id, categoria_id, evento_id) and `gastos_correo` (evento_id) now also require the referenced row to belong to `auth.uid()` (it used to be a known, accepted gap for a single user), and every `user_id → auth.users` FK is `on delete cascade` (deleting a user deletes all their rows — "Borrar mi cuenta"). Proven by `supabase/tests/aislamiento.sql` (see Tests). **Policies are written `user_id = (select auth.uid())`**, not
 `user_id = auth.uid()` (`20261008120000_rls_auth_uid_initplan.sql` altered all 24 in place): the
 subselect is evaluated once per query (an InitPlan) instead of potentially once per row, which
 matters for the dashboard's full-history reads — Supabase's advisor flags the bare form as
@@ -1180,7 +1189,15 @@ commits:
 - `.github/dependabot.yml` (2026-10-10) — weekly, grouped update PRs for npm (`frontend/`), pip
   and GitHub Actions (max 3 open each); each runs `ci.yml`. When accepting an Actions bump, check
   its `runs.using` (see below).
-- `.github/workflows/db-migrate.yml` — triggers on `supabase/migrations/**`. Applies pending Supabase migrations.
+- `ci.yml` job `rls` (2026-10-11): a `postgres:16` service, `supabase/tests/correr.sh` applies
+  `stub_supabase.sql` (roles, `auth.users`, `auth.uid()` from `request.jwt.claim.sub`) + every
+  migration, then `aislamiento.sql`: two users can't see/update/delete/reference each other's rows,
+  anon sees nothing, deleting a user cascades. Also triggers on `supabase/**`.
+- `.github/workflows/db-migrate.yml` — triggers on `supabase/migrations/**`. Applies pending Supabase migrations
+  to the personal project and (job `migrate-producto`, skipped without its secrets) to FinanzasPersonales'.
+- `.github/workflows/deploy-producto.yml` (2026-10-11) — same trigger as `deploy.yml`; builds with
+  `VITE_EDICION=producto` and the `PRODUCTO_VITE_SUPABASE_*` secrets, removes `functions/`, deploys
+  to Pages project `finanzaspersonales`. Skips with a notice until those secrets exist.
 - `.github/workflows/deploy.yml` — triggers on `frontend/**`. Builds the frontend and deploys to
   Cloudflare Pages via `wrangler pages deploy`, using secrets `CLOUDFLARE_API_TOKEN`,
   `CLOUDFLARE_ACCOUNT_ID`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`. Assumes the

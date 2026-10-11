@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
+import { NOMBRE_APP } from "../lib/edicion";
 
 export function Login() {
   const [email, setEmail] = useState("");
@@ -29,7 +30,7 @@ export function Login() {
           className="text-lg font-semibold"
           style={{ color: "var(--text-primary)" }}
         >
-          Dashboard Financiero
+          {NOMBRE_APP}
         </h1>
         <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
           Inicia sesión para ver tus transacciones.
