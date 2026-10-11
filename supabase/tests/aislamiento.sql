@@ -171,4 +171,75 @@ begin
   end if;
 end $$;
 
+-- ------------------------------------------- perfiles y "Borrar mi cuenta"
+-- El registro crea el perfil con lo que manda el formulario.
+insert into auth.users (id, email, raw_user_meta_data) values
+  ('cccccccc-0000-0000-0000-000000000001', 'c@prueba.mx',
+   '{"nombre": "  Cecilia ", "terminos_version": "2026-10-11"}');
+
+do $$
+begin
+  if not exists (select 1 from perfiles
+                  where user_id = 'cccccccc-0000-0000-0000-000000000001'
+                    and nombre = 'Cecilia' and terminos_version = '2026-10-11'
+                    and terminos_aceptados_en is not null) then
+    raise exception 'FALLO: el registro no creó el perfil con nombre y términos';
+  end if;
+  if not exists (select 1 from perfiles
+                  where user_id = 'bbbbbbbb-0000-0000-0000-000000000001'
+                    and nombre is null and terminos_aceptados_en is null) then
+    raise exception 'FALLO: un usuario sin datos de registro no tiene perfil vacío';
+  end if;
+end $$;
+
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000001';
+
+do $$
+declare
+  n int;
+begin
+  if (select count(*) from perfiles) <> 1 then
+    raise exception 'FALLO: B ve perfiles que no son suyos';
+  end if;
+  update perfiles set nombre = 'Intruso' where user_id = 'cccccccc-0000-0000-0000-000000000001';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'FALLO: B cambió el perfil de C'; end if;
+  update perfiles set nombre = 'Beto';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'FALLO: B no pudo cambiar su propio nombre'; end if;
+end $$;
+
+-- Sin sesión no se puede llamar.
+reset role;
+set role anon;
+set request.jwt.claim.sub = '';
+do $$
+begin
+  begin
+    perform borrar_mi_cuenta();
+    raise exception 'FALLO: anon pudo llamar borrar_mi_cuenta';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+
+-- C borra su cuenta: se va C con su perfil, B no se toca.
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = 'cccccccc-0000-0000-0000-000000000001';
+do $$ begin perform borrar_mi_cuenta(); end $$;
+
+reset role;
+do $$
+begin
+  if exists (select 1 from auth.users where id = 'cccccccc-0000-0000-0000-000000000001')
+     or exists (select 1 from perfiles where user_id = 'cccccccc-0000-0000-0000-000000000001') then
+    raise exception 'FALLO: borrar_mi_cuenta no borró al usuario C';
+  end if;
+  if not exists (select 1 from auth.users where id = 'bbbbbbbb-0000-0000-0000-000000000001')
+     or (select nombre from perfiles where user_id = 'bbbbbbbb-0000-0000-0000-000000000001') <> 'Beto' then
+    raise exception 'FALLO: borrar_mi_cuenta de C tocó a B';
+  end if;
+end $$;
+
 \echo 'Aislamiento entre usuarios: OK'

@@ -1,9 +1,13 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { supabase } from "./lib/supabase";
+import { ENLACE_INICIAL, supabase } from "./lib/supabase";
 import { Login } from "./components/Login";
 import { Landing } from "./components/Landing";
+import { Registro } from "./components/Registro";
+import { NuevaContrasena, RecuperarContrasena } from "./components/RecuperarContrasena";
+import { Legal } from "./components/Legal";
 import { EDICION } from "./lib/edicion";
+import { rutaDeHash, type RutaPublica } from "./lib/cuentaUsuario";
 
 // Dashboard (y todo lo que arrastra: Recharts, indicadores.ts, cada gráfica)
 // es la mayor parte del bundle -- separarlo del de Login hace que la
@@ -13,15 +17,25 @@ const Dashboard = lazy(() =>
   import("./components/Dashboard").then((m) => ({ default: m.Dashboard }))
 );
 
+function irA(ruta: RutaPublica) {
+  window.location.hash = ruta === "inicio" ? "" : ruta;
+}
+
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [cargandoSesion, setCargandoSesion] = useState(true);
-  // Solo en FinanzasPersonales: sin sesión se ve primero la landing page, y
-  // "#entrar" muestra el Login (así el botón Atrás del navegador regresa).
-  const [enLogin, setEnLogin] = useState(() => window.location.hash === "#entrar");
+  // Solo en FinanzasPersonales: el hash elige la pantalla pública (landing,
+  // entrar, registro, recuperar, términos, privacidad), así el botón Atrás
+  // del navegador funciona sin un enrutador.
+  const [ruta, setRuta] = useState<RutaPublica>(() =>
+    ENLACE_INICIAL.error ? "entrar" : rutaDeHash(window.location.hash)
+  );
+  // Llegó desde el correo de "Recuperar contraseña": antes del tablero, pedir
+  // la contraseña nueva.
+  const [recuperando, setRecuperando] = useState(ENLACE_INICIAL.recuperacion);
 
   useEffect(() => {
-    const alCambiarHash = () => setEnLogin(window.location.hash === "#entrar");
+    const alCambiarHash = () => setRuta(rutaDeHash(window.location.hash));
     window.addEventListener("hashchange", alCambiarHash);
     return () => window.removeEventListener("hashchange", alCambiarHash);
   }, []);
@@ -33,8 +47,9 @@ export default function App() {
     });
 
     const { data: suscripcion } = supabase.auth.onAuthStateChange(
-      (_evento, nuevaSesion) => {
+      (evento, nuevaSesion) => {
         setSession(nuevaSesion);
+        if (evento === "PASSWORD_RECOVERY") setRecuperando(true);
       }
     );
 
@@ -43,10 +58,27 @@ export default function App() {
 
   if (cargandoSesion) return null;
 
-  if (!session) {
-    if (EDICION === "personal") return <Login />;
-    if (!enLogin) return <Landing onEntrar={() => { window.location.hash = "entrar"; }} />;
-    return <Login onVolver={() => window.history.back()} />;
+  if (EDICION === "personal" && !session) return <Login />;
+
+  if (EDICION === "producto") {
+    // Términos y privacidad se ven con o sin sesión (enlaces desde Mi cuenta).
+    if (ruta === "terminos" || ruta === "privacidad")
+      return <Legal documento={ruta} onVolver={() => irA("inicio")} />;
+
+    if (session && recuperando) return <NuevaContrasena onListo={() => setRecuperando(false)} />;
+
+    if (!session) {
+      switch (ruta) {
+        case "entrar":
+          return <Login onVolver={() => irA("inicio")} mensajeInicial={ENLACE_INICIAL.error} />;
+        case "registro":
+          return <Registro />;
+        case "recuperar":
+          return <RecuperarContrasena />;
+        default:
+          return <Landing onEntrar={() => irA("entrar")} onRegistrarse={() => irA("registro")} />;
+      }
+    }
   }
 
   return (
@@ -60,7 +92,7 @@ export default function App() {
         </div>
       }
     >
-      <Dashboard />
+      <Dashboard correo={session?.user.email ?? ""} />
     </Suspense>
   );
 }

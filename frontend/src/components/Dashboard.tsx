@@ -13,7 +13,7 @@ import {
 } from "../lib/queries";
 import { eventosOcultosPorDefecto, eventosVisiblesTras } from "../lib/gastosEstadoCuenta";
 import { soloShophunters } from "../lib/shophunters";
-import { EDICION, incluyeFuncion } from "../lib/edicion";
+import { EDICION, incluyeFuncion, NOMBRE_APP } from "../lib/edicion";
 import { categoriasExcluidasPorDefecto, RANGO_MESES_VACIO, type RangoMeses } from "../lib/indicadores";
 import type { Transaccion } from "../lib/types";
 import { supabase } from "../lib/supabase";
@@ -70,6 +70,9 @@ const GastosRecientesTab = lazy(() =>
 const WikiTab = lazy(() =>
   cargarPestana(() => import("./WikiTab")).then((m) => ({ default: m.WikiTab }))
 );
+const MiCuenta = lazy(() =>
+  cargarPestana(() => import("./MiCuenta")).then((m) => ({ default: m.MiCuenta }))
+);
 const TarjetasCreditoTab = lazy(() =>
   cargarPestana(() => import("./TarjetasCreditoTab")).then((m) => ({ default: m.TarjetasCreditoTab }))
 );
@@ -124,6 +127,9 @@ const PESTANA_TECNICO = "tecnico";
 // Wiki del sitio: cómo está hecho y qué reglas calculan cada cosa. Un enlace
 // a una sección (#wiki-<id>) abre directamente esta pestaña.
 const PESTANA_WIKI = "wiki";
+// Solo FinanzasPersonales: perfil, contraseña, exportar y borrar la cuenta.
+// Se abre desde el encabezado, no es una pestaña más.
+const VISTA_CUENTA = "mi-cuenta";
 // Prefijo para no chocar con "resumen"/"eventos" si alguna cuenta tuviera
 // ese mismo alias.
 const PREFIJO_PESTANA_CUENTA = "cuenta:";
@@ -142,7 +148,8 @@ function temaEfectivoInicial(): Tema {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-export function Dashboard() {
+/** `correo`: el del usuario de la sesión (lo muestra Mi cuenta). */
+export function Dashboard({ correo = "" }: { correo?: string } = {}) {
   const [datos, setDatos] = useState<DatosTransacciones | null>(null);
   // Error de la carga inicial (sin datos no hay tablero que mostrar) vs. de
   // una recarga tras editar: esa se avisa arriba sin desmontar la vista, para
@@ -279,7 +286,8 @@ export function Dashboard() {
 
   // Si la pestaña activa desaparece (p. ej. tras reasignar todos los
   // documentos de una cuenta a otra desde el editor), vuelve al Resumen.
-  const vistaActiva = pestanas.some((p) => p.id === vista) ? vista : PESTANA_RESUMEN;
+  const enCuenta = vista === VISTA_CUENTA && EDICION === "producto";
+  const vistaActiva = enCuenta ? VISTA_CUENTA : pestanas.some((p) => p.id === vista) ? vista : PESTANA_RESUMEN;
 
   if (errorCarga) {
     return (
@@ -362,7 +370,7 @@ export function Dashboard() {
           className="text-base font-semibold"
           style={{ color: "var(--text-primary)" }}
         >
-          Dashboard Financiero
+          {NOMBRE_APP}
         </h1>
         <div className="flex items-center gap-2 sm:gap-4">
           <button
@@ -377,6 +385,16 @@ export function Dashboard() {
           >
             {tema === "dark" ? "Modo claro" : "Modo oscuro"}
           </button>
+          {EDICION === "producto" && (
+            <button
+              onClick={() => setVista(VISTA_CUENTA)}
+              className="text-xs font-medium"
+              style={{ color: enCuenta ? "var(--series-1)" : "var(--text-secondary)" }}
+              aria-current={enCuenta ? "page" : undefined}
+            >
+              Mi cuenta
+            </button>
+          )}
           <button
             onClick={() => supabase.auth.signOut()}
             className="text-xs"
@@ -429,14 +447,16 @@ export function Dashboard() {
 
         <LimiteDeError
           key={vistaActiva}
-          nombre={`la pestaña ${pestanas.find((p) => p.id === vistaActiva)?.etiqueta ?? ""}`}
+          nombre={enCuenta ? "Mi cuenta" : `la pestaña ${pestanas.find((p) => p.id === vistaActiva)?.etiqueta ?? ""}`}
         >
         <Suspense
           fallback={
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Cargando…</p>
           }
         >
-        {vistaActiva === PESTANA_WIKI ? (
+        {enCuenta ? (
+          <MiCuenta correo={correo} transacciones={transacciones} />
+        ) : vistaActiva === PESTANA_WIKI ? (
           <WikiTab />
         ) : vistaActiva === PESTANA_TECNICO ? (
           <AnalisisTecnicoTab />
@@ -470,8 +490,9 @@ export function Dashboard() {
           />
         ) : transacciones.length === 0 ? (
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-            No hay transacciones sincronizadas todavía — usa la app de
-            escritorio para procesar un estado de cuenta y sincronizarlo.
+            {EDICION === "producto"
+              ? "Todavía no tienes movimientos. Muy pronto podrás subir aquí tus estados de cuenta."
+              : "No hay transacciones sincronizadas todavía — usa la app de escritorio para procesar un estado de cuenta y sincronizarlo."}
           </p>
         ) : vistaActiva === PESTANA_EVENTOS ? (
           <EventosTab transacciones={transacciones} onActualizado={recargarTransacciones} />
