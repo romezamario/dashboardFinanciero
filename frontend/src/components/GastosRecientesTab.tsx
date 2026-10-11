@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { filaAGastoCorreo, obtenerGastosCorreo, type FilaGastoCorreo } from "../lib/gastosCorreo";
+import { filaAGastoCorreo, type FilaGastoCorreo } from "../lib/gastosCorreo";
 import { asignarEventoAGastosCorreo, eventoDe, type Catalogos } from "../lib/queries";
 import type { Transaccion } from "../lib/types";
 import { GastosCorreoTab } from "./GastosCorreoTab";
 import { GastosEstadoCuentaTab } from "./GastosEstadoCuentaTab";
-import { ProveedorMetaDiaria } from "./MetaDiaria";
 import { VISTA_CALENDARIO_INICIAL, type VistaCalendario } from "../lib/gastosUI";
 import { Segmentado } from "./Segmentado";
 
@@ -17,6 +16,13 @@ interface GastosRecientesTabProps {
   onActualizado: (ids?: string[]) => void | Promise<void>;
   /** Catálogo de eventos del Dashboard: resuelve el `evento_id` de cada aviso. */
   eventosCatalogo: Catalogos["eventos"];
+  /** Avisos de correo (null = cargando). Los carga el Dashboard una vez por sesión (ver
+   * `useGastosCorreo`): aquí se perderían cada vez que se sale de la pestaña. */
+  filasCorreo: FilaGastoCorreo[] | null;
+  errorCorreo: string | null;
+  onCambiarFilasCorreo: (cambio: (previas: FilaGastoCorreo[] | null) => FilaGastoCorreo[] | null) => void;
+  /** Vuelve a pedir los avisos (solo se usa si la carga anterior falló). */
+  onReintentarCorreo: () => void;
 }
 
 /** Pestaña "Gastos recientes": el mismo calendario con dos fuentes. "Por
@@ -29,17 +35,14 @@ export function GastosRecientesTab(props: GastosRecientesTabProps) {
   // El mes y el día elegidos se comparten entre las dos fuentes: al cambiar de
   // una a otra el calendario se queda donde estaba (acotado a lo que haya).
   const [vista, setVista] = useState<VistaCalendario>(VISTA_CALENDARIO_INICIAL);
-  // Los avisos de correo se cargan aquí, una vez al abrir la pestaña, y no en
-  // GastosCorreoTab: esa vista se desmonta al cambiar de fuente y volvería a
-  // consultar (y a mostrar "Cargando…") cada vez que se regresa a ella.
-  const [filasCorreo, setFilasCorreo] = useState<FilaGastoCorreo[] | null>(null);
-  const [errorCorreo, setErrorCorreo] = useState<string | null>(null);
+  const { eventosCatalogo, filasCorreo, errorCorreo, onCambiarFilasCorreo, onReintentarCorreo, ...resto } = props;
+  // Si la carga en segundo plano falló, se intenta otra vez al abrir la pestaña (antes cada
+  // apertura volvía a consultar; así un fallo momentáneo no deja el error toda la sesión).
   useEffect(() => {
-    obtenerGastosCorreo()
-      .then(setFilasCorreo)
-      .catch((e) => setErrorCorreo(e instanceof Error ? e.message : String(e)));
+    if (errorCorreo) onReintentarCorreo();
+    // Solo al montar: reintentar en cada cambio del error podría ciclar si sigue fallando.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const { eventosCatalogo } = props;
   const gastosCorreo = useMemo(
     () => filasCorreo && filasCorreo.map((f) => filaAGastoCorreo(f, eventosCatalogo)),
     [filasCorreo, eventosCatalogo]
@@ -64,12 +67,11 @@ export function GastosRecientesTab(props: GastosRecientesTabProps) {
     const eventoId = await asignarEventoAGastosCorreo(ids, evento);
     await props.onActualizado([]);
     const afectados = new Set(ids);
-    setFilasCorreo((previas) =>
+    onCambiarFilasCorreo((previas) =>
       previas && previas.map((f) => (afectados.has(f.id) ? { ...f, evento_id: eventoId } : f))
     );
   }
   return (
-    <ProveedorMetaDiaria>
     <div className="space-y-6">
       <Segmentado
         opciones={[
@@ -90,7 +92,7 @@ export function GastosRecientesTab(props: GastosRecientesTabProps) {
         />
       ) : (
         <GastosEstadoCuentaTab
-          {...props}
+          {...resto}
           gastosCorreo={gastosCorreo}
           errorCorreo={errorCorreo}
           vista={vista}
@@ -98,6 +100,5 @@ export function GastosRecientesTab(props: GastosRecientesTabProps) {
         />
       )}
     </div>
-    </ProveedorMetaDiaria>
   );
 }
