@@ -81,3 +81,9 @@ export const decimalFijo2 = new Intl.NumberFormat("es-MX", { minimumFractionDigi
 
 /** "1,235" -- sin decimales. */
 export const entero = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 });
+
+/** "0.008 %" -- porcentajes muy chicos (avance del agente hacia su meta), con 2 cifras significativas. */
+export const porcentajePequeno = new Intl.NumberFormat("es-MX", {
+  style: "percent",
+  maximumSignificantDigits: 2,
+});

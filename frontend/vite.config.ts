@@ -1,6 +1,7 @@
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig, type Plugin } from 'vite'
+import { onRequestGet as agenteSaldo } from './functions/api/agente-saldo.ts'
 import { onRequestGet as cotizaciones } from './functions/api/cotizaciones.ts'
 import { obtenerDatosMacro } from './scripts/fred.ts'
 
@@ -11,6 +12,8 @@ import { obtenerDatosMacro } from './scripts/fred.ts'
 const RUTAS_API: Record<string, (contexto: { request: Request }) => Promise<Response>> = {
   '/api/cotizaciones': cotizaciones,
   '/macro.json': async () => Response.json(await obtenerDatosMacro()),
+  '/api/agente-saldo': (contexto) =>
+    agenteSaldo({ ...contexto, env: { GITHUB_TOKEN_AGENTE: process.env.GITHUB_TOKEN_AGENTE } }),
 }
 
 function apiLocal(): Plugin {

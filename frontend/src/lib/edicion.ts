@@ -5,14 +5,14 @@
 // - "producto": FinanzasPersonales, la instancia para clientes (otro proyecto
 //   de Supabase y de Pages). Sin las pestañas que solo tienen sentido para el
 //   dueño: QQQ/TQQQ + Macro (datos de Yahoo que no se pueden revender),
-//   Shophunters (un evento personal) y la Wiki interna.
+//   Shophunters (un evento personal), la Wiki interna y el agente de trading.
 
 export type Edicion = "personal" | "producto";
 
 /** Funciones del tablero que solo existen en la edición personal. */
-export type FuncionPersonal = "tecnico" | "shophunters" | "wiki";
+export type FuncionPersonal = "tecnico" | "shophunters" | "wiki" | "agente";
 
-const SOLO_PERSONAL: ReadonlySet<FuncionPersonal> = new Set(["tecnico", "shophunters", "wiki"]);
+const SOLO_PERSONAL: ReadonlySet<FuncionPersonal> = new Set(["tecnico", "shophunters", "wiki", "agente"]);
 
 export function edicionDe(valor: string | undefined): Edicion {
   return valor === "producto" ? "producto" : "personal";
