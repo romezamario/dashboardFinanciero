@@ -69,14 +69,23 @@ export default function App() {
 
     if (!session) {
       switch (ruta) {
-        case "entrar":
-          return <Login onVolver={() => irA("inicio")} mensajeInicial={ENLACE_INICIAL.error} />;
         case "registro":
           return <Registro />;
         case "recuperar":
           return <RecuperarContrasena />;
         default:
-          return <Landing onEntrar={() => irA("entrar")} onRegistrarse={() => irA("registro")} />;
+          // "#entrar" es la misma landing con el Login flotando junto al
+          // botón "Entrar" (Mario, 2026-10-11: no una página aparte).
+          return (
+            <Landing
+              onEntrar={() => irA("entrar")}
+              onRegistrarse={() => irA("registro")}
+              login={
+                ruta === "entrar" ? <Login producto mensajeInicial={ENLACE_INICIAL.error} /> : null
+              }
+              onCerrarLogin={() => irA("inicio")}
+            />
+          );
       }
     }
   }

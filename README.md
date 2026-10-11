@@ -530,7 +530,7 @@ pasos, que son manuales y se hacen una vez:
    (`workflow_dispatch`); después se actualizan solos con cada push a `main`.
 
 Sin sesión, FinanzasPersonales abre en su **página de inicio** (qué hace, privacidad, planes Gratis /
-Básico / Pro con el anual primero y preguntas frecuentes); "Entrar" lleva al inicio de sesión (`#entrar`)
+Básico / Pro con el anual primero y preguntas frecuentes); "Entrar" abre el inicio de sesión en una ventana flotante sobre la misma página (`#entrar`)
 y "Empieza gratis" o cualquier botón de plan, al registro (`#registro`). Tu edición personal sigue entrando
 directo al inicio de sesión.
 

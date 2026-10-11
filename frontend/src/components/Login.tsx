@@ -3,17 +3,17 @@ import { supabase } from "../lib/supabase";
 import { traducirErrorAuth } from "../lib/cuentaUsuario";
 import { Aviso, BotonEnviar, Campo, EnlaceCuenta, PantallaCuenta } from "./FormularioCuenta";
 
-/** `onVolver`: solo en FinanzasPersonales (regresa a la landing page), junto
- * con los enlaces de registro y recuperación. `mensajeInicial`: p. ej. que el
- * enlace del correo ya venció. */
-export function Login({ onVolver, mensajeInicial }: { onVolver?: () => void; mensajeInicial?: string | null } = {}) {
+/** `producto`: FinanzasPersonales, con los enlaces de registro y recuperación;
+ * ahí el Login se muestra flotando sobre la landing page (la ventana pone su
+ * propio botón de cerrar). `mensajeInicial`: p. ej. que el enlace del correo
+ * ya venció. */
+export function Login({ producto = false, mensajeInicial }: { producto?: boolean; mensajeInicial?: string | null } = {}) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(mensajeInicial ?? null);
   const [sinConfirmar, setSinConfirmar] = useState(false);
   const [reenviado, setReenviado] = useState(false);
   const [cargando, setCargando] = useState(false);
-  const producto = Boolean(onVolver);
 
   async function iniciarSesion(e: React.FormEvent) {
     e.preventDefault();
@@ -44,8 +44,8 @@ export function Login({ onVolver, mensajeInicial }: { onVolver?: () => void; men
   }
 
   return (
-    <PantallaCuenta subtitulo="Inicia sesión para ver tus transacciones." onEnviar={iniciarSesion}>
-      <Campo etiqueta="Correo" tipo="email" valor={email} onCambiar={setEmail} autoComplete="email" />
+    <PantallaCuenta subtitulo="Inicia sesión para ver tus transacciones." onEnviar={iniciarSesion} flotante={producto}>
+      <Campo etiqueta="Correo" tipo="email" valor={email} onCambiar={setEmail} autoComplete="email" autoFocus={producto} />
       <Campo
         etiqueta="Contraseña"
         tipo="password"
@@ -65,20 +65,10 @@ export function Login({ onVolver, mensajeInicial }: { onVolver?: () => void; men
       <BotonEnviar cargando={cargando} texto="Entrar" textoCargando="Entrando..." />
 
       {producto && (
-        <>
-          <div className="mt-4 flex flex-wrap justify-between gap-2">
-            <EnlaceCuenta href="#recuperar">¿Olvidaste tu contraseña?</EnlaceCuenta>
-            <EnlaceCuenta href="#registro">Crear cuenta</EnlaceCuenta>
-          </div>
-          <button
-            type="button"
-            onClick={onVolver}
-            className="mt-4 text-sm"
-            style={{ color: "var(--text-secondary)" }}
-          >
-            ← Volver al inicio
-          </button>
-        </>
+        <div className="mt-4 flex flex-wrap justify-between gap-2">
+          <EnlaceCuenta href="#recuperar">¿Olvidaste tu contraseña?</EnlaceCuenta>
+          <EnlaceCuenta href="#registro">Crear cuenta</EnlaceCuenta>
+        </div>
       )}
     </PantallaCuenta>
   );

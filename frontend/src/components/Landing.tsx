@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ahorroAnual, DIAS_PRUEBA, PLANES, precioPorMes, type Periodo, type Plan } from "../lib/planes";
 import { NOMBRE_APP } from "../lib/edicion";
 
 // Página de inicio pública de FinanzasPersonales (solo en la edición
 // "producto"; la personal sigue entrando directo al Login). Sin enrutador:
-// App la muestra mientras no hay sesión; "Entrar" va al Login y los botones
-// de empezar, al registro.
+// App la muestra mientras no hay sesión; "Entrar" abre el Login flotando bajo
+// ese botón (ruta #entrar) y los botones de empezar van al registro.
 
 interface Props {
   onEntrar: () => void;
@@ -58,10 +58,17 @@ const PREGUNTAS = [
   },
 ];
 
-export function Landing({ onEntrar, onRegistrarse }: Props & { onRegistrarse: () => void }) {
+interface PropsLanding extends Props {
+  onRegistrarse: () => void;
+  /** El formulario de entrar, cuando la ruta es #entrar; null = cerrado. */
+  login: ReactNode;
+  onCerrarLogin: () => void;
+}
+
+export function Landing({ onEntrar, onRegistrarse, login, onCerrarLogin }: PropsLanding) {
   return (
     <div className="min-h-screen" style={{ background: "var(--page-plane)", color: "var(--text-primary)" }}>
-      <Encabezado onEntrar={onEntrar} />
+      <Encabezado onEntrar={onEntrar} login={login} onCerrarLogin={onCerrarLogin} />
       <main>
         <Portada onEntrar={onRegistrarse} />
         <ComoFunciona />
@@ -108,7 +115,8 @@ function BotonPrincipal({ children, onClick }: { children: React.ReactNode; onCl
   );
 }
 
-function Encabezado({ onEntrar }: Props) {
+function Encabezado({ onEntrar, login, onCerrarLogin }: Props & { login: ReactNode; onCerrarLogin: () => void }) {
+  const boton = useRef<HTMLButtonElement>(null);
   return (
     <header style={{ borderBottom: "1px solid var(--border)" }}>
       <Contenedor className="flex h-14 items-center justify-between">
@@ -120,17 +128,98 @@ function Encabezado({ onEntrar }: Props) {
           <a href="#preguntas" className="hidden sm:inline" style={{ color: "var(--text-secondary)" }}>
             Preguntas
           </a>
-          <button
-            type="button"
-            onClick={onEntrar}
-            className="rounded-md px-3 py-1.5 font-medium"
-            style={{ border: "1px solid var(--border)", color: "var(--text-primary)" }}
-          >
-            Entrar
-          </button>
+          <div className="relative">
+            <button
+              ref={boton}
+              type="button"
+              onClick={login ? onCerrarLogin : onEntrar}
+              aria-expanded={Boolean(login)}
+              aria-haspopup="dialog"
+              className="rounded-md px-3 py-1.5 font-medium"
+              style={
+                login
+                  ? { border: "1px solid var(--series-1)", color: "var(--series-1)" }
+                  : { border: "1px solid var(--border)", color: "var(--text-primary)" }
+              }
+            >
+              Entrar
+            </button>
+            {login && (
+              <VentanaEntrar
+                onCerrar={() => {
+                  onCerrarLogin();
+                  boton.current?.focus();
+                }}
+                boton={boton}
+              >
+                {login}
+              </VentanaEntrar>
+            )}
+          </div>
         </nav>
       </Contenedor>
     </header>
+  );
+}
+
+/** El inicio de sesión como globo bajo el botón "Entrar": se cierra con Esc,
+ * con la × o con un clic fuera (sin fondo que tape la página). */
+function VentanaEntrar({
+  children,
+  onCerrar,
+  boton,
+}: {
+  children: ReactNode;
+  onCerrar: () => void;
+  boton: React.RefObject<HTMLButtonElement | null>;
+}) {
+  const ventana = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const alTeclear = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCerrar();
+    };
+    const alPresionar = (e: PointerEvent) => {
+      const objetivo = e.target as Node;
+      if (ventana.current?.contains(objetivo) || boton.current?.contains(objetivo)) return;
+      onCerrar();
+    };
+    document.addEventListener("keydown", alTeclear);
+    document.addEventListener("pointerdown", alPresionar);
+    return () => {
+      document.removeEventListener("keydown", alTeclear);
+      document.removeEventListener("pointerdown", alPresionar);
+    };
+  }, [onCerrar, boton]);
+
+  return (
+    <div
+      ref={ventana}
+      role="dialog"
+      aria-label="Entrar"
+      className="tarjeta absolute right-0 top-full z-50 mt-3 w-[min(22rem,calc(100vw-2rem))] rounded-xl p-5 shadow-xl"
+    >
+      {/* Flechita que apunta al botón "Entrar". */}
+      <span
+        aria-hidden
+        className="absolute -top-[7px] right-6 h-3 w-3 rotate-45"
+        style={{
+          background: "var(--surface-1)",
+          borderLeft: "1px solid var(--border)",
+          borderTop: "1px solid var(--border)",
+        }}
+      />
+      <button
+        type="button"
+        onClick={onCerrar}
+        aria-label="Cerrar"
+        className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-md text-lg leading-none"
+        style={{ color: "var(--text-muted)" }}
+      >
+        ×
+      </button>
+      {children}
+    </div>
   );
 }
 
