@@ -50,6 +50,11 @@ builds that edition (without `functions/`) to the Pages project `finanzaspersona
 `db-migrate.yml`'s `migrate-producto` job applies the migrations there; both skip with a notice until
 the `PRODUCTO_*` secrets exist (README, "Instancia de clientes"). The plan doc (tiers MXN 0/29/59,
 Mercado Pago, phases) lives outside the repo; the desktop app keeps syncing only the personal instance.
+**Landing page (2026-10-11, user's request)**: in the producto edition only, `App` shows `Landing.tsx` while
+there's no session (personal still goes straight to `Login`); `#entrar` switches to `Login` (with "← Volver al
+inicio" and a "beta cerrada" note until signup exists), so the browser's Back returns. Plans/prices shown come
+from `lib/planes.ts` (tested; annual shown first by default, display only — the DB will decide the real plan).
+Don't promise Gmail reading there (phase 2). The dashboard mock in the hero is HTML with fake numbers.
 
 **Local pipeline** — entry point is a **Tkinter desktop app** (`app/main.py`), not a folder
 watcher. The user explicitly redesigned this away from the original spec's automatic
