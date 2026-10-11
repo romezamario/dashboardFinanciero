@@ -41,6 +41,26 @@ export function fechaCorta(fechaIso: string): string {
   return formatoFechaCorta.format(new Date(`${fechaIso}T00:00:00`));
 }
 
+const formatoFechaHora = new Intl.DateTimeFormat("es-MX", {
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+/** "2026-10-11T22:53:42Z" → "11 oct, 16:53" en la hora local del navegador. */
+export function fechaHora(instanteIso: string): string {
+  return formatoFechaHora.format(new Date(instanteIso));
+}
+
+/** "+US$1,234.56" -- ganancias y pérdidas en dólares, con signo. */
+export const dolaresConSigno = new Intl.NumberFormat("es-MX", {
+  style: "currency",
+  currency: "USD",
+  signDisplay: "exceptZero",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
 /** "$1.2 mil" -- pesos en celdas angostas (calendario en teléfono). */
 export const monedaCompacta = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -94,6 +114,8 @@ export const porcentaje1 = new Intl.NumberFormat("es-MX", {
 });
 
 /** "1.25" -- hasta dos decimales. */
+/** "0.048731" -- cantidades fraccionarias de un activo (acciones o cripto). */
+export const cantidad = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 6 });
 export const decimal2 = new Intl.NumberFormat("es-MX", { maximumFractionDigits: 2 });
 
 /** "4.3" / "4.30" -- siempre con 1 o 2 decimales (tasas, precios). */

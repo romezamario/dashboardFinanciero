@@ -10,19 +10,26 @@ import {
   YAxis,
 } from "recharts";
 import type { SaldoAgente } from "../../functions/api/agente-saldo";
-import type { OrdenAgente, PosicionAgente } from "../../functions/api/agente-saldo";
+import type { CuentaAlpaca, OrdenAgente, PosicionAgente } from "../../functions/api/agente-saldo";
 import {
+  estadoOrdenAlpaca,
   fraccionEnEfectivo,
   nombreActivo,
+  nombreSimboloAlpaca,
   obtenerSaldoAgente,
   ordenesRecientesPrimero,
+  resumirAlpaca,
   resumirGanancias,
   resumirSaldo,
 } from "../lib/agente";
 import { estiloTooltip } from "../lib/estilos";
 import {
+  cantidad,
   compacto,
+  dolares,
+  dolaresConSigno,
   fechaCorta,
+  fechaHora,
   moneda,
   monedaConCentavos,
   monedaConSigno,
@@ -139,6 +146,7 @@ export function AgenteTradingTab() {
       )}
       {saldo.positions && <Posiciones posiciones={saldo.positions} hasta={resumen.hasta} />}
       {saldo.trades && <Ordenes ordenes={saldo.trades} />}
+      {saldo.alpaca && <SeccionAlpaca cuenta={saldo.alpaca} />}
     </div>
   );
 }
@@ -183,6 +191,72 @@ function Ordenes({ ordenes }: { ordenes: OrdenAgente[] }) {
         monedaConCentavos.format(o.cost_mxn),
       ])}
     />
+  );
+}
+
+/** La cuenta de prueba (paper) en Alpaca: un broker de verdad recibe las mismas decisiones que la
+ * simulación, con dinero simulado. Está en dólares y no cuadra exacto con la simulación en pesos. */
+function SeccionAlpaca({ cuenta }: { cuenta: CuentaAlpaca }) {
+  const r = useMemo(() => resumirAlpaca(cuenta), [cuenta]);
+  return (
+    <section className="flex flex-col gap-3 border-t pt-4" style={{ borderColor: "var(--border)" }}>
+      <div>
+        <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+          Cuenta de prueba en Alpaca ({cuenta.moneda})
+        </h3>
+        <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+          Las mismas decisiones del agente mandadas a un broker real con dinero simulado. Actualizado el{" "}
+          {fechaHora(cuenta.actualizado)}; las órdenes de ETFs esperan a que abra la bolsa.
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <Dato titulo="Valor de la cuenta" valor={dolares.format(r.valor)} />
+        <Dato titulo="Efectivo" valor={dolares.format(r.efectivo)} />
+        <Dato
+          titulo="Cambio vs. el cierre anterior"
+          valor={r.cambioDia !== null ? <MontoUsd valor={r.cambioDia} fraccion={r.cambioDiaPct} /> : "—"}
+        />
+        <Dato titulo="Ganancia no realizada" valor={<MontoUsd valor={r.noRealizada} />} />
+      </div>
+      <Tabla
+        titulo={`Posiciones en Alpaca (${cuenta.posiciones.length})`}
+        vacio="Todavía no hay posiciones: las órdenes siguen en espera."
+        encabezados={["Activo", "Cantidad", "Valor", "Costo", "Ganancia no realizada", "Precio de entrada", "Precio actual"]}
+        filas={cuenta.posiciones.map((p) => [
+          nombreSimboloAlpaca(p.symbol),
+          p.qty != null ? cantidad.format(p.qty) : "—",
+          p.market_value != null ? dolares.format(p.market_value) : "—",
+          p.cost_basis != null ? dolares.format(p.cost_basis) : "—",
+          p.unrealized_pl != null ? <MontoUsd key="g" valor={p.unrealized_pl} fraccion={p.unrealized_plpc} /> : "—",
+          p.avg_entry_price != null ? precioUsd(p.avg_entry_price) : "—",
+          p.current_price != null ? precioUsd(p.current_price) : "—",
+        ])}
+      />
+      <Tabla
+        titulo={`Órdenes en Alpaca (últimas ${cuenta.ordenes.length})`}
+        vacio="Todavía no se ha mandado ninguna orden."
+        encabezados={["Enviada", "Activo", "Operación", "Monto pedido", "Estado", "Cantidad ejecutada", "Precio de ejecución"]}
+        filas={cuenta.ordenes.map((o) => [
+          o.submitted_at ? fechaHora(o.submitted_at) : "—",
+          nombreSimboloAlpaca(o.symbol),
+          o.side === "buy" ? "Compra" : "Venta",
+          o.notional != null ? dolares.format(o.notional) : o.qty != null ? `${cantidad.format(o.qty)} u.` : "Todo",
+          estadoOrdenAlpaca(o.status),
+          o.filled_qty ? cantidad.format(o.filled_qty) : "—",
+          o.filled_avg_price != null ? precioUsd(o.filled_avg_price) : "—",
+        ])}
+      />
+    </section>
+  );
+}
+
+function MontoUsd({ valor, fraccion }: { valor: number; fraccion?: number | null }) {
+  const color = valor > 0 ? "var(--status-good)" : valor < 0 ? "var(--status-critical)" : "var(--text-secondary)";
+  return (
+    <span style={{ color, fontVariantNumeric: "tabular-nums" }}>
+      {dolaresConSigno.format(valor)}
+      {fraccion != null && ` (${porcentajeConSigno1.format(fraccion)})`}
+    </span>
   );
 }
 
