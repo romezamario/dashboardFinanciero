@@ -395,6 +395,10 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
   VIX) con las fechas de los próximos datos. No usa tus finanzas; solo vive aquí para tener todo
   junto.
 
+- **Wiki** — cómo está hecho el tablero: arquitectura, de dónde sale cada dato, seguridad, modelo
+  de datos, cómo se calcula cada indicador y alerta, qué hace cada pestaña, umbrales, limitaciones
+  y glosario. Tiene buscador e índice, y cada sección su propio enlace (`#wiki-<sección>`).
+
 Si una pestaña falla al dibujarse (un dato inesperado), solo esa pestaña muestra el error con
 **Reintentar**; las demás siguen funcionando.
 

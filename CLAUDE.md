@@ -538,6 +538,19 @@ The README's "Qué muestra" section describes every tab for the user, in Spanish
 when a tab is added, removed or changes what it shows**; it went stale once already (it described
 the first dashboard until 2026-10-09).
 
+**"Wiki" tab (2026-10-11, user's request: "una wiki del sitio en donde pueda consultar todo")**: the last tab,
+`WikiTab.tsx` (lazy) — an in-app, Spanish, user-facing version of this file + the README: architecture,
+security, data flow, data model, how every indicator/alert/tab is computed, editable things and their
+durability, constants, deploy, limitations, glossary. Content is plain JSX in `src/wiki/contenido.tsx`
+(`SECCIONES`: id, grupo, titulo, cuerpo) built from the small components in `src/wiki/piezas.tsx`; the
+search box matches every word against each section's text extracted with `textoDe` (accent- and
+case-insensitive, `normalizar`), so text must be passed as `children` or as the props `textoDe` reads
+(`titulo`/`nombre`/`detalle`/`donde`/`encabezados`/`filas`). Each section has a link `#wiki-<id>`
+(`replaceState`; opening the site with such a hash starts on this tab). **Keep it current like the README**:
+when a tab, rule, formula or constant changes, update its section and `ULTIMA_REVISION`. Tested in
+`src/wiki/contenido.test.ts` (unique ids, search sees tables/notes) and checked in a browser (desktop
+light/dark, 390 px).
+
 **Charts**: `IngresosGastosChart` (ingresos vs. gastos por mes) and "ingresos y gastos por
 categoría / comercio / evento", which since 2026-10-08 are ONE component,
 `IngresosGastosPorDimensionChart` (`dimension` prop; it replaced three near-identical

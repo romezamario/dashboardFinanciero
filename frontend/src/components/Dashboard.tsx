@@ -66,6 +66,9 @@ const EventosTab = lazy(() =>
 const GastosRecientesTab = lazy(() =>
   cargarPestana(() => import("./GastosRecientesTab")).then((m) => ({ default: m.GastosRecientesTab }))
 );
+const WikiTab = lazy(() =>
+  cargarPestana(() => import("./WikiTab")).then((m) => ({ default: m.WikiTab }))
+);
 const TarjetasCreditoTab = lazy(() =>
   cargarPestana(() => import("./TarjetasCreditoTab")).then((m) => ({ default: m.TarjetasCreditoTab }))
 );
@@ -115,6 +118,9 @@ const PESTANA_GASTOS_CORREO = "gastos-correo";
 // Análisis técnico de QQQ/TQQQ: no usa las transacciones (cotizaciones de
 // /api/cotizaciones), solo vive aquí para tener todo en un mismo lugar.
 const PESTANA_TECNICO = "tecnico";
+// Wiki del sitio: cómo está hecho y qué reglas calculan cada cosa. Un enlace
+// a una sección (#wiki-<id>) abre directamente esta pestaña.
+const PESTANA_WIKI = "wiki";
 // Prefijo para no chocar con "resumen"/"eventos" si alguna cuenta tuviera
 // ese mismo alias.
 const PREFIJO_PESTANA_CUENTA = "cuenta:";
@@ -141,7 +147,9 @@ export function Dashboard() {
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
   const [errorRecarga, setErrorRecarga] = useState<string | null>(null);
   const [estadosPorPestana, setEstadosPorPestana] = useState<Record<string, EstadoVista>>({});
-  const [vista, setVista] = useState<string>(PESTANA_RESUMEN);
+  const [vista, setVista] = useState<string>(() =>
+    window.location.hash.startsWith("#wiki-") ? PESTANA_WIKI : PESTANA_RESUMEN
+  );
   const [tema, setTema] = useState<Tema>(temaEfectivoInicial);
 
   function alternarTema() {
@@ -257,6 +265,7 @@ export function Dashboard() {
       etiqueta: cuenta,
     })),
     { id: PESTANA_TECNICO, etiqueta: "QQQ / TQQQ" },
+    { id: PESTANA_WIKI, etiqueta: "Wiki" },
   ];
 
   // Si la pestaña activa desaparece (p. ej. tras reasignar todos los
@@ -418,7 +427,9 @@ export function Dashboard() {
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Cargando…</p>
           }
         >
-        {vistaActiva === PESTANA_TECNICO ? (
+        {vistaActiva === PESTANA_WIKI ? (
+          <WikiTab />
+        ) : vistaActiva === PESTANA_TECNICO ? (
           <AnalisisTecnicoTab />
         ) : vistaActiva === PESTANA_GASTOS_CORREO ? (
           <GastosRecientesTab
