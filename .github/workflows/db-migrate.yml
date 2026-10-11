@@ -37,7 +37,9 @@ jobs:
     env:
       PROYECTO: ${{ secrets.PRODUCTO_SUPABASE_PROJECT_ID }}
       PASSWORD: ${{ secrets.PRODUCTO_SUPABASE_DB_PASSWORD }}
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      # Token propio si el proyecto de clientes está en otra organización de
+      # Supabase; si no existe, se usa el mismo del proyecto personal.
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.PRODUCTO_SUPABASE_ACCESS_TOKEN || secrets.SUPABASE_ACCESS_TOKEN }}
     steps:
       - name: ¿Está configurada la instancia de clientes?
         id: config
