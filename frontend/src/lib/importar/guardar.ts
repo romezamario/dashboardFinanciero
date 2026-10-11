@@ -1,0 +1,121 @@
+// Guarda en Supabase lo que se leyó de un PDF en el navegador, con la sesión
+// del cliente (RLS limita todo a sus filas). Mismo diseño que
+// sync/sincronizador.py: buscar-o-crear banco, cuenta y documento, y upsert de
+// los movimientos por (documento_id, pagina, linea_cruda), así que subir el
+// mismo PDF dos veces no duplica nada. Solo manda las columnas que salen del
+// PDF: la categoría o el evento que el cliente ya asignó se conservan.
+
+import { supabase } from "../supabase";
+import type { MovimientoImportado } from "./procesar";
+import { periodo } from "./procesar";
+
+const LOTE = 500;
+
+function comoError(error: { message?: string } | null): Error {
+  return new Error(error?.message ?? "Error de Supabase");
+}
+
+async function idBanco(nombre: string): Promise<string> {
+  const buscar = () => supabase.from("bancos").select("id").eq("nombre", nombre).maybeSingle();
+  const existente = await buscar();
+  if (existente.error) throw comoError(existente.error);
+  if (existente.data) return existente.data.id;
+  const creado = await supabase.from("bancos").insert({ nombre }).select("id").single();
+  if (!creado.error) return creado.data.id;
+  // Otro cliente lo creó al mismo tiempo (nombre es único): ya existe.
+  const otraVez = await buscar();
+  if (otraVez.error || !otraVez.data) throw comoError(creado.error);
+  return otraVez.data.id;
+}
+
+async function idCuenta(bancoId: string, alias: string, ultimos4: string): Promise<string> {
+  const { data, error } = await supabase
+    .from("cuentas")
+    .select("id, alias")
+    .eq("banco_id", bancoId)
+    .eq("ultimos_4_digitos", ultimos4)
+    .maybeSingle();
+  if (error) throw comoError(error);
+  if (data) {
+    // El último alias escrito gana, como en el sincronizador.
+    if (data.alias !== alias) {
+      const cambio = await supabase.from("cuentas").update({ alias }).eq("id", data.id);
+      if (cambio.error) throw comoError(cambio.error);
+    }
+    return data.id;
+  }
+  const creada = await supabase
+    .from("cuentas")
+    .insert({ banco_id: bancoId, alias, ultimos_4_digitos: ultimos4 })
+    .select("id")
+    .single();
+  if (creada.error) throw comoError(creada.error);
+  return creada.data.id;
+}
+
+async function idDocumento(
+  cuentaId: string,
+  hash: string,
+  rango: { inicio: string; fin: string } | null
+): Promise<string> {
+  const { data, error } = await supabase.from("documentos").select("id, cuenta_id").eq("hash", hash).maybeSingle();
+  if (error) throw comoError(error);
+  if (data) {
+    if (data.cuenta_id !== cuentaId) {
+      const cambio = await supabase.from("documentos").update({ cuenta_id: cuentaId }).eq("id", data.id);
+      if (cambio.error) throw comoError(cambio.error);
+    }
+    return data.id;
+  }
+  const creado = await supabase
+    .from("documentos")
+    .insert({
+      cuenta_id: cuentaId,
+      hash,
+      periodo_inicio: rango?.inicio ?? null,
+      periodo_fin: rango?.fin ?? null,
+      // Sin ruta: en el navegador solo hay un nombre de archivo, que puede
+      // traer el nombre del cliente.
+      ruta_local: null,
+    })
+    .select("id")
+    .single();
+  if (creado.error) throw comoError(creado.error);
+  return creado.data.id;
+}
+
+export interface DatosParaGuardar {
+  banco: string;
+  alias: string;
+  ultimos4: string;
+  hash: string;
+  movimientos: readonly MovimientoImportado[];
+}
+
+/** Devuelve cuántos movimientos se guardaron. */
+export async function guardarImportacion(datos: DatosParaGuardar): Promise<number> {
+  const bancoId = await idBanco(datos.banco);
+  const cuentaId = await idCuenta(bancoId, datos.alias.trim(), datos.ultimos4);
+  const documentoId = await idDocumento(cuentaId, datos.hash, periodo(datos.movimientos));
+  const filas = datos.movimientos.map((m) => ({ ...m, documento_id: documentoId }));
+  for (let i = 0; i < filas.length; i += LOTE) {
+    const { error } = await supabase
+      .from("transacciones")
+      .upsert(filas.slice(i, i + LOTE), { onConflict: "documento_id,pagina,linea_cruda" });
+    if (error) throw comoError(error);
+  }
+  return filas.length;
+}
+
+export interface MuestraParaEnviar {
+  motivo: "sin-texto" | "banco-desconocido" | "sin-movimientos" | "faltan-movimientos";
+  banco_detectado: string | null;
+  comentario: string | null;
+  paginas: number;
+  texto_anonimizado: string;
+}
+
+export async function enviarMuestra(muestra: MuestraParaEnviar): Promise<void> {
+  const { error } = await supabase.from("muestras_estados_cuenta").insert(muestra);
+  if (error) throw comoError(error);
+}

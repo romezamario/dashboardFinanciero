@@ -91,6 +91,27 @@ skips with a notice until the secrets `PRODUCTO_SMTP_PASS` +
 domain, and `*.pages.dev` can't be verified. Checked: Vitest for the URL helpers, Playwright against a
 mocked `/auth/v1/verify` (confirm → dashboard, recovery → new password, expired → login message, one
 verify call), templates rendered at 700/390 px. Not yet against the real project.
+**Upload statements in the browser, phase 2 (2026-10-11, user's request: "enfoquémonos en los PDFs, antes que CSV o Excel")** — producto
+edition only: header "Subir estado de cuenta" (`VISTA_SUBIR` in `Dashboard`; the empty dashboard shows the same button) opens
+`SubirEstadoCuenta.tsx` (lazy). pdf.js (`pdfjs-dist`, its own lazy chunk + worker) extracts each page's text items and
+`lib/importar/lineas.ts` regroups them into lines like pdfplumber's `extract_text()` (same baseline ±3 pt, gap >1.5 pt → space;
+checked: identical lines on reportlab test PDFs). `lib/importar/{banamex,banamexTdc,invexTdc}.ts` are TS ports of the three
+Python parsers (same regexes and sign rules; amounts as integer cents, never float) **without** the owner-only bits (tiers by
+last 4, `ROLES_TARJETA_CONOCIDOS` — V2 Invex cards stay as their last 4) and **without glyph decoding** (image-rendered rows
+only warn). `procesar.ts`: exactly one lector must `reconoce` (else unknown), `normalizar` = the transformer (ISO date, unsigned
+monto + tipo, " (2)" suffix for repeated (página, línea)). `guardar.ts` writes with the customer's session: find-or-create
+`bancos` (same names as the desktop `PARSERS` keys) / `cuentas` (alias: last write wins) / `documentos` (hash = sha256 of the
+file, same as `hash_pdf`, so desktop and browser agree; `ruta_local` null — a file name can carry the customer's name), then
+upsert `transacciones` on `(documento_id, pagina, linea_cruda)` sending only PDF columns (categoría/evento are kept). The raw
+page text (may include the full account number) is dropped once processed. **Unreadable PDFs (user's decision 2026-10-11,
+"Muestra a revisión" over a paid live API call)**: no text → "escaneado" message; unknown bank, no movements, or the customer's
+"¿Faltan movimientos?" → they see `anonimizar.ts` (port of `parsers/_anonimizador.py`, same vocabulary) of every page and can
+send it to `muestras_estados_cuenta` (migration `20261012000000_…`: insert/select/delete own, only `estado='nueva'`, no update;
+size-capped; in `aislamiento.sql`). Those samples are for Claude to propose a new lector (structure only: anonymized amounts are
+all 0), reviewed by the owner — the repo is public, so samples must never be copied into issues, logs or artifacts.
+No categorization rules for customers yet (rows arrive "Sin categoría"). Tested in `lib/importar/procesar.test.ts` and in
+Playwright with generated PDFs (Banamex cheques, Invex V2, unknown bank, scanned) against mocked Supabase endpoints; not yet
+with real statements in the browser.
 **Landing page (2026-10-11, user's request)**: in the producto edition only, `App` shows `Landing.tsx` while
 there's no session (personal still goes straight to `Login`); `#entrar` keeps the landing and opens `Login`
 (`producto` prop → `PantallaCuenta flotante`) as a popover under the header's "Entrar" button (`VentanaEntrar`:
@@ -1099,7 +1120,7 @@ the GitHub Actions UI. It runs `supabase link` + `supabase db push` using three 
 `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_ID`, `SUPABASE_DB_PASSWORD`.
 
 Tables: `bancos` (shared catalog, no `user_id`) and `cuentas`/`categorias`/`documentos`/
-`transacciones`/`eventos`/`gastos_correo`/`preferencias`/`perfiles` (all RLS-scoped to the row's `user_id`, four
+`transacciones`/`eventos`/`gastos_correo`/`preferencias`/`perfiles`/`muestras_estados_cuenta` (all RLS-scoped to the row's `user_id`, four
 policies each — select/insert/update/delete; `gastos_correo` is described under the Gmail tab above;
 `preferencias` holds per-user settings, one row per `(user_id, clave)` with a `valor jsonb`, e.g. the
 daily-spend goal under `meta_gasto_diario`). `eventos` (added in `20260922010000_add_eventos.sql`) is a per-user
@@ -1360,7 +1381,7 @@ ladoDominante, gasto hormiga), `alertas` (duplicates, $0 echo lines, price chang
 and several-charges-a-month cases, new subscription), `gastosEstadoCuenta` (only TDC cargos of
 non-hidden categories add up; sinSumar reasons; day order; esTarjetaCredito), `tecnico`
 (SMA, RSI edges), `conciliarCorreo` (one-to-one matching, eventosHeredables, filaAGastoCorreo),
-`metaDiaria` (week/month averages vs. the goal), `cuentaUsuario` (hash routes, auth links, error
+`metaDiaria` (week/month averages vs. the goal), `importar/procesar` (browser PDF lectores, line grouping, anonymizer), `cuentaUsuario` (hash routes, auth links, error
 translation, password rules), `exportarDatos` (CSV escaping), `promedios` (averages from the first month with
 spending), `shophunters` and `patrones/*` (levels and chart patterns on synthetic series from
 `src/test/series.ts`). `npx tsc -b` and `npm run lint` are the other checks; CI runs all three.

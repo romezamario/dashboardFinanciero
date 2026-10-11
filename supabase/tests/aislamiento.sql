@@ -34,6 +34,26 @@ insert into transacciones (documento_id, fecha, descripcion, monto, tipo, pagina
 insert into gastos_correo (mensaje_id, fecha, hora, tarjeta, comercio, categoria, monto, evento_id)
   values ('msg-a', '2026-10-01', '12:00', '111', 'Tacos', 'Comida', 120.50, 'aaaaaaaa-0000-0000-0000-0000000000e1');
 insert into preferencias (clave, valor) values ('meta_gasto_diario', '1000');
+insert into muestras_estados_cuenta (motivo, paginas, texto_anonimizado) values ('banco-desconocido', 1, 'XXXX 00/00/0000');
+-- El cliente no puede marcar su muestra como resuelta ni crearla ya revisada.
+do $$
+declare
+  n int;
+begin
+  update muestras_estados_cuenta set estado = 'resuelta';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'FALLO: el cliente cambió el estado de su muestra'; end if;
+exception when insufficient_privilege then null;
+end $$;
+do $$
+begin
+  begin
+    insert into muestras_estados_cuenta (motivo, paginas, texto_anonimizado, estado)
+      values ('banco-desconocido', 1, 'x', 'resuelta');
+    raise exception 'FALLO: el cliente creó una muestra ya resuelta';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
 -- Editor masivo del dashboard: cambiar categoría y evento de sus propias filas.
 update transacciones set categoria_id = 'aaaaaaaa-0000-0000-0000-0000000000a1', evento_id = null
   where id = 'aaaaaaaa-0000-0000-0000-0000000000f1';
@@ -55,7 +75,7 @@ begin
   select (select count(*) from cuentas) + (select count(*) from categorias)
        + (select count(*) from eventos) + (select count(*) from documentos)
        + (select count(*) from transacciones) + (select count(*) from gastos_correo)
-       + (select count(*) from preferencias)
+       + (select count(*) from preferencias) + (select count(*) from muestras_estados_cuenta)
     into n;
   if n <> 0 then
     raise exception 'FALLO: B ve % filas de A', n;
@@ -163,7 +183,8 @@ begin
      or exists (select 1 from documentos where user_id = 'aaaaaaaa-0000-0000-0000-000000000001')
      or exists (select 1 from transacciones where user_id = 'aaaaaaaa-0000-0000-0000-000000000001')
      or exists (select 1 from gastos_correo where user_id = 'aaaaaaaa-0000-0000-0000-000000000001')
-     or exists (select 1 from preferencias where user_id = 'aaaaaaaa-0000-0000-0000-000000000001') then
+     or exists (select 1 from preferencias where user_id = 'aaaaaaaa-0000-0000-0000-000000000001')
+     or exists (select 1 from muestras_estados_cuenta where user_id = 'aaaaaaaa-0000-0000-0000-000000000001') then
     raise exception 'FALLO: quedaron filas de A después de borrar su cuenta';
   end if;
   if (select count(*) from transacciones where user_id = 'bbbbbbbb-0000-0000-0000-000000000001') <> 1 then

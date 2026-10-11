@@ -76,6 +76,9 @@ const WikiTab = lazy(() =>
 const MiCuenta = lazy(() =>
   cargarPestana(() => import("./MiCuenta")).then((m) => ({ default: m.MiCuenta }))
 );
+const SubirEstadoCuenta = lazy(() =>
+  cargarPestana(() => import("./SubirEstadoCuenta")).then((m) => ({ default: m.SubirEstadoCuenta }))
+);
 const TarjetasCreditoTab = lazy(() =>
   cargarPestana(() => import("./TarjetasCreditoTab")).then((m) => ({ default: m.TarjetasCreditoTab }))
 );
@@ -133,6 +136,9 @@ const PESTANA_WIKI = "wiki";
 // Solo FinanzasPersonales: perfil, contraseña, exportar y borrar la cuenta.
 // Se abre desde el encabezado, no es una pestaña más.
 const VISTA_CUENTA = "mi-cuenta";
+// Solo Ordena tu Lana: leer un PDF en el navegador y guardar sus movimientos
+// (fase 2). También se abre desde el encabezado.
+const VISTA_SUBIR = "subir";
 // Prefijo para no chocar con "resumen"/"eventos" si alguna cuenta tuviera
 // ese mismo alias.
 const PREFIJO_PESTANA_CUENTA = "cuenta:";
@@ -338,7 +344,14 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
   // Si la pestaña activa desaparece (p. ej. tras reasignar todos los
   // documentos de una cuenta a otra desde el editor), vuelve al Resumen.
   const enCuenta = vista === VISTA_CUENTA && EDICION === "producto";
-  const pestanaActiva = enCuenta ? VISTA_CUENTA : pestanas.some((p) => p.id === vista) ? vista : PESTANA_RESUMEN;
+  const enSubir = vista === VISTA_SUBIR && EDICION === "producto";
+  const pestanaActiva = enCuenta
+    ? VISTA_CUENTA
+    : enSubir
+      ? VISTA_SUBIR
+      : pestanas.some((p) => p.id === vista)
+        ? vista
+        : PESTANA_RESUMEN;
   // Igual para la sección del Resumen (Tarjetas/Shophunters solo existen si
   // hay movimientos suyos).
   const seccionActiva = seccionesResumen.some((s) => s.id === seccionResumen)
@@ -444,6 +457,17 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
           </button>
           {EDICION === "producto" && (
             <button
+              onClick={() => cambiarVista(VISTA_SUBIR)}
+              className="text-xs font-medium"
+              style={{ color: enSubir ? "var(--series-1)" : "var(--text-secondary)" }}
+              aria-current={enSubir ? "page" : undefined}
+            >
+              <span className="sm:hidden">Subir PDF</span>
+              <span className="hidden sm:inline">Subir estado de cuenta</span>
+            </button>
+          )}
+          {EDICION === "producto" && (
+            <button
               onClick={() => cambiarVista(VISTA_CUENTA)}
               className="text-xs font-medium"
               style={{ color: enCuenta ? "var(--series-1)" : "var(--text-secondary)" }}
@@ -518,7 +542,9 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
           nombre={
             enCuenta
               ? "Mi cuenta"
-              : `la pestaña ${
+              : enSubir
+                ? "Subir estado de cuenta"
+                : `la pestaña ${
                   [...seccionesResumen, ...pestanas].find((p) => p.id === vistaActiva)?.etiqueta ?? ""
                 }`
           }
@@ -530,6 +556,8 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
         >
         {enCuenta ? (
           <MiCuenta correo={correo} transacciones={transacciones} />
+        ) : enSubir ? (
+          <SubirEstadoCuenta onGuardado={() => void recargarTransacciones()} />
         ) : vistaActiva === PESTANA_WIKI ? (
           <WikiTab />
         ) : vistaActiva === PESTANA_TECNICO ? (
@@ -567,11 +595,25 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
             onActualizado={recargarTransacciones}
           />
         ) : transacciones.length === 0 ? (
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-            {EDICION === "producto"
-              ? "Todavía no tienes movimientos. Muy pronto podrás subir aquí tus estados de cuenta."
-              : "No hay transacciones sincronizadas todavía — usa la app de escritorio para procesar un estado de cuenta y sincronizarlo."}
-          </p>
+          EDICION === "producto" ? (
+            <div className="tarjeta space-y-3 rounded-lg p-6 text-center">
+              <p className="text-sm" style={{ color: "var(--text-primary)" }}>
+                Todavía no tienes movimientos. Empieza subiendo el PDF de tu estado de cuenta.
+              </p>
+              <button
+                onClick={() => cambiarVista(VISTA_SUBIR)}
+                className="rounded-md px-4 py-2 text-sm font-medium text-white"
+                style={{ background: "var(--series-1)" }}
+              >
+                Subir estado de cuenta
+              </button>
+            </div>
+          ) : (
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              No hay transacciones sincronizadas todavía — usa la app de escritorio para procesar un estado de cuenta y
+              sincronizarlo.
+            </p>
+          )
         ) : vistaActiva === PESTANA_EVENTOS ? (
           <EventosTab transacciones={transacciones} onActualizado={recargarTransacciones} />
         ) : vistaActiva === PESTANA_TARJETAS_CREDITO ? (

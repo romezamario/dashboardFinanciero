@@ -568,6 +568,15 @@ movimientos a CSV y borrar la cuenta con todos sus datos). Configuración única
    Supabase no deja cambiar las plantillas sin SMTP propio) y los correos siguen saliendo en inglés de
    Supabase, que solo manda unos pocos por hora.
 
+**Subir estados de cuenta (fase 2)**: con sesión, el botón **Subir estado de cuenta** (y el del tablero
+vacío) lee el PDF en el navegador del cliente: el archivo no se sube a ningún lado, solo se guardan los
+movimientos. Lee Banamex (cheques y tarjetas de crédito) e Invex (tarjeta de crédito), igual que la app de
+escritorio; antes de guardar muestra los movimientos, los totales de cargos y abonos, y pide nombre de la
+cuenta y últimos 4 dígitos. Subir el mismo PDF dos veces no duplica nada. Si no sabemos leer el banco (o el
+cliente avisa que faltan movimientos), puede enviar una **muestra anonimizada** (cada número → 0, cada nombre →
+X; la ve antes de enviarla) que queda en la tabla `muestras_estados_cuenta` del Supabase de clientes, para
+escribir el lector de ese banco. Un PDF escaneado (sin texto) no se puede leer.
+
 La app de escritorio sigue sincronizando solo con tu instancia personal.
 
 **Aislamiento entre usuarios**: `supabase/tests/correr.sh` aplica todas las migraciones a un Postgres
