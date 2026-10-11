@@ -46,6 +46,43 @@ export function leerEnlaceDeAuth(hash: string): EnlaceDeAuth {
   return { recuperacion: false, error };
 }
 
+/** Tipos de enlace que mandan los correos propios (supabase/correos/): el
+ * enlace apunta al sitio, no a supabase.co, y el sitio verifica el token. */
+export type TipoVerificacion = "email" | "recovery" | "email_change";
+
+const TIPOS_VERIFICACION: ReadonlySet<string> = new Set(["email", "recovery", "email_change"]);
+
+export interface VerificacionPendiente {
+  tokenHash: string;
+  tipo: TipoVerificacion;
+}
+
+/** Lee `?token_hash=…&type=…` (el enlace de los correos de FinanzasPersonales).
+ * null si la URL no trae uno válido. */
+export function leerVerificacion(busqueda: string): VerificacionPendiente | null {
+  const parametros = new URLSearchParams(busqueda);
+  const tokenHash = parametros.get("token_hash");
+  const tipo = parametros.get("type");
+  if (!tokenHash || !tipo || !TIPOS_VERIFICACION.has(tipo)) return null;
+  return { tokenHash, tipo: tipo as TipoVerificacion };
+}
+
+/** La misma URL sin el token: se quita en cuanto se lee, para que no quede
+ * en el historial ni se reintente al recargar. */
+export function urlSinVerificacion(url: string): string {
+  const u = new URL(url);
+  u.searchParams.delete("token_hash");
+  u.searchParams.delete("type");
+  return u.pathname + u.search + u.hash;
+}
+
+/** Mensaje cuando el token del correo ya no sirve. */
+export function mensajeVerificacionFallida(tipo: TipoVerificacion): string {
+  return tipo === "recovery"
+    ? "El enlace para cambiar tu contraseña ya venció o ya se usó. Pide uno nuevo."
+    : "El enlace del correo ya venció o ya se usó. Si ya confirmaste tu correo, solo entra.";
+}
+
 /** Los errores de Supabase Auth llegan en inglés; estos son los que un
  * usuario puede provocar al entrar, registrarse o cambiar su contraseña. */
 export function traducirErrorAuth(mensaje: string): string {

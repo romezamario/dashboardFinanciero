@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { leerEnlaceDeAuth } from "./cuentaUsuario";
+import { leerEnlaceDeAuth, leerVerificacion, urlSinVerificacion } from "./cuentaUsuario";
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -16,5 +16,13 @@ if (!url || !anonKey) {
 export const ENLACE_INICIAL = leerEnlaceDeAuth(
   typeof window === "undefined" ? "" : window.location.hash
 );
+
+/** El enlace de un correo propio de FinanzasPersonales (`?token_hash=…&type=…`,
+ * plantillas en supabase/correos/). Se quita de la URL al leerlo; App lo
+ * verifica con verifyOtp. */
+export const VERIFICACION_INICIAL =
+  typeof window === "undefined" ? null : leerVerificacion(window.location.search);
+if (VERIFICACION_INICIAL)
+  window.history.replaceState(null, "", urlSinVerificacion(window.location.href));
 
 export const supabase = createClient(url, anonKey);

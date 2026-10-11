@@ -1,0 +1,46 @@
+name: Correos de FinanzasPersonales (Supabase de clientes)
+
+# Aplica las plantillas de supabase/correos/ (confirmar cuenta, recuperar
+# contraseña, cambiar correo) y, si existen sus secretos, el remitente propio
+# por SMTP (Resend por omisión) al proyecto de Supabase de clientes. El
+# proyecto personal no se toca.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/correos/**"
+      - ".github/workflows/correos-producto.yml"
+  workflow_dispatch: {}
+
+jobs:
+  aplicar:
+    runs-on: ubuntu-24.04
+    env:
+      PROYECTO: ${{ secrets.PRODUCTO_SUPABASE_PROJECT_ID }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.PRODUCTO_SUPABASE_ACCESS_TOKEN || secrets.SUPABASE_ACCESS_TOKEN }}
+      SMTP_PASS: ${{ secrets.PRODUCTO_SMTP_PASS }}
+      SMTP_REMITENTE: ${{ secrets.PRODUCTO_SMTP_REMITENTE }}
+      SMTP_HOST: ${{ secrets.PRODUCTO_SMTP_HOST }}
+      SMTP_USUARIO: ${{ secrets.PRODUCTO_SMTP_USUARIO }}
+      SMTP_PUERTO: ${{ secrets.PRODUCTO_SMTP_PUERTO }}
+    steps:
+      - name: ¿Está configurada la instancia de clientes?
+        id: config
+        run: |
+          if [ -n "$PROYECTO" ]; then
+            echo "lista=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Sin PRODUCTO_SUPABASE_PROJECT_ID: no se aplican los correos."
+          fi
+
+      - uses: actions/checkout@v5
+        if: steps.config.outputs.lista == 'true'
+
+      - uses: actions/setup-node@v5
+        if: steps.config.outputs.lista == 'true'
+        with:
+          node-version: 22
+
+      - name: Aplicar plantillas y remitente
+        if: steps.config.outputs.lista == 'true'
+        run: node supabase/correos/aplicar.mjs

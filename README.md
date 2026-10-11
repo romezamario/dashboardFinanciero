@@ -543,8 +543,14 @@ movimientos a CSV y borrar la cuenta con todos sus datos). Configuración única
    *Redirect URLs* agrega `https://finanzaspersonales-2t6.pages.dev/**`. Sin esto, los enlaces de los
    correos (confirmar cuenta, recuperar contraseña) apuntan a `localhost`.
 2. **Authentication → Sign In / Providers → Email**: deja activado *Confirm email*.
-3. Antes de abrir el registro a más gente, un SMTP propio (**Authentication → Emails → SMTP Settings**, p. ej.
-   Resend): el remitente incluido de Supabase solo manda unos pocos correos por hora.
+3. **Correos con la marca FinanzasPersonales**: las plantillas viven en `supabase/correos/` y el workflow
+   *Correos de FinanzasPersonales* las aplica solo (no las pegues en el panel: se sobrescriben). Sus
+   enlaces llevan al sitio (`/?token_hash=…&type=…`), no a supabase.co. Para que también el **remitente**
+   sea propio, agrega en GitHub los secretos `PRODUCTO_SMTP_PASS` (API key de Resend) y
+   `PRODUCTO_SMTP_REMITENTE` (p. ej. `hola@tudominio.com`, de un dominio verificado en Resend) y corre el
+   workflow. Para otro SMTP (p. ej. Gmail con contraseña de aplicación) agrega también `PRODUCTO_SMTP_HOST`,
+   `PRODUCTO_SMTP_USUARIO` y `PRODUCTO_SMTP_PUERTO`. Sin esos secretos el remitente sigue siendo el de
+   Supabase, que solo manda unos pocos correos por hora.
 
 La app de escritorio sigue sincronizando solo con tu instancia personal.
 

@@ -74,7 +74,22 @@ filled in, the address is only the city during the beta (owner's choice, 2026-10
 a contact@ email on the final domain before launch); bump `VERSION_TERMINOS` when the text changes. Checked in a Playwright harness with mocked Supabase endpoints (sign-up payload,
 unconfirmed login + resend, reset, recovery link → new password → dashboard, Mi cuenta save/delete,
 390 px, dark); not yet against the real customer project. Not done: Google sign-in, CAPTCHA (Turnstile),
-custom SMTP (Supabase's built-in sender is rate-limited — a dashboard setting).
+custom SMTP sender (needs a domain; see below).
+**Branded auth emails (2026-10-11, user's request: "el usuario no debe percibir que hay piezas sueltas")**:
+`supabase/correos/` holds the Spanish templates (confirmation, recovery, email change: content files +
+shared `base.html`/`boton.html`; `aplicar.mjs` assembles them) and `correos-producto.yml` PATCHes them into
+the customer project's auth config via the Management API (`/v1/projects/{ref}/config/auth`), so they're
+versioned — never edit them in the Supabase panel. Links point to the SITE, not supabase.co:
+`{{ .SiteURL }}/?token_hash=…&type=email|recovery|email_change`; `lib/supabase.ts` reads that into
+`VERIFICACION_INICIAL` before creating the client and strips it from the URL, and `App` calls
+`verifyOtp` once (module-level promise: the token is single-use and StrictMode runs effects twice);
+recovery → `NuevaContrasena`, failure → `#entrar` with `mensajeVerificacionFallida`. The old hash flow
+(`ENLACE_INICIAL`) stays for links sent before. Sender: only with secrets `PRODUCTO_SMTP_PASS` +
+`PRODUCTO_SMTP_REMITENTE` (Resend defaults host `smtp.resend.com`, user `resend`, port 465; override with
+`PRODUCTO_SMTP_HOST/USUARIO/PUERTO`, e.g. Gmail) — Resend only delivers to anyone from a verified
+domain, and `*.pages.dev` can't be verified. Checked: Vitest for the URL helpers, Playwright against a
+mocked `/auth/v1/verify` (confirm → dashboard, recovery → new password, expired → login message, one
+verify call), templates rendered at 700/390 px. Not yet against the real project.
 **Landing page (2026-10-11, user's request)**: in the producto edition only, `App` shows `Landing.tsx` while
 there's no session (personal still goes straight to `Login`); `#entrar` keeps the landing and opens `Login`
 (`producto` prop → `PantallaCuenta flotante`) as a popover under the header's "Entrar" button (`VentanaEntrar`:
@@ -1241,6 +1256,8 @@ commits:
   `borrar_mi_cuenta()` deletes only the caller and anon can't call it. Also triggers on `supabase/**`.
 - `.github/workflows/db-migrate.yml` — triggers on `supabase/migrations/**`. Applies pending Supabase migrations
   to the personal project and (job `migrate-producto`, skipped without its secrets) to FinanzasPersonales'.
+- `.github/workflows/correos-producto.yml` (2026-10-11) — triggers on `supabase/correos/**`; applies the
+  auth email templates (+ SMTP sender when its secrets exist) to the customer Supabase project.
 - `.github/workflows/deploy-producto.yml` (2026-10-11) — same trigger as `deploy.yml`; builds with
   `VITE_EDICION=producto` and the `PRODUCTO_VITE_SUPABASE_*` secrets, removes `functions/`, deploys
   to Pages project `finanzaspersonales`. Skips with a notice until those secrets exist.
