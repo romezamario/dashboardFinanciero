@@ -92,6 +92,8 @@ export interface CuentaAlpaca {
   cash: number | null;
   posiciones: PosicionAlpaca[];
   ordenes: OrdenAlpaca[];
+  /** Valor de la cuenta al cierre de cada día (y hoy); en versiones anteriores no viene. */
+  historial?: { date: string; equity: number }[];
 }
 
 /** Formato de output/balance.json (lo escribe agent/export.py del agente). */

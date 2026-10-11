@@ -404,8 +404,9 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
   las órdenes ejecutadas (fecha, compra/venta, monto, ganancia o pérdida de cada venta, precio, %
   antes → después, comisión). Arriba de las tablas, el cambio del saldo partido en ganancia realizada,
   no realizada (posiciones abiertas, con su costo) y efecto del tipo de cambio sobre el efectivo, que
-  el agente guarda en dólares. Abajo, la **cuenta de prueba en Alpaca** (broker real, dinero
-  simulado, en USD) donde el agente manda las mismas decisiones: valor de la cuenta, efectivo,
+  el agente guarda en dólares. Arriba de todo eso, en su propio bloque, va la **cuenta de prueba en
+  Alpaca** (broker real, dinero simulado, en USD) donde el agente manda las mismas decisiones: la
+  gráfica del valor de la cuenta por día, valor de la cuenta, efectivo,
   cambio contra el cierre anterior, ganancia no realizada, posiciones y las últimas órdenes con su
   estado real (ejecutada, en espera de que abra la bolsa, cancelada…). Sale de `output/alpaca.json`
   de ese repo, que se actualiza cada noche y en la apertura y cierre de la bolsa; si no existe, esa
