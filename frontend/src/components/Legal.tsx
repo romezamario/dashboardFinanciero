@@ -2,11 +2,12 @@ import { useEffect, type ReactNode } from "react";
 import { NOMBRE_APP } from "../lib/edicion";
 import { VERSION_TERMINOS } from "../lib/cuentaUsuario";
 
-// Términos de servicio y aviso de privacidad de FinanzasPersonales.
+// Términos de servicio y aviso de privacidad de Ordena tu Lana.
 // BORRADOR redactado sin abogado: necesita revisión legal antes del
 // lanzamiento público (fase 4). Durante la beta el domicilio es solo la
-// ciudad (decisión del responsable); el completo y el correo del dominio
-// propio (contacto@…) van antes del lanzamiento. Si cambias el texto, sube VERSION_TERMINOS
+// ciudad (decisión del responsable); el completo va antes del lanzamiento.
+// El contacto es contacto@ordenatulana.com (Email Routing de Cloudflare →
+// Gmail del responsable). Si cambias el texto, sube VERSION_TERMINOS
 // (lib/cuentaUsuario.ts): es la versión que cada usuario aceptó.
 
 export type DocumentoLegal = "terminos" | "privacidad";
@@ -109,7 +110,7 @@ function Terminos() {
       <Apartado titulo="8. Cambios y ley aplicable">
         <p>
           Si cambiamos estos términos te avisaremos y te pediremos aceptarlos de nuevo. Se rigen por las leyes de
-          los Estados Unidos Mexicanos. Contacto: romezamario@gmail.com.
+          los Estados Unidos Mexicanos. Contacto: contacto@ordenatulana.com.
         </p>
       </Apartado>
     </>
@@ -123,7 +124,7 @@ function Privacidad() {
         <p>
           Mario Alberto Rodríguez Meza, con domicilio en la Ciudad de México, es responsable del
           tratamiento de tus datos personales conforme a la Ley Federal de Protección de Datos Personales en
-          Posesión de los Particulares. Contacto: romezamario@gmail.com.
+          Posesión de los Particulares. Contacto: contacto@ordenatulana.com.
         </p>
       </Apartado>
       <Apartado titulo="Qué datos tratamos">
@@ -162,7 +163,7 @@ function Privacidad() {
         <p>
           Puedes acceder a tus datos, rectificarlos, cancelarlos u oponerte a su tratamiento, y revocar tu
           consentimiento. Desde Mi cuenta puedes descargar todos tus movimientos y borrar tu cuenta con todos sus
-          datos. Para cualquier otra solicitud escribe a romezamario@gmail.com; te responderemos en un máximo de 20
+          datos. Para cualquier otra solicitud escribe a contacto@ordenatulana.com; te responderemos en un máximo de 20
           días hábiles.
         </p>
       </Apartado>
