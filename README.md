@@ -505,7 +505,8 @@ pasos, que son manuales y se hacen una vez:
 
 1. **Supabase**: crea un proyecto nuevo (tier free mientras no haya clientes que paguen), por ejemplo
    `finanzaspersonales`. Anota su *Project ref*, la contraseña de la base, la URL y la `anon key`.
-2. **Cloudflare Pages**: crea el proyecto una vez (dominio de prueba `finanzaspersonales.pages.dev`):
+2. **Cloudflare Pages**: crea el proyecto una vez (el nombre `finanzaspersonales` ya estaba tomado como
+   subdominio, así que Cloudflare le dio `finanzaspersonales-2t6.pages.dev`):
    `npx wrangler pages project create finanzaspersonales --production-branch=main`
    (con `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` en el entorno). **No** le pongas Cloudflare Access.
 3. **GitHub Secrets** (los de Cloudflare y `SUPABASE_ACCESS_TOKEN` se reusan):
@@ -516,6 +517,7 @@ pasos, que son manuales y se hacen una vez:
 | `PRODUCTO_SUPABASE_DB_PASSWORD` | Contraseña de su base |
 | `PRODUCTO_VITE_SUPABASE_URL` | Su URL |
 | `PRODUCTO_VITE_SUPABASE_ANON_KEY` | Su `anon key` (nunca el `service_role`) |
+| `PRODUCTO_SUPABASE_ACCESS_TOKEN` | Opcional: *access token* de la cuenta/organización dueña del proyecto nuevo, si `SUPABASE_ACCESS_TOKEN` no tiene acceso a él ("does not have the necessary privileges") |
 
 4. Corre a mano **Migrar base de datos** y **Deploy FinanzasPersonales** desde la pestaña Actions
    (`workflow_dispatch`); después se actualizan solos con cada push a `main`.
