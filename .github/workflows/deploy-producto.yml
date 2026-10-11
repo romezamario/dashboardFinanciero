@@ -1,0 +1,72 @@
+name: Deploy FinanzasPersonales (instancia de clientes)
+
+# El mismo frontend que deploy.yml, construido con VITE_EDICION=producto
+# (sin QQQ/Macro, Shophunters ni Wiki; ver frontend/src/lib/edicion.ts) y
+# apuntando al Supabase de clientes. Va a otro proyecto de Cloudflare Pages,
+# sin Cloudflare Access delante. Mientras no existan sus secretos, se salta.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/deploy-producto.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-producto
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      VITE_SUPABASE_URL: ${{ secrets.PRODUCTO_VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ secrets.PRODUCTO_VITE_SUPABASE_ANON_KEY }}
+      VITE_EDICION: producto
+    steps:
+      - name: ¿Está configurada la instancia de clientes?
+        id: config
+        run: |
+          if [ -n "$VITE_SUPABASE_URL" ] && [ -n "$VITE_SUPABASE_ANON_KEY" ]; then
+            echo "lista=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Sin PRODUCTO_VITE_SUPABASE_URL / PRODUCTO_VITE_SUPABASE_ANON_KEY: no se despliega FinanzasPersonales."
+          fi
+
+      - uses: actions/checkout@v5
+        if: steps.config.outputs.lista == 'true'
+
+      - uses: actions/setup-node@v5
+        if: steps.config.outputs.lista == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependencias
+        if: steps.config.outputs.lista == 'true'
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build (edición producto)
+        if: steps.config.outputs.lista == 'true'
+        working-directory: frontend
+        run: npm run build
+
+      # La Pages Function de /api/cotizaciones solo sirve a la pestaña QQQ,
+      # que no existe en esta edición: no se publica.
+      - name: Quitar functions/
+        if: steps.config.outputs.lista == 'true'
+        working-directory: frontend
+        run: rm -rf functions
+
+      - name: Deploy a Cloudflare Pages
+        if: steps.config.outputs.lista == 'true'
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: frontend
+          command: pages deploy dist --project-name=finanzaspersonales

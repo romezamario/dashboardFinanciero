@@ -487,6 +487,41 @@ Esto se configura fuera del código, en el dashboard de Cloudflare Zero Trust:
 4. Guarda. A partir de ahí, cualquier visita al sitio pide login de Cloudflare Access antes de llegar
    siquiera a la pantalla de login de Supabase Auth.
 
+## Instancia de clientes: FinanzasPersonales (fase 0 del plan de suscripciones)
+
+El mismo código se despliega dos veces: tu dashboard personal (todo lo de arriba, sin cambios) y
+**FinanzasPersonales**, la versión para clientes, en **otro** proyecto de Supabase y de Cloudflare
+Pages, sin Cloudflare Access. La edición se elige al compilar con `VITE_EDICION=producto`, que quita
+QQQ/TQQQ + Macro, Shophunters y la Wiki. Los workflows `deploy-producto.yml` y el job
+`migrate-producto` de `db-migrate.yml` no hacen nada (solo dejan un aviso) hasta que existan estos
+pasos, que son manuales y se hacen una vez:
+
+1. **Supabase**: crea un proyecto nuevo (tier free mientras no haya clientes que paguen), por ejemplo
+   `finanzaspersonales`. Anota su *Project ref*, la contraseña de la base, la URL y la `anon key`.
+2. **Cloudflare Pages**: crea el proyecto una vez (dominio de prueba `finanzaspersonales.pages.dev`):
+   `npx wrangler pages project create finanzaspersonales --production-branch=main`
+   (con `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` en el entorno). **No** le pongas Cloudflare Access.
+3. **GitHub Secrets** (los de Cloudflare y `SUPABASE_ACCESS_TOKEN` se reusan):
+
+| Secret | Valor |
+|---|---|
+| `PRODUCTO_SUPABASE_PROJECT_ID` | *Project ref* del proyecto nuevo |
+| `PRODUCTO_SUPABASE_DB_PASSWORD` | Contraseña de su base |
+| `PRODUCTO_VITE_SUPABASE_URL` | Su URL |
+| `PRODUCTO_VITE_SUPABASE_ANON_KEY` | Su `anon key` (nunca el `service_role`) |
+
+4. Corre a mano **Migrar base de datos** y **Deploy FinanzasPersonales** desde la pestaña Actions
+   (`workflow_dispatch`); después se actualizan solos con cada push a `main`.
+
+Hasta la fase 1 no hay registro de usuarios: para probar, crea usuarios a mano en
+**Authentication → Users** del proyecto nuevo. La app de escritorio sigue sincronizando solo con tu
+instancia personal.
+
+**Aislamiento entre usuarios**: `supabase/tests/correr.sh` aplica todas las migraciones a un Postgres
+desechable y prueba que un usuario no puede ver, cambiar, borrar ni referenciar filas de otro, y que
+borrar un usuario borra todas sus filas. Corre en CI (job `rls`); localmente:
+`PGHOST=localhost PGUSER=postgres PGPASSWORD=... supabase/tests/correr.sh` (nunca contra Supabase).
+
 ## Gastos recientes (avisos de compra de Banamex)
 
 La pestaña **Gastos recientes** muestra los cargos que Banamex avisa por correo, un día por

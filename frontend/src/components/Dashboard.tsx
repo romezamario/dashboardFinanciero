@@ -13,6 +13,7 @@ import {
 } from "../lib/queries";
 import { eventosOcultosPorDefecto, eventosVisiblesTras } from "../lib/gastosEstadoCuenta";
 import { soloShophunters } from "../lib/shophunters";
+import { EDICION, incluyeFuncion } from "../lib/edicion";
 import { categoriasExcluidasPorDefecto, RANGO_MESES_VACIO, type RangoMeses } from "../lib/indicadores";
 import type { Transaccion } from "../lib/types";
 import { supabase } from "../lib/supabase";
@@ -148,7 +149,9 @@ export function Dashboard() {
   const [errorRecarga, setErrorRecarga] = useState<string | null>(null);
   const [estadosPorPestana, setEstadosPorPestana] = useState<Record<string, EstadoVista>>({});
   const [vista, setVista] = useState<string>(() =>
-    window.location.hash.startsWith("#wiki-") ? PESTANA_WIKI : PESTANA_RESUMEN
+    window.location.hash.startsWith("#wiki-") && incluyeFuncion(EDICION, "wiki")
+      ? PESTANA_WIKI
+      : PESTANA_RESUMEN
   );
   const [tema, setTema] = useState<Tema>(temaEfectivoInicial);
 
@@ -237,7 +240,10 @@ export function Dashboard() {
     () => eventosOcultosPorDefecto(eventosExistentes, eventosVisiblesGastos),
     [eventosExistentes, eventosVisiblesGastos]
   );
-  const transaccionesShophunters = useMemo(() => soloShophunters(transacciones), [transacciones]);
+  const transaccionesShophunters = useMemo(
+    () => (incluyeFuncion(EDICION, "shophunters") ? soloShophunters(transacciones) : []),
+    [transacciones]
+  );
   const transaccionesPorCuenta = useMemo(() => {
     const porCuenta = new Map<string, Transaccion[]>();
     for (const t of transacciones) {
@@ -264,8 +270,9 @@ export function Dashboard() {
       id: PREFIJO_PESTANA_CUENTA + cuenta,
       etiqueta: cuenta,
     })),
-    { id: PESTANA_TECNICO, etiqueta: "QQQ / TQQQ" },
-    { id: PESTANA_WIKI, etiqueta: "Wiki" },
+    // Solo en la edición personal (ver lib/edicion.ts).
+    ...(incluyeFuncion(EDICION, "tecnico") ? [{ id: PESTANA_TECNICO, etiqueta: "QQQ / TQQQ" }] : []),
+    ...(incluyeFuncion(EDICION, "wiki") ? [{ id: PESTANA_WIKI, etiqueta: "Wiki" }] : []),
   ];
 
   // Si la pestaña activa desaparece (p. ej. tras reasignar todos los

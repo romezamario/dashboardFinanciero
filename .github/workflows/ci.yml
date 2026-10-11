@@ -14,6 +14,7 @@ on:
       - "sync/**"
       - "tests/**"
       - "requirements.txt"
+      - "supabase/**"
       - ".github/workflows/ci.yml"
   pull_request:
     paths:
@@ -24,6 +25,7 @@ on:
       - "sync/**"
       - "tests/**"
       - "requirements.txt"
+      - "supabase/**"
       - ".github/workflows/ci.yml"
 
 jobs:
@@ -69,3 +71,33 @@ jobs:
       # sintético. La interfaz Tkinter no se prueba aquí (app/logica.py sí).
       - name: Pruebas
         run: python -m unittest discover -s tests -t .
+
+  # Aislamiento entre usuarios (puerta de la fase 0 de FinanzasPersonales):
+  # aplica todas las migraciones a un Postgres vacío con lo mínimo de Supabase
+  # (supabase/tests/stub_supabase.sql) y comprueba que un usuario no ve, cambia,
+  # borra ni referencia filas de otro, y que borrar una cuenta borra sus filas.
+  rls:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v5
+      - name: Migraciones + pruebas de RLS
+        run: supabase/tests/correr.sh
