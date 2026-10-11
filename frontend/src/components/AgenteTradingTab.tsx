@@ -27,6 +27,7 @@ import {
   cantidad,
   compacto,
   dolares,
+  entero,
   dolaresConSigno,
   fechaCorta,
   fechaHora,
@@ -40,9 +41,6 @@ import {
 } from "../lib/formato";
 import { Tabla } from "./IndicadoresUI";
 
-// Una sola serie (el saldo), así que no hay leyenda: el título la nombra.
-// Línea en --series-1 (paleta ya validada) y una referencia punteada en el
-// saldo inicial para leer de un vistazo si va arriba o abajo.
 const COLOR_SALDO = "var(--series-1)";
 
 export function AgenteTradingTab() {
@@ -77,76 +75,114 @@ export function AgenteTradingTab() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-        Cuenta {saldo.source === "paper" ? "simulada (paper trading)" : saldo.source} del agente de trading,
-        sin dinero real. Datos del {fechaCorta(resumen.desde)} al {fechaCorta(resumen.hasta)}.
-      </p>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Dato titulo="Saldo actual" valor={monedaConCentavos.format(resumen.saldoActual)} />
-        <Dato
-          titulo={`Desde ${moneda.format(resumen.saldoInicial)} iniciales`}
-          valor={porcentajeConSigno1.format(resumen.cambio)}
+    <div className="flex flex-col gap-8">
+      {saldo.alpaca && <SeccionAlpaca cuenta={saldo.alpaca} />}
+      <section className="flex flex-col gap-4">
+        <Encabezado
+          titulo={`Simulación del agente (${saldo.currency})`}
+          detalle={`Backtest diario con dinero simulado: el agente aplica sus reglas a los precios de cada día
+            desde el ${fechaCorta(resumen.desde)} (último dato: ${fechaCorta(resumen.hasta)}). No es la cuenta de Alpaca.`}
         />
-        <Dato titulo="Peor caída desde un máximo" valor={porcentajeConSigno1.format(resumen.peorCaida)} />
-        <Dato
-          titulo={`Avance a la meta de ${compacto.format(saldo.goal)}`}
-          valor={porcentajePequeno.format(resumen.avanceMeta)}
-        />
-      </div>
-      <div className="rounded-lg p-4 tarjeta">
-        <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-          Saldo de la cuenta del agente ({saldo.currency})
-        </h3>
-        <div className="mt-3 h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={saldo.series}>
-              <CartesianGrid vertical={false} stroke="var(--gridline)" strokeWidth={1} />
-              <XAxis
-                dataKey="date"
-                tick={{ fill: "var(--text-muted)", fontSize: 12 }}
-                axisLine={false}
-                tickLine={false}
-                minTickGap={40}
-                tickFormatter={(f: string) => fechaCorta(f)}
-              />
-              <YAxis
-                tick={{ fill: "var(--text-muted)", fontSize: 12 }}
-                axisLine={false}
-                tickLine={false}
-                domain={["auto", "auto"]}
-                tickFormatter={(v: number) => compacto.format(v)}
-              />
-              <ReferenceLine
-                y={resumen.saldoInicial}
-                stroke="var(--baseline)"
-                strokeDasharray="4 4"
-                label={{ value: "Inicial", position: "insideTopLeft", fill: "var(--text-muted)", fontSize: 11 }}
-              />
-              <Tooltip
-                contentStyle={estiloTooltip}
-                itemStyle={{ color: "var(--text-primary)" }}
-                labelFormatter={(f) => fechaCorta(String(f))}
-                formatter={(v) => [monedaConCentavos.format(Number(v)), "Saldo"]}
-              />
-              <Line type="monotone" dataKey="balance" stroke={COLOR_SALDO} strokeWidth={2} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-      {ganancias && (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          <Dato titulo="Ganancia realizada (ventas)" valor={<Monto valor={ganancias.realizada} />} />
-          <Dato titulo="Ganancia no realizada (posiciones abiertas)" valor={<Monto valor={ganancias.noRealizada} />} />
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <Dato titulo="Saldo simulado" valor={monedaConCentavos.format(resumen.saldoActual)} />
           <Dato
-            titulo="Tipo de cambio sobre el efectivo (se guarda en dólares)"
-            valor={<Monto valor={ganancias.tipoDeCambio} />}
+            titulo={`Desde ${moneda.format(resumen.saldoInicial)} iniciales`}
+            valor={porcentajeConSigno1.format(resumen.cambio)}
+          />
+          <Dato titulo="Peor caída desde un máximo" valor={porcentajeConSigno1.format(resumen.peorCaida)} />
+          <Dato
+            titulo={`Avance a la meta de ${compacto.format(saldo.goal)}`}
+            valor={porcentajePequeno.format(resumen.avanceMeta)}
           />
         </div>
-      )}
-      {saldo.positions && <Posiciones posiciones={saldo.positions} hasta={resumen.hasta} />}
-      {saldo.trades && <Ordenes ordenes={saldo.trades} />}
-      {saldo.alpaca && <SeccionAlpaca cuenta={saldo.alpaca} />}
+        <GraficaSaldo
+          titulo={`Saldo de la simulación (${saldo.currency})`}
+          puntos={saldo.series.map((p) => ({ date: p.date, valor: p.balance }))}
+          inicial={resumen.saldoInicial}
+          formato={(v) => monedaConCentavos.format(v)}
+        />
+        {ganancias && (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <Dato titulo="Ganancia realizada (ventas)" valor={<Monto valor={ganancias.realizada} />} />
+            <Dato titulo="Ganancia no realizada (posiciones abiertas)" valor={<Monto valor={ganancias.noRealizada} />} />
+            <Dato
+              titulo="Tipo de cambio sobre el efectivo (se guarda en dólares)"
+              valor={<Monto valor={ganancias.tipoDeCambio} />}
+            />
+          </div>
+        )}
+        {saldo.positions && <Posiciones posiciones={saldo.positions} hasta={resumen.hasta} />}
+        {saldo.trades && <Ordenes ordenes={saldo.trades} />}
+      </section>
+    </div>
+  );
+}
+
+function Encabezado({ titulo, detalle }: { titulo: string; detalle: string }) {
+  return (
+    <div className="border-b pb-2" style={{ borderColor: "var(--border)" }}>
+      <h3 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>{titulo}</h3>
+      <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{detalle}</p>
+    </div>
+  );
+}
+
+/** Una sola serie (el saldo), así que no hay leyenda: el título la nombra. Línea en --series-1
+ * (paleta ya validada) y una referencia punteada en el saldo inicial. */
+function GraficaSaldo({ titulo, puntos, inicial, formato, formatoEje = (v) => compacto.format(v) }: {
+  titulo: string;
+  puntos: { date: string; valor: number }[];
+  inicial: number;
+  formato: (v: number) => string;
+  /** Las etiquetas del eje; "100 k" no distingue movimientos de cientos de dólares. */
+  formatoEje?: (v: number) => string;
+}) {
+  return (
+    <div className="rounded-lg p-4 tarjeta">
+      <h4 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>{titulo}</h4>
+      <div className="mt-3 h-72">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={puntos}>
+            <CartesianGrid vertical={false} stroke="var(--gridline)" strokeWidth={1} />
+            <XAxis
+              dataKey="date"
+              tick={{ fill: "var(--text-muted)", fontSize: 12 }}
+              axisLine={false}
+              tickLine={false}
+              minTickGap={40}
+              tickFormatter={(f: string) => fechaCorta(f)}
+            />
+            <YAxis
+              tick={{ fill: "var(--text-muted)", fontSize: 12 }}
+              axisLine={false}
+              tickLine={false}
+              domain={["auto", "auto"]}
+              tickFormatter={formatoEje}
+              width={64}
+            />
+            <ReferenceLine
+              y={inicial}
+              stroke="var(--baseline)"
+              strokeDasharray="4 4"
+              ifOverflow="extendDomain"
+              label={{ value: "Inicial", position: "insideTopLeft", fill: "var(--text-muted)", fontSize: 11 }}
+            />
+            <Tooltip
+              contentStyle={estiloTooltip}
+              itemStyle={{ color: "var(--text-primary)" }}
+              labelFormatter={(f) => fechaCorta(String(f))}
+              formatter={(v) => [formato(Number(v)), "Saldo"]}
+            />
+            <Line
+              type="monotone"
+              dataKey="valor"
+              stroke={COLOR_SALDO}
+              strokeWidth={2}
+              dot={puntos.length < 15}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }
@@ -198,17 +234,17 @@ function Ordenes({ ordenes }: { ordenes: OrdenAgente[] }) {
  * simulación, con dinero simulado. Está en dólares y no cuadra exacto con la simulación en pesos. */
 function SeccionAlpaca({ cuenta }: { cuenta: CuentaAlpaca }) {
   const r = useMemo(() => resumirAlpaca(cuenta), [cuenta]);
+  const historial = useMemo(
+    () => (cuenta.historial ?? []).map((p) => ({ date: p.date, valor: p.equity })),
+    [cuenta.historial]
+  );
   return (
-    <section className="flex flex-col gap-3 border-t pt-4" style={{ borderColor: "var(--border)" }}>
-      <div>
-        <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-          Cuenta de prueba en Alpaca ({cuenta.moneda})
-        </h3>
-        <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-          Las mismas decisiones del agente mandadas a un broker real con dinero simulado. Actualizado el{" "}
-          {fechaHora(cuenta.actualizado)}; las órdenes de ETFs esperan a que abra la bolsa.
-        </p>
-      </div>
+    <section className="flex flex-col gap-4">
+      <Encabezado
+        titulo={`Cuenta de prueba en Alpaca (${cuenta.moneda})`}
+        detalle={`Broker real con dinero simulado: recibe cada noche las órdenes del agente. Actualizado el
+          ${fechaHora(cuenta.actualizado)}; las órdenes de ETFs esperan a que abra la bolsa.`}
+      />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Dato titulo="Valor de la cuenta" valor={dolares.format(r.valor)} />
         <Dato titulo="Efectivo" valor={dolares.format(r.efectivo)} />
@@ -218,6 +254,15 @@ function SeccionAlpaca({ cuenta }: { cuenta: CuentaAlpaca }) {
         />
         <Dato titulo="Ganancia no realizada" valor={<MontoUsd valor={r.noRealizada} />} />
       </div>
+      {historial.length > 0 && (
+        <GraficaSaldo
+          titulo={`Valor de la cuenta en Alpaca (${cuenta.moneda})`}
+          puntos={historial}
+          inicial={historial[0].valor}
+          formato={(v) => dolares.format(v)}
+          formatoEje={(v) => entero.format(v)}
+        />
+      )}
       <Tabla
         titulo={`Posiciones en Alpaca (${cuenta.posiciones.length})`}
         vacio="Todavía no hay posiciones: las órdenes siguen en espera."

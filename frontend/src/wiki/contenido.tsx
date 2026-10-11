@@ -1239,7 +1239,8 @@ export const SECCIONES: SeccionWiki[] = [
             los datos llegan hasta el día UTC anterior.
           </li>
           <li>
-            <B>Cuenta de prueba en Alpaca</B> (en USD, al final): valor de la cuenta, efectivo, cambio contra
+            <B>Cuenta de prueba en Alpaca</B> (en USD, primer bloque, separado de la simulación): gráfica del
+            valor de la cuenta por día, valor de la cuenta, efectivo, cambio contra
             el cierre del día hábil anterior, ganancia no realizada, posiciones (cantidad, valor, costo,
             precio de entrada y actual) y las últimas 100 órdenes con su estado real en Alpaca. Sale de{" "}
             <C>output/alpaca.json</C> del mismo repo, que el agente actualiza después de mandar las órdenes
