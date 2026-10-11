@@ -611,8 +611,9 @@ into a noisy catch-all the way `categoriaDe()`'s `SIN_CATEGORIA` fallback does f
 `VistaResumen.tsx` is the single view for the "Resumen" tab *and* every non-credit-card account tab; the separate
 "Indicadores" tab/`IndicadoresTab.tsx` is gone (its presentational pieces live in
 `IndicadoresUI.tsx`: `Tile`, `Delta`, `Tabla`; calculations stay in `src/lib/indicadores.ts`).
-Tabs: Resumen, Eventos, Categorías y Comercios, Tarjetas de crédito (all TDCs in one comparison
-tab), then one per remaining account (e.g. Priority). The merge unified three controls whose **scopes
+Tabs: Resumen, Tarjetas de crédito (all TDCs in one comparison tab), Eventos, Shophunters,
+Categorías y Comercios, Gastos recientes, then one per remaining account (e.g. Priority) — order
+set 2026-10-11 (user's request: cards, events and Shophunters right after Resumen). The merge unified three controls whose **scopes
 differ on purpose** (user chose each one explicitly) — keep them this way:
 
 - **Period (applies to everything)**: `rangoMeses` "Desde/Hasta" month `<select>`s over months with
@@ -662,7 +663,7 @@ differ on purpose** (user chose each one explicitly) — keep them this way:
 hide-categories / click-filters / bulk editor, own per-tab state under key `"shophunters"`), fed only with
 the transactions whose **event name contains "shophunters"** (`lib/shophunters.ts`, case-insensitive, so
 "2026-08 Shophunters", "2026-09 Shophunters" and any future "2026-10 Shophunters" enter by themselves).
-It sits right after "Eventos" and only appears when at least one such transaction exists. **It has no
+It sits right after "Eventos" (which follows "Tarjetas de crédito") and only appears when at least one such transaction exists. **It has no
 "Tasa de ahorro" hero card** (user's request 2026-10-09: it's only an event's spending, savings makes no sense
 there) — `VistaResumen` takes `sinTasaDeAhorro` and `Dashboard.renderVistaResumen` passes it for this tab only; the
 indicator tiles were removed too (all of them, in this tab) (user's request 2026-10-10; `sinTarjetasIndicadores`, same pattern; the detail sections below stay). Because every
