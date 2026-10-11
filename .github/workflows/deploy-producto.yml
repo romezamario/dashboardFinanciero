@@ -4,6 +4,12 @@ name: Deploy Ordena tu Lana (instancia de clientes)
 # (sin QQQ/Macro, Shophunters ni Wiki; ver frontend/src/lib/edicion.ts) y
 # apuntando al Supabase de clientes. Va a otro proyecto de Cloudflare Pages,
 # sin Cloudflare Access delante. Mientras no existan sus secretos, se salta.
+#
+# Dos ambientes (decisión del dueño, 2026-10-11: "validar antes de publicar"):
+# - cada push a main va a PRUEBAS: https://pruebas.ordenatulana.pages.dev
+#   (despliegue de vista previa de Pages, con --branch=pruebas);
+# - PRODUCCIÓN (ordenatulana.com) solo cambia al correr este workflow a mano
+#   desde Actions con destino "produccion" (rama de producción de Pages: main).
 on:
   push:
     branches: [main]
@@ -11,9 +17,15 @@ on:
       - "frontend/**"
       - ".github/workflows/deploy-producto.yml"
   workflow_dispatch:
+    inputs:
+      destino:
+        description: "¿A dónde publicar?"
+        type: choice
+        options: [pruebas, produccion]
+        default: pruebas
 
 concurrency:
-  group: deploy-producto
+  group: deploy-producto-${{ inputs.destino || 'pruebas' }}
   cancel-in-progress: false
 
 jobs:
@@ -25,6 +37,8 @@ jobs:
       VITE_SUPABASE_URL: ${{ secrets.PRODUCTO_VITE_SUPABASE_URL }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.PRODUCTO_VITE_SUPABASE_ANON_KEY }}
       VITE_EDICION: producto
+      # Rama de Pages: "main" es producción; cualquier otra es vista previa.
+      RAMA_PAGES: ${{ inputs.destino == 'produccion' && 'main' || 'pruebas' }}
     steps:
       - name: ¿Está configurada la instancia de clientes?
         id: config
@@ -81,4 +95,10 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: frontend
-          command: pages deploy dist --project-name=ordenatulana
+          command: pages deploy dist --project-name=ordenatulana --branch=${{ env.RAMA_PAGES }} --commit-dirty=true
+
+      - name: Resumen
+        if: steps.config.outputs.lista == 'true'
+        run: |
+          if [ "$RAMA_PAGES" = main ]; then destino="PRODUCCIÓN (ordenatulana.com)"; else destino="PRUEBAS (https://pruebas.ordenatulana.pages.dev)"; fi
+          echo "Publicado en $destino, commit ${GITHUB_SHA::7}." >> "$GITHUB_STEP_SUMMARY"

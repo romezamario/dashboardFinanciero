@@ -531,6 +531,13 @@ pasos, que son manuales y se hacen una vez:
 4. Corre a mano **Migrar base de datos** y **Deploy Ordena tu Lana** desde la pestaña Actions
    (`workflow_dispatch`); después se actualizan solos con cada push a `main`.
 
+**Pruebas antes de publicar**: cada push a `main` publica la edición de clientes solo en el sitio de
+**pruebas**, https://pruebas.ordenatulana.pages.dev. **ordenatulana.com no cambia** hasta que, después de
+revisar pruebas, corras *Actions → Deploy Ordena tu Lana → Run workflow* con destino **produccion** (publica
+lo que hay en `main` en ese momento). Las dos direcciones usan la **misma base de datos** de clientes, así que
+las cuentas y movimientos que crees en pruebas son reales, y las migraciones se siguen aplicando al hacer push.
+Los enlaces de los correos de registro y contraseña llevan a ordenatulana.com (el *Site URL*), no a pruebas.
+
 Sin sesión, Ordena tu Lana abre en su **página de inicio** (qué hace, privacidad, planes Gratis /
 Básico / Pro con el anual primero y preguntas frecuentes); "Entrar" abre el inicio de sesión en una ventana flotante sobre la misma página (`#entrar`)
 y "Empieza gratis" o cualquier botón de plan, al registro (`#registro`). Tu edición personal sigue entrando

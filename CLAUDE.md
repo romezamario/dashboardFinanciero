@@ -1263,6 +1263,10 @@ commits:
 - `.github/workflows/deploy-producto.yml` (2026-10-11) — same trigger as `deploy.yml`; builds with
   `VITE_EDICION=producto` and the `PRODUCTO_VITE_SUPABASE_*` secrets, removes `functions/`, deploys
   to Pages project `ordenatulana` (custom domain ordenatulana.com). Skips with a notice until those secrets exist.
+  **Staging (2026-10-11, user's request "un ambiente de pruebas para validar antes de publicar")**: a push
+  deploys only to the Pages preview branch `pruebas` (https://pruebas.ordenatulana.pages.dev); production
+  (`--branch=main`, ordenatulana.com) only via `workflow_dispatch` with `destino: produccion`. Same customer
+  Supabase for both (migrations still apply on push) — a separate test database is not set up.
 - `.github/workflows/deploy.yml` — triggers on `frontend/**`. Builds the frontend and deploys to
   Cloudflare Pages via `wrangler pages deploy`, using secrets `CLOUDFLARE_API_TOKEN`,
   `CLOUDFLARE_ACCOUNT_ID`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`. Assumes the
