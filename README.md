@@ -549,8 +549,9 @@ movimientos a CSV y borrar la cuenta con todos sus datos). Configuración única
    sea propio, agrega en GitHub los secretos `PRODUCTO_SMTP_PASS` (API key de Resend) y
    `PRODUCTO_SMTP_REMITENTE` (p. ej. `hola@tudominio.com`, de un dominio verificado en Resend) y corre el
    workflow. Para otro SMTP (p. ej. Gmail con contraseña de aplicación) agrega también `PRODUCTO_SMTP_HOST`,
-   `PRODUCTO_SMTP_USUARIO` y `PRODUCTO_SMTP_PUERTO`. Sin esos secretos el remitente sigue siendo el de
-   Supabase, que solo manda unos pocos correos por hora.
+   `PRODUCTO_SMTP_USUARIO` y `PRODUCTO_SMTP_PUERTO`. Sin esos secretos no se aplica nada (el plan gratuito de
+   Supabase no deja cambiar las plantillas sin SMTP propio) y los correos siguen saliendo en inglés de
+   Supabase, que solo manda unos pocos por hora.
 
 La app de escritorio sigue sincronizando solo con tu instancia personal.
 

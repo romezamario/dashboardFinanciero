@@ -5,9 +5,10 @@
 //
 //   node supabase/correos/aplicar.mjs --vista DIR   # solo escribe los HTML armados en DIR
 //
-// Variables: SUPABASE_ACCESS_TOKEN, PROYECTO (ref del proyecto) y, opcionales
-// para el remitente, SMTP_PASS + SMTP_REMITENTE (+ SMTP_HOST, SMTP_PUERTO,
-// SMTP_USUARIO; por omisión los de Resend).
+// Variables: SUPABASE_ACCESS_TOKEN, PROYECTO (ref del proyecto), SMTP_PASS y
+// SMTP_REMITENTE (+ SMTP_HOST, SMTP_PUERTO, SMTP_USUARIO; por omisión los de
+// Resend). Sin SMTP no aplica nada: el plan gratuito de Supabase rechaza
+// cambiar plantillas con su remitente incluido.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -80,7 +81,14 @@ async function main() {
   const { SUPABASE_ACCESS_TOKEN: token, PROYECTO: proyecto } = process.env;
   if (!token || !proyecto) throw new Error("Faltan SUPABASE_ACCESS_TOKEN o PROYECTO.");
   const cuerpo = configuracionAuth(process.env);
-  const conSmtp = "smtp_host" in cuerpo;
+  // En el plan gratuito, Supabase no deja cambiar las plantillas mientras se
+  // use su remitente incluido: sin SMTP propio no hay nada que aplicar.
+  if (!("smtp_host" in cuerpo)) {
+    console.log(
+      "::notice::Sin PRODUCTO_SMTP_PASS / PRODUCTO_SMTP_REMITENTE no se aplican los correos: el plan gratuito de Supabase solo permite cambiar las plantillas con un SMTP propio."
+    );
+    return;
+  }
   const respuesta = await fetch(`https://api.supabase.com/v1/projects/${proyecto}/config/auth`, {
     method: "PATCH",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -88,11 +96,7 @@ async function main() {
   });
   if (!respuesta.ok) throw new Error(`Supabase respondió ${respuesta.status}: ${await respuesta.text()}`);
   console.log(`Correos aplicados (${CORREOS.length} plantillas).`);
-  console.log(
-    conSmtp
-      ? `Remitente: ${NOMBRE_REMITENTE} <${process.env.SMTP_REMITENTE}> por ${cuerpo.smtp_host}.`
-      : "Sin PRODUCTO_SMTP_PASS / PRODUCTO_SMTP_REMITENTE: el remitente sigue siendo el de Supabase."
-  );
+  console.log(`Remitente: ${NOMBRE_REMITENTE} <${process.env.SMTP_REMITENTE}> por ${cuerpo.smtp_host}.`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

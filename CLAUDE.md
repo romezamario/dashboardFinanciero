@@ -84,8 +84,10 @@ versioned — never edit them in the Supabase panel. Links point to the SITE, no
 `VERIFICACION_INICIAL` before creating the client and strips it from the URL, and `App` calls
 `verifyOtp` once (module-level promise: the token is single-use and StrictMode runs effects twice);
 recovery → `NuevaContrasena`, failure → `#entrar` with `mensajeVerificacionFallida`. The old hash flow
-(`ENLACE_INICIAL`) stays for links sent before. Sender: only with secrets `PRODUCTO_SMTP_PASS` +
-`PRODUCTO_SMTP_REMITENTE` (Resend defaults host `smtp.resend.com`, user `resend`, port 465; override with
+(`ENLACE_INICIAL`) stays for links sent before. **Nothing applies without SMTP**: the free plan answers 400 "Email template modification is not
+available for free tier projects using the default email provider" (seen 2026-10-11), so `aplicar.mjs`
+skips with a notice until the secrets `PRODUCTO_SMTP_PASS` +
+`PRODUCTO_SMTP_REMITENTE` exist (Resend defaults host `smtp.resend.com`, user `resend`, port 465; override with
 `PRODUCTO_SMTP_HOST/USUARIO/PUERTO`, e.g. Gmail) — Resend only delivers to anyone from a verified
 domain, and `*.pages.dev` can't be verified. Checked: Vitest for the URL helpers, Playwright against a
 mocked `/auth/v1/verify` (confirm → dashboard, recovery → new password, expired → login message, one
