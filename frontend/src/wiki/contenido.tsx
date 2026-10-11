@@ -678,6 +678,11 @@ export const SECCIONES: SeccionWiki[] = [
           ]}
         />
         <P>
+          Arriba del Resumen hay un selector, como el de Trading: <B>Resumen</B>, <B>Tarjetas de
+          crédito</B>, <B>Eventos</B> y <B>Shophunters</B> (este solo si hay movimientos suyos). Cada
+          sección guarda sus propios filtros y periodo.
+        </P>
+        <P>
           El Resumen tiene tres controles con <B>alcances distintos a propósito</B>:
         </P>
         <TablaWiki

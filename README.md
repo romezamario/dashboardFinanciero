@@ -353,17 +353,19 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
   - **Editar en lote** (ver abajo) y **alertas** al final: posibles cargos duplicados,
     suscripciones que cambiaron de precio o son nuevas, cargos inusualmente grandes para su
     categoría y cambios fuertes en la tasa de ahorro. "Ver movimientos" filtra la tabla a eso.
-- **Tarjetas de crédito** — todas las tarjetas comparadas en el mismo periodo: cómo se reparte
-  el gasto entre ellas, una tabla por tarjeta (gasto, compras, ticket promedio, cambio vs. el
-  periodo anterior, pagos y abonos, categoría principal), gasto mensual por tarjeta y para qué
-  usas cada una (gasto por categoría y tarjeta). "Gasto" son solo cargos; los pagos van aparte.
-- **Eventos** — viajes, fiestas, etc.: cuánto gastaste en cada uno, en qué categorías y comercios,
-  sus transacciones, y un buscador para asignar (o quitar) un evento a varias transacciones.
-- **Shophunters** — aparece solo si hay movimientos con un evento cuyo nombre contiene
-  "Shophunters" (p. ej. "2026-09 Shophunters"; los meses nuevos entran solos). Es la vista del
-  Resumen con solo esos movimientos, sin tasa de ahorro ni tarjetas de indicadores (es el gasto de
-  un evento, no tus finanzas), y la gráfica mensual lleva el promedio móvil de 3 meses y los
-  promedios de 3 y 12 meses, contados desde el primer mes con gasto.
+- **Resumen → selector de arriba**: el Resumen tiene un selector, como el de Trading, con
+  "Resumen | Tarjetas de crédito | Eventos | Shophunters"; cada sección recuerda sus filtros:
+  - **Tarjetas de crédito** — todas las tarjetas comparadas en el mismo periodo: cómo se reparte
+    el gasto entre ellas, una tabla por tarjeta (gasto, compras, ticket promedio, cambio vs. el
+    periodo anterior, pagos y abonos, categoría principal), gasto mensual por tarjeta y para qué
+    usas cada una (gasto por categoría y tarjeta). "Gasto" son solo cargos; los pagos van aparte.
+  - **Eventos** — viajes, fiestas, etc.: cuánto gastaste en cada uno, en qué categorías y comercios,
+    sus transacciones, y un buscador para asignar (o quitar) un evento a varias transacciones.
+  - **Shophunters** — aparece solo si hay movimientos con un evento cuyo nombre contiene
+    "Shophunters" (p. ej. "2026-09 Shophunters"; los meses nuevos entran solos). Es la vista del
+    Resumen con solo esos movimientos, sin tasa de ahorro ni tarjetas de indicadores (es el gasto de
+    un evento, no tus finanzas), y la gráfica mensual lleva el promedio móvil de 3 meses y los
+    promedios de 3 y 12 meses, contados desde el primer mes con gasto.
 - **Categorías y Comercios** — el detalle de una categoría y/o un comercio: gasto mensual con
   promedio móvil de 3 meses (o ingreso, si lo elegido solo tiene abonos), sus movimientos más
   grandes y sus transacciones. Clic en un mes filtra lo de abajo a ese mes.

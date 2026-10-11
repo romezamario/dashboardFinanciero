@@ -21,6 +21,7 @@ import { esTarjetaCredito } from "../lib/tarjetas";
 import type { VistaTiempo } from "./IngresosGastosChart";
 import { VistaResumen } from "./VistaResumen";
 import { LimiteDeError } from "./LimiteDeError";
+import { Segmentado } from "./Segmentado";
 
 // Cada pestaña que no es la de inicio se baja al abrirla por primera vez:
 // el análisis técnico/macro, el calendario de gastos, eventos y tarjetas
@@ -162,6 +163,8 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
       ? PESTANA_WIKI
       : PESTANA_RESUMEN
   );
+  // Sección elegida dentro del Resumen; se recuerda al cambiar de pestaña.
+  const [seccionResumen, setSeccionResumen] = useState<string>(PESTANA_RESUMEN);
   const [tema, setTema] = useState<Tema>(temaEfectivoInicial);
 
   function alternarTema() {
@@ -264,7 +267,9 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
     return porCuenta;
   }, [transacciones]);
 
-  const pestanas = [
+  // Tarjetas de crédito, Eventos y Shophunters viven DENTRO del Resumen, con
+  // un selector arriba (como las secciones de Trading), no como pestañas.
+  const seccionesResumen = [
     { id: PESTANA_RESUMEN, etiqueta: "Resumen" },
     ...(transaccionesTarjetas.length > 0
       ? [{ id: PESTANA_TARJETAS_CREDITO, etiqueta: "Tarjetas de crédito" }]
@@ -273,6 +278,9 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
     ...(transaccionesShophunters.length > 0
       ? [{ id: PESTANA_SHOPHUNTERS, etiqueta: "Shophunters" }]
       : []),
+  ];
+  const pestanas = [
+    { id: PESTANA_RESUMEN, etiqueta: "Resumen" },
     { id: PESTANA_CATEGORIAS_COMERCIOS, etiqueta: "Categorías y Comercios" },
     { id: PESTANA_GASTOS_CORREO, etiqueta: "Gastos recientes" },
     ...cuentasSinTarjeta.map((cuenta) => ({
@@ -287,7 +295,13 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
   // Si la pestaña activa desaparece (p. ej. tras reasignar todos los
   // documentos de una cuenta a otra desde el editor), vuelve al Resumen.
   const enCuenta = vista === VISTA_CUENTA && EDICION === "producto";
-  const vistaActiva = enCuenta ? VISTA_CUENTA : pestanas.some((p) => p.id === vista) ? vista : PESTANA_RESUMEN;
+  const pestanaActiva = enCuenta ? VISTA_CUENTA : pestanas.some((p) => p.id === vista) ? vista : PESTANA_RESUMEN;
+  // Igual para la sección del Resumen (Tarjetas/Shophunters solo existen si
+  // hay movimientos suyos).
+  const seccionActiva = seccionesResumen.some((s) => s.id === seccionResumen)
+    ? seccionResumen
+    : PESTANA_RESUMEN;
+  const vistaActiva = pestanaActiva === PESTANA_RESUMEN ? seccionActiva : pestanaActiva;
 
   if (errorCarga) {
     return (
@@ -434,9 +448,9 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
               onClick={() => setVista(tab.id)}
               className="whitespace-nowrap px-4 py-2 text-xs font-medium"
               style={{
-                color: vistaActiva === tab.id ? "var(--series-1)" : "var(--text-secondary)",
+                color: pestanaActiva === tab.id ? "var(--series-1)" : "var(--text-secondary)",
                 borderBottom: `2px solid ${
-                  vistaActiva === tab.id ? "var(--series-1)" : "transparent"
+                  pestanaActiva === tab.id ? "var(--series-1)" : "transparent"
                 }`,
               }}
             >
@@ -445,9 +459,23 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
           ))}
         </div>
 
+        {pestanaActiva === PESTANA_RESUMEN && transacciones.length > 0 && (
+          <Segmentado
+            opciones={seccionesResumen}
+            valor={seccionActiva}
+            onCambiar={setSeccionResumen}
+          />
+        )}
+
         <LimiteDeError
           key={vistaActiva}
-          nombre={enCuenta ? "Mi cuenta" : `la pestaña ${pestanas.find((p) => p.id === vistaActiva)?.etiqueta ?? ""}`}
+          nombre={
+            enCuenta
+              ? "Mi cuenta"
+              : `la pestaña ${
+                  [...seccionesResumen, ...pestanas].find((p) => p.id === vistaActiva)?.etiqueta ?? ""
+                }`
+          }
         >
         <Suspense
           fallback={
