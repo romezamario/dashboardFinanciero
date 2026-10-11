@@ -397,7 +397,7 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
   doble techo/piso— con las reglas que cumple cada uno, RSI, MACD, comparación QQQ vs. TQQQ) y un tablero de indicadores macro de EE. UU. (Fed, inflación, empleo, tasas,
   VIX) con las fechas de los próximos datos. No usa tus finanzas; solo vive aquí para tener todo
   junto.
-  *Agente de trading* (tercera sección de la misma pestaña): el saldo de la cuenta simulada (sin dinero real) del agente de trading,
+  *Agente de trading* (tercera sección de la misma pestaña; la simulación va plegada al final, abajo de la cuenta de Alpaca): el saldo de la cuenta simulada (sin dinero real) del agente de trading,
   que vive en su propio repo (`romezamario/trading-agent`): saldo actual, cambio contra los 10,000
   MXN iniciales, peor caída, avance a la meta de 100 M, la gráfica del saldo por día, las
   posiciones abiertas (activo, % de la cuenta, valor, desde cuándo, precio de entrada y actual) y

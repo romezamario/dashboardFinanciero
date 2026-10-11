@@ -59,6 +59,9 @@ export function AgenteTradingTab() {
 
   const resumen = useMemo(() => (saldo ? resumirSaldo(saldo) : null), [saldo]);
   const ganancias = useMemo(() => (saldo ? resumirGanancias(saldo) : null), [saldo]);
+  // La simulación es la referencia que decide las órdenes, no lo que se revisa a diario: va
+  // plegada al final (si no hay cuenta de Alpaca que mostrar, abierta).
+  const [simulacionAbierta, setSimulacionAbierta] = useState(false);
 
   if (error) {
     return (
@@ -77,43 +80,54 @@ export function AgenteTradingTab() {
   return (
     <div className="flex flex-col gap-8">
       {saldo.alpaca && <SeccionAlpaca cuenta={saldo.alpaca} />}
-      <section className="flex flex-col gap-4">
-        <Encabezado
-          titulo={`Simulación del agente (${saldo.currency})`}
-          detalle={`Backtest diario con dinero simulado: el agente aplica sus reglas a los precios de cada día
-            desde el ${fechaCorta(resumen.desde)} (último dato: ${fechaCorta(resumen.hasta)}). No es la cuenta de Alpaca.`}
-        />
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Dato titulo="Saldo simulado" valor={monedaConCentavos.format(resumen.saldoActual)} />
-          <Dato
-            titulo={`Desde ${moneda.format(resumen.saldoInicial)} iniciales`}
-            valor={porcentajeConSigno1.format(resumen.cambio)}
+      <details
+        className="flex flex-col"
+        open={simulacionAbierta || !saldo.alpaca}
+        onToggle={(e) => setSimulacionAbierta(e.currentTarget.open)}
+      >
+        <summary className="cursor-pointer list-none">
+          <Encabezado
+            titulo={`${simulacionAbierta || !saldo.alpaca ? "▾" : "▸"} Simulación del agente (${saldo.currency})`}
+            detalle={`Backtest diario con dinero simulado: con él decide el agente qué mandar a Alpaca. Datos
+              del ${fechaCorta(resumen.desde)} al ${fechaCorta(resumen.hasta)}; saldo ${monedaConCentavos.format(resumen.saldoActual)}.`}
           />
-          <Dato titulo="Peor caída desde un máximo" valor={porcentajeConSigno1.format(resumen.peorCaida)} />
-          <Dato
-            titulo={`Avance a la meta de ${compacto.format(saldo.goal)}`}
-            valor={porcentajePequeno.format(resumen.avanceMeta)}
-          />
-        </div>
-        <GraficaSaldo
-          titulo={`Saldo de la simulación (${saldo.currency})`}
-          puntos={saldo.series.map((p) => ({ date: p.date, valor: p.balance }))}
-          inicial={resumen.saldoInicial}
-          formato={(v) => monedaConCentavos.format(v)}
-        />
-        {ganancias && (
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            <Dato titulo="Ganancia realizada (ventas)" valor={<Monto valor={ganancias.realizada} />} />
-            <Dato titulo="Ganancia no realizada (posiciones abiertas)" valor={<Monto valor={ganancias.noRealizada} />} />
-            <Dato
-              titulo="Tipo de cambio sobre el efectivo (se guarda en dólares)"
-              valor={<Monto valor={ganancias.tipoDeCambio} />}
+        </summary>
+        {/* Las gráficas solo se montan abiertas: Recharts mide 0 px dentro de un <details> cerrado. */}
+        {(simulacionAbierta || !saldo.alpaca) && (
+          <section className="mt-4 flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+              <Dato titulo="Saldo simulado" valor={monedaConCentavos.format(resumen.saldoActual)} />
+              <Dato
+                titulo={`Desde ${moneda.format(resumen.saldoInicial)} iniciales`}
+                valor={porcentajeConSigno1.format(resumen.cambio)}
+              />
+              <Dato titulo="Peor caída desde un máximo" valor={porcentajeConSigno1.format(resumen.peorCaida)} />
+              <Dato
+                titulo={`Avance a la meta de ${compacto.format(saldo.goal)}`}
+                valor={porcentajePequeno.format(resumen.avanceMeta)}
+              />
+            </div>
+            <GraficaSaldo
+              titulo={`Saldo de la simulación (${saldo.currency})`}
+              puntos={saldo.series.map((p) => ({ date: p.date, valor: p.balance }))}
+              inicial={resumen.saldoInicial}
+              formato={(v) => monedaConCentavos.format(v)}
             />
-          </div>
+            {ganancias && (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <Dato titulo="Ganancia realizada (ventas)" valor={<Monto valor={ganancias.realizada} />} />
+                <Dato titulo="Ganancia no realizada (posiciones abiertas)" valor={<Monto valor={ganancias.noRealizada} />} />
+                <Dato
+                  titulo="Tipo de cambio sobre el efectivo (se guarda en dólares)"
+                  valor={<Monto valor={ganancias.tipoDeCambio} />}
+                />
+              </div>
         )}
         {saldo.positions && <Posiciones posiciones={saldo.positions} hasta={resumen.hasta} />}
         {saldo.trades && <Ordenes ordenes={saldo.trades} />}
       </section>
+        )}
+      </details>
     </div>
   );
 }
