@@ -520,6 +520,11 @@ pasos, que son manuales y se hacen una vez:
 4. Corre a mano **Migrar base de datos** y **Deploy FinanzasPersonales** desde la pestaña Actions
    (`workflow_dispatch`); después se actualizan solos con cada push a `main`.
 
+Sin sesión, FinanzasPersonales abre en su **página de inicio** (qué hace, privacidad, planes Gratis /
+Básico / Pro con el anual primero y preguntas frecuentes); "Entrar" o cualquier botón de plan lleva al
+inicio de sesión (`#entrar`). Mientras no exista el registro (fase 1), la pantalla de inicio de sesión
+avisa que el acceso es por beta cerrada. Tu edición personal sigue entrando directo al inicio de sesión.
+
 Hasta la fase 1 no hay registro de usuarios: para probar, crea usuarios a mano en
 **Authentication → Users** del proyecto nuevo. La app de escritorio sigue sincronizando solo con tu
 instancia personal.

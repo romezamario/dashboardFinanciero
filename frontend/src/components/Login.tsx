@@ -2,7 +2,8 @@ import { useState } from "react";
 import { supabase } from "../lib/supabase";
 import { NOMBRE_APP } from "../lib/edicion";
 
-export function Login() {
+/** `onVolver`: solo en FinanzasPersonales, regresa a la landing page. */
+export function Login({ onVolver }: { onVolver?: () => void } = {}) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -88,6 +89,22 @@ export function Login() {
         >
           {cargando ? "Entrando..." : "Entrar"}
         </button>
+
+        {onVolver && (
+          <>
+            <p className="mt-4 text-xs" style={{ color: "var(--text-muted)" }}>
+              ¿Aún no tienes cuenta? Estamos en beta cerrada; el registro abre pronto.
+            </p>
+            <button
+              type="button"
+              onClick={onVolver}
+              className="mt-3 text-sm"
+              style={{ color: "var(--text-secondary)" }}
+            >
+              ← Volver al inicio
+            </button>
+          </>
+        )}
       </form>
     </div>
   );

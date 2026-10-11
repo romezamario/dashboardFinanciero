@@ -2,6 +2,8 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
 import { Login } from "./components/Login";
+import { Landing } from "./components/Landing";
+import { EDICION } from "./lib/edicion";
 
 // Dashboard (y todo lo que arrastra: Recharts, indicadores.ts, cada gráfica)
 // es la mayor parte del bundle -- separarlo del de Login hace que la
@@ -14,6 +16,15 @@ const Dashboard = lazy(() =>
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [cargandoSesion, setCargandoSesion] = useState(true);
+  // Solo en FinanzasPersonales: sin sesión se ve primero la landing page, y
+  // "#entrar" muestra el Login (así el botón Atrás del navegador regresa).
+  const [enLogin, setEnLogin] = useState(() => window.location.hash === "#entrar");
+
+  useEffect(() => {
+    const alCambiarHash = () => setEnLogin(window.location.hash === "#entrar");
+    window.addEventListener("hashchange", alCambiarHash);
+    return () => window.removeEventListener("hashchange", alCambiarHash);
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -32,7 +43,11 @@ export default function App() {
 
   if (cargandoSesion) return null;
 
-  if (!session) return <Login />;
+  if (!session) {
+    if (EDICION === "personal") return <Login />;
+    if (!enLogin) return <Landing onEntrar={() => { window.location.hash = "entrar"; }} />;
+    return <Login onVolver={() => window.history.back()} />;
+  }
 
   return (
     <Suspense
