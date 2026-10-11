@@ -69,9 +69,9 @@ customer sees it): name, accepted terms version, plan (beta text until phase 3),
 "Exportar mis datos" (CSV of all transactions, `lib/exportarDatos.ts`: BOM + CRLF, formula-injection
 guard) and "Borrar mi cuenta" (type BORRAR → RPC `borrar_mi_cuenta()`, security definer, deletes only
 `auth.uid()` from `auth.users`; everything cascades; anon can't execute it; then local sign-out).
-`Legal.tsx` holds the terms and privacy notice — a **draft without legal review**, with `[bracketed]`
-placeholders (responsible party, address, contact email) the owner must fill; bump `VERSION_TERMINOS`
-when the text changes. Checked in a Playwright harness with mocked Supabase endpoints (sign-up payload,
+`Legal.tsx` holds the terms and privacy notice — a **draft without legal review**; responsible party and contact email are
+filled in, the address is only the city during the beta (owner's choice, 2026-10-11 — full address and
+a contact@ email on the final domain before launch); bump `VERSION_TERMINOS` when the text changes. Checked in a Playwright harness with mocked Supabase endpoints (sign-up payload,
 unconfirmed login + resend, reset, recovery link → new password → dashboard, Mi cuenta save/delete,
 390 px, dark); not yet against the real customer project. Not done: Google sign-in, CAPTCHA (Turnstile),
 custom SMTP (Supabase's built-in sender is rate-limited — a dashboard setting).

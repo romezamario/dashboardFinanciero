@@ -530,8 +530,8 @@ y "Empieza gratis" o cualquier botón de plan, al registro (`#registro`). Tu edi
 directo al inicio de sesión.
 
 **Cuentas de clientes (fase 1)**: registro con verificación por correo, recuperar contraseña, términos y
-aviso de privacidad (`#terminos`, `#privacidad`, borradores sin revisión legal: completa los datos entre
-corchetes en `frontend/src/components/Legal.tsx`) y **Mi cuenta** (nombre, contraseña, exportar los
+aviso de privacidad (`#terminos`, `#privacidad`, borradores sin revisión legal en `frontend/src/components/Legal.tsx`;
+durante la beta el domicilio es solo la ciudad) y **Mi cuenta** (nombre, contraseña, exportar los
 movimientos a CSV y borrar la cuenta con todos sus datos). Configuración única en el Supabase de clientes:
 
 1. **Authentication → URL Configuration**: *Site URL* = `https://finanzaspersonales-2t6.pages.dev` y en
