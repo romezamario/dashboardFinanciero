@@ -137,6 +137,24 @@ const PREFIJO_PESTANA_CUENTA = "cuenta:";
 
 type Tema = "light" | "dark";
 const CLAVE_TEMA = "tema";
+// Pestaña abierta, para que al recargar la página se vuelva a la misma
+// (sessionStorage: dura lo que la pestaña del navegador, no entre visitas).
+const CLAVE_PESTANA = "pestana-activa";
+
+/** Pestaña con la que arranca el tablero: un enlace a una sección de la wiki
+ * (#wiki-<id>) manda; si no, la que estaba abierta antes de recargar. Puede
+ * ser una pestaña que todavía no existe (las de cuenta salen de los datos):
+ * mientras tanto se ve el Resumen y, al cargar, se abre la recordada. */
+function vistaInicial(): string {
+  if (window.location.hash.startsWith("#wiki-") && incluyeFuncion(EDICION, "wiki")) {
+    return PESTANA_WIKI;
+  }
+  try {
+    return sessionStorage.getItem(CLAVE_PESTANA) || PESTANA_RESUMEN;
+  } catch {
+    return PESTANA_RESUMEN;
+  }
+}
 
 /** El botón de tema alterna sobre lo que se ve HOY, sin importar si viene
  * del sistema o de una elección previa -- por eso lee `data-theme` (ya
@@ -158,11 +176,25 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
   const [errorRecarga, setErrorRecarga] = useState<string | null>(null);
   const [estadosPorPestana, setEstadosPorPestana] = useState<Record<string, EstadoVista>>({});
-  const [vista, setVista] = useState<string>(() =>
-    window.location.hash.startsWith("#wiki-") && incluyeFuncion(EDICION, "wiki")
-      ? PESTANA_WIKI
-      : PESTANA_RESUMEN
-  );
+  const [vista, setVista] = useState<string>(vistaInicial);
+
+  function cambiarVista(id: string) {
+    setVista(id);
+    try {
+      sessionStorage.setItem(CLAVE_PESTANA, id);
+    } catch {
+      // Almacenamiento bloqueado: solo no se recuerda al recargar.
+    }
+    // La wiki deja su ancla (#wiki-<id>) en la dirección; al salir de ella se
+    // quita, o recargar desde otra pestaña volvería a abrir la wiki.
+    if (id !== PESTANA_WIKI && window.location.hash.startsWith("#wiki-")) {
+      try {
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      } catch {
+        // Sin replaceState el ancla se queda; no es grave.
+      }
+    }
+  }
   // Sección elegida dentro del Resumen; se recuerda al cambiar de pestaña.
   const [seccionResumen, setSeccionResumen] = useState<string>(PESTANA_RESUMEN);
   const [tema, setTema] = useState<Tema>(temaEfectivoInicial);
@@ -401,7 +433,7 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
           </button>
           {EDICION === "producto" && (
             <button
-              onClick={() => setVista(VISTA_CUENTA)}
+              onClick={() => cambiarVista(VISTA_CUENTA)}
               className="text-xs font-medium"
               style={{ color: enCuenta ? "var(--series-1)" : "var(--text-secondary)" }}
               aria-current={enCuenta ? "page" : undefined}
@@ -445,7 +477,7 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
           {pestanas.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setVista(tab.id)}
+              onClick={() => cambiarVista(tab.id)}
               className="whitespace-nowrap px-4 py-2 text-xs font-medium"
               style={{
                 color: pestanaActiva === tab.id ? "var(--series-1)" : "var(--text-secondary)",

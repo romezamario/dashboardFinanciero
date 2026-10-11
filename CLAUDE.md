@@ -1001,8 +1001,9 @@ live once in `src/lib/formato.ts` (`moneda`, `monedaConCentavos`, `monedaCompact
 is one CSS class, `.tarjeta` (`index.css`, `@layer components`: surface + border + radius), and
 chart/tooltip boxes use `estiloTarjeta` / `estiloTooltip` from `src/lib/estilos.ts`. Each lazy tab
 is wrapped in `LimiteDeError` (`key` = tab id): a render error shows "Algo falló al mostrar … /
-Reintentar" in that tab only instead of blanking the whole dashboard. `localStorage` access (the
-remembered tab) is in try/catch (private windows can throw).
+Reintentar" in that tab only instead of blanking the whole dashboard. `localStorage`/`sessionStorage` access
+(theme; the open tab, kept in `sessionStorage` so a reload returns to it — leaving the Wiki also clears its
+`#wiki-<id>` hash, which used to send a reload from any tab back to the Wiki) is in try/catch (private windows can throw).
 Two big files were split (2026-10-10): `AnalisisTecnicoTab.tsx` → charts in `GraficasTecnicas.tsx`
 (`nombreFecha`/`zonaRsi` moved to `lib/tecnico.ts`); `GastosEstadoCuentaTab.tsx` → the day panel and
 its rows/editor in `PanelDiaEstado.tsx`. **`TransaccionesTabla` renders 100 rows at a time** (`FILAS_POR_TANDA`;
