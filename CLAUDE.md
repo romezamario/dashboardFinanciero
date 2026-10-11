@@ -8,13 +8,11 @@ Personal finance dashboard: a local Python pipeline parses bank statement PDFs, 
 categorizes transactions, and syncs only the normalized data (never the PDF or its raw text) to
 Supabase, which a React frontend reads directly (protected by Row Level Security).
 
-The full original spec — architecture, exact DB schema, folder layout, phased implementation plan —
-lives in [prompt-claude-code.md](prompt-claude-code.md). Read it before making structural changes;
-it's the source of truth for what to build next, **except** for the local pipeline's entry point,
-which was deliberately redesigned away from that spec's automatic watcher — see Architecture below
-— and except for the frontend's dashboard chart set, where "tendencia de saldo" (mentioned in the
-spec) was later replaced by "gasto por comercio" at the user's explicit request — see the
-"Removed, then reintroduced: filtering by `cuenta`" bullet under Frontend below.
+The original spec — architecture, exact DB schema, folder layout — lives in
+[prompt-claude-code.md](prompt-claude-code.md). Read it before making structural changes; where it
+differs from this file, this file wins (known differences: the Tkinter app replaces the folder
+watcher — see Architecture; "gasto por comercio" replaced "tendencia de saldo" — see "Removed, then
+reintroduced: filtering by `cuenta`" under Frontend).
 
 Long decision histories that no longer change day-to-day live in `docs/decisiones/` (so far:
 [parsers.md](docs/decisiones/parsers.md), the bank-parser lessons); this file keeps the rules in force.
@@ -54,7 +52,7 @@ cargo) → `transform/transformador.py` (bank-agnostic: dates to ISO, amounts to
 split into `(monto, tipo)`, builds `TransaccionCanonica` with audit fields `pagina`/`linea_cruda`)
 → `transform/categorizador.py` (keyword rules loaded from `transform/reglas_categorizacion.json`,
 gitignored — editable live from the app's "Reglas de categorización..." dialog, `VentanaReglas`)
-→ user reviews the table and the "Totales de la tabla cargada" panel (the "Validación de totales" box — type the statement's total, compare via `validar_contra_total` — was removed from the UI 2026-10-02 at the user's request, they didn't use it; the function stays in `transform/transformador.py`, tested) →
+→ user reviews the table and the "Totales de la tabla cargada" panel → "Guardar archivo procesado" (below). (`validar_contra_total` in `transform/transformador.py` is tested but no longer wired to the UI.)
 
 Each `Regla` maps a `patron` to both a `categoria` (required) and an optional `comercio` (e.g.
 pattern `"TELEVIA"` → categoria `"Transporte"`, comercio `"Televia"`) — `comercio` was added after
@@ -117,9 +115,10 @@ user re-typing the right `strptime` format string per load. No known real bank n
 the default yet — both `BanamexParser` and `BanamexTdcParser` already normalize `fecha_texto` to
 `DD/MM/AAAA` internally.
 
-**Auto-detection, so the user doesn't have to pick the bank manually**: `BaseParser` has two
-optional hooks, both defaulting to "unsupported" so old/simple parsers (`EjemploParser`) don't
-need to implement them:
+**Auto-detection, so the user doesn't have to pick the bank manually**: `BaseParser` has optional
+hooks, all defaulting to "unsupported" so old/simple parsers (`EjemploParser`) don't need to
+implement them (the three below, plus `sugerencias_renglon_manual` and
+`descripcion_para_categorizar`, described under "Manual row entry"):
 - `puede_procesar(ruta_pdf) -> bool` — a cheap, conservative check. `detectar_banco` (`app/logica.py`) tries
   every registered parser's `puede_procesar` against the loaded PDF; if exactly one matches, that
   bank is used and the dropdown is updated to show it. Zero or multiple matches fall back to
@@ -130,8 +129,9 @@ need to implement them:
   somewhere, so that check alone made every Banamex PDF match both parsers (ambiguous, silently
   losing auto-detection for both). Fixed by requiring a structural marker unique to each document
   *type*, not just the issuer: checking requires "BANAMEX" **and** the transaction table header
-  "FECHA CONCEPTO RETIROS" (the TDC statement has no such column); TDC requires "BANAMEX" **and**
-  "PAGO MÍNIMO" (checking has no minimum-payment concept). When adding a second product for a
+  "FECHA CONCEPTO RETIROS" (the TDC statement has no such column); TDC requires only "PAGO MÍNIMO"
+  (checking has no minimum-payment concept; "BANAMEX" isn't selectable text on a TDC statement) and
+  excludes INVEX. When adding a second product for a
   bank you've already written a parser for, go back and tighten that parser's `puede_procesar`
   the same way — don't assume the existing check is still selective enough.
 - `extraer_info_cuenta(ruta_pdf) -> (alias, ultimos_4) | (None, None)` — reads the account alias
@@ -145,7 +145,7 @@ need to implement them:
   messagebox so the user knows to check that row by hand — it's a hint, not a recovery mechanism;
   nothing gets reconstructed automatically.
 
-All three hooks are best-effort: on no match/exception they return the "unsupported"/empty
+All the hooks are best-effort: on no match/exception they return the "unsupported"/empty
 sentinel and the app silently falls back to whatever the user already has in the manual fields —
 never a hard failure, never a silently wrong guess presented as certain.
 
@@ -285,7 +285,7 @@ done on purpose**: a combined view that fills the days after the last cutoff wit
 
 **Events on correo notices, inherited by the statement (2026-10-10, user's request: categorize as soon as the charge happens, reuse it when the statement arrives)**:
 `gastos_correo.evento_id` (FK to the same `eventos` catalog; migration `20261010120000_gastos_correo_evento.sql`; the desktop upload upsert doesn't send it, so
-re-uploading a day keeps it). In "Por correo" the day panel has checkboxes + an "Asignar evento" block (`AsignarEvento` in `GastosCorreoTab.tsx`: type/pick an event,
+re-uploading a day keeps it). In "Por correo" the day panel has checkboxes + an "Asignar evento" block (`AsignarEventoDia.tsx`, shared with "Por estado de cuenta": type/pick an event,
 "Asignar a N", "Quitar evento", "Seleccionar todo el día") calling `asignarEventoAGastosCorreo` (queries.ts, same `buscarOCrearId("eventos")` + `porLotes`);
 `GastosRecientesTab` keeps the raw rows and derives the notices with `useMemo`: `GastoCorreo.evento` is resolved by `filaAGastoCorreo(fila, eventos)` from
 `evento_id` against the already-loaded `eventos` catalog (since 2026-10-10; it used to be a nested `eventos(nombre)` per row), so assigning first refreshes the
@@ -303,7 +303,7 @@ to the day). Panels carry `key={fecha}` so the selection resets per day. Not dri
 **Weekly daily-average vs. goal (2026-10-08, user's request: "el objetivo es tener un gasto diario de 1000")**: under each
 week row of the calendar (both sources; `FranjaSemana` in `CalendarioMensual.tsx`, math in `lib/metaDiaria.ts`) a strip
 shows the week's range (Sunday–Saturday, may cross months — the grid only draws the in-month days but the average uses all
-7), the **average spend per day**, a bar filled to the goal `META_GASTO_DIARIO` = $1,000 (tick at 100%, green below / red
+7), the **average spend per day**, a bar filled to the goal (default `META_GASTO_DIARIO` = $1,000, user-editable — see below; tick at 100%, green below / red
 above, up to 150%), the difference in words ("✓ $200 por debajo" / "▲ $143 sobre la meta" — never color alone) and the
 week total. A day with no movements *inside the known range* counts as a $0 day; days outside it are not counted:
 `resumenDeSemana(fecha, totales, primera, corte)` counts only days between the first loaded day and `fechaCorte`, so the
@@ -484,8 +484,7 @@ verified against the real CLI that with `--tools ""` a "read this file" request 
 text in one turn, nothing runs; MCP servers from the user's config are ignored. Timeouts:
 `TIEMPO_MAXIMO_SEGUNDOS` = 600 per request, `TIEMPO_MAXIMO_INSTALACION` = 900 for the install — the user chose it over the Anthropic API (per-use
 cost, breaks the $0 budget) and Ollama (weak at Mexican merchants/RFCs): it uses their Claude
-subscription. `buscar_claude` also checks `~/.local/bin` and `%APPDATA%
-pm` because the app is
+subscription. `buscar_claude` also checks `~/.local/bin` and `%APPDATA%\npm` because the app is
 opened from a desktop shortcut (`pythonw -m app.main`) that may not inherit a console's PATH. What
 leaves the laptop: the unique uncategorized descriptions + all current rules (as style examples) —
 same as pasting into the chat — **with every run of 8+ digits masked to `****` + its last 4**
@@ -611,7 +610,7 @@ differ on purpose** (user chose each one explicitly) — keep them this way:
   detail*: category/comercio charts, the transactions table, the Sankey, gasto hormiga
   (`calcularGastoHormiga`), categorías al alza (+ sparklines), and the income-vs-expenses chart.
   They do **not** filter the financial-health indicators (hero savings rate, net flow, average
-  spend, months covered, recurring, `FlujoNetoChart`) — a savings rate of just "Comida" means
+  spend, recurring, `FlujoNetoChart`) — a savings rate of just "Comida" means
   nothing; `calcularIndicadores` gets the hidden-categories set but never `filtros` (a note under
   the chips says so). `aplicarFiltros(transacciones, filtros, excluir?)` — `excluir` (a key or an
   array) is the cross-filter trick: each chart is computed with every *other* active dimension but
@@ -896,8 +895,7 @@ explicit request, no risk flagged — a straightforward swap, not a correction o
 line per account's running `saldo` over time and was, at the time, the *only* UI source of the
 `cuenta` filter dimension — removing the chart made that whole dimension unreachable, so
 `Filtros.cuenta` and its `aplicarFiltros` branch were deleted too rather than left as dead code with
-no way to trigger it. (The `saldoActual` KPI tile mentioned in older notes no longer exists; balance
-surfaces as "Meses cubiertos con tu saldo", computed from the latest `saldo` per account.)
+no way to trigger it.
 **`Filtros.cuenta` came back on 2026-09-25**, alongside the "Per-card tabs" feature below: a "Cuenta:"
 pill row in `VistaResumen.tsx` (shown whenever `cuentasConocidas.length > 1`, i.e. in Resumen but not
 inside a single account's own tab) gives it a new UI entry point, letting Resumen cross-filter down
@@ -1029,8 +1027,10 @@ the GitHub Actions UI. It runs `supabase link` + `supabase db push` using three 
 `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_ID`, `SUPABASE_DB_PASSWORD`.
 
 Tables: `bancos` (shared catalog, no `user_id`) and `cuentas`/`categorias`/`documentos`/
-`transacciones`/`eventos`/`gastos_correo` (all RLS-scoped to the row's `user_id`, four policies
-each — select/insert/update/delete; `gastos_correo` is described under the Gmail tab above). `eventos` (added in `20260922010000_add_eventos.sql`) is a per-user
+`transacciones`/`eventos`/`gastos_correo`/`preferencias` (all RLS-scoped to the row's `user_id`, four
+policies each — select/insert/update/delete; `gastos_correo` is described under the Gmail tab above;
+`preferencias` holds per-user settings, one row per `(user_id, clave)` with a `valor jsonb`, e.g. the
+daily-spend goal under `meta_gasto_diario`). `eventos` (added in `20260922010000_add_eventos.sql`) is a per-user
 catalog like `categorias` (find-or-create by `nombre`, unique per user) referenced by
 `transacciones.evento_id`; events are assigned from the frontend only (Eventos tab / bulk editor),
 never by the desktop pipeline, and the sync upsert doesn't send `evento_id`, so re-syncing a
@@ -1210,8 +1210,7 @@ Account-side setup (Cloudflare tokens, Supabase tokens, GitHub secrets) is docum
 
 ## Tests
 
-`tests/` (stdlib `unittest`, no extra dependency; added 2026-09-26; 118 tests as of 2026-10-10,
-also run by CI) — one file per module:
+`tests/` (stdlib `unittest`, no extra dependency; also run by CI) — one file per module:
 
 - `test_transformador.py` — signed amounts, deterministic duplicate-line suffixes, total validation.
 - `test_categorizador.py` — first-match rules, `inferir_categoria_comercio` (rules → same
@@ -1278,7 +1277,7 @@ non-hidden categories add up; sinSumar reasons; day order; esTarjetaCredito), `t
 (SMA, RSI edges), `conciliarCorreo` (one-to-one matching, eventosHeredables, filaAGastoCorreo),
 `metaDiaria` (week/month averages vs. the goal), `promedios` (averages from the first month with
 spending), `shophunters` and `patrones/*` (levels and chart patterns on synthetic series from
-`src/test/series.ts`) — 115 tests as of 2026-10-10. `npx tsc -b` and `npm run lint` are the other checks; CI runs all three.
+`src/test/series.ts`). `npx tsc -b` and `npm run lint` are the other checks; CI runs all three.
 
 **Dashboard thresholds and rules (constants)** — the numbers that decide what the user sees,
 in one place (change the constant, not a copy of it):
@@ -1310,11 +1309,6 @@ to preview pending migrations against the linked project).
 
 ## Implementation status & working style
 
-The original spec asks to implement phases sequentially and pause for review before starting the
-next one (see "Fases sugeridas de implementación" in `prompt-claude-code.md`). Follow that unless
-the user directs otherwise — as happened with phase 6 (CI/CD), which was pulled forward ahead of
-phases 2-5 at the user's explicit request.
-
 **Shipping changes** (user's standing instruction, 2026-09-25): once a change is validated (typecheck/
 build/tests pass), merge it straight into `main` (which auto-deploys) without asking for confirmation
 each time.
@@ -1322,19 +1316,3 @@ each time.
 All six phases are complete and verified end-to-end in production (PDF → desktop app → Supabase →
 frontend, behind Cloudflare Access + Supabase Auth) — this project is functionally done; further
 work is enhancement, not completion.
-
-- [x] Phase 1 — DB schema + RLS policies (as Supabase migrations, applied via Actions)
-- [x] Phase 2 — `BaseParser` + one documented example extractor (`parsers/base.py`, `parsers/ejemplo.py`)
-- [x] Phase 3 (redesigned) — Transformer + Categorizer as libraries (`transform/`), driven by a
-      Tkinter desktop app (`app/main.py`) instead of the originally-planned watcher — user's
-      explicit request, see Architecture above
-- [x] Phase 4 — Sincronizador (`sync/sincronizador.py`), find-or-create for
-      bancos/cuentas/documentos/categorias, upsert on `(documento_id, pagina, linea_cruda)` for
-      transacciones. Triggered from the app's "Sincronizar a Supabase..." button. User confirmed
-      a real sync populated all 5 tables correctly (verified in the Supabase Table Editor).
-- [x] Phase 5 — Frontend (`frontend/`) — React + Vite + Tailwind + Recharts, login + dashboard,
-      RLS-only access control (no `user_id` filters in query code), charts built per this repo's
-      `dataviz` skill and validated with its palette script
-- [x] Phase 6 — CI/CD (DB migrations + Cloudflare Pages deploy) and Cloudflare Access. User
-      confirmed the live site now shows two logins in sequence — Cloudflare Access (email + PIN)
-      first, then Supabase Auth — and the dashboard renders real synced data correctly.
