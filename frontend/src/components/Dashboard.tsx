@@ -266,14 +266,14 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
 
   const pestanas = [
     { id: PESTANA_RESUMEN, etiqueta: "Resumen" },
+    ...(transaccionesTarjetas.length > 0
+      ? [{ id: PESTANA_TARJETAS_CREDITO, etiqueta: "Tarjetas de crédito" }]
+      : []),
     { id: PESTANA_EVENTOS, etiqueta: "Eventos" },
     ...(transaccionesShophunters.length > 0
       ? [{ id: PESTANA_SHOPHUNTERS, etiqueta: "Shophunters" }]
       : []),
     { id: PESTANA_CATEGORIAS_COMERCIOS, etiqueta: "Categorías y Comercios" },
-    ...(transaccionesTarjetas.length > 0
-      ? [{ id: PESTANA_TARJETAS_CREDITO, etiqueta: "Tarjetas de crédito" }]
-      : []),
     { id: PESTANA_GASTOS_CORREO, etiqueta: "Gastos recientes" },
     ...cuentasSinTarjeta.map((cuenta) => ({
       id: PREFIJO_PESTANA_CUENTA + cuenta,

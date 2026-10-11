@@ -353,6 +353,10 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
   - **Editar en lote** (ver abajo) y **alertas** al final: posibles cargos duplicados,
     suscripciones que cambiaron de precio o son nuevas, cargos inusualmente grandes para su
     categoría y cambios fuertes en la tasa de ahorro. "Ver movimientos" filtra la tabla a eso.
+- **Tarjetas de crédito** — todas las tarjetas comparadas en el mismo periodo: cómo se reparte
+  el gasto entre ellas, una tabla por tarjeta (gasto, compras, ticket promedio, cambio vs. el
+  periodo anterior, pagos y abonos, categoría principal), gasto mensual por tarjeta y para qué
+  usas cada una (gasto por categoría y tarjeta). "Gasto" son solo cargos; los pagos van aparte.
 - **Eventos** — viajes, fiestas, etc.: cuánto gastaste en cada uno, en qué categorías y comercios,
   sus transacciones, y un buscador para asignar (o quitar) un evento a varias transacciones.
 - **Shophunters** — aparece solo si hay movimientos con un evento cuyo nombre contiene
@@ -365,10 +369,6 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
   grandes y sus transacciones. Clic en un mes filtra lo de abajo a ese mes.
   Las tablas de transacciones (aquí y en las demás pestañas) muestran 100 filas a la vez, con
   «Mostrar 100 más» y «Mostrar todas», para que la pestaña abra rápido con todo el historial.
-- **Tarjetas de crédito** — todas las tarjetas comparadas en el mismo periodo: cómo se reparte
-  el gasto entre ellas, una tabla por tarjeta (gasto, compras, ticket promedio, cambio vs. el
-  periodo anterior, pagos y abonos, categoría principal), gasto mensual por tarjeta y para qué
-  usas cada una (gasto por categoría y tarjeta). "Gasto" son solo cargos; los pagos van aparte.
 - **Gastos recientes** — un calendario con el gasto de cada día coloreado de verde a rojo. Dos
   fuentes: **por correo** (los avisos de compra de Banamex, llegan el mismo día) y **por estado
   de cuenta** (las transacciones sincronizadas, que llegan semanas después; solo suman los cargos
