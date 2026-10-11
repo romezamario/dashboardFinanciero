@@ -22,6 +22,8 @@ import type { VistaTiempo } from "./IngresosGastosChart";
 import { VistaResumen } from "./VistaResumen";
 import { LimiteDeError } from "./LimiteDeError";
 import { Segmentado } from "./Segmentado";
+import { ProveedorMetaDiaria } from "./MetaDiaria";
+import { useGastosCorreo } from "../hooks/useGastosCorreo";
 
 // Cada pestaña que no es la de inicio se baja al abrirla por primera vez:
 // el análisis técnico/macro, el calendario de gastos, eventos y tarjetas
@@ -211,6 +213,15 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
       vigente = false;
     };
   }, []);
+
+  // "Gastos recientes": sus avisos de correo y el archivo de la pestaña se piden en cuanto
+  // termina la carga inicial (en segundo plano), y se quedan aquí toda la sesión: abrir la
+  // pestaña ya no espera a bajar miles de avisos, y volver a ella no los pide otra vez.
+  const cargaInicialLista = datos !== null;
+  const avisosCorreo = useGastosCorreo(cargaInicialLista);
+  useEffect(() => {
+    if (cargaInicialLista) import("./GastosRecientesTab").catch(() => {});
+  }, [cargaInicialLista]);
 
   const transacciones = useMemo<Transaccion[]>(
     () => (datos ? armarTransacciones(datos.filas, datos.catalogos) : []),
@@ -467,6 +478,9 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
           />
         )}
 
+        {/* La meta de gasto diario de "Gastos recientes" se lee una vez por sesión, no
+            cada vez que se abre la pestaña. */}
+        <ProveedorMetaDiaria>
         <LimiteDeError
           key={vistaActiva}
           nombre={
@@ -492,6 +506,10 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
           <GastosRecientesTab
             transacciones={transacciones}
             eventosCatalogo={datos.catalogos.eventos}
+            filasCorreo={avisosCorreo.filas}
+            errorCorreo={avisosCorreo.error}
+            onCambiarFilasCorreo={avisosCorreo.setFilas}
+            onReintentarCorreo={avisosCorreo.reintentar}
             // Su propio "Ocultar categorías": se guarda aparte del Resumen
             // (misma lógica de default `null` = categorías de pagos entre cuentas).
             categoriasOcultas={
@@ -557,6 +575,7 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
         )}
         </Suspense>
         </LimiteDeError>
+        </ProveedorMetaDiaria>
       </main>
     </div>
   );
