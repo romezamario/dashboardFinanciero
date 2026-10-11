@@ -16,6 +16,7 @@ import {
   nombreActivo,
   obtenerSaldoAgente,
   ordenesRecientesPrimero,
+  resumirGanancias,
   resumirSaldo,
 } from "../lib/agente";
 import { estiloTooltip } from "../lib/estilos";
@@ -24,6 +25,7 @@ import {
   fechaCorta,
   moneda,
   monedaConCentavos,
+  monedaConSigno,
   porcentaje1,
   porcentajeConSigno1,
   porcentajePequeno,
@@ -51,6 +53,7 @@ export function AgenteTradingTab() {
   }, []);
 
   const resumen = useMemo(() => (saldo ? resumirSaldo(saldo) : null), [saldo]);
+  const ganancias = useMemo(() => (saldo ? resumirGanancias(saldo) : null), [saldo]);
 
   if (error) {
     return (
@@ -124,6 +127,16 @@ export function AgenteTradingTab() {
           </ResponsiveContainer>
         </div>
       </div>
+      {ganancias && (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <Dato titulo="Ganancia realizada (ventas)" valor={<Monto valor={ganancias.realizada} />} />
+          <Dato titulo="Ganancia no realizada (posiciones abiertas)" valor={<Monto valor={ganancias.noRealizada} />} />
+          <Dato
+            titulo="Tipo de cambio sobre el efectivo (se guarda en dólares)"
+            valor={<Monto valor={ganancias.tipoDeCambio} />}
+          />
+        </div>
+      )}
       {saldo.positions && <Posiciones posiciones={saldo.positions} hasta={resumen.hasta} />}
       {saldo.trades && <Ordenes ordenes={saldo.trades} />}
     </div>
@@ -136,15 +149,16 @@ function Posiciones({ posiciones, hasta }: { posiciones: PosicionAgente[]; hasta
     <Tabla
       titulo={`Posiciones abiertas al ${fechaCorta(hasta)} · ${porcentaje1.format(efectivo)} en efectivo`}
       vacio="El agente no tiene posiciones abiertas: todo está en efectivo."
-      encabezados={["Activo", "% de la cuenta", "Valor", "Desde", "Precio de entrada", "Precio actual", "Cambio de precio"]}
+      encabezados={["Activo", "% de la cuenta", "Valor", "Costo", "Ganancia no realizada", "Desde", "Precio de entrada", "Precio actual"]}
       filas={posiciones.map((p) => [
         nombreActivo(p.asset),
         porcentaje1.format(p.weight),
         monedaConCentavos.format(p.value_mxn),
+        p.cost_basis_mxn != null ? monedaConCentavos.format(p.cost_basis_mxn) : "—",
+        p.unrealized_pnl_mxn != null ? <Monto key="g" valor={p.unrealized_pnl_mxn} fraccion={p.unrealized_pnl_pct} /> : "—",
         p.entry_date ? fechaCorta(p.entry_date) : "—",
         p.entry_price_usd != null ? precioUsd(p.entry_price_usd) : "—",
         precioUsd(p.price_usd),
-        p.price_change != null ? porcentajeConSigno1.format(p.price_change) : "—",
       ])}
     />
   );
@@ -157,12 +171,13 @@ function Ordenes({ ordenes }: { ordenes: OrdenAgente[] }) {
     <Tabla
       titulo={`Órdenes ejecutadas (${ordenes.length}) · ${monedaConCentavos.format(comisiones)} en comisiones`}
       vacio="El agente todavía no ha ejecutado órdenes."
-      encabezados={["Fecha", "Activo", "Operación", "Monto", "Precio", "% de la cuenta", "Comisión"]}
+      encabezados={["Fecha", "Activo", "Operación", "Monto", "Ganancia/pérdida", "Precio", "% de la cuenta", "Comisión"]}
       filas={ordenadas.map((o) => [
         fechaCorta(o.date),
         nombreActivo(o.asset),
         o.side === "buy" ? "Compra" : "Venta",
         monedaConCentavos.format(o.amount_mxn),
+        o.pnl_mxn !== undefined ? <Monto key="g" valor={o.pnl_mxn} fraccion={o.pnl_pct} /> : "—",
         precioUsd(o.price_usd),
         `${porcentaje1.format(o.weight_before)} → ${porcentaje1.format(o.weight_after)}`,
         monedaConCentavos.format(o.cost_mxn),
@@ -171,7 +186,18 @@ function Ordenes({ ordenes }: { ordenes: OrdenAgente[] }) {
   );
 }
 
-function Dato({ titulo, valor }: { titulo: string; valor: string }) {
+/** Ganancia/pérdida con signo escrito (no solo color): verde si gana, rojo si pierde. */
+function Monto({ valor, fraccion }: { valor: number; fraccion?: number | null }) {
+  const color = valor > 0 ? "var(--status-good)" : valor < 0 ? "var(--status-critical)" : "var(--text-secondary)";
+  return (
+    <span style={{ color, fontVariantNumeric: "tabular-nums" }}>
+      {monedaConSigno.format(valor)}
+      {fraccion != null && ` (${porcentajeConSigno1.format(fraccion)})`}
+    </span>
+  );
+}
+
+function Dato({ titulo, valor }: { titulo: string; valor: React.ReactNode }) {
   return (
     <div className="rounded-lg p-3 tarjeta">
       <div className="text-xs" style={{ color: "var(--text-secondary)" }}>{titulo}</div>

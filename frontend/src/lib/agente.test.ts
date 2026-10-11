@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { OrdenAgente, PosicionAgente, SaldoAgente } from "../../functions/api/agente-saldo";
-import { fraccionEnEfectivo, ordenesRecientesPrimero, resumirSaldo } from "./agente";
+import { fraccionEnEfectivo, ordenesRecientesPrimero, resumirGanancias, resumirSaldo } from "./agente";
 
 function saldo(valores: number[]): SaldoAgente {
   return {
@@ -51,5 +51,28 @@ describe("posiciones y órdenes", () => {
   it("ordena las órdenes de la más reciente a la más vieja, conservando el orden del mismo día", () => {
     const ordenadas = ordenesRecientesPrimero([orden("2025-01-01", "a"), orden("2025-01-03", "b"), orden("2025-01-03", "c")]);
     expect(ordenadas.map((o) => o.asset)).toEqual(["c", "b", "a"]);
+  });
+});
+
+describe("resumirGanancias", () => {
+  it("separa realizada, no realizada y el resto (tipo de cambio)", () => {
+    const base = saldo([10000, 9500]);
+    const r = resumirGanancias({
+      ...base,
+      trades: [
+        { date: "2025-01-01", asset: "btc", side: "buy", amount_mxn: 1000, price_usd: 1, weight_before: 0, weight_after: 0.1, cost_mxn: 6 },
+        { date: "2025-01-02", asset: "btc", side: "sell", amount_mxn: 900, price_usd: 1, weight_before: 0.1, weight_after: 0, cost_mxn: 5, pnl_mxn: -111, pnl_pct: -0.11 },
+      ],
+      positions: [
+        { asset: "eth", weight: 0.2, value_mxn: 1900, entry_date: null, entry_price_usd: null, price_usd: 1, price_change: null, cost_basis_mxn: 2200, unrealized_pnl_mxn: -300, unrealized_pnl_pct: -0.136 },
+      ],
+    })!;
+    expect(r.realizada).toBe(-111);
+    expect(r.noRealizada).toBe(-300);
+    expect(r.tipoDeCambio).toBe(-89);
+  });
+
+  it("sin ganancias exportadas no inventa nada", () => {
+    expect(resumirGanancias(saldo([10000, 9500]))).toBeNull();
   });
 });

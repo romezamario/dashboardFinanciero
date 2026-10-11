@@ -401,7 +401,10 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
   que vive en su propio repo (`romezamario/trading-agent`): saldo actual, cambio contra los 10,000
   MXN iniciales, peor caída, avance a la meta de 100 M, la gráfica del saldo por día, las
   posiciones abiertas (activo, % de la cuenta, valor, desde cuándo, precio de entrada y actual) y
-  las órdenes ejecutadas (fecha, compra/venta, monto, precio, % antes → después, comisión). Lo lee
+  las órdenes ejecutadas (fecha, compra/venta, monto, ganancia o pérdida de cada venta, precio, %
+  antes → después, comisión). Arriba de las tablas, el cambio del saldo partido en ganancia realizada,
+  no realizada (posiciones abiertas, con su costo) y efecto del tipo de cambio sobre el efectivo, que
+  el agente guarda en dólares. Lo lee
   `/api/agente-saldo` (función de Cloudflare) del archivo `output/balance.json` de ese repo. Como
   el repo es privado, necesita la variable `GITHUB_TOKEN_AGENTE` en Cloudflare Pages (Settings →
   Variables and Secrets, producción): un token *fine-grained* de GitHub con acceso solo a

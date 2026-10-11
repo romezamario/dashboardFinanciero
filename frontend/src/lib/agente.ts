@@ -51,6 +51,29 @@ export function ordenesRecientesPrimero(ordenes: OrdenAgente[]): OrdenAgente[] {
     .map(({ orden }) => orden);
 }
 
+export interface ResumenGanancias {
+  /** Suma de la ganancia/pérdida de todas las ventas. */
+  realizada: number;
+  /** Valor actual − costo de lo que sigue abierto. */
+  noRealizada: number;
+  /** El resto del cambio del saldo: el efectivo se guarda en dólares, así que se mueve con el tipo de cambio. */
+  tipoDeCambio: number;
+}
+
+/** Desglosa el cambio del saldo en ganancia realizada, no realizada y efecto del tipo de cambio.
+ * null si el agente todavía no exporta ganancias (versiones anteriores de balance.json). */
+export function resumirGanancias(saldo: SaldoAgente): ResumenGanancias | null {
+  const ordenes = saldo.trades ?? [];
+  const posiciones = saldo.positions ?? [];
+  const tieneDatos =
+    ordenes.some((o) => o.pnl_mxn !== undefined) || posiciones.some((p) => p.unrealized_pnl_mxn != null);
+  if (!tieneDatos) return null;
+  const realizada = ordenes.reduce((suma, o) => suma + (o.pnl_mxn ?? 0), 0);
+  const noRealizada = posiciones.reduce((suma, p) => suma + (p.unrealized_pnl_mxn ?? 0), 0);
+  const cambioTotal = saldo.current_balance - saldo.initial_balance;
+  return { realizada, noRealizada, tipoDeCambio: cambioTotal - realizada - noRealizada };
+}
+
 /** "BTC" en vez de "btc". */
 export function nombreActivo(activo: string): string {
   return activo.toUpperCase();

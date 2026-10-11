@@ -1219,13 +1219,19 @@ export const SECCIONES: SeccionWiki[] = [
           </li>
           <li>La línea punteada marca el saldo inicial.</li>
           <li>
-            <B>Posiciones abiertas</B> al último día simulado: % de la cuenta, valor en MXN, desde cuándo
-            se tiene (la compra que la abrió desde cero), precio de entrada, precio actual y cambio de
-            precio desde la entrada (no cuenta los ajustes de tamaño posteriores). El resto es efectivo.
+            <B>Posiciones abiertas</B> al último día simulado: % de la cuenta, valor en MXN, costo (lo pagado
+            por lo que queda, con comisiones), ganancia no realizada (valor − costo), desde cuándo se tiene,
+            precio de entrada y precio actual. El resto es efectivo.
           </li>
           <li>
             <B>Órdenes ejecutadas</B>: cada compra o venta simulada, de la más reciente a la más vieja, con
-            monto, precio en USD, % de la cuenta antes → después y comisión (0.6% por lado).
+            monto, ganancia o pérdida de cada venta (lo recibido − comisión − lo que costó lo vendido),
+            precio en USD, % de la cuenta antes → después y comisión (0.6% por lado).
+          </li>
+          <li>
+            Recuadros de ganancia: realizada (suma de las ventas) + no realizada (posiciones abiertas) +
+            tipo de cambio sobre el efectivo = cambio del saldo. El efectivo del agente está en dólares,
+            así que sube o baja en pesos cuando se mueve el dólar.
           </li>
           <li>
             El agente se simula solo cada día (workflow "Simulación diaria" de su repo, 01:30 UTC), así que
