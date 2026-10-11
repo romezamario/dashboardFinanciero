@@ -24,6 +24,8 @@ import {
 import type { EventosPatron, Seleccion } from "./dibujoPatrones";
 import { Tabla, Tile } from "./IndicadoresUI";
 import { MacroEeuu } from "./MacroEeuu";
+import { AgenteTradingTab } from "./AgenteTradingTab";
+import { EDICION, incluyeFuncion } from "../lib/edicion";
 import { ChipPatron, ContenidoNivel, ContenidoPatron, DetalleTrazabilidad } from "./PanelPatrones";
 import { Segmentado } from "./Segmentado";
 import { TarjetaFlotante } from "./TarjetaFlotante";
@@ -47,21 +49,30 @@ import {
 
 const SIMBOLOS: Simbolo[] = ["QQQ", "TQQQ"];
 
-/** Pestaña "QQQ / TQQQ": análisis técnico de los dos ETFs y, aparte, los
- * indicadores macro de EE.UU. que sigue la Fed (MacroEeuu). */
+/** Pestaña "Trading": análisis técnico de QQQ/TQQQ, los indicadores macro de
+ * EE.UU. que sigue la Fed (MacroEeuu) y el saldo del agente de trading
+ * (AgenteTradingTab, solo en la edición personal). */
 export function AnalisisTecnicoTab() {
-  const [seccion, setSeccion] = useState<"tecnico" | "macro">("tecnico");
+  const [seccion, setSeccion] = useState<"tecnico" | "macro" | "agente">("tecnico");
+  const conAgente = incluyeFuncion(EDICION, "agente");
   return (
     <div className="space-y-6">
       <Segmentado
         opciones={[
-          { id: "tecnico", etiqueta: "Análisis técnico" },
+          { id: "tecnico", etiqueta: "QQQ / TQQQ" },
           { id: "macro", etiqueta: "Macro EE.UU." },
+          ...(conAgente ? [{ id: "agente" as const, etiqueta: "Agente de trading" }] : []),
         ]}
         valor={seccion}
         onCambiar={setSeccion}
       />
-      {seccion === "tecnico" ? <VistaTecnica /> : <MacroEeuu />}
+      {seccion === "macro" ? (
+        <MacroEeuu />
+      ) : seccion === "agente" && conAgente ? (
+        <AgenteTradingTab />
+      ) : (
+        <VistaTecnica />
+      )}
     </div>
   );
 }

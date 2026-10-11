@@ -389,19 +389,19 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
     identificador común entre las dos fuentes. Los movimientos con coincidencia llevan ✉.
 - **Una pestaña por cada cuenta que no es tarjeta** (p. ej. la de cheques) — la misma vista
   que el Resumen, solo con esa cuenta.
-- **QQQ / TQQQ** — análisis técnico (velas, medias móviles, Bollinger, soportes y resistencias
+- **Trading** — tres secciones. *QQQ / TQQQ*: análisis técnico (velas, medias móviles, Bollinger, soportes y resistencias
   calculados de los últimos 6 meses con las velas que los originan, volumen contra su promedio,
   patrones chartistas —rectángulo, hombro-cabeza-hombro, bandera, taza con asa, murciélago,
   doble techo/piso— con las reglas que cumple cada uno, RSI, MACD, comparación QQQ vs. TQQQ) y un tablero de indicadores macro de EE. UU. (Fed, inflación, empleo, tasas,
   VIX) con las fechas de los próximos datos. No usa tus finanzas; solo vive aquí para tener todo
   junto.
-- **Agente de trading** — el saldo de la cuenta simulada (sin dinero real) del agente de trading,
+  *Agente de trading* (tercera sección de la misma pestaña): el saldo de la cuenta simulada (sin dinero real) del agente de trading,
   que vive en su propio repo (`romezamario/trading-agent`): saldo actual, cambio contra los 10,000
   MXN iniciales, peor caída, avance a la meta de 100 M y la gráfica del saldo por día. Lo lee
   `/api/agente-saldo` (función de Cloudflare) del archivo `output/balance.json` de ese repo. Como
   el repo es privado, necesita la variable `GITHUB_TOKEN_AGENTE` en Cloudflare Pages (Settings →
   Variables and Secrets, producción): un token *fine-grained* de GitHub con acceso solo a
-  `trading-agent` y permiso **Contents: Read-only**. Sin ella la pestaña dice que falta configurarla.
+  `trading-agent` y permiso **Contents: Read-only**. Sin ella la sección dice que falta configurarla.
 
 - **Wiki** — cómo está hecho el tablero: arquitectura, de dónde sale cada dato, seguridad, modelo
   de datos, cómo se calcula cada indicador y alerta, qué hace cada pestaña, umbrales, limitaciones
