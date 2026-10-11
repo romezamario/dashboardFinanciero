@@ -397,7 +397,9 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
   junto.
   *Agente de trading* (tercera sección de la misma pestaña): el saldo de la cuenta simulada (sin dinero real) del agente de trading,
   que vive en su propio repo (`romezamario/trading-agent`): saldo actual, cambio contra los 10,000
-  MXN iniciales, peor caída, avance a la meta de 100 M y la gráfica del saldo por día. Lo lee
+  MXN iniciales, peor caída, avance a la meta de 100 M, la gráfica del saldo por día, las
+  posiciones abiertas (activo, % de la cuenta, valor, desde cuándo, precio de entrada y actual) y
+  las órdenes ejecutadas (fecha, compra/venta, monto, precio, % antes → después, comisión). Lo lee
   `/api/agente-saldo` (función de Cloudflare) del archivo `output/balance.json` de ese repo. Como
   el repo es privado, necesita la variable `GITHUB_TOKEN_AGENTE` en Cloudflare Pages (Settings →
   Variables and Secrets, producción): un token *fine-grained* de GitHub con acceso solo a

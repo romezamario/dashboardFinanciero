@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { SaldoAgente } from "../../functions/api/agente-saldo";
-import { resumirSaldo } from "./agente";
+import type { OrdenAgente, PosicionAgente, SaldoAgente } from "../../functions/api/agente-saldo";
+import { fraccionEnEfectivo, ordenesRecientesPrimero, resumirSaldo } from "./agente";
 
 function saldo(valores: number[]): SaldoAgente {
   return {
@@ -32,5 +32,24 @@ describe("resumirSaldo", () => {
 
   it("serie vacía no tiene resumen", () => {
     expect(resumirSaldo(saldo([]))).toBeNull();
+  });
+});
+
+describe("posiciones y órdenes", () => {
+  const posicion = (weight: number): PosicionAgente => ({
+    asset: "btc", weight, value_mxn: 0, entry_date: null, entry_price_usd: null, price_usd: 1, price_change: null,
+  });
+  const orden = (date: string, asset: string): OrdenAgente => ({
+    date, asset, side: "buy", amount_mxn: 1, price_usd: 1, weight_before: 0, weight_after: 0.1, cost_mxn: 0,
+  });
+
+  it("el efectivo es lo que no suman las posiciones", () => {
+    expect(fraccionEnEfectivo([posicion(0.3), posicion(0.2)])).toBeCloseTo(0.5);
+    expect(fraccionEnEfectivo([])).toBe(1);
+  });
+
+  it("ordena las órdenes de la más reciente a la más vieja, conservando el orden del mismo día", () => {
+    const ordenadas = ordenesRecientesPrimero([orden("2025-01-01", "a"), orden("2025-01-03", "b"), orden("2025-01-03", "c")]);
+    expect(ordenadas.map((o) => o.asset)).toEqual(["c", "b", "a"]);
   });
 });

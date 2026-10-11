@@ -20,6 +20,31 @@ export interface PuntoSaldo {
   balance: number;
 }
 
+/** Posición abierta al último día de la simulación. */
+export interface PosicionAgente {
+  asset: string;
+  /** Fracción de la cuenta (0.3 = 30%). */
+  weight: number;
+  value_mxn: number;
+  entry_date: string | null;
+  entry_price_usd: number | null;
+  price_usd: number;
+  /** Cambio del precio desde la entrada, como fracción. */
+  price_change: number | null;
+}
+
+/** Orden simulada que ejecutó el agente. */
+export interface OrdenAgente {
+  date: string;
+  asset: string;
+  side: "buy" | "sell";
+  amount_mxn: number;
+  price_usd: number;
+  weight_before: number;
+  weight_after: number;
+  cost_mxn: number;
+}
+
 /** Formato de output/balance.json (lo escribe agent/export.py del agente). */
 export interface SaldoAgente {
   currency: string;
@@ -30,6 +55,9 @@ export interface SaldoAgente {
   goal: number;
   updated_at: string;
   series: PuntoSaldo[];
+  /** Solo en versiones del agente que ya las exportan. */
+  positions?: PosicionAgente[];
+  trades?: OrdenAgente[];
 }
 
 interface Entorno {

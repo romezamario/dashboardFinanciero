@@ -1,7 +1,7 @@
 // Pestaña "Agente de trading": el saldo de la cuenta simulada del agente
 // (repo aparte, romezamario/trading-agent). Aquí solo se lee y se resume;
 // el agente decide y calcula todo en su propio repo.
-import type { SaldoAgente } from "../../functions/api/agente-saldo";
+import type { OrdenAgente, PosicionAgente, SaldoAgente } from "../../functions/api/agente-saldo";
 
 export interface ResumenAgente {
   saldoActual: number;
@@ -36,6 +36,24 @@ export function resumirSaldo(saldo: SaldoAgente): ResumenAgente | null {
     desde: serie[0].date,
     hasta: serie[serie.length - 1].date,
   };
+}
+
+/** Fracción de la cuenta que no está invertida (lo que suman las posiciones, al revés). */
+export function fraccionEnEfectivo(posiciones: PosicionAgente[]): number {
+  return Math.max(0, 1 - posiciones.reduce((suma, p) => suma + p.weight, 0));
+}
+
+/** Órdenes de la más reciente a la más vieja (el agente las escribe en orden de ejecución). */
+export function ordenesRecientesPrimero(ordenes: OrdenAgente[]): OrdenAgente[] {
+  return ordenes
+    .map((orden, i) => ({ orden, i }))
+    .sort((a, b) => b.orden.date.localeCompare(a.orden.date) || b.i - a.i)
+    .map(({ orden }) => orden);
+}
+
+/** "BTC" en vez de "btc". */
+export function nombreActivo(activo: string): string {
+  return activo.toUpperCase();
 }
 
 /** Trae el saldo de /api/agente-saldo (Pages Function). El error viene con

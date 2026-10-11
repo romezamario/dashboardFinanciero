@@ -10,16 +10,26 @@ import {
   YAxis,
 } from "recharts";
 import type { SaldoAgente } from "../../functions/api/agente-saldo";
-import { obtenerSaldoAgente, resumirSaldo } from "../lib/agente";
+import type { OrdenAgente, PosicionAgente } from "../../functions/api/agente-saldo";
+import {
+  fraccionEnEfectivo,
+  nombreActivo,
+  obtenerSaldoAgente,
+  ordenesRecientesPrimero,
+  resumirSaldo,
+} from "../lib/agente";
 import { estiloTooltip } from "../lib/estilos";
 import {
   compacto,
   fechaCorta,
   moneda,
   monedaConCentavos,
+  porcentaje1,
   porcentajeConSigno1,
   porcentajePequeno,
+  precioUsd,
 } from "../lib/formato";
+import { Tabla } from "./IndicadoresUI";
 
 // Una sola serie (el saldo), así que no hay leyenda: el título la nombra.
 // Línea en --series-1 (paleta ya validada) y una referencia punteada en el
@@ -114,7 +124,50 @@ export function AgenteTradingTab() {
           </ResponsiveContainer>
         </div>
       </div>
+      {saldo.positions && <Posiciones posiciones={saldo.positions} hasta={resumen.hasta} />}
+      {saldo.trades && <Ordenes ordenes={saldo.trades} />}
     </div>
+  );
+}
+
+function Posiciones({ posiciones, hasta }: { posiciones: PosicionAgente[]; hasta: string }) {
+  const efectivo = fraccionEnEfectivo(posiciones);
+  return (
+    <Tabla
+      titulo={`Posiciones abiertas al ${fechaCorta(hasta)} · ${porcentaje1.format(efectivo)} en efectivo`}
+      vacio="El agente no tiene posiciones abiertas: todo está en efectivo."
+      encabezados={["Activo", "% de la cuenta", "Valor", "Desde", "Precio de entrada", "Precio actual", "Cambio de precio"]}
+      filas={posiciones.map((p) => [
+        nombreActivo(p.asset),
+        porcentaje1.format(p.weight),
+        monedaConCentavos.format(p.value_mxn),
+        p.entry_date ? fechaCorta(p.entry_date) : "—",
+        p.entry_price_usd != null ? precioUsd(p.entry_price_usd) : "—",
+        precioUsd(p.price_usd),
+        p.price_change != null ? porcentajeConSigno1.format(p.price_change) : "—",
+      ])}
+    />
+  );
+}
+
+function Ordenes({ ordenes }: { ordenes: OrdenAgente[] }) {
+  const ordenadas = useMemo(() => ordenesRecientesPrimero(ordenes), [ordenes]);
+  const comisiones = ordenes.reduce((suma, o) => suma + o.cost_mxn, 0);
+  return (
+    <Tabla
+      titulo={`Órdenes ejecutadas (${ordenes.length}) · ${monedaConCentavos.format(comisiones)} en comisiones`}
+      vacio="El agente todavía no ha ejecutado órdenes."
+      encabezados={["Fecha", "Activo", "Operación", "Monto", "Precio", "% de la cuenta", "Comisión"]}
+      filas={ordenadas.map((o) => [
+        fechaCorta(o.date),
+        nombreActivo(o.asset),
+        o.side === "buy" ? "Compra" : "Venta",
+        monedaConCentavos.format(o.amount_mxn),
+        precioUsd(o.price_usd),
+        `${porcentaje1.format(o.weight_before)} → ${porcentaje1.format(o.weight_after)}`,
+        monedaConCentavos.format(o.cost_mxn),
+      ])}
+    />
   );
 }
 
