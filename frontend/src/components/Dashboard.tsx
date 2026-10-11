@@ -55,9 +55,6 @@ function cargarPestana<T>(importar: () => Promise<T>): Promise<T> {
     }
   );
 }
-const AgenteTradingTab = lazy(() =>
-  cargarPestana(() => import("./AgenteTradingTab")).then((m) => ({ default: m.AgenteTradingTab }))
-);
 const AnalisisTecnicoTab = lazy(() =>
   cargarPestana(() => import("./AnalisisTecnicoTab")).then((m) => ({ default: m.AnalisisTecnicoTab }))
 );
@@ -124,7 +121,6 @@ const PESTANA_GASTOS_CORREO = "gastos-correo";
 const PESTANA_TECNICO = "tecnico";
 // Saldo del agente de trading (repo aparte, romezamario/trading-agent; lo
 // trae /api/agente-saldo). Como QQQ/TQQQ, no toca Supabase.
-const PESTANA_AGENTE = "agente";
 // Wiki del sitio: cómo está hecho y qué reglas calculan cada cosa. Un enlace
 // a una sección (#wiki-<id>) abre directamente esta pestaña.
 const PESTANA_WIKI = "wiki";
@@ -277,8 +273,7 @@ export function Dashboard() {
       etiqueta: cuenta,
     })),
     // Solo en la edición personal (ver lib/edicion.ts).
-    ...(incluyeFuncion(EDICION, "tecnico") ? [{ id: PESTANA_TECNICO, etiqueta: "QQQ / TQQQ" }] : []),
-    ...(incluyeFuncion(EDICION, "agente") ? [{ id: PESTANA_AGENTE, etiqueta: "Agente de trading" }] : []),
+    ...(incluyeFuncion(EDICION, "tecnico") ? [{ id: PESTANA_TECNICO, etiqueta: "Trading" }] : []),
     ...(incluyeFuncion(EDICION, "wiki") ? [{ id: PESTANA_WIKI, etiqueta: "Wiki" }] : []),
   ];
 
@@ -445,8 +440,6 @@ export function Dashboard() {
           <WikiTab />
         ) : vistaActiva === PESTANA_TECNICO ? (
           <AnalisisTecnicoTab />
-        ) : vistaActiva === PESTANA_AGENTE ? (
-          <AgenteTradingTab />
         ) : vistaActiva === PESTANA_GASTOS_CORREO ? (
           <GastosRecientesTab
             transacciones={transacciones}

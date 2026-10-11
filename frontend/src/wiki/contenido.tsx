@@ -1068,7 +1068,7 @@ export const SECCIONES: SeccionWiki[] = [
   {
     id: "qqq",
     grupo: "Pestañas",
-    titulo: "QQQ / TQQQ (análisis técnico)",
+    titulo: "Trading: QQQ / TQQQ (análisis técnico)",
     cuerpo: (
       <>
         <Flujo
@@ -1151,7 +1151,7 @@ export const SECCIONES: SeccionWiki[] = [
           ]}
         />
         <P>
-          Dentro de QQQ / TQQQ. Los datos vienen de <B>FRED</B> (Fed de St. Louis), descargados por
+          Dentro de la pestaña Trading. Los datos vienen de <B>FRED</B> (Fed de St. Louis), descargados por
           GitHub Actions en cada publicación del sitio y dos veces cada día hábil (15:00 y 23:00 UTC),
           y guardados como <C>/macro.json</C>. FRED no se puede llamar desde Cloudflare ni desde el
           navegador.
@@ -1186,7 +1186,7 @@ export const SECCIONES: SeccionWiki[] = [
   {
     id: "agente",
     grupo: "Pestañas",
-    titulo: "Agente de trading",
+    titulo: "Trading: agente de trading",
     cuerpo: (
       <>
         <Flujo
@@ -1371,7 +1371,7 @@ export const SECCIONES: SeccionWiki[] = [
           que una regla etiqueta con comercio.
         </li>
         <li>
-          <B>Fuentes externas no oficiales:</B> si Yahoo o FRED cambian, solo la pestaña QQQ / TQQQ
+          <B>Fuentes externas no oficiales:</B> si Yahoo o FRED cambian, solo la pestaña Trading
           muestra un error; tus finanzas no se ven afectadas.
         </li>
       </Lista>
