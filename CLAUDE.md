@@ -888,6 +888,8 @@ licensed (ISM pulled its series from FRED in 2016) and no free keyless source wa
 cloud sandbox's network couldn't even reach ismworld.org to test a scraper; don't add one without
 checking terms and testing it from GitHub Actions.
 
+**"Agente de trading" tab (2026-10-11, user's request: "lo único que quiero conectar al dashboard financiero es la gráfica con el saldo que tenga el agente en su cuenta")**: the trading agent is a separate project in its own private repo, `romezamario/trading-agent` (simulation only, no broker); this dashboard ONLY charts its balance. `AgenteTradingTab.tsx` (lazy, personal edition only — `FuncionPersonal` `"agente"`) fetches `/api/agente-saldo`, a Pages Function (`functions/api/agente-saldo.ts`) that reads `output/balance.json` from that repo's `main` through the GitHub contents API with the env var `GITHUB_TOKEN_AGENTE` (fine-grained PAT, Contents read-only on that repo, set in Cloudflare Pages; in `npm run dev` it's read from `process.env`). No token → 503 with a Spanish message the tab shows. `balance.json` format: `{currency, source, strategy, initial_balance, current_balance, goal, updated_at, series: [{date, balance}]}` (written by the agent's `agent/export.py`). Summary math in `lib/agente.ts` (`resumirSaldo`, tested). Single series in `--series-1`, dashed reference at the initial balance. Doesn't touch Supabase. Checked in a browser harness with the real file (light, dark, 390 px) and the missing-token error.
+
 Per-tab view state (`filtros`, `categoriasOcultas`, `rangoMeses`, `vistaTiempo`) still lives in
 `Dashboard`'s `estadosPorPestana: Record<tabId, EstadoVista>`, passed to each view as controlled
 props, so filtering in one tab never touches another and a tab keeps its selection when you switch

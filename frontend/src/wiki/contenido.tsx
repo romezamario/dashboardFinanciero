@@ -1183,6 +1183,42 @@ export const SECCIONES: SeccionWiki[] = [
     ),
   },
 
+  {
+    id: "agente",
+    grupo: "Pestañas",
+    titulo: "Agente de trading",
+    cuerpo: (
+      <>
+        <Flujo
+          titulo="Cómo llega el saldo del agente"
+          pasos={[
+            { lugar: "externo", titulo: "Repo trading-agent", detalle: "output/balance.json en main", luego: "API de GitHub con token" },
+            { lugar: "nube", titulo: "/api/agente-saldo", detalle: "Función de Cloudflare, caché 5 min", luego: "al abrir la pestaña" },
+            { lugar: "navegador", titulo: "Recuadros y gráfica", detalle: "Saldo por día en MXN" },
+          ]}
+        />
+        <P>
+          El agente de trading es un proyecto aparte (<C>romezamario/trading-agent</C>) que opera con
+          dinero <B>simulado</B>: no hay broker conectado. Este tablero solo grafica su saldo; no lo
+          calcula ni lo guarda en Supabase.
+        </P>
+        <Lista>
+          <li>
+            <C>/api/agente-saldo</C> lee <C>output/balance.json</C> de la rama main con la variable{" "}
+            <C>GITHUB_TOKEN_AGENTE</C> (token de GitHub de solo lectura, configurado en Cloudflare
+            Pages). Sin ella, o si el archivo no existe, la pestaña muestra el motivo.
+          </li>
+          <li>
+            Recuadros: saldo actual, cambio contra el saldo inicial, peor caída desde un máximo previo y
+            avance hacia la meta (saldo actual ÷ meta).
+          </li>
+          <li>La línea punteada marca el saldo inicial.</li>
+          <li>Solo en la edición personal.</li>
+        </Lista>
+      </>
+    ),
+  },
+
   // ------------------------------------------------------------ operación
   {
     id: "edicion",

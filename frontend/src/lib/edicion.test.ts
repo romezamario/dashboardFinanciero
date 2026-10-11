@@ -13,12 +13,14 @@ describe("edicion", () => {
     expect(incluyeFuncion("personal", "tecnico")).toBe(true);
     expect(incluyeFuncion("personal", "shophunters")).toBe(true);
     expect(incluyeFuncion("personal", "wiki")).toBe(true);
+    expect(incluyeFuncion("personal", "agente")).toBe(true);
   });
 
   it("el producto no incluye QQQ/Macro, Shophunters ni la Wiki", () => {
     expect(incluyeFuncion("producto", "tecnico")).toBe(false);
     expect(incluyeFuncion("producto", "shophunters")).toBe(false);
     expect(incluyeFuncion("producto", "wiki")).toBe(false);
+    expect(incluyeFuncion("producto", "agente")).toBe(false);
   });
 
   it("nombre de la app por edición", () => {

@@ -395,6 +395,13 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
   doble techo/piso— con las reglas que cumple cada uno, RSI, MACD, comparación QQQ vs. TQQQ) y un tablero de indicadores macro de EE. UU. (Fed, inflación, empleo, tasas,
   VIX) con las fechas de los próximos datos. No usa tus finanzas; solo vive aquí para tener todo
   junto.
+- **Agente de trading** — el saldo de la cuenta simulada (sin dinero real) del agente de trading,
+  que vive en su propio repo (`romezamario/trading-agent`): saldo actual, cambio contra los 10,000
+  MXN iniciales, peor caída, avance a la meta de 100 M y la gráfica del saldo por día. Lo lee
+  `/api/agente-saldo` (función de Cloudflare) del archivo `output/balance.json` de ese repo. Como
+  el repo es privado, necesita la variable `GITHUB_TOKEN_AGENTE` en Cloudflare Pages (Settings →
+  Variables and Secrets, producción): un token *fine-grained* de GitHub con acceso solo a
+  `trading-agent` y permiso **Contents: Read-only**. Sin ella la pestaña dice que falta configurarla.
 
 - **Wiki** — cómo está hecho el tablero: arquitectura, de dónde sale cada dato, seguridad, modelo
   de datos, cómo se calcula cada indicador y alerta, qué hace cada pestaña, umbrales, limitaciones
@@ -492,7 +499,7 @@ Esto se configura fuera del código, en el dashboard de Cloudflare Zero Trust:
 El mismo código se despliega dos veces: tu dashboard personal (todo lo de arriba, sin cambios) y
 **FinanzasPersonales**, la versión para clientes, en **otro** proyecto de Supabase y de Cloudflare
 Pages, sin Cloudflare Access. La edición se elige al compilar con `VITE_EDICION=producto`, que quita
-QQQ/TQQQ + Macro, Shophunters y la Wiki. Los workflows `deploy-producto.yml` y el job
+QQQ/TQQQ + Macro, Shophunters, la Wiki y el agente de trading. Los workflows `deploy-producto.yml` y el job
 `migrate-producto` de `db-migrate.yml` no hacen nada (solo dejan un aviso) hasta que existan estos
 pasos, que son manuales y se hacen una vez:
 
