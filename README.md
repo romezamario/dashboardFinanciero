@@ -378,7 +378,7 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
   «Heredar eventos» o desde la tarjeta del movimiento; nunca pisa un evento ya asignado). En la
   vista por estado de cuenta también puedes marcar varios movimientos del día y asignarles (o
   quitarles) un evento de una vez, con el bloque «Asignar evento» al final de las tablas.
-  - **Meta de gasto diario ($1,000)**: arriba del calendario, el promedio por día del mes, y debajo
+  - **Meta de gasto diario (por defecto $1,000; se cambia con «Cambiar» y se queda guardada)**: arriba del calendario, el promedio por día del mes, y debajo
     de cada semana (domingo a sábado) el de esa semana, con una barra contra la meta y cuánto
     quedaste por debajo o por encima. Solo cuentan los días que ya están cargados (hasta hoy en
     "por correo"; hasta el último movimiento en "por estado de cuenta").

@@ -8,13 +8,14 @@ import {
 } from "../lib/gastosCorreo";
 import { formatoMoneda, type VistaCalendario } from "../lib/gastosUI";
 import {
-  META_GASTO_DIARIO,
   diasDelMes,
   resumenDeMes,
   resumenDeSemana,
   type ResumenPromedio,
 } from "../lib/metaDiaria";
 import { monedaCompacta as formatoCompacto } from "../lib/formato";
+import { useMetaDiaria } from "../hooks/metaDiariaContexto";
+import { MetaEditable } from "./MetaDiaria";
 
 // Para las celdas del calendario en pantallas angostas, donde no cabe el monto completo.
 
@@ -181,10 +182,12 @@ export function CalendarioMensual({
       {extremos && (
         <LeyendaCalor minimo={extremos.minimo} maximo={extremos.maximo} etiqueta={etiquetaTotal} />
       )}
-      <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
-        Meta: {formatoMoneda.format(META_GASTO_DIARIO)} de gasto al día. Abajo, el promedio diario del
-        mes y, debajo de cada semana (domingo a sábado), el de esa semana.
-      </p>
+      <div className="space-y-1">
+        <MetaEditable />
+        <p className="text-[11px]" style={{ color: "var(--text-muted)" }}>
+          Abajo, el promedio diario del mes y, debajo de cada semana (domingo a sábado), el de esa semana.
+        </p>
+      </div>
       <FranjaPromedio
         etiqueta={tituloMes(mes)}
         diasCompletos={diasDelMes(mes).length}
@@ -254,7 +257,7 @@ const diaCorto = (fecha: string) => formatoDiaCorto.format(new Date(`${fecha}T12
 
 /**
  * Promedio de gasto diario de una semana -- o del mes completo (`mes`) -- frente
- * a la meta (`META_GASTO_DIARIO`): una barra que se llena hasta el 100% de la
+ * a la meta (`meta`, la del usuario): una barra que se llena hasta el 100% de la
  * meta -- con una marca en la meta y desbordándose en rojo si se pasa -- y el
  * texto con el monto y la diferencia (nunca solo color). Un periodo a medias
  * (la semana o el mes en curso, o lo que sigue al último estado de cuenta)
@@ -273,8 +276,11 @@ function FranjaPromedio({
   etiqueta?: string;
   mes?: boolean;
 }) {
-  if (!resumen) return null;
-  const meta = META_GASTO_DIARIO * 100; // centavos
+  const { meta: metaPesos, cargada } = useMetaDiaria();
+  // Hasta leer la meta guardada no se pinta nada contra la de por defecto (se vería un
+  // verde/rojo equivocado un instante).
+  if (!resumen || !cargada) return null;
+  const meta = metaPesos * 100; // centavos
   const sobre = resumen.promedio > meta;
   const diferencia = Math.abs(resumen.promedio - meta);
   const color = sobre ? "var(--status-critical)" : "var(--status-good)";
@@ -296,7 +302,7 @@ function FranjaPromedio({
       role="group"
       aria-label={`${mes ? `Mes de ${nombre}` : `Semana del ${rango}`}: promedio diario ${formatoMoneda.format(
         resumen.promedio / 100
-      )}, ${sobre ? "sobre" : "dentro de"} la meta de ${formatoMoneda.format(META_GASTO_DIARIO)}`}
+      )}, ${sobre ? "sobre" : "dentro de"} la meta de ${formatoMoneda.format(metaPesos)}`}
     >
       <span className={mes ? "font-semibold" : undefined} style={{ color: "var(--text-secondary)" }}>
         {nombre}

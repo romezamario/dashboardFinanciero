@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { diasDeLaSemana, diasDelMes, resumenDeMes, resumenDeSemana } from "./metaDiaria";
+import { diasDeLaSemana, diasDelMes, META_MAXIMA, parsearMeta, resumenDeMes, resumenDeSemana } from "./metaDiaria";
 
 describe("diasDeLaSemana", () => {
   it("de domingo a sábado, también cruzando mes y año", () => {
@@ -80,5 +80,22 @@ describe("resumenDeMes", () => {
   it("un mes fuera del rango devuelve null", () => {
     expect(resumenDeMes("2026-08", totales, "2026-09-01", "2026-10-31")).toBeNull();
     expect(resumenDeMes("2026-11", totales, "2026-09-01", "2026-10-31")).toBeNull();
+  });
+});
+
+describe("parsearMeta", () => {
+  it("acepta pesos con $, comas y espacios, y redondea a centavos", () => {
+    expect(parsearMeta("1500")).toBe(1500);
+    expect(parsearMeta("$1,500")).toBe(1500);
+    expect(parsearMeta(" 1 200.505 ")).toBe(1200.51);
+    expect(parsearMeta("750.5")).toBe(750.5);
+  });
+
+  it("rechaza vacío, cero, negativos, texto y más del tope", () => {
+    for (const malo of ["", "0", "0.00", "-100", "abc", "12abc", "1.2.3", "1e3"]) {
+      expect(parsearMeta(malo)).toBeNull();
+    }
+    expect(parsearMeta(String(META_MAXIMA))).toBe(META_MAXIMA);
+    expect(parsearMeta(String(META_MAXIMA + 1))).toBeNull();
   });
 });

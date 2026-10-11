@@ -1,8 +1,22 @@
 // Meta de gasto diario y promedio por semana del calendario de "Gastos
 // recientes" (vista por correo y por estado de cuenta).
 
-/** Meta del usuario: gastar en promedio $1,000 al día (en pesos). */
+/** Meta de gasto diario POR DEFECTO (en pesos). El usuario puede cambiarla en la pantalla
+ * y se guarda en Supabase (`preferencias`, ver `ProveedorMetaDiaria`); esta es la de antes
+ * de que la cambie y a la que "Restablecer" vuelve. */
 export const META_GASTO_DIARIO = 1000;
+
+/** Tope de la meta que se acepta (evita un cero de más al teclear). */
+export const META_MAXIMA = 1_000_000;
+
+/** Lee la meta que escribió el usuario ("1,500", "$1 200.50"): pesos con hasta 2 decimales,
+ * mayor a 0 y no más de `META_MAXIMA`; null si no es válida. */
+export function parsearMeta(texto: string): number | null {
+  const limpio = texto.replace(/[\s$,]/g, "");
+  if (!/^\d+(\.\d+)?$/.test(limpio)) return null;
+  const pesos = Math.round(Number(limpio) * 100) / 100;
+  return pesos > 0 && pesos <= META_MAXIMA ? pesos : null;
+}
 
 
 const DIA_MS = 86_400_000;

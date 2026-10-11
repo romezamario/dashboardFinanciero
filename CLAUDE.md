@@ -313,8 +313,7 @@ loaded movement date** for "Por estado de cuenta" (statements arrive weeks late)
 shown in the cell (so for statements: TDC cargos of non-hidden categories only, Priority/abonos excluded). **The same strip also shows the whole
 month's average** (2026-10-08, user's request; blue border, above the weekday header, for the month on screen, "(N días de M)"
 while the month is still partial; `resumenDeMes`/`resumenDeDias`) — it counts the month's days within the same
-first-day..`fechaCorte` range, so a month spanning the cutoff averages only its known days. The goal is a
-constant (no UI to change it). Covered by `lib/metaDiaria.test.ts` (Vitest: week boundaries, partial weeks, first week, no countable days)
+first-day..`fechaCorte` range, so a month spanning the cutoff averages only its known days. The goal **is editable and saved (2026-10-11, user's request)**: "Meta: $X de gasto al día · Cambiar" above the strips (`MetaEditable`, shared by both sources through `ProveedorMetaDiaria`/`useMetaDiaria` — context in `hooks/metaDiariaContexto.ts`, loaded once when the tab opens) writes the row `meta_gasto_diario` of the new `preferencias` table (`user_id`, `clave`, `valor jsonb`, RLS own-rows, migration `20261011120000_preferencias.sql`, grants for `authenticated`/`service_role` per the 2026-10-30 rule; `lib/preferencias.ts`), so it survives sessions and is the same on phone and laptop. `META_GASTO_DIARIO` = $1,000 is now only the default (and what "Restablecer" returns to); `parsearMeta` accepts "$1,500"/"1 200.50", >0 and ≤ `META_MAXIMA` (tested). Until the saved goal is read the strips aren't drawn (a flash of the wrong green/red); if reading fails the default is used and a red note says so; a failed save keeps the old goal and shows the error. Not driven in a browser (needs the real session). The goal is not a per-source setting. Covered by `lib/metaDiaria.test.ts` (Vitest: week boundaries, partial weeks, first week, no countable days)
 and checked in the browser with synthetic data (cutoff per source, over/under).
 
 **Main window layout (2026-10-04, user's request to improve look & usability)**: `_construir_ui`
@@ -1290,7 +1289,7 @@ in one place (change the constant, not a copy of it):
 | `MESES_PERIODO_POR_DEFECTO` (indicadores.ts) | 3 | default period = last 3 complete months |
 | `PATRON_EXCLUIDA_POR_DEFECTO` (indicadores.ts) | `pago tdc\|entre cuentas\|traspaso` | categories hidden by default |
 | `PATRON_SHOPHUNTERS` (shophunters.ts) | `/shophunters/i` | event names that feed the Shophunters tab |
-| `META_GASTO_DIARIO` (metaDiaria.ts) | 1000 | daily-spend goal in the calendar strips |
+| `META_GASTO_DIARIO` (metaDiaria.ts) | 1000 | DEFAULT daily-spend goal in the calendar strips (user-editable, saved in `preferencias`) |
 | `TOLERANCIA_DIAS` (conciliarCorreo.ts) | 1 | statement↔correo match window (amount must be exact) |
 | `TOPE_SANKEY_INGRESOS` / `TOPE_SANKEY_GASTOS` (indicadores.ts) | 5 / 8 | Sankey nodes before folding |
 | `TOLERANCIA_MONTO_FIJO` (alertas.ts) | 2% | two charges count as "the same price" |

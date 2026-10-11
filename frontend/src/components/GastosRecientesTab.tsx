@@ -4,6 +4,7 @@ import { asignarEventoAGastosCorreo, eventoDe, type Catalogos } from "../lib/que
 import type { Transaccion } from "../lib/types";
 import { GastosCorreoTab } from "./GastosCorreoTab";
 import { GastosEstadoCuentaTab } from "./GastosEstadoCuentaTab";
+import { ProveedorMetaDiaria } from "./MetaDiaria";
 import { VISTA_CALENDARIO_INICIAL, type VistaCalendario } from "../lib/gastosUI";
 import { Segmentado } from "./Segmentado";
 
@@ -68,6 +69,7 @@ export function GastosRecientesTab(props: GastosRecientesTabProps) {
     );
   }
   return (
+    <ProveedorMetaDiaria>
     <div className="space-y-6">
       <Segmentado
         opciones={[
@@ -96,5 +98,6 @@ export function GastosRecientesTab(props: GastosRecientesTabProps) {
         />
       )}
     </div>
+    </ProveedorMetaDiaria>
   );
 }
