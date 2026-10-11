@@ -76,8 +76,10 @@ unconfirmed login + resend, reset, recovery link → new password → dashboard,
 390 px, dark); not yet against the real customer project. Not done: Google sign-in, CAPTCHA (Turnstile),
 custom SMTP (Supabase's built-in sender is rate-limited — a dashboard setting).
 **Landing page (2026-10-11, user's request)**: in the producto edition only, `App` shows `Landing.tsx` while
-there's no session (personal still goes straight to `Login`); `#entrar` switches to `Login` (with "← Volver al
-inicio" and a "beta cerrada" note until signup exists), so the browser's Back returns. Plans/prices shown come
+there's no session (personal still goes straight to `Login`); `#entrar` keeps the landing and opens `Login`
+(`producto` prop → `PantallaCuenta flotante`) as a popover under the header's "Entrar" button (`VentanaEntrar`:
+closes with Esc, ×, a click outside or clicking "Entrar" again, returning focus to it; no backdrop) — user's
+request 2026-10-11, instead of a separate page; Back still works since it's the hash. Plans/prices shown come
 from `lib/planes.ts` (tested; annual shown first by default, display only — the DB will decide the real plan).
 Don't promise Gmail reading there (phase 2). The dashboard mock in the hero is HTML with fake numbers.
 

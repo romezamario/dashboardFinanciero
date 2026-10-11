@@ -15,11 +15,27 @@ export function PantallaCuenta({
   subtitulo,
   onEnviar,
   children,
+  flotante = false,
 }: {
   subtitulo: string;
   onEnviar?: (e: React.FormEvent) => void;
   children: ReactNode;
+  /** Solo el formulario, sin la pantalla completa: lo envuelve la ventana
+   * flotante de la landing page (ver VentanaEntrar en Landing.tsx). */
+  flotante?: boolean;
 }) {
+  if (flotante)
+    return (
+      <form onSubmit={onEnviar ?? ((e) => e.preventDefault())}>
+        <h2 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
+          Entrar a {NOMBRE_APP}
+        </h2>
+        <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+          {subtitulo}
+        </p>
+        {children}
+      </form>
+    );
   return (
     <div
       className="flex min-h-screen items-center justify-center px-4 py-8"
@@ -46,6 +62,7 @@ export function Campo({
   autoComplete,
   requerido = true,
   ayuda,
+  autoFocus,
 }: {
   etiqueta: string;
   tipo?: "text" | "email" | "password";
@@ -54,6 +71,7 @@ export function Campo({
   autoComplete?: string;
   requerido?: boolean;
   ayuda?: string;
+  autoFocus?: boolean;
 }) {
   const idAyuda = useId();
   return (
@@ -65,6 +83,7 @@ export function Campo({
           required={requerido}
           value={valor}
           autoComplete={autoComplete}
+          autoFocus={autoFocus}
           aria-describedby={ayuda ? idAyuda : undefined}
           onChange={(e) => onCambiar(e.target.value)}
           className="mt-1 w-full rounded-md px-3 py-2 text-sm"
