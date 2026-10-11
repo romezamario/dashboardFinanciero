@@ -525,13 +525,23 @@ pasos, que son manuales y se hacen una vez:
    (`workflow_dispatch`); después se actualizan solos con cada push a `main`.
 
 Sin sesión, FinanzasPersonales abre en su **página de inicio** (qué hace, privacidad, planes Gratis /
-Básico / Pro con el anual primero y preguntas frecuentes); "Entrar" o cualquier botón de plan lleva al
-inicio de sesión (`#entrar`). Mientras no exista el registro (fase 1), la pantalla de inicio de sesión
-avisa que el acceso es por beta cerrada. Tu edición personal sigue entrando directo al inicio de sesión.
+Básico / Pro con el anual primero y preguntas frecuentes); "Entrar" lleva al inicio de sesión (`#entrar`)
+y "Empieza gratis" o cualquier botón de plan, al registro (`#registro`). Tu edición personal sigue entrando
+directo al inicio de sesión.
 
-Hasta la fase 1 no hay registro de usuarios: para probar, crea usuarios a mano en
-**Authentication → Users** del proyecto nuevo. La app de escritorio sigue sincronizando solo con tu
-instancia personal.
+**Cuentas de clientes (fase 1)**: registro con verificación por correo, recuperar contraseña, términos y
+aviso de privacidad (`#terminos`, `#privacidad`, borradores sin revisión legal: completa los datos entre
+corchetes en `frontend/src/components/Legal.tsx`) y **Mi cuenta** (nombre, contraseña, exportar los
+movimientos a CSV y borrar la cuenta con todos sus datos). Configuración única en el Supabase de clientes:
+
+1. **Authentication → URL Configuration**: *Site URL* = `https://finanzaspersonales-2t6.pages.dev` y en
+   *Redirect URLs* agrega `https://finanzaspersonales-2t6.pages.dev/**`. Sin esto, los enlaces de los
+   correos (confirmar cuenta, recuperar contraseña) apuntan a `localhost`.
+2. **Authentication → Sign In / Providers → Email**: deja activado *Confirm email*.
+3. Antes de abrir el registro a más gente, un SMTP propio (**Authentication → Emails → SMTP Settings**, p. ej.
+   Resend): el remitente incluido de Supabase solo manda unos pocos correos por hora.
+
+La app de escritorio sigue sincronizando solo con tu instancia personal.
 
 **Aislamiento entre usuarios**: `supabase/tests/correr.sh` aplica todas las migraciones a un Postgres
 desechable y prueba que un usuario no puede ver, cambiar, borrar ni referenciar filas de otro, y que

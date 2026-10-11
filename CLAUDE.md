@@ -50,6 +50,31 @@ builds that edition (without `functions/`) to the Pages project `finanzaspersona
 `db-migrate.yml`'s `migrate-producto` job applies the migrations there; both skip with a notice until
 the `PRODUCTO_*` secrets exist (README, "Instancia de clientes"). The plan doc (tiers MXN 0/29/59,
 Mercado Pago, phases) lives outside the repo; the desktop app keeps syncing only the personal instance.
+
+**Accounts, phase 1 (2026-10-11, user's "arranca la fase 1")** — producto edition only; the personal one
+still goes straight to the plain `Login`. No router: the URL hash picks the public screen
+(`rutaDeHash` in `lib/cuentaUsuario.ts`: `#entrar`, `#registro`, `#recuperar`, `#terminos`, `#privacidad`;
+anything else, incl. the landing's `#precios` anchors and Supabase's token hashes, is the landing).
+`Registro.tsx` → `supabase.auth.signUp` with `options.data = {nombre, terminos_version}` and
+`emailRedirectTo = origin`; email confirmation is required (Supabase's "Confirm email"), so there is no
+session at sign-up and the profile is written by the trigger `crear_perfil_de_usuario` on `auth.users`
+(migration `20261011220000_perfiles_y_borrar_cuenta.sql`, table `perfiles`: nombre, terminos_version,
+terminos_aceptados_en). Password reset: `RecuperarContrasena` → `resetPasswordForEmail(redirectTo:
+origin)`; Supabase comes back with `#…type=recovery`, which `lib/supabase.ts` reads into `ENLACE_INICIAL`
+**before** `createClient` (the client strips the hash and its PASSWORD_RECOVERY event can fire before React
+subscribes) → `NuevaContrasena`. An expired link (`#error_code=otp_expired`) opens `#entrar` with a
+message. Auth errors are translated by `traducirErrorAuth`; "Email not confirmed" offers "Reenviar".
+**Mi cuenta** (`MiCuenta.tsx`, header button, rendered before the "no transactions" check so a new
+customer sees it): name, accepted terms version, plan (beta text until phase 3), change password,
+"Exportar mis datos" (CSV of all transactions, `lib/exportarDatos.ts`: BOM + CRLF, formula-injection
+guard) and "Borrar mi cuenta" (type BORRAR → RPC `borrar_mi_cuenta()`, security definer, deletes only
+`auth.uid()` from `auth.users`; everything cascades; anon can't execute it; then local sign-out).
+`Legal.tsx` holds the terms and privacy notice — a **draft without legal review**, with `[bracketed]`
+placeholders (responsible party, address, contact email) the owner must fill; bump `VERSION_TERMINOS`
+when the text changes. Checked in a Playwright harness with mocked Supabase endpoints (sign-up payload,
+unconfirmed login + resend, reset, recovery link → new password → dashboard, Mi cuenta save/delete,
+390 px, dark); not yet against the real customer project. Not done: Google sign-in, CAPTCHA (Turnstile),
+custom SMTP (Supabase's built-in sender is rate-limited — a dashboard setting).
 **Landing page (2026-10-11, user's request)**: in the producto edition only, `App` shows `Landing.tsx` while
 there's no session (personal still goes straight to `Login`); `#entrar` switches to `Login` (with "← Volver al
 inicio" and a "beta cerrada" note until signup exists), so the browser's Back returns. Plans/prices shown come
@@ -1045,7 +1070,7 @@ the GitHub Actions UI. It runs `supabase link` + `supabase db push` using three 
 `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_ID`, `SUPABASE_DB_PASSWORD`.
 
 Tables: `bancos` (shared catalog, no `user_id`) and `cuentas`/`categorias`/`documentos`/
-`transacciones`/`eventos`/`gastos_correo`/`preferencias` (all RLS-scoped to the row's `user_id`, four
+`transacciones`/`eventos`/`gastos_correo`/`preferencias`/`perfiles` (all RLS-scoped to the row's `user_id`, four
 policies each — select/insert/update/delete; `gastos_correo` is described under the Gmail tab above;
 `preferencias` holds per-user settings, one row per `(user_id, clave)` with a `valor jsonb`, e.g. the
 daily-spend goal under `meta_gasto_diario`). `eventos` (added in `20260922010000_add_eventos.sql`) is a per-user
@@ -1199,7 +1224,8 @@ commits:
 - `ci.yml` job `rls` (2026-10-11): a `postgres:16` service, `supabase/tests/correr.sh` applies
   `stub_supabase.sql` (roles, `auth.users`, `auth.uid()` from `request.jwt.claim.sub`) + every
   migration, then `aislamiento.sql`: two users can't see/update/delete/reference each other's rows,
-  anon sees nothing, deleting a user cascades. Also triggers on `supabase/**`.
+  anon sees nothing, deleting a user cascades; sign-up creates the `perfiles` row from its metadata,
+  `borrar_mi_cuenta()` deletes only the caller and anon can't call it. Also triggers on `supabase/**`.
 - `.github/workflows/db-migrate.yml` — triggers on `supabase/migrations/**`. Applies pending Supabase migrations
   to the personal project and (job `migrate-producto`, skipped without its secrets) to FinanzasPersonales'.
 - `.github/workflows/deploy-producto.yml` (2026-10-11) — same trigger as `deploy.yml`; builds with
@@ -1299,7 +1325,8 @@ ladoDominante, gasto hormiga), `alertas` (duplicates, $0 echo lines, price chang
 and several-charges-a-month cases, new subscription), `gastosEstadoCuenta` (only TDC cargos of
 non-hidden categories add up; sinSumar reasons; day order; esTarjetaCredito), `tecnico`
 (SMA, RSI edges), `conciliarCorreo` (one-to-one matching, eventosHeredables, filaAGastoCorreo),
-`metaDiaria` (week/month averages vs. the goal), `promedios` (averages from the first month with
+`metaDiaria` (week/month averages vs. the goal), `cuentaUsuario` (hash routes, auth links, error
+translation, password rules), `exportarDatos` (CSV escaping), `promedios` (averages from the first month with
 spending), `shophunters` and `patrones/*` (levels and chart patterns on synthetic series from
 `src/test/series.ts`). `npx tsc -b` and `npm run lint` are the other checks; CI runs all three.
 

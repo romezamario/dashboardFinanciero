@@ -1,111 +1,85 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabase";
-import { NOMBRE_APP } from "../lib/edicion";
+import { traducirErrorAuth } from "../lib/cuentaUsuario";
+import { Aviso, BotonEnviar, Campo, EnlaceCuenta, PantallaCuenta } from "./FormularioCuenta";
 
-/** `onVolver`: solo en FinanzasPersonales, regresa a la landing page. */
-export function Login({ onVolver }: { onVolver?: () => void } = {}) {
+/** `onVolver`: solo en FinanzasPersonales (regresa a la landing page), junto
+ * con los enlaces de registro y recuperación. `mensajeInicial`: p. ej. que el
+ * enlace del correo ya venció. */
+export function Login({ onVolver, mensajeInicial }: { onVolver?: () => void; mensajeInicial?: string | null } = {}) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(mensajeInicial ?? null);
+  const [sinConfirmar, setSinConfirmar] = useState(false);
+  const [reenviado, setReenviado] = useState(false);
   const [cargando, setCargando] = useState(false);
+  const producto = Boolean(onVolver);
 
   async function iniciarSesion(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setReenviado(false);
     setCargando(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setCargando(false);
-    if (error) setError(error.message);
+    if (error) {
+      setError(producto ? traducirErrorAuth(error.message) : error.message);
+      setSinConfirmar(/email not confirmed/i.test(error.message));
+    }
+  }
+
+  async function reenviarConfirmacion() {
+    setCargando(true);
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: window.location.origin },
+    });
+    setCargando(false);
+    if (error) setError(traducirErrorAuth(error.message));
+    else {
+      setError(null);
+      setReenviado(true);
+    }
   }
 
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ background: "var(--page-plane)" }}
-    >
-      <form
-        onSubmit={iniciarSesion}
-        className="w-full max-w-sm rounded-lg p-6 tarjeta"
-      >
-        <h1
-          className="text-lg font-semibold"
-          style={{ color: "var(--text-primary)" }}
-        >
-          {NOMBRE_APP}
-        </h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-          Inicia sesión para ver tus transacciones.
+    <PantallaCuenta subtitulo="Inicia sesión para ver tus transacciones." onEnviar={iniciarSesion}>
+      <Campo etiqueta="Correo" tipo="email" valor={email} onCambiar={setEmail} autoComplete="email" />
+      <Campo
+        etiqueta="Contraseña"
+        tipo="password"
+        valor={password}
+        onCambiar={setPassword}
+        autoComplete="current-password"
+      />
+
+      {error && <Aviso tipo="error">{error}</Aviso>}
+      {sinConfirmar && !reenviado && (
+        <p className="mt-2">
+          <EnlaceCuenta onClick={reenviarConfirmacion}>Reenviar el correo de confirmación</EnlaceCuenta>
         </p>
+      )}
+      {reenviado && <Aviso tipo="exito">Listo: te mandamos otro correo a {email}.</Aviso>}
 
-        <label
-          className="mt-4 block text-sm"
-          style={{ color: "var(--text-secondary)" }}
-        >
-          Correo
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 w-full rounded-md px-3 py-2 text-sm"
-            style={{
-              background: "var(--page-plane)",
-              border: "1px solid var(--border)",
-              color: "var(--text-primary)",
-            }}
-          />
-        </label>
+      <BotonEnviar cargando={cargando} texto="Entrar" textoCargando="Entrando..." />
 
-        <label
-          className="mt-3 block text-sm"
-          style={{ color: "var(--text-secondary)" }}
-        >
-          Contraseña
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 w-full rounded-md px-3 py-2 text-sm"
-            style={{
-              background: "var(--page-plane)",
-              border: "1px solid var(--border)",
-              color: "var(--text-primary)",
-            }}
-          />
-        </label>
-
-        {error && (
-          <p className="mt-3 text-sm" style={{ color: "var(--status-critical)" }}>
-            {error}
-          </p>
-        )}
-
-        <button
-          type="submit"
-          disabled={cargando}
-          className="mt-4 w-full rounded-md py-2 text-sm font-medium text-white disabled:opacity-60"
-          style={{ background: "var(--series-1)" }}
-        >
-          {cargando ? "Entrando..." : "Entrar"}
-        </button>
-
-        {onVolver && (
-          <>
-            <p className="mt-4 text-xs" style={{ color: "var(--text-muted)" }}>
-              ¿Aún no tienes cuenta? Estamos en beta cerrada; el registro abre pronto.
-            </p>
-            <button
-              type="button"
-              onClick={onVolver}
-              className="mt-3 text-sm"
-              style={{ color: "var(--text-secondary)" }}
-            >
-              ← Volver al inicio
-            </button>
-          </>
-        )}
-      </form>
-    </div>
+      {producto && (
+        <>
+          <div className="mt-4 flex flex-wrap justify-between gap-2">
+            <EnlaceCuenta href="#recuperar">¿Olvidaste tu contraseña?</EnlaceCuenta>
+            <EnlaceCuenta href="#registro">Crear cuenta</EnlaceCuenta>
+          </div>
+          <button
+            type="button"
+            onClick={onVolver}
+            className="mt-4 text-sm"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            ← Volver al inicio
+          </button>
+        </>
+      )}
+    </PantallaCuenta>
   );
 }

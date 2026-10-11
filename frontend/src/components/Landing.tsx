@@ -4,7 +4,8 @@ import { NOMBRE_APP } from "../lib/edicion";
 
 // Página de inicio pública de FinanzasPersonales (solo en la edición
 // "producto"; la personal sigue entrando directo al Login). Sin enrutador:
-// App la muestra mientras no hay sesión y `onEntrar` cambia al Login.
+// App la muestra mientras no hay sesión; "Entrar" va al Login y los botones
+// de empezar, al registro.
 
 interface Props {
   onEntrar: () => void;
@@ -57,18 +58,18 @@ const PREGUNTAS = [
   },
 ];
 
-export function Landing({ onEntrar }: Props) {
+export function Landing({ onEntrar, onRegistrarse }: Props & { onRegistrarse: () => void }) {
   return (
     <div className="min-h-screen" style={{ background: "var(--page-plane)", color: "var(--text-primary)" }}>
       <Encabezado onEntrar={onEntrar} />
       <main>
-        <Portada onEntrar={onEntrar} />
+        <Portada onEntrar={onRegistrarse} />
         <ComoFunciona />
         <Funciones />
         <Privacidad />
-        <Precios onEntrar={onEntrar} />
+        <Precios onEntrar={onRegistrarse} />
         <Preguntas />
-        <LlamadoFinal onEntrar={onEntrar} />
+        <LlamadoFinal onEntrar={onRegistrarse} />
       </main>
       <Pie />
     </div>
@@ -486,6 +487,10 @@ function Pie() {
     <footer style={{ borderTop: "1px solid var(--border)" }}>
       <Contenedor className="flex flex-col gap-2 py-8 text-sm sm:flex-row sm:items-center sm:justify-between">
         <Logo />
+        <nav className="flex gap-4" style={{ color: "var(--text-secondary)" }}>
+          <a href="#terminos">Términos</a>
+          <a href="#privacidad">Aviso de privacidad</a>
+        </nav>
         <p style={{ color: "var(--text-muted)" }}>© {new Date().getFullYear()} {NOMBRE_APP} · Hecho en México</p>
       </Contenedor>
     </footer>
