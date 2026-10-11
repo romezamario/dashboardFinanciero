@@ -501,10 +501,10 @@ Esto se configura fuera del código, en el dashboard de Cloudflare Zero Trust:
 4. Guarda. A partir de ahí, cualquier visita al sitio pide login de Cloudflare Access antes de llegar
    siquiera a la pantalla de login de Supabase Auth.
 
-## Instancia de clientes: FinanzasPersonales (fase 0 del plan de suscripciones)
+## Instancia de clientes: Ordena tu Lana (fase 0 del plan de suscripciones)
 
 El mismo código se despliega dos veces: tu dashboard personal (todo lo de arriba, sin cambios) y
-**FinanzasPersonales**, la versión para clientes, en **otro** proyecto de Supabase y de Cloudflare
+**Ordena tu Lana** (ordenatulana.com; antes "FinanzasPersonales"), la versión para clientes, en **otro** proyecto de Supabase y de Cloudflare
 Pages, sin Cloudflare Access. La edición se elige al compilar con `VITE_EDICION=producto`, que quita
 QQQ/TQQQ + Macro, Shophunters, la Wiki y el agente de trading. Los workflows `deploy-producto.yml` y el job
 `migrate-producto` de `db-migrate.yml` no hacen nada (solo dejan un aviso) hasta que existan estos
@@ -512,10 +512,12 @@ pasos, que son manuales y se hacen una vez:
 
 1. **Supabase**: crea un proyecto nuevo (tier free mientras no haya clientes que paguen), por ejemplo
    `finanzaspersonales`. Anota su *Project ref*, la contraseña de la base, la URL y la `anon key`.
-2. **Cloudflare Pages**: crea el proyecto una vez (el nombre `finanzaspersonales` ya estaba tomado como
-   subdominio, así que Cloudflare le dio `finanzaspersonales-2t6.pages.dev`):
-   `npx wrangler pages project create finanzaspersonales --production-branch=main`
-   (con `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` en el entorno). **No** le pongas Cloudflare Access.
+2. **Cloudflare Pages**: el workflow crea solo el proyecto `ordenatulana` en el primer deploy (el paso
+   "Crear proyecto de Pages" falla con "ya existe" en los siguientes y se ignora). **No** le pongas
+   Cloudflare Access. Dominio: en *Workers & Pages → ordenatulana → Custom domains* agrega
+   `ordenatulana.com` y `www.ordenatulana.com` (el dominio está en Cloudflare, los DNS se crean solos).
+   El proyecto anterior, `finanzaspersonales` (`finanzaspersonales-2t6.pages.dev`), se reemplazó por este
+   el 2026-10-11 junto con el cambio de marca.
 3. **GitHub Secrets** (los de Cloudflare y `SUPABASE_ACCESS_TOKEN` se reusan):
 
 | Secret | Valor |
@@ -526,10 +528,10 @@ pasos, que son manuales y se hacen una vez:
 | `PRODUCTO_VITE_SUPABASE_ANON_KEY` | Su `anon key` (nunca el `service_role`) |
 | `PRODUCTO_SUPABASE_ACCESS_TOKEN` | Opcional: *access token* de la cuenta/organización dueña del proyecto nuevo, si `SUPABASE_ACCESS_TOKEN` no tiene acceso a él ("does not have the necessary privileges") |
 
-4. Corre a mano **Migrar base de datos** y **Deploy FinanzasPersonales** desde la pestaña Actions
+4. Corre a mano **Migrar base de datos** y **Deploy Ordena tu Lana** desde la pestaña Actions
    (`workflow_dispatch`); después se actualizan solos con cada push a `main`.
 
-Sin sesión, FinanzasPersonales abre en su **página de inicio** (qué hace, privacidad, planes Gratis /
+Sin sesión, Ordena tu Lana abre en su **página de inicio** (qué hace, privacidad, planes Gratis /
 Básico / Pro con el anual primero y preguntas frecuentes); "Entrar" abre el inicio de sesión en una ventana flotante sobre la misma página (`#entrar`)
 y "Empieza gratis" o cualquier botón de plan, al registro (`#registro`). Tu edición personal sigue entrando
 directo al inicio de sesión.
@@ -539,15 +541,15 @@ aviso de privacidad (`#terminos`, `#privacidad`, borradores sin revisión legal 
 durante la beta el domicilio es solo la ciudad) y **Mi cuenta** (nombre, contraseña, exportar los
 movimientos a CSV y borrar la cuenta con todos sus datos). Configuración única en el Supabase de clientes:
 
-1. **Authentication → URL Configuration**: *Site URL* = `https://finanzaspersonales-2t6.pages.dev` y en
-   *Redirect URLs* agrega `https://finanzaspersonales-2t6.pages.dev/**`. Sin esto, los enlaces de los
+1. **Authentication → URL Configuration**: *Site URL* = `https://ordenatulana.com` y en
+   *Redirect URLs* agrega `https://ordenatulana.com/**`. Sin esto, los enlaces de los
    correos (confirmar cuenta, recuperar contraseña) apuntan a `localhost`.
 2. **Authentication → Sign In / Providers → Email**: deja activado *Confirm email*.
-3. **Correos con la marca FinanzasPersonales**: las plantillas viven en `supabase/correos/` y el workflow
-   *Correos de FinanzasPersonales* las aplica solo (no las pegues en el panel: se sobrescriben). Sus
+3. **Correos con la marca Ordena tu Lana**: las plantillas viven en `supabase/correos/` y el workflow
+   *Correos de Ordena tu Lana* las aplica solo (no las pegues en el panel: se sobrescriben). Sus
    enlaces llevan al sitio (`/?token_hash=…&type=…`), no a supabase.co. Para que también el **remitente**
    sea propio, agrega en GitHub los secretos `PRODUCTO_SMTP_PASS` (API key de Resend) y
-   `PRODUCTO_SMTP_REMITENTE` (p. ej. `hola@tudominio.com`, de un dominio verificado en Resend) y corre el
+   `PRODUCTO_SMTP_REMITENTE` (`hola@ordenatulana.com`; el dominio se verifica en Resend con su botón para Cloudflare) y corre el
    workflow. Para otro SMTP (p. ej. Gmail con contraseña de aplicación) agrega también `PRODUCTO_SMTP_HOST`,
    `PRODUCTO_SMTP_USUARIO` y `PRODUCTO_SMTP_PUERTO`. Sin esos secretos no se aplica nada (el plan gratuito de
    Supabase no deja cambiar las plantillas sin SMTP propio) y los correos siguen saliendo en inglés de

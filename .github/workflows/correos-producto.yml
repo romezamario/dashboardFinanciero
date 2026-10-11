@@ -1,4 +1,4 @@
-name: Correos de FinanzasPersonales (Supabase de clientes)
+name: Correos de Ordena tu Lana (Supabase de clientes)
 
 # Aplica las plantillas de supabase/correos/ (confirmar cuenta, recuperar
 # contraseña, cambiar correo) y, si existen sus secretos, el remitente propio

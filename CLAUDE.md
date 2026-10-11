@@ -45,8 +45,8 @@ dashboard (this file's subject) and **FinanzasPersonales**, the paid product for
 from the same `frontend/` and the same `supabase/migrations/`, but deployed to **separate** Supabase
 and Cloudflare Pages projects (the customer instance has no Cloudflare Access). `VITE_EDICION=producto`
 (`src/lib/edicion.ts`, tested) hides QQQ/TQQQ + Macro (Yahoo data can't be resold), Shophunters and the
-Wiki, and names the app "Ordena tu Lana" (brand renamed 2026-10-11 with the domain ordenatulana.com, user's decision; "FinanzasPersonales" survives only as the internal/project name, e.g. the Pages project and workflow names); unset = personal, exactly as before. `deploy-producto.yml`
-builds that edition (without `functions/`) to the Pages project `finanzaspersonales`, and
+Wiki, and names the app "Ordena tu Lana" (brand renamed 2026-10-11 with the domain ordenatulana.com, user's decision; "FinanzasPersonales" survives only in code comments and the `PRODUCTO_*` secret names); unset = personal, exactly as before. `deploy-producto.yml`
+builds that edition (without `functions/`) to the Pages project `ordenatulana` (created by the workflow itself, `continue-on-error`; it replaced `finanzaspersonales` on 2026-10-11, user's request, so names don't cross), and
 `db-migrate.yml`'s `migrate-producto` job applies the migrations there; both skip with a notice until
 the `PRODUCTO_*` secrets exist (README, "Instancia de clientes"). The plan doc (tiers MXN 0/29/59,
 Mercado Pago, phases) lives outside the repo; the desktop app keeps syncing only the personal instance.
@@ -1262,7 +1262,7 @@ commits:
   auth email templates (+ SMTP sender when its secrets exist) to the customer Supabase project.
 - `.github/workflows/deploy-producto.yml` (2026-10-11) — same trigger as `deploy.yml`; builds with
   `VITE_EDICION=producto` and the `PRODUCTO_VITE_SUPABASE_*` secrets, removes `functions/`, deploys
-  to Pages project `finanzaspersonales`. Skips with a notice until those secrets exist.
+  to Pages project `ordenatulana` (custom domain ordenatulana.com). Skips with a notice until those secrets exist.
 - `.github/workflows/deploy.yml` — triggers on `frontend/**`. Builds the frontend and deploys to
   Cloudflare Pages via `wrangler pages deploy`, using secrets `CLOUDFLARE_API_TOKEN`,
   `CLOUDFLARE_ACCOUNT_ID`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`. Assumes the

@@ -1,4 +1,4 @@
-name: Deploy FinanzasPersonales (instancia de clientes)
+name: Deploy Ordena tu Lana (instancia de clientes)
 
 # El mismo frontend que deploy.yml, construido con VITE_EDICION=producto
 # (sin QQQ/Macro, Shophunters ni Wiki; ver frontend/src/lib/edicion.ts) y
@@ -32,7 +32,7 @@ jobs:
           if [ -n "$VITE_SUPABASE_URL" ] && [ -n "$VITE_SUPABASE_ANON_KEY" ]; then
             echo "lista=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::notice::Sin PRODUCTO_VITE_SUPABASE_URL / PRODUCTO_VITE_SUPABASE_ANON_KEY: no se despliega FinanzasPersonales."
+            echo "::notice::Sin PRODUCTO_VITE_SUPABASE_URL / PRODUCTO_VITE_SUPABASE_ANON_KEY: no se despliega Ordena tu Lana."
           fi
 
       - uses: actions/checkout@v5
@@ -62,6 +62,18 @@ jobs:
         working-directory: frontend
         run: rm -rf functions
 
+      # Crea el proyecto de Pages la primera vez; después falla con "ya existe"
+      # y se ignora (continue-on-error), así nunca bloquea el deploy.
+      - name: Crear proyecto de Pages (si no existe)
+        if: steps.config.outputs.lista == 'true'
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: frontend
+          command: pages project create ordenatulana --production-branch=main
+
       - name: Deploy a Cloudflare Pages
         if: steps.config.outputs.lista == 'true'
         uses: cloudflare/wrangler-action@v4
@@ -69,4 +81,4 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: frontend
-          command: pages deploy dist --project-name=finanzaspersonales
+          command: pages deploy dist --project-name=ordenatulana
