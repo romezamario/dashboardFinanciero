@@ -3,9 +3,10 @@ import { NOMBRE_APP } from "../lib/edicion";
 import { VERSION_TERMINOS } from "../lib/cuentaUsuario";
 
 // Términos de servicio y aviso de privacidad de FinanzasPersonales.
-// BORRADOR redactado sin abogado: los datos entre corchetes los tiene que
-// completar el responsable y el texto necesita revisión legal antes del
-// lanzamiento público (fase 4). Si cambias el texto, sube VERSION_TERMINOS
+// BORRADOR redactado sin abogado: necesita revisión legal antes del
+// lanzamiento público (fase 4). Durante la beta el domicilio es solo la
+// ciudad (decisión del responsable); el completo y el correo del dominio
+// propio (contacto@…) van antes del lanzamiento. Si cambias el texto, sube VERSION_TERMINOS
 // (lib/cuentaUsuario.ts): es la versión que cada usuario aceptó.
 
 export type DocumentoLegal = "terminos" | "privacidad";
@@ -108,7 +109,7 @@ function Terminos() {
       <Apartado titulo="8. Cambios y ley aplicable">
         <p>
           Si cambiamos estos términos te avisaremos y te pediremos aceptarlos de nuevo. Se rigen por las leyes de
-          los Estados Unidos Mexicanos. Contacto: [correo de contacto].
+          los Estados Unidos Mexicanos. Contacto: romezamario@gmail.com.
         </p>
       </Apartado>
     </>
@@ -120,9 +121,9 @@ function Privacidad() {
     <>
       <Apartado titulo="Responsable">
         <p>
-          [Nombre completo o razón social del responsable], con domicilio en [domicilio], es responsable del
+          Mario Alberto Rodríguez Meza, con domicilio en la Ciudad de México, es responsable del
           tratamiento de tus datos personales conforme a la Ley Federal de Protección de Datos Personales en
-          Posesión de los Particulares. Contacto: [correo de contacto].
+          Posesión de los Particulares. Contacto: romezamario@gmail.com.
         </p>
       </Apartado>
       <Apartado titulo="Qué datos tratamos">
@@ -161,7 +162,7 @@ function Privacidad() {
         <p>
           Puedes acceder a tus datos, rectificarlos, cancelarlos u oponerte a su tratamiento, y revocar tu
           consentimiento. Desde Mi cuenta puedes descargar todos tus movimientos y borrar tu cuenta con todos sus
-          datos. Para cualquier otra solicitud escribe a [correo de contacto]; te responderemos en un máximo de 20
+          datos. Para cualquier otra solicitud escribe a romezamario@gmail.com; te responderemos en un máximo de 20
           días hábiles.
         </p>
       </Apartado>
