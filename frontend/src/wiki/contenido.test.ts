@@ -14,4 +14,12 @@ describe("wiki", () => {
     expect(texto("sincronizacion")).toContain("nunca se borran"); // título de una Nota
     expect(texto("resumen-controles")).toContain("periodo"); // sin acentos
   });
+
+  it("el buscador ve el texto de los diagramas, no los estilos", () => {
+    const texto = (id: string) => normalizar(textoDe(SECCIONES.find((s) => s.id === id)!.cuerpo));
+    expect(texto("qqq")).toContain("pivotes"); // paso de un Flujo
+    expect(texto("gastos-recientes")).toContain("no suman al total"); // resultado de Decisiones
+    expect(texto("modelo-de-datos")).toContain("documento_id → documentos"); // DiagramaRelaciones
+    expect(texto("seguridad")).not.toContain("text-sm");
+  });
 });

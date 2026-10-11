@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { B, C, DiagramaFlujo, Formula, Lista, Nota, P, Pasos, Sub, TablaWiki } from "./piezas";
+import { Capas, Decisiones, DiagramaRelaciones, Flujo, LeyendaLugares, Ramas, SemanaEjemplo } from "./diagramas";
+import { B, C, Formula, Lista, Nota, P, Pasos, Sub, TablaWiki } from "./piezas";
 
 // Contenido de la pestaña "Wiki": cómo está hecho el tablero, de dónde sale
 // cada dato y qué reglas decide lo que se ve. Es la versión en español y para
@@ -23,6 +24,15 @@ export const SECCIONES: SeccionWiki[] = [
     titulo: "Qué es este tablero",
     cuerpo: (
       <>
+        <Flujo
+          titulo="Tres lugares, tres trabajos"
+          pasos={[
+            { lugar: "laptop", donde: "Tu laptop", titulo: "Se leen y revisan los PDFs", detalle: "App de escritorio: extraer, categorizar, corregir", luego: "solo transacciones limpias" },
+            { lugar: "nube", donde: "Supabase", titulo: "Se guardan", detalle: "Una base de datos con tus transacciones; nada se calcula ahí", luego: "las lee directo" },
+            { lugar: "navegador", donde: "Tu navegador", titulo: "Se calcula y se dibuja todo", detalle: "Totales, promedios, alertas y gráficas, cada vez que abres el sitio" },
+          ]}
+        />
+        <LeyendaLugares />
         <P>
           Un tablero de finanzas personales. Tus estados de cuenta en PDF se leen{" "}
           <B>en tu laptop</B> con una app de escritorio; ahí se convierten en transacciones
@@ -62,7 +72,39 @@ export const SECCIONES: SeccionWiki[] = [
     titulo: "Arquitectura (de dónde sale cada dato)",
     cuerpo: (
       <>
-        <DiagramaFlujo />
+        <Ramas
+          titulo="Las tres fuentes de datos y a dónde llegan"
+          origen={{ lugar: "neutro", titulo: "Fuentes", detalle: "Cada una entra por un camino distinto" }}
+          ramas={[
+            {
+              etiqueta: "estados de cuenta",
+              pasos: [
+                { lugar: "laptop", donde: "Tu laptop", titulo: "PDF del banco", luego: "app de escritorio" },
+                { lugar: "laptop", donde: "app/ + parsers/ + transform/", titulo: "Extraer, categorizar, revisar", luego: "Guardar" },
+                { lugar: "laptop", donde: "data/procesados/", titulo: "<hash>.json", luego: "Sincronizar (tu usuario)" },
+                { lugar: "nube", donde: "Supabase", titulo: "transacciones y catálogos" },
+              ],
+            },
+            {
+              etiqueta: "avisos de compra",
+              pasos: [
+                { lugar: "externo", donde: "Tu Gmail", titulo: "Correos de Banamex", luego: "app de escritorio (solo lectura)" },
+                { lugar: "laptop", donde: "data/gastos_correo/", titulo: "Un JSON por día", luego: "se sube con tu usuario" },
+                { lugar: "nube", donde: "Supabase", titulo: "gastos_correo" },
+              ],
+            },
+            {
+              etiqueta: "mercados",
+              pasos: [
+                { lugar: "externo", donde: "Yahoo Finance", titulo: "Velas QQQ / TQQQ", luego: "función de Cloudflare" },
+                { lugar: "externo", donde: "FRED / Fed", titulo: "Indicadores macro", luego: "GitHub Actions" },
+                { lugar: "nube", donde: "Cloudflare Pages", titulo: "/api/cotizaciones y /macro.json" },
+              ],
+            },
+          ]}
+          destino={{ lugar: "navegador", donde: "Cloudflare Pages + Access", titulo: "Este tablero", detalle: "Lee de Supabase con supabase-js y calcula todo en tu navegador" }}
+        />
+        <LeyendaLugares />
         <Sub>Las piezas</Sub>
         <TablaWiki
           encabezados={["Pieza", "Dónde corre", "Qué hace"]}
@@ -124,6 +166,24 @@ export const SECCIONES: SeccionWiki[] = [
     titulo: "Seguridad y privacidad",
     cuerpo: (
       <>
+        <Capas
+          titulo="Las puertas para llegar a tus datos"
+          capas={[
+            { lugar: "externo", titulo: "Internet", detalle: "Cualquiera puede escribir la dirección del sitio…" },
+            { lugar: "nube", titulo: "1. Cloudflare Access", detalle: "…pero primero pide tu correo y un PIN que llega a ese correo." },
+            { lugar: "nube", titulo: "2. Supabase Auth", detalle: "Luego, usuario y contraseña de Supabase. La app de escritorio entra igual, con tu usuario." },
+            { lugar: "nube", titulo: "3. Row Level Security (RLS)", detalle: "Cada consulta solo regresa filas cuyo user_id eres tú; aunque el código pidiera todo." },
+            { lugar: "navegador", titulo: "Tus filas", detalle: "Lo único que llega a la pantalla." },
+          ]}
+        />
+        <Flujo
+          titulo="Qué sale de tu laptop y qué no"
+          pasos={[
+            { lugar: "laptop", titulo: "PDF", detalle: "Se queda en tu laptop (se mueve a su carpeta procesados/)", luego: "se lee" },
+            { lugar: "laptop", titulo: "Texto completo y número de cuenta", detalle: "Se usan en memoria y se descartan; de la cuenta solo quedan 4 dígitos", luego: "se normaliza" },
+            { lugar: "nube", titulo: "Transacciones normalizadas", detalle: "Fecha, descripción, monto, categoría, página y línea de origen: esto sí sube" },
+          ]}
+        />
         <Sub>Reglas que nunca se rompen</Sub>
         <Lista>
           <li>
@@ -191,6 +251,39 @@ export const SECCIONES: SeccionWiki[] = [
     titulo: "De un PDF a una transacción",
     cuerpo: (
       <>
+        <Flujo
+          titulo="En la app de escritorio, paso a paso"
+          pasos={[
+            { lugar: "laptop", titulo: "1. Cargar PDF", detalle: "Detecta banco, alias y últimos 4 dígitos", luego: "parser del banco" },
+            { lugar: "laptop", titulo: "2. Extraer", detalle: "Renglones: fecha, descripción, monto con signo, página, línea", luego: "transformador" },
+            { lugar: "laptop", titulo: "3. Transformar", detalle: "Fecha ISO, monto Decimal ≥ 0 + cargo/abono", luego: "reglas" },
+            { lugar: "laptop", titulo: "4. Categorizar", detalle: "Categoría y comercio" },
+          ]}
+        />
+        <Flujo
+          pasos={[
+            { lugar: "laptop", titulo: "5. Revisar", detalle: "Tabla, totales, avisos, renglones a mano", luego: "Guardar" },
+            { lugar: "laptop", titulo: "6. JSON", detalle: "data/procesados/<hash>.json; el PDF a procesados/", luego: "Sincronizar" },
+            { lugar: "nube", titulo: "7. Supabase", detalle: "Upsert idempotente con tu usuario" },
+          ]}
+        />
+        <Decisiones
+          titulo="¿Qué banco es? (detección automática)"
+          inicio="Cargas un PDF"
+          preguntas={[
+            { pregunta: "¿Exactamente un parser reconoce su marca en las primeras 3 páginas?", si: "Se usa ese parser y la lista \"Banco\" se actualiza sola." },
+          ]}
+          alFinal="Ninguno o varios lo reconocen: se usa el banco que tengas elegido en la lista (nunca adivina)."
+        />
+        <Decisiones
+          titulo="¿Qué pasa con un renglón que no es texto normal?"
+          inicio="Un renglón con fecha pero sin monto legible"
+          preguntas={[
+            { pregunta: "¿El resto del renglón es una imagen de letras conocidas?", si: "Se reconstruye letra por letra (parsers/glifos.py) y entra como cualquier renglón." },
+            { pregunta: "¿Era una línea legible que solo falló por basura al final (\" ..\")?", si: "Ya no pasa: el patrón tolera puntos y espacios al final." },
+          ]}
+          alFinal="Queda como aviso y como sugerencia de renglón manual (fecha, página y tarjeta ya llenas) para capturarlo a mano."
+        />
         <Pasos>
           <li>
             <B>Cargar PDF...</B> En la app de escritorio. La app detecta el banco sola (cada parser
@@ -275,6 +368,17 @@ export const SECCIONES: SeccionWiki[] = [
     titulo: "Reglas de categorización",
     cuerpo: (
       <>
+        <Decisiones
+          titulo="Cómo se decide la categoría de un renglón"
+          inicio="Descripción del renglón"
+          preguntas={[
+            { pregunta: "¿Le pusiste una categoría manual (✎) a este renglón?", si: "Gana la manual; las reglas no la tocan aunque recargues reglas." },
+            { pregunta: "¿Contiene el patrón de la regla 1?", si: "Categoría y comercio de la regla 1. No se revisa ninguna otra." },
+            { pregunta: "¿Contiene el patrón de la regla 2?", si: "Categoría y comercio de la regla 2." },
+            { pregunta: "… y así, en el orden de la lista de reglas", si: "La primera que coincide gana." },
+          ]}
+          alFinal="Ninguna coincide: queda sin categoría (en rojo en la app y en la pestaña «Sin categorizar»)."
+        />
         <P>
           Cada regla tiene un <B>patrón</B> (texto que debe aparecer en la descripción), una{" "}
           <B>categoría</B> obligatoria y un <B>comercio</B> opcional. Ejemplo: "TELEVIA" →
@@ -323,6 +427,27 @@ export const SECCIONES: SeccionWiki[] = [
     titulo: "Sincronización con Supabase",
     cuerpo: (
       <>
+        <Decisiones
+          titulo="Para cada JSON de data/procesados/"
+          inicio="Sincronizar a Supabase..."
+          preguntas={[
+            { pregunta: "¿Su contenido es idéntico al de la última subida exitosa?", si: "Se salta (no se manda nada)." },
+            { pregunta: "¿No se puede leer (archivo dañado)?", si: "Se reporta como fallido y se sigue con los demás; se reintenta la próxima vez." },
+          ]}
+          alFinal="Se sube (siguiente diagrama)."
+        />
+        <Flujo
+          vertical
+          titulo="Cómo se sube un JSON"
+          pasos={[
+            { lugar: "nube", donde: "bancos", titulo: "Buscar o crear el banco", luego: "" },
+            { lugar: "nube", donde: "cuentas", titulo: "Buscar la cuenta por banco + últimos 4", detalle: "Si no existe se crea; si su alias cambió, se renombra" },
+            { lugar: "nube", donde: "documentos", titulo: "Buscar el documento por el hash del PDF", detalle: "Si no existe se crea; si ahora es de otra cuenta, se mueve" },
+            { lugar: "nube", donde: "categorias", titulo: "Crear las categorías que falten", detalle: "Todas en una sola llamada" },
+            { lugar: "nube", donde: "transacciones", titulo: "Upsert por (documento, página, línea)", detalle: "Existe → se actualiza; no existe → se inserta. Nunca se borra nada" },
+            { lugar: "laptop", donde: "_estado_sync.json", titulo: "Guardar la huella del JSON", detalle: "Solo si todo salió bien" },
+          ]}
+        />
         <Lista>
           <li>
             <B>Idempotente:</B> cada transacción se identifica por (documento, página, línea de
@@ -359,6 +484,16 @@ export const SECCIONES: SeccionWiki[] = [
     titulo: "Avisos de compra por correo (Gmail)",
     cuerpo: (
       <>
+        <Decisiones
+          titulo="Para cada correo de aviso de Banamex"
+          inicio="Revisar Gmail y subir"
+          preguntas={[
+            { pregunta: "¿Ya está guardado en data/gastos_correo/?", si: "No se vuelve a descargar; solo se re-categoriza con las reglas actuales." },
+            { pregunta: "¿Es un retiro o compra con la cuenta de cheques (débito)?", si: "Va a debitos.json: no suma como gasto y no se sube." },
+            { pregunta: "¿No se pudo leer el formato?", si: "Se reporta en la pestaña para revisarlo." },
+          ]}
+          alFinal="Se categoriza, se guarda en el archivo de su día y ese día se sube a gastos_correo (junto con los demás días que cambiaron, hasta 500 gastos por llamada)."
+        />
         <P>
           Banamex manda un correo por cada compra con tarjeta de crédito. La app de escritorio
           (pestaña "Gastos recientes (Gmail)") los lee con permiso de <B>solo lectura</B>, los
@@ -389,6 +524,18 @@ export const SECCIONES: SeccionWiki[] = [
     titulo: "Modelo de datos (tablas y columnas)",
     cuerpo: (
       <>
+        <DiagramaRelaciones
+          titulo="Tablas y cómo se relacionan (→ = apunta a)"
+          tablas={[
+            { nombre: "transacciones", columnas: ["fecha, descripcion", "monto, tipo, saldo", "comercio, tarjeta", "pagina, linea_cruda"], apunta: ["documento_id → documentos", "categoria_id → categorias", "evento_id → eventos"] },
+            { nombre: "documentos", columnas: ["hash (del PDF)", "periodo_inicio / fin", "ruta_local"], apunta: ["cuenta_id → cuentas"] },
+            { nombre: "cuentas", columnas: ["alias", "ultimos_4_digitos"], apunta: ["banco_id → bancos"] },
+            { nombre: "bancos", columnas: ["nombre (compartido, sin user_id)"] },
+            { nombre: "categorias", columnas: ["nombre (único por usuario)"] },
+            { nombre: "eventos", columnas: ["nombre (único por usuario)"] },
+            { nombre: "gastos_correo", columnas: ["mensaje_id, fecha, hora", "tarjeta (terminación)", "comercio, categoria (texto)", "establecimiento, ciudad, monto"], apunta: ["evento_id → eventos"] },
+          ]}
+        />
         <P>
           El esquema vive en <C>supabase/migrations/</C> y se aplica solo con GitHub Actions; nunca se
           cambia a mano en Supabase. Todas las tablas menos <C>bancos</C> tienen <C>user_id</C> y RLS.
@@ -458,6 +605,23 @@ export const SECCIONES: SeccionWiki[] = [
     titulo: "Cómo carga los datos el tablero",
     cuerpo: (
       <>
+        <Ramas
+          titulo="Al abrir el sitio"
+          origen={{ lugar: "navegador", titulo: "Inicias sesión", detalle: "El tablero pide los datos a Supabase" }}
+          ramas={[
+            { etiqueta: "una sola vez", pasos: [{ lugar: "nube", titulo: "Catálogos", detalle: "Cuentas (con su banco), categorías y eventos" }] },
+            { etiqueta: "en paralelo", pasos: [{ lugar: "nube", titulo: "Transacciones", detalle: "Todo el historial, en páginas de 1,000 ordenadas por fecha e id" }] },
+          ]}
+          destino={{ lugar: "navegador", titulo: "Se unen y se calcula cada pestaña", detalle: "Cada pestaña calcula lo suyo con sus propios filtros" }}
+        />
+        <Flujo
+          titulo="Cuando editas algo"
+          pasos={[
+            { lugar: "navegador", titulo: "Editas", detalle: "Categoría, comercio, evento o cuenta", luego: "se guarda" },
+            { lugar: "nube", titulo: "Supabase", detalle: "Con tu sesión y RLS", luego: "solo esas filas" },
+            { lugar: "navegador", titulo: "Se vuelven a pedir", detalle: "Las filas editadas + catálogos, y se reemplazan" },
+          ]}
+        />
         <Lista>
           <li>
             Al entrar descarga <B>todo el historial</B> de transacciones en páginas de 1,000 (varias
@@ -496,6 +660,20 @@ export const SECCIONES: SeccionWiki[] = [
     titulo: "Resumen: periodo, exclusiones y filtros",
     cuerpo: (
       <>
+                <Ramas
+          titulo="Por dónde pasan tus transacciones en el Resumen"
+          origen={{ lugar: "navegador", titulo: "Todas tus transacciones − lo excluido", detalle: "«Excluir del análisis» (Pago TDC, traspasos y lo que elijas) las quita de todo, también de las comparaciones" }}
+          ramas={[
+            {
+              etiqueta: "solo el periodo",
+              pasos: [{ lugar: "navegador", titulo: "Indicadores de salud y alertas", detalle: "Tasa de ahorro, flujo neto, gasto promedio, meses cubiertos, recurrentes, flujo neto mensual" }],
+            },
+            {
+              etiqueta: "periodo + filtros por clic",
+              pasos: [{ lugar: "navegador", titulo: "Detalle del gasto", detalle: "Gráficas por categoría/comercio, Sankey, gasto hormiga, categorías al alza, tabla" }],
+            },
+          ]}
+        />
         <P>
           El Resumen tiene tres controles con <B>alcances distintos a propósito</B>:
         </P>
@@ -556,6 +734,15 @@ export const SECCIONES: SeccionWiki[] = [
     titulo: "Resumen: indicadores y cómo se calculan",
     cuerpo: (
       <>
+        <Ramas
+          titulo="De los movimientos a la tasa de ahorro"
+          origen={{ lugar: "navegador", titulo: "Movimientos del periodo", detalle: "Ya sin lo excluido" }}
+          ramas={[
+            { etiqueta: "abonos", pasos: [{ lugar: "navegador", titulo: "Ingresos", detalle: "Nómina, transferencias recibidas, devoluciones" }] },
+            { etiqueta: "cargos", pasos: [{ lugar: "navegador", titulo: "Gastos", detalle: "Compras, comisiones, retiros, pagos enviados" }] },
+          ]}
+          destino={{ lugar: "navegador", titulo: "Tasa de ahorro = (ingresos − gastos) ÷ ingresos", detalle: "Flujo neto = (ingresos − gastos) ÷ meses; gasto promedio = gastos ÷ meses" }}
+        />
         <P>
           "Ingresos" = suma de <B>abonos</B> y "gastos" = suma de <B>cargos</B>, en los meses del
           periodo, después de quitar lo excluido. Ojo: una devolución es un abono, así que cuenta
@@ -606,6 +793,27 @@ export const SECCIONES: SeccionWiki[] = [
     titulo: "Alertas automáticas",
     cuerpo: (
       <>
+        <Decisiones
+          titulo="¿Es un cambio de precio de una suscripción?"
+          inicio="Un cargo del periodo, de un comercio"
+          preguntas={[
+            { pregunta: "¿Hay más de un cargo de ese comercio en ese mes, o tiene evento?", si: "No se evalúa: un súper o un viaje no tienen «precio».", no: "No, es un solo cargo" },
+            { pregunta: "¿Los dos cargos mensuales anteriores difieren más de 2% entre sí?", si: "No es un precio fijo: no hay alerta.", no: "No, eran el mismo precio" },
+            { pregunta: "¿El nuevo difiere menos de 3% o menos de $10?", si: "Sin cambio real: no hay alerta.", no: "No, cambió" },
+            { pregunta: "¿Difiere más de 50%?", si: "Es otra compra, no un aumento: no hay alerta (puede salir como cargo inusual).", no: "No" },
+          ]}
+          alFinal="Alerta: «<comercio> subió/bajó de precio», con el costo extra al año."
+        />
+        <Decisiones
+          titulo="¿Es un cargo inusual?"
+          inicio="Un cargo del periodo, sin evento"
+          preguntas={[
+            { pregunta: "¿Es menor a $1,000?", si: "No se evalúa." },
+            { pregunta: "¿Su categoría tiene menos de 6 cargos en los 12 meses anteriores?", si: "No hay con qué comparar: no se evalúa." },
+            { pregunta: "¿Es menor a 3× la mediana de su categoría, o no supera su máximo del año?", si: "Es normal para la categoría: no hay alerta." },
+          ]}
+          alFinal="Alerta de cargo inusual (se muestran los 3 más extremos)."
+        />
         <P>
           Al final del Resumen (y de las pestañas de cuenta). Usan el periodo y las exclusiones, pero
           nunca los filtros por clic. Se muestran 4 y el resto con "Ver N más"; primero las que piden
@@ -650,6 +858,21 @@ export const SECCIONES: SeccionWiki[] = [
     titulo: "Eventos y Shophunters",
     cuerpo: (
       <>
+        <Flujo
+          titulo="Vida de un evento"
+          pasos={[
+            { lugar: "navegador", titulo: "Lo creas al asignarlo", detalle: "Escribes un nombre nuevo y se crea solo", luego: "se asigna a" },
+            { lugar: "nube", titulo: "Transacciones o avisos", detalle: "Desde Eventos, Editar en lote o Gastos recientes", luego: "se usa en" },
+            { lugar: "navegador", titulo: "Filtros y reportes", detalle: "Pestaña Eventos, filtro Evento, Sankey por evento, Shophunters" },
+          ]}
+        />
+        <Flujo
+          titulo="Shophunters: qué entra solo"
+          pasos={[
+            { lugar: "navegador", titulo: "Todas las transacciones", luego: "evento contiene «shophunters»" },
+            { lugar: "navegador", titulo: "Pestaña Shophunters", detalle: "La vista del Resumen sin tasa de ahorro ni tarjetas de indicadores" },
+          ]}
+        />
         <Sub>Eventos</Sub>
         <P>
           Un evento agrupa transacciones de un viaje, una fiesta, etc. Solo se asignan desde el
@@ -680,6 +903,14 @@ export const SECCIONES: SeccionWiki[] = [
     titulo: "Categorías y Comercios",
     cuerpo: (
       <>
+        <Flujo
+          titulo="Cómo se van acotando los filtros"
+          pasos={[
+            { lugar: "navegador", titulo: "Eliges categoría", detalle: "Lista o clic en su barra", luego: "la lista de comercios se reduce" },
+            { lugar: "navegador", titulo: "Eliges comercio", detalle: "Solo los de esa categoría", luego: "clic en un mes" },
+            { lugar: "navegador", titulo: "Tablas de ese mes", detalle: "La gráfica mensual se queda completa; el mes elegido resaltado" },
+          ]}
+        />
         <P>
           El detalle de una categoría y/o un comercio sobre todo el historial: gasto mensual con
           promedio móvil de 3 meses y promedios de 3 y 12 meses, sus movimientos más grandes y sus
@@ -703,6 +934,14 @@ export const SECCIONES: SeccionWiki[] = [
     titulo: "Tarjetas de crédito",
     cuerpo: (
       <>
+        <Ramas
+          titulo="Qué es «gasto» de una tarjeta"
+          origen={{ lugar: "navegador", titulo: "Movimientos de las tarjetas en el periodo", detalle: "Cuentas cuyo banco o alias dice TDC" }}
+          ramas={[
+            { etiqueta: "cargos (> $0)", pasos: [{ lugar: "navegador", titulo: "Gasto y compras", detalle: "Reparto, tabla, gasto mensual, gasto por categoría" }] },
+            { etiqueta: "abonos", pasos: [{ lugar: "navegador", titulo: "Pagos y abonos", detalle: "Columna aparte: restarlos anularía el gasto" }] },
+          ]}
+        />
         <P>
           Compara todas las cuentas cuyo banco o alias dice "TDC" (Invex TDC, TDC Beyond, TDC
           Conquista, TDC Platino) en el mismo periodo que el Resumen. La cuenta de cheques no entra.
@@ -733,6 +972,42 @@ export const SECCIONES: SeccionWiki[] = [
     titulo: "Gastos recientes (calendario)",
     cuerpo: (
       <>
+        <Ramas
+          titulo="Dos fuentes, el mismo calendario"
+          origen={{ lugar: "neutro", titulo: "Un cargo con tu tarjeta" }}
+          ramas={[
+            { etiqueta: "el mismo día", pasos: [{ lugar: "externo", titulo: "Aviso por correo", luego: "app de escritorio" }, { lugar: "nube", titulo: "gastos_correo", detalle: "«Por correo»" }] },
+            { etiqueta: "semanas después", pasos: [{ lugar: "externo", titulo: "Estado de cuenta (PDF)", luego: "app de escritorio" }, { lugar: "nube", titulo: "transacciones", detalle: "«Por estado de cuenta»" }] },
+          ]}
+          destino={{ lugar: "navegador", titulo: "Calendario con el gasto de cada día", detalle: "Clic en un movimiento del estado de cuenta → posible aviso de correo (monto exacto, ±1 día)" }}
+        />
+        <Decisiones
+          titulo="«Por estado de cuenta»: ¿suma al total del día?"
+          inicio="Un movimiento del día"
+          preguntas={[
+            { pregunta: "¿Es un cargo de $0 (línea de eco de Invex)?", si: "Se descarta." },
+            { pregunta: "¿Es de la cuenta de cheques (no es tarjeta)?", si: "Se muestra en «No suman al total», con la cuenta en la celda." },
+            { pregunta: "¿Es un abono?", si: "«No suman» (un pago a la tarjeta no es ingreso ni gasto)." },
+            { pregunta: "¿Su categoría o su evento están ocultos?", si: "«No suman», con el motivo. Los eventos están ocultos por defecto." },
+          ]}
+          alFinal="Suma al total del día, al color del calendario y a los promedios de la meta."
+        />
+        <SemanaEjemplo
+          titulo="Ejemplo: cómo se promedia una semana (por estado de cuenta, último movimiento cargado: jueves)"
+          dias={[
+            { dia: "dom", monto: "$1,800", estado: "gasto" },
+            { dia: "lun", monto: "$0", estado: "cero" },
+            { dia: "mar", monto: "$650", estado: "gasto" },
+            { dia: "mié", monto: "$0", estado: "cero" },
+            { dia: "jue", monto: "$1,550", estado: "gasto" },
+            { dia: "vie", monto: "—", estado: "fuera" },
+            { dia: "sáb", monto: "—", estado: "fuera" },
+          ]}
+        />
+        <P>
+          En el ejemplo: ($1,800 + $0 + $650 + $0 + $1,550) ÷ 5 días = <B>$800 por día</B>, $200 por
+          debajo de la meta. Viernes y sábado aún no están cargados, así que no cuentan como $0.
+        </P>
         <P>
           Un calendario del gasto por día, coloreado de verde (día barato) a rojo (día caro) con una
           escala logarítmica entre el día más barato y el más caro de todo lo cargado. Clic en un día
@@ -798,6 +1073,32 @@ export const SECCIONES: SeccionWiki[] = [
     titulo: "QQQ / TQQQ (análisis técnico)",
     cuerpo: (
       <>
+        <Flujo
+          titulo="De dónde salen las velas"
+          pasos={[
+            { lugar: "externo", titulo: "Yahoo Finance", detalle: "Velas diarias de 10 años, sin llave", luego: "/api/cotizaciones" },
+            { lugar: "nube", titulo: "Función de Cloudflare", detalle: "Solo QQQ y TQQQ; caché de 5 minutos", luego: "JSON" },
+            { lugar: "navegador", titulo: "Indicadores y patrones", detalle: "SMA, Bollinger, RSI, MACD, ATR, niveles, patrones" },
+          ]}
+        />
+        <Flujo
+          titulo="Cómo se calculan los soportes y resistencias"
+          pasos={[
+            { lugar: "navegador", titulo: "Últimas 126 sesiones", detalle: "≈ 6 meses de toda la serie (no del zoom)", luego: "±5 sesiones" },
+            { lugar: "navegador", titulo: "Pivotes", detalle: "Máximos y mínimos locales", luego: "agrupar a 0.75 ATR" },
+            { lugar: "navegador", titulo: "Zonas", detalle: "Con sus toques y velas de origen", luego: "según el cierre" },
+            { lugar: "navegador", titulo: "Niveles", detalle: "Resistencia arriba; soportes inmediato, intermedio y estructural abajo" },
+          ]}
+        />
+        <Decisiones
+          titulo="¿Se muestra un patrón chartista?"
+          inicio="Un candidato en el rango visible"
+          preguntas={[
+            { pregunta: "¿Falla alguna regla obligatoria del patrón?", si: "No se muestra." },
+            { pregunta: "¿Ya hay 4 patrones más recientes de esa familia?", si: "No se muestra (máximo 4 por familia)." },
+          ]}
+          alFinal="Se dibuja; las reglas de calidad (✓/✗) deciden si su confianza es alta, media o baja."
+        />
         <P>
           No usa tus finanzas: está aquí para tener todo en un lugar. Las velas diarias de 10 años
           vienen de Yahoo Finance a través de una función de Cloudflare (<C>/api/cotizaciones</C>, solo
@@ -842,6 +1143,15 @@ export const SECCIONES: SeccionWiki[] = [
     titulo: "Macro EE.UU.",
     cuerpo: (
       <>
+        <Flujo
+          titulo="Cómo llegan los datos macro"
+          pasos={[
+            { lugar: "externo", titulo: "FRED y federalreserve.gov", detalle: "Series en CSV y calendario del FOMC", luego: "en cada deploy y 2 veces al día hábil" },
+            { lugar: "nube", titulo: "GitHub Actions", detalle: "scripts/descargar-macro.ts", luego: "archivo estático" },
+            { lugar: "nube", titulo: "/macro.json", detalle: "Publicado con el sitio en Cloudflare", luego: "una vez por sesión" },
+            { lugar: "navegador", titulo: "Recuadros e históricos", detalle: "Cambio vs. dato anterior, próxima fecha" },
+          ]}
+        />
         <P>
           Dentro de QQQ / TQQQ. Los datos vienen de <B>FRED</B> (Fed de St. Louis), descargados por
           GitHub Actions en cada publicación del sitio y dos veces cada día hábil (15:00 y 23:00 UTC),
@@ -882,6 +1192,15 @@ export const SECCIONES: SeccionWiki[] = [
     titulo: "Lo que se puede editar desde el tablero",
     cuerpo: (
       <>
+        <Ramas
+          titulo="Qué pasa con tus ediciones si re-sincronizas ese PDF"
+          origen={{ lugar: "laptop", titulo: "Recargas el PDF en la app y lo sincronizas otra vez" }}
+          ramas={[
+            { etiqueta: "se pierde", pasos: [{ lugar: "nube", titulo: "Categoría y comercio", detalle: "Vuelven a lo que digan las reglas" }] },
+            { etiqueta: "se pierde", pasos: [{ lugar: "nube", titulo: "Cuenta", detalle: "Vuelve a la del JSON" }] },
+            { etiqueta: "se conserva", pasos: [{ lugar: "nube", titulo: "Eventos", detalle: "La app nunca manda eventos" }] },
+          ]}
+        />
         <P>Todas las escrituras usan tu sesión y las mismas reglas de RLS que las lecturas.</P>
         <TablaWiki
           encabezados={["Edición", "Dónde", "Qué cambia"]}
@@ -942,6 +1261,15 @@ export const SECCIONES: SeccionWiki[] = [
     titulo: "Publicación, pruebas y migraciones",
     cuerpo: (
       <>
+        <Ramas
+          titulo="Qué dispara cada cambio que llega al repositorio"
+          origen={{ lugar: "nube", titulo: "Un cambio llega a GitHub", detalle: "Solo corre lo que le toca a los archivos cambiados" }}
+          ramas={[
+            { etiqueta: "frontend/ o la app", pasos: [{ lugar: "nube", titulo: "ci.yml", detalle: "Tipos, lint y pruebas (tablero y Python)" }] },
+            { etiqueta: "frontend/ en main", pasos: [{ lugar: "nube", titulo: "deploy.yml", detalle: "Datos macro → compilar → Cloudflare Pages", luego: "" }, { lugar: "navegador", titulo: "Sitio actualizado", detalle: "Una pestaña abierta se recarga sola al cambiar de pestaña" }] },
+            { etiqueta: "supabase/migrations/", pasos: [{ lugar: "nube", titulo: "db-migrate.yml", detalle: "Aplica la migración a Supabase" }] },
+          ]}
+        />
         <TablaWiki
           encabezados={["Proceso", "Cuándo corre", "Qué hace"]}
           filas={[
@@ -1045,22 +1373,30 @@ export const SECCIONES: SeccionWiki[] = [
   },
 ];
 
-/** Texto plano de un nodo de React (para el buscador): recorre los hijos de
- * los elementos sin dibujar nada. Los componentes de `piezas.tsx` reciben su
- * texto como `children`, así que también se encuentra. */
+/** Texto plano de un nodo de React (para el buscador): recorre los hijos y
+ * las props de los elementos sin dibujar nada. Los diagramas reciben su texto
+ * como arreglos de objetos (`pasos`, `ramas`, `preguntas`, `tablas`...), así
+ * que también se recorren los valores de las props, no solo `children`. */
 export function textoDe(nodo: ReactNode): string {
-  if (nodo === null || nodo === undefined || typeof nodo === "boolean") return "";
-  if (typeof nodo === "string" || typeof nodo === "number") return String(nodo);
-  if (Array.isArray(nodo)) return nodo.map(textoDe).join(" ");
-  if (typeof nodo === "object" && "props" in nodo) {
-    const props = nodo.props as Record<string, unknown>;
-    const partes = [textoDe(props.children as ReactNode)];
-    for (const clave of ["titulo", "nombre", "detalle", "donde"]) {
-      if (typeof props[clave] === "string") partes.push(props[clave] as string);
-    }
-    if (Array.isArray(props.encabezados)) partes.push((props.encabezados as string[]).join(" "));
-    if (Array.isArray(props.filas)) partes.push(textoDe(props.filas as ReactNode));
-    return partes.join(" ");
+  return textoDeValor(nodo);
+}
+
+// Props que no son contenido (estilos, nombres de clase, colores de lugar):
+// si se indexaran, buscar "text" o "nube" encontraría todo.
+const PROPS_SIN_TEXTO = new Set(["className", "style", "key", "lugar", "vertical"]);
+
+function textoDeValor(valor: unknown): string {
+  if (valor === null || valor === undefined || typeof valor === "boolean") return "";
+  if (typeof valor === "string" || typeof valor === "number") return String(valor);
+  if (typeof valor === "function") return "";
+  if (Array.isArray(valor)) return valor.map(textoDeValor).join(" ");
+  if (typeof valor === "object") {
+    // Un elemento de React: su texto está en sus props.
+    const objeto = "props" in valor ? (valor as { props: Record<string, unknown> }).props : valor;
+    return Object.entries(objeto as Record<string, unknown>)
+      .filter(([clave]) => !PROPS_SIN_TEXTO.has(clave))
+      .map(([, v]) => textoDeValor(v))
+      .join(" ");
   }
   return "";
 }

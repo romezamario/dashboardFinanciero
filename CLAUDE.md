@@ -542,10 +542,15 @@ the first dashboard until 2026-10-09).
 `WikiTab.tsx` (lazy) — an in-app, Spanish, user-facing version of this file + the README: architecture,
 security, data flow, data model, how every indicator/alert/tab is computed, editable things and their
 durability, constants, deploy, limitations, glossary. Content is plain JSX in `src/wiki/contenido.tsx`
-(`SECCIONES`: id, grupo, titulo, cuerpo) built from the small components in `src/wiki/piezas.tsx`; the
-search box matches every word against each section's text extracted with `textoDe` (accent- and
-case-insensitive, `normalizar`), so text must be passed as `children` or as the props `textoDe` reads
-(`titulo`/`nombre`/`detalle`/`donde`/`encabezados`/`filas`). Each section has a link `#wiki-<id>`
+(`SECCIONES`: id, grupo, titulo, cuerpo) built from the small components in `src/wiki/piezas.tsx` and the
+diagrams in `src/wiki/diagramas.tsx` (added 2026-10-11, user's request "más visual": `Flujo` steps,
+`Ramas` one-to-many + optional join, `Decisiones` linear yes/no trees, `Capas` nested layers,
+`DiagramaRelaciones` table cards with "→ tabla" FKs, `SemanaEjemplo`; all HTML boxes, horizontal from
+`md` and vertical on phones, no fixed-coordinate SVG; the top border color says where a step runs —
+laptop/nube/navegador/externo, always with its name written too, `LeyendaLugares`). Almost every
+section opens with a diagram. The search box matches every word against each section's text extracted
+with `textoDe` (accent- and case-insensitive, `normalizar`), which walks children **and every prop value**
+(arrays/objects included, so diagram data is searchable) except `PROPS_SIN_TEXTO` (className, style, …). Each section has a link `#wiki-<id>`
 (`replaceState`; opening the site with such a hash starts on this tab). **Keep it current like the README**:
 when a tab, rule, formula or constant changes, update its section and `ULTIMA_REVISION`. Tested in
 `src/wiki/contenido.test.ts` (unique ids, search sees tables/notes) and checked in a browser (desktop
