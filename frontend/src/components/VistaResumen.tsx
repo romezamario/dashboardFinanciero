@@ -96,7 +96,7 @@ interface VistaResumenProps {
   /** Oculta la tarjeta grande de "Tasa de ahorro" (la pestaña Shophunters no la
    * quiere: son solo gastos de un evento, no tiene sentido hablar de ahorro). */
   sinTasaDeAhorro?: boolean;
-  /** Sin la cuadrícula de seis tarjetas (flujo neto, gasto promedio, meses cubiertos, recurrentes, hormiga, al alza). */
+  /** Sin la cuadrícula de seis tarjetas (flujo neto, gasto promedio, recurrentes, hormiga). */
   sinTarjetasIndicadores?: boolean;
   /** Dibuja en la gráfica de barras los promedios de gasto (móvil de 3 meses, últimos 3 y 12)
    * con sus etiquetas a la derecha: la pestaña Shophunters (ver `IngresosGastosChart`). */
@@ -119,7 +119,7 @@ interface VistaResumenProps {
  * - **Filtros por clic** (categoría, comercio, cuenta, tarjeta, evento):
  *   solo al detalle de gasto (gráficas, tabla, Sankey, gasto hormiga,
  *   categorías al alza). Los indicadores de salud (tasa de ahorro, flujo
- *   neto, gasto promedio, meses cubiertos, recurrentes, flujo neto mensual)
+ *   neto, gasto promedio, recurrentes, flujo neto mensual)
  *   siempre describen tus finanzas completas del periodo.
  */
 export function VistaResumen({
@@ -348,8 +348,6 @@ export function VistaResumen({
     gastoPromedioReferencia,
     recurrentes,
     totalRecurrenteMensual,
-    mesesDeCobertura,
-    saldoAlCierre: saldo,
   } = indicadores;
 
   const cambioAhorroPuntos =
@@ -523,7 +521,7 @@ export function VistaResumen({
           categorías al alza y tabla).
           {sinTarjetasIndicadores
             ? ""
-            : ` ${sinTasaDeAhorro ? "Flujo" : "Tasa de ahorro, flujo"} neto, gasto promedio, meses cubiertos y recurrentes siguen mostrando tus finanzas completas del periodo.`}
+            : ` ${sinTasaDeAhorro ? "Flujo" : "Tasa de ahorro, flujo"} neto, gasto promedio y recurrentes siguen mostrando tus finanzas completas del periodo.`}
         </p>
       )}
 
@@ -592,15 +590,6 @@ export function VistaResumen({
           }
         />
         <Tile
-          etiqueta="Meses cubiertos con tu saldo"
-          valor={mesesDeCobertura === null ? "—" : `${decimal.format(mesesDeCobertura)} meses`}
-          detalle={
-            saldo === null
-              ? "Sin cuentas de débito con saldo"
-              : `${moneda.format(saldo)} de saldo al cierre de ${nombreMes(ultimoMes, true)} ÷ ${moneda.format(gastoPromedio)} de gasto mensual. Referencia: 3–6 meses de fondo de emergencia`
-          }
-        />
-        <Tile
           etiqueta="Gastos recurrentes (por mes)"
           valor={moneda.format(totalRecurrenteMensual)}
           detalle={
@@ -617,15 +606,6 @@ export function VistaResumen({
               ? ""
               : `, ${porcentaje.format(hormiga.proporcion)} del gasto ${unMes ? "del mes" : "del periodo"}`
           }`}
-        />
-        <Tile
-          etiqueta="Categorías gastando más de lo normal"
-          valor={String(enAlza.length)}
-          detalle={
-            enAlza.length > 0
-              ? `En total, ${moneda.format(enAlza.reduce((s, c) => s + c.diferencia, 0))}${unMes ? "" : " al mes"} más que en ${nombreDelAnterior}`
-              : `Ninguna categoría gastó más que en ${nombreDelAnterior}`
-          }
         />
       </div>
       )}

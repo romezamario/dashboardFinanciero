@@ -666,7 +666,7 @@ export const SECCIONES: SeccionWiki[] = [
           ramas={[
             {
               etiqueta: "solo el periodo",
-              pasos: [{ lugar: "navegador", titulo: "Indicadores de salud y alertas", detalle: "Tasa de ahorro, flujo neto, gasto promedio, meses cubiertos, recurrentes, flujo neto mensual" }],
+              pasos: [{ lugar: "navegador", titulo: "Indicadores de salud y alertas", detalle: "Tasa de ahorro, flujo neto, gasto promedio, recurrentes, flujo neto mensual" }],
             },
             {
               etiqueta: "periodo + filtros por clic",
@@ -706,7 +706,7 @@ export const SECCIONES: SeccionWiki[] = [
         <Sub>Por qué los filtros por clic no cambian los indicadores</Sub>
         <P>
           Una "tasa de ahorro de solo Comida" no significa nada. Los indicadores de salud (tasa de
-          ahorro, flujo neto, gasto promedio, meses cubiertos, recurrentes, flujo neto mensual) y las
+          ahorro, flujo neto, gasto promedio, recurrentes, flujo neto mensual) y las
           alertas siempre describen tus finanzas completas del periodo.
         </P>
         <Sub>Cómo funciona el filtro por clic (estilo Power BI)</Sub>
@@ -759,11 +759,6 @@ export const SECCIONES: SeccionWiki[] = [
         <Formula nombre="Gasto mensual promedio">
           gastos ÷ meses del periodo, comparado contra tu promedio mensual de hasta 12 meses antes
           del periodo (contando solo desde tu primer estado de cuenta).
-        </Formula>
-        <Formula nombre="Meses cubiertos con tu saldo">
-          saldo más reciente al cierre del periodo de cada cuenta que reporta saldo (las tarjetas no
-          lo traen por renglón, así que es la cuenta de cheques) ÷ gasto mensual promedio. Referencia:
-          3–6 meses de fondo de emergencia.
         </Formula>
         <Formula nombre="Gastos recurrentes">
           comercios con cargos en al menos 3 de los 6 meses que terminan en el último mes del periodo,

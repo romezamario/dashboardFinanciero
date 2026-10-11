@@ -342,8 +342,9 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
     nada son los últimos 3 meses completos (el mes en curso no cuenta: los estados de cuenta
     llegan a mes vencido). Las comparaciones son contra el periodo anterior de la misma duración.
   - **Indicadores de salud**: tasa de ahorro del periodo (y la de 12 meses como referencia),
-    flujo neto, gasto mensual vs. tu promedio previo, meses cubiertos con tu saldo, gastos
-    recurrentes, gasto hormiga (cargos de menos de $200) y categorías gastando más de lo normal.
+    flujo neto, gasto mensual vs. tu promedio previo, gastos recurrentes y gasto hormiga
+    (cargos de menos de $200). (Las tarjetas «Meses cubiertos con tu saldo» y «Categorías gastando
+    más de lo normal» se quitaron; la tabla de categorías al alza sigue más abajo.)
   - **Gráficas**: ingresos vs. gastos por mes (13 meses, todo el historial o por años — clic en
     un mes o un año lo vuelve el periodo), flujo de dinero (Sankey: de dónde entra y en qué se
     va), ingresos y gastos por categoría y por comercio, y flujo neto mensual.

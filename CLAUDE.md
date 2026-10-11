@@ -605,6 +605,7 @@ differ on purpose** (user chose each one explicitly) — keep them this way:
   hidden category never disappears from its own toggle. Hiding vs. click-isolating the same
   category cross-clears (`alternarCategoriaOculta`/`seleccionarCategoria`). The bulk editor's search
   is exempt from hiding.
+- **The "Meses cubiertos con tu saldo" and "Categorías gastando más de lo normal" tiles were removed from `VistaResumen` (2026-10-11, user's request: not needed)** — in every tab; `calcularIndicadores` still computes `mesesDeCobertura` (unused by the UI now) and the "Categorías al alza" table below stays.
 - **Click filters / cross-filter, Power BI style (detail only)**: `Filtros` = categoría, comercio,
   cuenta, tarjeta, evento (pill rows + chart clicks, chips to clear). They filter the *spending
   detail*: category/comercio charts, the transactions table, the Sankey, gasto hormiga
@@ -624,7 +625,7 @@ the transactions whose **event name contains "shophunters"** (`lib/shophunters.t
 It sits right after "Eventos" and only appears when at least one such transaction exists. **It has no
 "Tasa de ahorro" hero card** (user's request 2026-10-09: it's only an event's spending, savings makes no sense
 there) — `VistaResumen` takes `sinTasaDeAhorro` and `Dashboard.renderVistaResumen` passes it for this tab only; the
-six indicator tiles (net flow, average spend, months covered, recurring, gasto hormiga, categories above normal) were removed too (user's request 2026-10-10; `sinTarjetasIndicadores`, same pattern; the detail sections below stay). Because every
+indicator tiles were removed too (all of them, in this tab) (user's request 2026-10-10; `sinTarjetasIndicadores`, same pattern; the detail sections below stay). Because every
 movement here has an event, the "recurring" block and the alert kinds that skip events (price changes, new
 subscriptions, unusual charges) are naturally empty; the "Evento" pill row lists just the Shophunters events.
 
