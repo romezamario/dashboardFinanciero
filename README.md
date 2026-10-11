@@ -548,9 +548,9 @@ aviso de privacidad (`#terminos`, `#privacidad`, borradores sin revisión legal 
 durante la beta el domicilio es solo la ciudad) y **Mi cuenta** (nombre, contraseña, exportar los
 movimientos a CSV y borrar la cuenta con todos sus datos). Configuración única en el Supabase de clientes:
 
-1. **Authentication → URL Configuration**: *Site URL* = `https://ordenatulana.com` y en
-   *Redirect URLs* agrega `https://ordenatulana.com/**`. Sin esto, los enlaces de los
-   correos (confirmar cuenta, recuperar contraseña) apuntan a `localhost`.
+1. **Authentication → URL Configuration**: *Site URL* (`https://ordenatulana.com`) y *Redirect URLs*
+   (ordenatulana.com, www y el sitio de pruebas) los aplica el workflow *Correos de Ordena tu Lana*
+   (`supabase/correos/aplicar.mjs`), junto con las plantillas; no los cambies en el panel.
 2. **Authentication → Sign In / Providers → Email**: deja activado *Confirm email*.
 3. **Correos con la marca Ordena tu Lana**: las plantillas viven en `supabase/correos/` y el workflow
    *Correos de Ordena tu Lana* las aplica solo (no las pegues en el panel: se sobrescriben). Sus

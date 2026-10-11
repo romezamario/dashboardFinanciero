@@ -16,6 +16,15 @@ import { fileURLToPath } from "node:url";
 const DIR = dirname(fileURLToPath(import.meta.url));
 const NOMBRE_REMITENTE = "Ordena tu Lana";
 const CORREO_CONTACTO = "contacto@ordenatulana.com";
+// A dónde llevan los enlaces de los correos ({{ .SiteURL }}) y a qué
+// direcciones puede volver Supabase después de confirmar/recuperar. Versionado
+// aquí para no depender del panel (Authentication → URL Configuration).
+const SITIO = "https://ordenatulana.com";
+const REDIRECCIONES = [
+  "https://ordenatulana.com/**",
+  "https://www.ordenatulana.com/**",
+  "https://pruebas.ordenatulana.pages.dev/**",
+];
 // Tope de correos de auth por hora con SMTP propio (el de Supabase es fijo y bajo).
 const CORREOS_POR_HORA = 100;
 
@@ -45,7 +54,7 @@ export function armarCorreo(archivo) {
 }
 
 export function configuracionAuth(entorno) {
-  const cuerpo = {};
+  const cuerpo = { site_url: SITIO, uri_allow_list: REDIRECCIONES.join(",") };
   for (const { archivo, campo } of CORREOS) {
     const { asunto, html } = armarCorreo(archivo);
     cuerpo[`mailer_subjects_${campo}`] = asunto;
@@ -95,7 +104,7 @@ async function main() {
     body: JSON.stringify(cuerpo),
   });
   if (!respuesta.ok) throw new Error(`Supabase respondió ${respuesta.status}: ${await respuesta.text()}`);
-  console.log(`Correos aplicados (${CORREOS.length} plantillas).`);
+  console.log(`Correos aplicados (${CORREOS.length} plantillas). Sitio: ${SITIO}.`);
   console.log(`Remitente: ${NOMBRE_REMITENTE} <${process.env.SMTP_REMITENTE}> por ${cuerpo.smtp_host}.`);
 }
 
