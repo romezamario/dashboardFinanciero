@@ -1194,7 +1194,7 @@ export const SECCIONES: SeccionWiki[] = [
           pasos={[
             { lugar: "externo", titulo: "Repo trading-agent", detalle: "output/balance.json en main", luego: "API de GitHub con token" },
             { lugar: "nube", titulo: "/api/agente-saldo", detalle: "Función de Cloudflare, caché 5 min", luego: "al abrir la pestaña" },
-            { lugar: "navegador", titulo: "Recuadros y gráfica", detalle: "Saldo por día en MXN" },
+            { lugar: "navegador", titulo: "Recuadros, gráfica y tablas", detalle: "Saldo por día, posiciones y órdenes" },
           ]}
         />
         <P>
@@ -1213,6 +1213,19 @@ export const SECCIONES: SeccionWiki[] = [
             avance hacia la meta (saldo actual ÷ meta).
           </li>
           <li>La línea punteada marca el saldo inicial.</li>
+          <li>
+            <B>Posiciones abiertas</B> al último día simulado: % de la cuenta, valor en MXN, desde cuándo
+            se tiene (la compra que la abrió desde cero), precio de entrada, precio actual y cambio de
+            precio desde la entrada (no cuenta los ajustes de tamaño posteriores). El resto es efectivo.
+          </li>
+          <li>
+            <B>Órdenes ejecutadas</B>: cada compra o venta simulada, de la más reciente a la más vieja, con
+            monto, precio en USD, % de la cuenta antes → después y comisión (0.6% por lado).
+          </li>
+          <li>
+            El agente se simula solo cada día (workflow "Simulación diaria" de su repo, 01:30 UTC), así que
+            los datos llegan hasta el día UTC anterior.
+          </li>
           <li>Solo en la edición personal.</li>
         </Lista>
       </>

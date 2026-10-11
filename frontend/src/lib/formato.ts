@@ -57,6 +57,17 @@ export const dolares = new Intl.NumberFormat("es-MX", {
   maximumFractionDigits: 2,
 });
 
+/** "US$0.3625" -- precio de una cripto: 2 decimales desde US$1, hasta 4 por debajo (DOGE, TRX). */
+const dolaresChicos = new Intl.NumberFormat("es-MX", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 4,
+});
+export function precioUsd(valor: number): string {
+  return (Math.abs(valor) >= 1 ? dolares : dolaresChicos).format(valor);
+}
+
 /** "+1.2 %" / "−0.4 %" -- cambios con signo, un decimal. */
 export const porcentajeConSigno1 = new Intl.NumberFormat("es-MX", {
   style: "percent",
