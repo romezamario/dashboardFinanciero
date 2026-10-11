@@ -14,7 +14,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const DIR = dirname(fileURLToPath(import.meta.url));
-const NOMBRE_REMITENTE = "FinanzasPersonales";
+const NOMBRE_REMITENTE = "Ordena tu Lana";
 const CORREO_CONTACTO = "romezamario@gmail.com";
 // Tope de correos de auth por hora con SMTP propio (el de Supabase es fijo y bajo).
 const CORREOS_POR_HORA = 100;

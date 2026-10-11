@@ -45,7 +45,7 @@ dashboard (this file's subject) and **FinanzasPersonales**, the paid product for
 from the same `frontend/` and the same `supabase/migrations/`, but deployed to **separate** Supabase
 and Cloudflare Pages projects (the customer instance has no Cloudflare Access). `VITE_EDICION=producto`
 (`src/lib/edicion.ts`, tested) hides QQQ/TQQQ + Macro (Yahoo data can't be resold), Shophunters and the
-Wiki, and names the app "FinanzasPersonales"; unset = personal, exactly as before. `deploy-producto.yml`
+Wiki, and names the app "Ordena tu Lana" (brand renamed 2026-10-11 with the domain ordenatulana.com, user's decision; "FinanzasPersonales" survives only as the internal/project name, e.g. the Pages project and workflow names); unset = personal, exactly as before. `deploy-producto.yml`
 builds that edition (without `functions/`) to the Pages project `finanzaspersonales`, and
 `db-migrate.yml`'s `migrate-producto` job applies the migrations there; both skip with a notice until
 the `PRODUCTO_*` secrets exist (README, "Instancia de clientes"). The plan doc (tiers MXN 0/29/59,

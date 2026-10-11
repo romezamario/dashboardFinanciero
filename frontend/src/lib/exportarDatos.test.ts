@@ -41,6 +41,6 @@ describe("transaccionesACsv", () => {
   });
 
   it("nombra el archivo con la fecha", () => {
-    expect(nombreArchivoExportacion("2026-10-11")).toBe("finanzaspersonales-movimientos-2026-10-11.csv");
+    expect(nombreArchivoExportacion("2026-10-11")).toBe("ordenatulana-movimientos-2026-10-11.csv");
   });
 });

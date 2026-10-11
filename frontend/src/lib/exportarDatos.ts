@@ -50,7 +50,7 @@ export function transaccionesACsv(transacciones: Transaccion[]): string {
 }
 
 export function nombreArchivoExportacion(hoy: string): string {
-  return `finanzaspersonales-movimientos-${hoy}.csv`;
+  return `ordenatulana-movimientos-${hoy}.csv`;
 }
 
 /** Descarga el texto como archivo (solo navegador). */
