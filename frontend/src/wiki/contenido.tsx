@@ -1197,15 +1197,16 @@ export const SECCIONES: SeccionWiki[] = [
         <Flujo
           titulo="Cómo llega el saldo del agente"
           pasos={[
-            { lugar: "externo", titulo: "Repo trading-agent", detalle: "output/balance.json en main", luego: "API de GitHub con token" },
+            { lugar: "externo", titulo: "Repo trading-agent", detalle: "output/balance.json y alpaca.json en main", luego: "API de GitHub con token" },
             { lugar: "nube", titulo: "/api/agente-saldo", detalle: "Función de Cloudflare, caché 5 min", luego: "al abrir la pestaña" },
             { lugar: "navegador", titulo: "Recuadros, gráfica y tablas", detalle: "Saldo por día, posiciones y órdenes" },
           ]}
         />
         <P>
           El agente de trading es un proyecto aparte (<C>romezamario/trading-agent</C>) que opera con
-          dinero <B>simulado</B>: no hay broker conectado. Este tablero solo grafica su saldo; no lo
-          calcula ni lo guarda en Supabase.
+          dinero <B>simulado</B>. Desde el 11 de octubre de 2026 además manda sus decisiones a una cuenta
+          de <B>prueba</B> (paper) en Alpaca, un broker real pero sin dinero real. Este tablero solo lee
+          ambos; no los calcula ni los guarda en Supabase.
         </P>
         <Lista>
           <li>
@@ -1236,6 +1237,16 @@ export const SECCIONES: SeccionWiki[] = [
           <li>
             El agente se simula solo cada día (workflow "Simulación diaria" de su repo, 01:30 UTC), así que
             los datos llegan hasta el día UTC anterior.
+          </li>
+          <li>
+            <B>Cuenta de prueba en Alpaca</B> (en USD, al final): valor de la cuenta, efectivo, cambio contra
+            el cierre del día hábil anterior, ganancia no realizada, posiciones (cantidad, valor, costo,
+            precio de entrada y actual) y las últimas 100 órdenes con su estado real en Alpaca. Sale de{" "}
+            <C>output/alpaca.json</C> del mismo repo, que el agente actualiza después de mandar las órdenes
+            de la noche y en la apertura y el cierre de la bolsa (workflow "Estado de Alpaca"). Las órdenes
+            de ETFs mandadas de noche quedan "En espera (abre la bolsa)" hasta la apertura. No cuadra
+            exacto con la simulación en pesos: Alpaca no opera BNB, ignora ajustes chicos y ejecuta a
+            precios reales.
           </li>
           <li>Solo en la edición personal.</li>
         </Lista>

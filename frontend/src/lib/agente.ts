@@ -1,7 +1,7 @@
 // Pestaña "Agente de trading": el saldo de la cuenta simulada del agente
 // (repo aparte, romezamario/trading-agent). Aquí solo se lee y se resume;
 // el agente decide y calcula todo en su propio repo.
-import type { OrdenAgente, PosicionAgente, SaldoAgente } from "../../functions/api/agente-saldo";
+import type { CuentaAlpaca, OrdenAgente, PosicionAgente, SaldoAgente } from "../../functions/api/agente-saldo";
 
 export interface ResumenAgente {
   saldoActual: number;
@@ -77,6 +77,55 @@ export function resumirGanancias(saldo: SaldoAgente): ResumenGanancias | null {
 /** "BTC" en vez de "btc". */
 export function nombreActivo(activo: string): string {
   return activo.toUpperCase();
+}
+
+export interface ResumenAlpaca {
+  valor: number;
+  efectivo: number;
+  /** Cambio vs. el cierre del día hábil anterior (null si Alpaca no lo dio). */
+  cambioDia: number | null;
+  cambioDiaPct: number | null;
+  /** Suma de la ganancia no realizada de las posiciones abiertas. */
+  noRealizada: number;
+}
+
+export function resumirAlpaca(cuenta: CuentaAlpaca): ResumenAlpaca {
+  const valor = cuenta.equity ?? 0;
+  const anterior = cuenta.last_equity;
+  const cambioDia = anterior ? valor - anterior : null;
+  return {
+    valor,
+    efectivo: cuenta.cash ?? 0,
+    cambioDia,
+    cambioDiaPct: anterior && cambioDia !== null ? cambioDia / anterior : null,
+    noRealizada: cuenta.posiciones.reduce((suma, p) => suma + (p.unrealized_pl ?? 0), 0),
+  };
+}
+
+/** "BTCUSD" o "BTC/USD" → "BTC"; "QQQ" se queda igual. */
+export function nombreSimboloAlpaca(simbolo: string): string {
+  return simbolo.replace(/\/?USD$/, "") || simbolo;
+}
+
+const ESTADOS_ORDEN: Record<string, string> = {
+  filled: "Ejecutada",
+  partially_filled: "Ejecutada en parte",
+  new: "En espera",
+  accepted: "En espera (abre la bolsa)",
+  pending_new: "Enviándose",
+  done_for_day: "Terminó el día",
+  canceled: "Cancelada",
+  expired: "Venció",
+  rejected: "Rechazada",
+  replaced: "Reemplazada",
+  pending_cancel: "Cancelándose",
+  held: "Retenida",
+};
+
+/** Estado de una orden de Alpaca en español (el original si no se conoce). */
+export function estadoOrdenAlpaca(estado: string | null): string {
+  if (!estado) return "—";
+  return ESTADOS_ORDEN[estado] ?? estado;
 }
 
 /** Trae el saldo de /api/agente-saldo (Pages Function). El error viene con

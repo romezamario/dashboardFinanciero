@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
-import type { OrdenAgente, PosicionAgente, SaldoAgente } from "../../functions/api/agente-saldo";
-import { fraccionEnEfectivo, ordenesRecientesPrimero, resumirGanancias, resumirSaldo } from "./agente";
+import type { CuentaAlpaca, OrdenAgente, PosicionAgente, SaldoAgente } from "../../functions/api/agente-saldo";
+import {
+  estadoOrdenAlpaca,
+  fraccionEnEfectivo,
+  nombreSimboloAlpaca,
+  ordenesRecientesPrimero,
+  resumirAlpaca,
+  resumirGanancias,
+  resumirSaldo,
+} from "./agente";
 
 function saldo(valores: number[]): SaldoAgente {
   return {
@@ -74,5 +82,42 @@ describe("resumirGanancias", () => {
 
   it("sin ganancias exportadas no inventa nada", () => {
     expect(resumirGanancias(saldo([10000, 9500]))).toBeNull();
+  });
+});
+
+describe("cuenta de Alpaca", () => {
+  const cuenta: CuentaAlpaca = {
+    broker: "alpaca-paper",
+    actualizado: "2026-10-11T22:53:42Z",
+    moneda: "USD",
+    equity: 101000,
+    last_equity: 100000,
+    cash: 15000,
+    posiciones: [
+      { symbol: "BTCUSD", asset_class: "crypto", qty: 0.05, avg_entry_price: 1, current_price: 1,
+        market_value: 5050, cost_basis: 5000, unrealized_pl: 50, unrealized_plpc: 0.01 },
+      { symbol: "QQQ", asset_class: "us_equity", qty: 20, avg_entry_price: 1, current_price: 1,
+        market_value: 12000, cost_basis: 12100, unrealized_pl: -100, unrealized_plpc: null },
+    ],
+    ordenes: [],
+  };
+
+  it("resume valor, cambio del día y ganancia no realizada", () => {
+    const r = resumirAlpaca(cuenta);
+    expect(r.cambioDia).toBe(1000);
+    expect(r.cambioDiaPct).toBeCloseTo(0.01);
+    expect(r.noRealizada).toBe(-50);
+  });
+
+  it("sin cierre anterior no inventa el cambio del día", () => {
+    expect(resumirAlpaca({ ...cuenta, last_equity: null }).cambioDia).toBeNull();
+  });
+
+  it("nombra símbolos y estados en español", () => {
+    expect(nombreSimboloAlpaca("BTCUSD")).toBe("BTC");
+    expect(nombreSimboloAlpaca("ETH/USD")).toBe("ETH");
+    expect(nombreSimboloAlpaca("QQQ")).toBe("QQQ");
+    expect(estadoOrdenAlpaca("filled")).toBe("Ejecutada");
+    expect(estadoOrdenAlpaca("algo_nuevo")).toBe("algo_nuevo");
   });
 });

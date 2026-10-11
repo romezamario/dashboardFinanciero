@@ -12,6 +12,7 @@
 
 export const REPO_AGENTE = "romezamario/trading-agent";
 export const RUTA_SALDO = "output/balance.json";
+export const RUTA_ALPACA = "output/alpaca.json";
 const SEGUNDOS_EN_CACHE = 300;
 
 export interface PuntoSaldo {
@@ -53,6 +54,46 @@ export interface OrdenAgente {
   pnl_pct?: number | null;
 }
 
+/** Posición en la cuenta de prueba de Alpaca (montos en USD). */
+export interface PosicionAlpaca {
+  symbol: string;
+  asset_class: string | null;
+  qty: number | null;
+  avg_entry_price: number | null;
+  current_price: number | null;
+  market_value: number | null;
+  cost_basis: number | null;
+  unrealized_pl: number | null;
+  /** Como fracción del costo. */
+  unrealized_plpc: number | null;
+}
+
+/** Orden en Alpaca con su estado real (filled, accepted, canceled…). */
+export interface OrdenAlpaca {
+  submitted_at: string | null;
+  filled_at: string | null;
+  symbol: string;
+  side: "buy" | "sell";
+  notional: number | null;
+  qty: number | null;
+  filled_qty: number | null;
+  filled_avg_price: number | null;
+  status: string | null;
+}
+
+/** Formato de output/alpaca.json (la foto de la cuenta de prueba que escribe agent/broker.py). */
+export interface CuentaAlpaca {
+  broker: string;
+  actualizado: string;
+  moneda: string;
+  equity: number | null;
+  /** Valor al cierre del día hábil anterior. */
+  last_equity: number | null;
+  cash: number | null;
+  posiciones: PosicionAlpaca[];
+  ordenes: OrdenAlpaca[];
+}
+
 /** Formato de output/balance.json (lo escribe agent/export.py del agente). */
 export interface SaldoAgente {
   currency: string;
@@ -66,15 +107,17 @@ export interface SaldoAgente {
   /** Solo en versiones del agente que ya las exportan. */
   positions?: PosicionAgente[];
   trades?: OrdenAgente[];
+  /** La cuenta de prueba en Alpaca, si el agente ya la tiene (output/alpaca.json). */
+  alpaca?: CuentaAlpaca;
 }
 
 interface Entorno {
   GITHUB_TOKEN_AGENTE?: string;
 }
 
-export async function obtenerSaldoAgente(token: string): Promise<SaldoAgente> {
-  const url = `https://api.github.com/repos/${REPO_AGENTE}/contents/${RUTA_SALDO}?ref=main`;
-  const respuesta = await fetch(url, {
+async function leerArchivo(token: string, ruta: string): Promise<Response> {
+  const url = `https://api.github.com/repos/${REPO_AGENTE}/contents/${ruta}?ref=main`;
+  return fetch(url, {
     headers: {
       Accept: "application/vnd.github.raw+json",
       Authorization: `Bearer ${token}`,
@@ -82,11 +125,26 @@ export async function obtenerSaldoAgente(token: string): Promise<SaldoAgente> {
       "X-GitHub-Api-Version": "2022-11-28",
     },
   });
+}
+
+/** Lee la cuenta de Alpaca; si no existe o falla, la sección simplemente no se muestra. */
+async function obtenerCuentaAlpaca(token: string): Promise<CuentaAlpaca | undefined> {
+  try {
+    const respuesta = await leerArchivo(token, RUTA_ALPACA);
+    return respuesta.ok ? ((await respuesta.json()) as CuentaAlpaca) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function obtenerSaldoAgente(token: string): Promise<SaldoAgente> {
+  const [respuesta, alpaca] = await Promise.all([leerArchivo(token, RUTA_SALDO), obtenerCuentaAlpaca(token)]);
   if (respuesta.status === 404) {
     throw new Error(`Todavía no existe ${RUTA_SALDO} en la rama main de ${REPO_AGENTE}`);
   }
   if (!respuesta.ok) throw new Error(`GitHub respondió ${respuesta.status}`);
-  return (await respuesta.json()) as SaldoAgente;
+  const saldo = (await respuesta.json()) as SaldoAgente;
+  return alpaca ? { ...saldo, alpaca } : saldo;
 }
 
 export async function onRequestGet({ env }: { request: Request; env?: Entorno }): Promise<Response> {
