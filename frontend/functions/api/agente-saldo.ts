@@ -31,6 +31,11 @@ export interface PosicionAgente {
   price_usd: number;
   /** Cambio del precio desde la entrada, como fracción. */
   price_change: number | null;
+  /** Lo que costó lo que queda de la posición (MXN, comisiones incluidas). */
+  cost_basis_mxn?: number | null;
+  /** Valor actual − costo, en MXN y como fracción del costo. */
+  unrealized_pnl_mxn?: number | null;
+  unrealized_pnl_pct?: number | null;
 }
 
 /** Orden simulada que ejecutó el agente. */
@@ -43,6 +48,9 @@ export interface OrdenAgente {
   weight_before: number;
   weight_after: number;
   cost_mxn: number;
+  /** Solo en ventas: lo recibido − comisión − lo que costó lo vendido (MXN y fracción). */
+  pnl_mxn?: number;
+  pnl_pct?: number | null;
 }
 
 /** Formato de output/balance.json (lo escribe agent/export.py del agente). */

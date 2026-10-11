@@ -68,6 +68,16 @@ export function precioUsd(valor: number): string {
   return (Math.abs(valor) >= 1 ? dolares : dolaresChicos).format(valor);
 }
 
+/** "+$1,234.56" / "-$12.30" -- ganancias y pérdidas en pesos, con signo. */
+export const monedaConSigno = new Intl.NumberFormat("es-MX", {
+  style: "currency",
+  currency: "MXN",
+  currencyDisplay: "narrowSymbol",
+  signDisplay: "exceptZero",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
 /** "+1.2 %" / "−0.4 %" -- cambios con signo, un decimal. */
 export const porcentajeConSigno1 = new Intl.NumberFormat("es-MX", {
   style: "percent",
