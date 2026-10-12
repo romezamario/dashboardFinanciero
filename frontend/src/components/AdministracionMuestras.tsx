@@ -1,0 +1,296 @@
+import { useEffect, useState, type ReactNode } from "react";
+import {
+  borrarMuestra,
+  cambiarEstadoMuestra,
+  ESTADOS_MUESTRA,
+  filtrarMuestras,
+  MOTIVOS_MUESTRA,
+  obtenerMuestras,
+  obtenerTextoMuestra,
+  textoParaClaude,
+  type EstadoMuestra,
+  type Muestra,
+} from "../lib/administracion";
+import { descargarTexto } from "../lib/exportarDatos";
+import { fechaHora } from "../lib/formato";
+
+// Administración de Ordena tu Lana (solo la ve quien es_administrador()): las
+// muestras anonimizadas que mandan los clientes cuando no leemos su PDF. El
+// dueño copia el texto, se lo pasa a Claude para que proponga el lector, y
+// marca la muestra como resuelta o descartada.
+
+type Filtro = EstadoMuestra | "pendientes" | "todas";
+
+const estiloEntrada = {
+  background: "var(--page-plane)",
+  border: "1px solid var(--border)",
+  color: "var(--text-primary)",
+};
+
+export function AdministracionMuestras() {
+  const [muestras, setMuestras] = useState<Muestra[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [filtro, setFiltro] = useState<Filtro>("pendientes");
+  const [recargas, setRecargas] = useState(0);
+
+  useEffect(() => {
+    let vigente = true;
+    obtenerMuestras()
+      .then((lista) => vigente && (setMuestras(lista), setError(null)))
+      .catch((e: Error) => vigente && setError(e.message));
+    return () => {
+      vigente = false;
+    };
+  }, [recargas]);
+
+  const actualizar = (id: string, cambio: Partial<Muestra> | null) =>
+    setMuestras((lista) =>
+      (lista ?? []).flatMap((m) => (m.id !== id ? [m] : cambio === null ? [] : [{ ...m, ...cambio }]))
+    );
+
+  const cuenta = (f: Filtro) => (muestras ? filtrarMuestras(muestras, f).length : 0);
+  const visibles = muestras ? filtrarMuestras(muestras, filtro) : [];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>
+            Administración: muestras de clientes
+          </h2>
+          <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+            Estados de cuenta que no pudimos leer, ya anonimizados en el navegador del cliente. Copia el texto y
+            pídele a Claude el lector de ese banco. No lo pegues en issues ni lugares públicos.
+          </p>
+        </div>
+        <div className="flex items-end gap-2">
+          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            Mostrar
+            <select
+              value={filtro}
+              onChange={(e) => setFiltro(e.target.value as Filtro)}
+              className="mt-1 block rounded-md px-2 py-1.5 text-sm"
+              style={estiloEntrada}
+            >
+              <option value="pendientes">Pendientes ({cuenta("pendientes")})</option>
+              {ESTADOS_MUESTRA.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.etiqueta} ({cuenta(e.id)})
+                </option>
+              ))}
+              <option value="todas">Todas ({cuenta("todas")})</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={() => setRecargas((n) => n + 1)}
+            className="rounded-md px-3 py-1.5 text-sm"
+            style={{ border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+          >
+            Actualizar
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <p className="text-sm" style={{ color: "var(--status-critical)" }}>
+          No se pudieron cargar las muestras: {error}
+        </p>
+      )}
+      {muestras === null && !error && (
+        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+          Cargando…
+        </p>
+      )}
+      {muestras !== null && visibles.length === 0 && (
+        <p className="tarjeta rounded-lg p-4 text-sm" style={{ color: "var(--text-secondary)" }}>
+          {filtro === "pendientes" ? "No hay muestras pendientes." : "No hay muestras con ese estado."}
+        </p>
+      )}
+      {visibles.map((m) => (
+        <TarjetaMuestra key={m.id} muestra={m} onCambio={(cambio) => actualizar(m.id, cambio)} />
+      ))}
+    </div>
+  );
+}
+
+function TarjetaMuestra({ muestra, onCambio }: { muestra: Muestra; onCambio: (cambio: Partial<Muestra> | null) => void }) {
+  const [texto, setTexto] = useState<string | null>(null);
+  const [abierta, setAbierta] = useState(false);
+  const [ocupado, setOcupado] = useState(false);
+  const [mensaje, setMensaje] = useState<{ tipo: "error" | "exito"; texto: string } | null>(null);
+  const [confirmarBorrado, setConfirmarBorrado] = useState(false);
+
+  async function cargarTexto(): Promise<string> {
+    if (texto !== null) return texto;
+    const leido = await obtenerTextoMuestra(muestra.id);
+    setTexto(leido);
+    return leido;
+  }
+
+  async function correr(accion: () => Promise<string | void>) {
+    setOcupado(true);
+    setMensaje(null);
+    try {
+      const exito = await accion();
+      if (exito) setMensaje({ tipo: "exito", texto: exito });
+    } catch (e) {
+      setMensaje({ tipo: "error", texto: (e as Error).message });
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  const alternarTexto = () =>
+    correr(async () => {
+      if (!abierta) await cargarTexto();
+      setAbierta((a) => !a);
+    });
+
+  const copiar = () =>
+    correr(async () => {
+      await navigator.clipboard.writeText(textoParaClaude(muestra, await cargarTexto()));
+      // Quien copia para revisarla, la está revisando.
+      if (muestra.estado === "nueva") {
+        await cambiarEstadoMuestra(muestra.id, "en-revision");
+        onCambio({ estado: "en-revision" });
+      }
+      return "Copiado. Pégalo en una conversación con Claude para que proponga el lector.";
+    });
+
+  const descargar = () =>
+    correr(async () => {
+      descargarTexto(
+        `muestra-${muestra.creado_en.slice(0, 10)}-${muestra.id.slice(0, 8)}.txt`,
+        textoParaClaude(muestra, await cargarTexto()),
+        "text/plain;charset=utf-8"
+      );
+    });
+
+  const cambiarEstado = (estado: EstadoMuestra) =>
+    correr(async () => {
+      await cambiarEstadoMuestra(muestra.id, estado);
+      onCambio({ estado });
+    });
+
+  const borrar = () =>
+    correr(async () => {
+      await borrarMuestra(muestra.id);
+      onCambio(null);
+    });
+
+  return (
+    <section className="tarjeta space-y-3 rounded-lg p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+            {MOTIVOS_MUESTRA[muestra.motivo]}
+            {muestra.banco_detectado && <span style={{ color: "var(--text-secondary)" }}> · {muestra.banco_detectado}</span>}
+          </p>
+          <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+            {fechaHora(muestra.creado_en)} · {muestra.paginas} página{muestra.paginas === 1 ? "" : "s"}
+          </p>
+          {muestra.comentario && (
+            <p className="break-words text-sm" style={{ color: "var(--text-secondary)" }}>
+              “{muestra.comentario}”
+            </p>
+          )}
+        </div>
+        <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+          Estado
+          <select
+            value={muestra.estado}
+            onChange={(e) => cambiarEstado(e.target.value as EstadoMuestra)}
+            disabled={ocupado}
+            className="mt-1 block rounded-md px-2 py-1 text-sm"
+            style={estiloEntrada}
+          >
+            {ESTADOS_MUESTRA.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.etiqueta}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Accion onClick={copiar} deshabilitado={ocupado} principal>
+          Copiar para Claude
+        </Accion>
+        <Accion onClick={alternarTexto} deshabilitado={ocupado}>
+          {abierta ? "Ocultar texto" : "Ver texto"}
+        </Accion>
+        <Accion onClick={descargar} deshabilitado={ocupado}>
+          Descargar .txt
+        </Accion>
+        {confirmarBorrado ? (
+          <>
+            <Accion onClick={borrar} deshabilitado={ocupado} peligro>
+              Sí, borrar
+            </Accion>
+            <Accion onClick={() => setConfirmarBorrado(false)} deshabilitado={ocupado}>
+              Cancelar
+            </Accion>
+          </>
+        ) : (
+          <Accion onClick={() => setConfirmarBorrado(true)} deshabilitado={ocupado}>
+            Borrar
+          </Accion>
+        )}
+      </div>
+
+      {mensaje && (
+        <p
+          className="text-xs"
+          style={{ color: mensaje.tipo === "error" ? "var(--status-critical)" : "var(--status-good)" }}
+          role={mensaje.tipo === "error" ? "alert" : "status"}
+        >
+          {mensaje.texto}
+        </p>
+      )}
+
+      {abierta && texto !== null && (
+        <pre
+          className="max-h-96 overflow-auto rounded-md p-3 text-xs leading-snug"
+          style={{ background: "var(--page-plane)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+        >
+          {texto}
+        </pre>
+      )}
+    </section>
+  );
+}
+
+function Accion({
+  onClick,
+  deshabilitado,
+  principal,
+  peligro,
+  children,
+}: {
+  onClick: () => void;
+  deshabilitado: boolean;
+  principal?: boolean;
+  peligro?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={deshabilitado}
+      className="rounded-md px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+      style={
+        principal
+          ? { background: "var(--series-1)", color: "white" }
+          : {
+              border: `1px solid ${peligro ? "var(--status-critical)" : "var(--border)"}`,
+              color: peligro ? "var(--status-critical)" : "var(--text-secondary)",
+            }
+      }
+    >
+      {children}
+    </button>
+  );
+}

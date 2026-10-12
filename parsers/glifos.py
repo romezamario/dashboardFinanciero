@@ -20,6 +20,10 @@ Conservador a propósito: si una fila trae un bitmap que no está en `GLIFOS`
 (una letra nunca vista, p. ej. "Ñ" o "Q" minúscula), esa fila NO se completa
 -- el extractor sigue reportándola como advertencia, igual que antes, en vez
 de adivinar. Para agregar un carácter nuevo: su huella sale de `_huella()`.
+
+El navegador (Ordena tu Lana) usa una copia de esta tabla y de este
+algoritmo en frontend/src/lib/importar/glifos.ts: agrega ahí también cada
+carácter nuevo.
 """
 
 from __future__ import annotations

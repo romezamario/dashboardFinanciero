@@ -28,6 +28,10 @@ const PATRON_TRANSACCION = new RegExp(
   String.raw`^(${FECHA})\s+${FECHA}\s+(.+?)\s+([+-])\s*\$\s*([\d,]+\.\d{2})[\s.]*$`
 );
 const PATRON_PREFIJO_FECHAS = new RegExp(String.raw`^${FECHA}\s+${FECHA}`);
+// Una línea que es SOLO las dos fechas: el resto de la fila son imágenes de
+// letras, que glifos.ts traduce antes de leer (si alguna letra no está en su
+// tabla, la línea sigue sola y cae en la advertencia de siempre).
+const PATRON_SOLO_FECHAS = new RegExp(String.raw`^${FECHA}\s+${FECHA}$`);
 const PATRON_PAGO_INTERBANCARIO_INICIO = new RegExp(
   String.raw`^(${FECHA})\s+${FECHA}\s+PAGO INTERBANCARIO\s*$`,
   "i"
@@ -240,6 +244,11 @@ export const lectorBanamexTdc: Lector = {
     return PATRON_PAGO_MINIMO.test(texto) && !PATRON_INVEX.test(texto);
   },
   leer: leerBanamexTdc,
+  imagenes: {
+    esIncompleta: (linea) => PATRON_SOLO_FECHAS.test(linea),
+    // Encabezados "Tarjeta titular: …" que algunos estados imprimen como imagen.
+    esEncabezado: (linea) => PATRON_SECCION_TARJETA.test(linea),
+  },
   cuenta(paginas): InfoCuenta {
     const texto = textoInicial(paginas);
     let ultimos4: string | null = null;

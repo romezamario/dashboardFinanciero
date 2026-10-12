@@ -2,7 +2,8 @@ import { useState, type ReactNode } from "react";
 import { deCentavos } from "../lib/importar/comun";
 import { enviarMuestra, guardarImportacion, type MuestraParaEnviar } from "../lib/importar/guardar";
 import { huellaArchivo, leerPaginasPdf, PdfConContrasena } from "../lib/importar/leerPdf";
-import { periodo, procesarPaginas, totales, type ResultadoImportacion } from "../lib/importar/procesar";
+import { detectarLector, periodo, procesarPaginas, totales, type ResultadoImportacion } from "../lib/importar/procesar";
+import { categorizar } from "../lib/importar/reglasBase";
 import { fechaCorta, monedaConCentavos } from "../lib/formato";
 
 // "Subir estado de cuenta" de Ordena tu Lana (fase 2): el PDF se lee aquí, en
@@ -42,10 +43,13 @@ export function SubirEstadoCuenta({ onGuardado }: { onGuardado: () => void }) {
     setArchivos((lista) => [...lista, { id, nombre: archivo.name, estado: { fase: "leyendo" } }]);
     try {
       const datos = await archivo.arrayBuffer();
-      const [paginas, hash] = await Promise.all([leerPaginasPdf(datos), huellaArchivo(datos)]);
+      const [{ paginas, detalles }, hash] = await Promise.all([
+        leerPaginasPdf(datos, (p) => detectarLector(p)?.imagenes !== undefined),
+        huellaArchivo(datos),
+      ]);
       // Solo el resultado queda en memoria; el texto completo (que puede traer
       // el número de cuenta) se descarta aquí.
-      actualizar(id, { fase: "listo", hash, resultado: procesarPaginas(paginas) });
+      actualizar(id, { fase: "listo", hash, resultado: procesarPaginas(paginas, undefined, detalles) });
     } catch (error) {
       actualizar(id, {
         fase: "error",
@@ -192,6 +196,7 @@ function Reconocido({ resultado, hash, onGuardado }: { resultado: Reconocido; ha
   const rango = periodo(resultado.movimientos);
   const ultimos4Valido = /^\d{4}$/.test(ultimos4);
   const visibles = verTodos ? resultado.movimientos : resultado.movimientos.slice(0, FILAS_VISTA_PREVIA);
+  const categorizados = resultado.movimientos.filter((m) => categorizar(m.descripcion)).length;
 
   async function guardar() {
     setGuardando(true);
@@ -228,7 +233,8 @@ function Reconocido({ resultado, hash, onGuardado }: { resultado: Reconocido; ha
         </span>
       </div>
       <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-        Compara estos totales con los de tu estado de cuenta antes de guardar.
+        Compara estos totales con los de tu estado de cuenta antes de guardar. {categorizados} de{" "}
+        {resultado.movimientos.length} ya llegan con categoría; las demás las puedes asignar en tu tablero.
       </p>
 
       {resultado.advertencias.length > 0 && (
@@ -250,6 +256,7 @@ function Reconocido({ resultado, hash, onGuardado }: { resultado: Reconocido; ha
             <tr style={{ color: "var(--text-muted)" }}>
               <th className="py-1 pr-3 text-left font-medium">Fecha</th>
               <th className="py-1 pr-3 text-left font-medium">Descripción</th>
+              <th className="hidden py-1 pr-3 text-left font-medium sm:table-cell">Categoría</th>
               <th className="py-1 text-right font-medium">Monto</th>
             </tr>
           </thead>
@@ -258,6 +265,9 @@ function Reconocido({ resultado, hash, onGuardado }: { resultado: Reconocido; ha
               <tr key={i} style={{ borderTop: "1px solid var(--border)", color: "var(--text-primary)" }}>
                 <td className="whitespace-nowrap py-1 pr-3">{fechaCorta(m.fecha)}</td>
                 <td className="py-1 pr-3">{m.descripcion}</td>
+                <td className="hidden py-1 pr-3 sm:table-cell" style={{ color: "var(--text-secondary)" }}>
+                  {categorizar(m.descripcion)?.categoria ?? "Sin categoría"}
+                </td>
                 <td
                   className="whitespace-nowrap py-1 text-right tabular-nums"
                   style={{ color: m.tipo === "abono" ? "var(--status-good)" : undefined }}

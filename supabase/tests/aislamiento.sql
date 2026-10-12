@@ -166,7 +166,8 @@ set request.jwt.claim.sub = '';
 
 do $$
 begin
-  if (select count(*) from transacciones) + (select count(*) from cuentas) <> 0 then
+  if (select count(*) from transacciones) + (select count(*) from cuentas)
+     + (select count(*) from muestras_estados_cuenta) <> 0 or es_administrador() then
     raise exception 'FALLO: anon ve datos';
   end if;
 end $$;
@@ -260,6 +261,70 @@ begin
   if not exists (select 1 from auth.users where id = 'bbbbbbbb-0000-0000-0000-000000000001')
      or (select nombre from perfiles where user_id = 'bbbbbbbb-0000-0000-0000-000000000001') <> 'Beto' then
     raise exception 'FALLO: borrar_mi_cuenta de C tocó a B';
+  end if;
+end $$;
+
+-- ------------------------------------------------- administración de muestras
+-- B manda una muestra; el administrador (correo de `administradores`,
+-- confirmado) la ve y cambia su estado. El mismo correo sin confirmar no es
+-- administrador, y B sigue sin poder cambiar el estado ni ver otras.
+reset role;
+insert into auth.users (id, email, email_confirmed_at) values
+  ('dddddddd-0000-0000-0000-000000000001', 'RomezaMario@gmail.com', now()),
+  ('eeeeeeee-0000-0000-0000-000000000001', 'romezamario@gmail.com', null);
+
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000001';
+insert into muestras_estados_cuenta (id, motivo, paginas, texto_anonimizado)
+  values ('bbbbbbbb-0000-0000-0000-0000000000a5', 'banco-desconocido', 2, 'XXXX');
+do $$
+declare
+  n int;
+begin
+  if es_administrador() then raise exception 'FALLO: B es administrador'; end if;
+  update muestras_estados_cuenta set estado = 'resuelta';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'FALLO: B cambió el estado de su muestra'; end if;
+end $$;
+
+set request.jwt.claim.sub = 'eeeeeeee-0000-0000-0000-000000000001';
+do $$
+begin
+  if es_administrador() or (select count(*) from muestras_estados_cuenta) <> 0 then
+    raise exception 'FALLO: un correo de administrador sin confirmar ve muestras';
+  end if;
+end $$;
+
+set request.jwt.claim.sub = 'dddddddd-0000-0000-0000-000000000001';
+do $$
+declare
+  n int;
+begin
+  if not es_administrador() then raise exception 'FALLO: el administrador no es reconocido'; end if;
+  if (select count(*) from muestras_estados_cuenta where id = 'bbbbbbbb-0000-0000-0000-0000000000a5') <> 1 then
+    raise exception 'FALLO: el administrador no ve la muestra de B';
+  end if;
+  update muestras_estados_cuenta set estado = 'en-revision' where id = 'bbbbbbbb-0000-0000-0000-0000000000a5';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'FALLO: el administrador no pudo cambiar el estado'; end if;
+exception when insufficient_privilege then
+  raise exception 'FALLO: el administrador no tiene permiso sobre las muestras';
+end $$;
+do $$
+begin
+  begin
+    perform count(*) from administradores;
+    raise exception 'FALLO: la tabla administradores se puede leer por la API';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+delete from muestras_estados_cuenta where id = 'bbbbbbbb-0000-0000-0000-0000000000a5';
+
+reset role;
+do $$
+begin
+  if exists (select 1 from muestras_estados_cuenta where id = 'bbbbbbbb-0000-0000-0000-0000000000a5') then
+    raise exception 'FALLO: el administrador no pudo borrar la muestra revisada';
   end if;
 end $$;
 

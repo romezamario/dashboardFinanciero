@@ -40,6 +40,12 @@ export interface Lector {
   reconoce(paginas: Paginas): boolean;
   leer(paginas: Paginas): Lectura;
   cuenta(paginas: Paginas): InfoCuenta;
+  /** Si el banco imprime filas como imágenes de letras (glifos.ts): qué línea
+   * abre una fila incompleta y qué renglón-imagen suelto es un encabezado. */
+  imagenes?: {
+    esIncompleta(linea: string): boolean;
+    esEncabezado?(linea: string): boolean;
+  };
 }
 
 /** Mes abreviado en español → número (llaves en minúsculas). */

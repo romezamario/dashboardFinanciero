@@ -15,6 +15,7 @@ create schema auth;
 create table auth.users (
   id uuid primary key default gen_random_uuid(),
   email text,
+  email_confirmed_at timestamptz,
   -- Lo que el registro manda en `options.data` (supabase.auth.signUp).
   raw_user_meta_data jsonb not null default '{}'
 );

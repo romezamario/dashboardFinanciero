@@ -93,12 +93,19 @@ mocked `/auth/v1/verify` (confirm → dashboard, recovery → new password, expi
 verify call), templates rendered at 700/390 px. Not yet against the real project.
 **Upload statements in the browser, phase 2 (2026-10-11, user's request: "enfoquémonos en los PDFs, antes que CSV o Excel")** — producto
 edition only: header "Subir estado de cuenta" (`VISTA_SUBIR` in `Dashboard`; the empty dashboard shows the same button) opens
-`SubirEstadoCuenta.tsx` (lazy). pdf.js (`pdfjs-dist`, its own lazy chunk + worker) extracts each page's text items and
+`SubirEstadoCuenta.tsx` (lazy). pdf.js (`pdfjs-dist`, **its `legacy` build** — the modern one calls `Map.prototype.getOrInsertComputed`, missing in the Chromium used for testing and older browsers, so `getOperatorList` failed; its own lazy chunk + worker) extracts each page's text items and
 `lib/importar/lineas.ts` regroups them into lines like pdfplumber's `extract_text()` (same baseline ±3 pt, gap >1.5 pt → space;
 checked: identical lines on reportlab test PDFs). `lib/importar/{banamex,banamexTdc,invexTdc}.ts` are TS ports of the three
 Python parsers (same regexes and sign rules; amounts as integer cents, never float) **without** the owner-only bits (tiers by
-last 4, `ROLES_TARJETA_CONOCIDOS` — V2 Invex cards stay as their last 4) and **without glyph decoding** (image-rendered rows
-only warn). `procesar.ts`: exactly one lector must `reconoce` (else unknown), `normalizar` = the transformer (ISO date, unsigned
+last 4, `ROLES_TARJETA_CONOCIDOS` — V2 Invex cards stay as their last 4). **Glyph decoding ported (2026-10-12, user's request
+"replicar el funcionamiento de la app de escritorio para las imágenes")**: `lib/importar/glifos.ts` = `parsers/glifos.py` (same
+`GLIFOS` table — keep both in sync when a glyph is added — same block/header algorithm). A lector opts in with `imagenes`
+(`esIncompleta`/`esEncabezado`; only Banamex TDC); then `leerPaginasPdf(datos, quiereDetalle)` also returns `detalles` (line boxes
++ words from `agruparEnLineasConPosicion`, and every 1-bit image mask from `getOperatorList` — single, Group and Repeat ops, CTM
+tracked — with `getDocument({isOffscreenCanvasSupported: false})` so masks arrive as bytes). Fingerprint = sha1("WxH"+bytes)[:16]
+like `_huella`, tried also on the inverted bytes (pdf.js inverts `/Decode [1 0]` masks, pdfminer doesn't). Checked against Python
+on a generated PDF (raw, Flate and inverted masks): same fingerprints and same completed lines; **not yet on a real Banamex TDC
+statement in the browser**. `procesar.ts`: exactly one lector must `reconoce` (else unknown), `normalizar` = the transformer (ISO date, unsigned
 monto + tipo, " (2)" suffix for repeated (página, línea)). `guardar.ts` writes with the customer's session: find-or-create
 `bancos` (same names as the desktop `PARSERS` keys) / `cuentas` (alias: last write wins) / `documentos` (hash = sha256 of the
 file, same as `hash_pdf`, so desktop and browser agree; `ruta_local` null — a file name can carry the customer's name), then
@@ -109,7 +116,21 @@ page text (may include the full account number) is dropped once processed. **Unr
 send it to `muestras_estados_cuenta` (migration `20261012000000_…`: insert/select/delete own, only `estado='nueva'`, no update;
 size-capped; in `aislamiento.sql`). Those samples are for Claude to propose a new lector (structure only: anonymized amounts are
 all 0), reviewed by the owner — the repo is public, so samples must never be copied into issues, logs or artifacts.
-No categorization rules for customers yet (rows arrive "Sin categoría"). Tested in `lib/importar/procesar.test.ts` and in
+**Base categorization rules (2026-10-12, user's request "toma mis reglas de categorización y haz una base general")**:
+`lib/importar/reglasBase.ts` (`REGLAS_BASE`, ~230 rules, same semantics as `categorizar()`: case-insensitive substring, first match
+wins) was curated from the owner's 872 desktop rules keeping only chains, services and bank terms — no local businesses, trips,
+doctors, employer, card numbers (public repo) — plus a few national chains (Coppel, Suburbia, Bodega Aurrera, Spotify, Pemex…);
+Starbucks moved from Ocio to Restaurantes. `reglasBase.test.ts` fails if a rule is shadowed by an earlier, more generic one. The
+upload preview shows each row's category; `guardar.ts` upserts, gets back the rows with `categoria_id` AND `comercio` both null
+(so a re-upload never overwrites a customer's edit), find-or-creates the categories in one upsert and PATCHes ids in batches.
+**Admin screen (2026-10-12, user's request)**: migration `20261012010000_administradores.sql` — table `administradores (correo)`
+(RLS, no API grants; seeded with the owner's email; add admins with a migration) and `es_administrador()` (security definer: the
+caller's CONFIRMED email is in that table; callable by anon too, returns false, because the policies evaluate it for every role);
+`muestras_estados_cuenta` gets admin select/update/delete policies and `grant update (estado)`. `Dashboard` asks the RPC once
+(producto edition) and shows "Administración" (`VISTA_ADMIN`, lazy `AdministracionMuestras.tsx`, `lib/administracion.ts`): list
+without the text (loaded on demand), filter (pendientes = nueva + en-revisión), "Copiar para Claude" (context + text; marks a
+"nueva" as "en-revisión"), view, download .txt, change estado, delete with confirmation. Covered by `aislamiento.sql` (confirmed
+admin sees/updates/deletes B's sample, unconfirmed same email and B don't, `administradores` unreadable, anon gets 0 rows). Tested in `lib/importar/procesar.test.ts` and in
 Playwright with generated PDFs (Banamex cheques, Invex V2, unknown bank, scanned) against mocked Supabase endpoints; not yet
 with real statements in the browser.
 **Landing page (2026-10-11, user's request)**: in the producto edition only, `App` shows `Landing.tsx` while
@@ -1120,7 +1141,8 @@ the GitHub Actions UI. It runs `supabase link` + `supabase db push` using three 
 `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_ID`, `SUPABASE_DB_PASSWORD`.
 
 Tables: `bancos` (shared catalog, no `user_id`) and `cuentas`/`categorias`/`documentos`/
-`transacciones`/`eventos`/`gastos_correo`/`preferencias`/`perfiles`/`muestras_estados_cuenta` (all RLS-scoped to the row's `user_id`, four
+`transacciones`/`eventos`/`gastos_correo`/`preferencias`/`perfiles`/`muestras_estados_cuenta` (`administradores` is
+RLS-on with no API access, see the admin screen above) (all RLS-scoped to the row's `user_id`, four
 policies each — select/insert/update/delete; `gastos_correo` is described under the Gmail tab above;
 `preferencias` holds per-user settings, one row per `(user_id, clave)` with a `valor jsonb`, e.g. the
 daily-spend goal under `meta_gasto_diario`). `eventos` (added in `20260922010000_add_eventos.sql`) is a per-user
@@ -1381,7 +1403,7 @@ ladoDominante, gasto hormiga), `alertas` (duplicates, $0 echo lines, price chang
 and several-charges-a-month cases, new subscription), `gastosEstadoCuenta` (only TDC cargos of
 non-hidden categories add up; sinSumar reasons; day order; esTarjetaCredito), `tecnico`
 (SMA, RSI edges), `conciliarCorreo` (one-to-one matching, eventosHeredables, filaAGastoCorreo),
-`metaDiaria` (week/month averages vs. the goal), `importar/procesar` (browser PDF lectores, line grouping, anonymizer), `cuentaUsuario` (hash routes, auth links, error
+`metaDiaria` (week/month averages vs. the goal), `importar/procesar` (browser PDF lectores, line grouping, anonymizer), `importar/glifos` (image-row decoding, Python fingerprint), `importar/reglasBase` (no shadowed rules), `administracion`, `cuentaUsuario` (hash routes, auth links, error
 translation, password rules), `exportarDatos` (CSV escaping), `promedios` (averages from the first month with
 spending), `shophunters` and `patrones/*` (levels and chart patterns on synthetic series from
 `src/test/series.ts`). `npx tsc -b` and `npm run lint` are the other checks; CI runs all three.

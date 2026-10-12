@@ -577,6 +577,17 @@ cliente avisa que faltan movimientos), puede enviar una **muestra anonimizada** 
 X; la ve antes de enviarla) que queda en la tabla `muestras_estados_cuenta` del Supabase de clientes, para
 escribir el lector de ese banco. Un PDF escaneado (sin texto) no se puede leer.
 
+Las filas que Banamex imprime como imágenes de letras (p. ej. "SU ABONO...GRACIAS" en las tarjetas) se leen
+igual que en la app de escritorio, con la misma tabla de letras (`frontend/src/lib/importar/glifos.ts`). Los
+movimientos llegan ya categorizados con una **base general de reglas** (`frontend/src/lib/importar/reglasBase.ts`,
+armada a partir de las reglas de la app de escritorio, solo con cadenas y servicios conocidos); volver a subir un
+PDF no pisa lo que el cliente ya cambió.
+
+**Administración**: quien tiene su correo (confirmado) en la tabla `administradores` ve el botón
+**Administración** con las muestras de los clientes: copiar el texto para pedirle a Claude el lector,
+descargarlo, cambiar su estado (nueva, en revisión, resuelta, descartada) o borrarla. Para agregar un
+administrador, una migración que inserte su correo.
+
 La app de escritorio sigue sincronizando solo con tu instancia personal.
 
 **Aislamiento entre usuarios**: `supabase/tests/correr.sh` aplica todas las migraciones a un Postgres

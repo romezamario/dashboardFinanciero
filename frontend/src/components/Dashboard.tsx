@@ -79,6 +79,9 @@ const MiCuenta = lazy(() =>
 const SubirEstadoCuenta = lazy(() =>
   cargarPestana(() => import("./SubirEstadoCuenta")).then((m) => ({ default: m.SubirEstadoCuenta }))
 );
+const AdministracionMuestras = lazy(() =>
+  cargarPestana(() => import("./AdministracionMuestras")).then((m) => ({ default: m.AdministracionMuestras }))
+);
 const TarjetasCreditoTab = lazy(() =>
   cargarPestana(() => import("./TarjetasCreditoTab")).then((m) => ({ default: m.TarjetasCreditoTab }))
 );
@@ -139,6 +142,9 @@ const VISTA_CUENTA = "mi-cuenta";
 // Solo Ordena tu Lana: leer un PDF en el navegador y guardar sus movimientos
 // (fase 2). También se abre desde el encabezado.
 const VISTA_SUBIR = "subir";
+// Solo Ordena tu Lana y solo para administradores (es_administrador() en la
+// base): las muestras anonimizadas de los clientes.
+const VISTA_ADMIN = "administracion";
 // Prefijo para no chocar con "resumen"/"eventos" si alguna cuenta tuviera
 // ese mismo alias.
 const PREFIJO_PESTANA_CUENTA = "cuenta:";
@@ -185,6 +191,17 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
   const [errorRecarga, setErrorRecarga] = useState<string | null>(null);
   const [estadosPorPestana, setEstadosPorPestana] = useState<Record<string, EstadoVista>>({});
   const [vista, setVista] = useState<string>(vistaInicial);
+  const [esAdmin, setEsAdmin] = useState(false);
+  useEffect(() => {
+    if (EDICION !== "producto") return;
+    let vigente = true;
+    void import("../lib/administracion")
+      .then((m) => m.esAdministrador())
+      .then((si) => vigente && setEsAdmin(si));
+    return () => {
+      vigente = false;
+    };
+  }, []);
 
   function cambiarVista(id: string) {
     setVista(id);
@@ -345,11 +362,14 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
   // documentos de una cuenta a otra desde el editor), vuelve al Resumen.
   const enCuenta = vista === VISTA_CUENTA && EDICION === "producto";
   const enSubir = vista === VISTA_SUBIR && EDICION === "producto";
+  const enAdmin = vista === VISTA_ADMIN && EDICION === "producto" && esAdmin;
   const pestanaActiva = enCuenta
     ? VISTA_CUENTA
     : enSubir
       ? VISTA_SUBIR
-      : pestanas.some((p) => p.id === vista)
+      : enAdmin
+        ? VISTA_ADMIN
+        : pestanas.some((p) => p.id === vista)
         ? vista
         : PESTANA_RESUMEN;
   // Igual para la sección del Resumen (Tarjetas/Shophunters solo existen si
@@ -466,6 +486,17 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
               <span className="hidden sm:inline">Subir estado de cuenta</span>
             </button>
           )}
+          {EDICION === "producto" && esAdmin && (
+            <button
+              onClick={() => cambiarVista(VISTA_ADMIN)}
+              className="text-xs font-medium"
+              style={{ color: enAdmin ? "var(--series-1)" : "var(--text-secondary)" }}
+              aria-current={enAdmin ? "page" : undefined}
+            >
+              <span className="sm:hidden">Admin</span>
+              <span className="hidden sm:inline">Administración</span>
+            </button>
+          )}
           {EDICION === "producto" && (
             <button
               onClick={() => cambiarVista(VISTA_CUENTA)}
@@ -544,7 +575,9 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
               ? "Mi cuenta"
               : enSubir
                 ? "Subir estado de cuenta"
-                : `la pestaña ${
+                : enAdmin
+                  ? "Administración"
+                  : `la pestaña ${
                   [...seccionesResumen, ...pestanas].find((p) => p.id === vistaActiva)?.etiqueta ?? ""
                 }`
           }
@@ -558,6 +591,8 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
           <MiCuenta correo={correo} transacciones={transacciones} />
         ) : enSubir ? (
           <SubirEstadoCuenta onGuardado={() => void recargarTransacciones()} />
+        ) : enAdmin ? (
+          <AdministracionMuestras />
         ) : vistaActiva === PESTANA_WIKI ? (
           <WikiTab />
         ) : vistaActiva === PESTANA_TECNICO ? (

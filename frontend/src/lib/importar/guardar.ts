@@ -3,13 +3,17 @@
 // sync/sincronizador.py: buscar-o-crear banco, cuenta y documento, y upsert de
 // los movimientos por (documento_id, pagina, linea_cruda), así que subir el
 // mismo PDF dos veces no duplica nada. Solo manda las columnas que salen del
-// PDF: la categoría o el evento que el cliente ya asignó se conservan.
+// PDF: la categoría o el evento que el cliente ya asignó se conservan. Los
+// movimientos que quedan sin categoría ni comercio reciben los de las reglas
+// base (reglasBase.ts).
 
 import { supabase } from "../supabase";
 import type { MovimientoImportado } from "./procesar";
 import { periodo } from "./procesar";
+import { categorizar, type Regla } from "./reglasBase";
 
 const LOTE = 500;
+const LOTE_IDS = 150;
 
 function comoError(error: { message?: string } | null): Error {
   return new Error(error?.message ?? "Error de Supabase");
@@ -98,13 +102,57 @@ export async function guardarImportacion(datos: DatosParaGuardar): Promise<numbe
   const cuentaId = await idCuenta(bancoId, datos.alias.trim(), datos.ultimos4);
   const documentoId = await idDocumento(cuentaId, datos.hash, periodo(datos.movimientos));
   const filas = datos.movimientos.map((m) => ({ ...m, documento_id: documentoId }));
+  const sinCategoria: { id: string; descripcion: string }[] = [];
   for (let i = 0; i < filas.length; i += LOTE) {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("transacciones")
-      .upsert(filas.slice(i, i + LOTE), { onConflict: "documento_id,pagina,linea_cruda" });
+      .upsert(filas.slice(i, i + LOTE), { onConflict: "documento_id,pagina,linea_cruda" })
+      .select("id, descripcion, categoria_id, comercio");
     if (error) throw comoError(error);
+    for (const fila of data ?? []) if (fila.categoria_id === null && fila.comercio === null) sinCategoria.push(fila);
   }
+  await categorizarNuevas(sinCategoria);
   return filas.length;
+}
+
+/** Pone categoría y comercio de las reglas base a los movimientos que no
+ * tienen ninguno de los dos. Así, volver a subir el PDF nunca pisa lo que el
+ * cliente ya corrigió a mano. */
+async function categorizarNuevas(filas: readonly { id: string; descripcion: string }[]): Promise<void> {
+  const grupos = new Map<string, { regla: Regla; ids: string[] }>();
+  for (const fila of filas) {
+    const regla = categorizar(fila.descripcion);
+    if (!regla) continue;
+    const clave = `${regla.categoria}\u0000${regla.comercio ?? ""}`;
+    const grupo = grupos.get(clave) ?? { regla, ids: [] };
+    grupo.ids.push(fila.id);
+    grupos.set(clave, grupo);
+  }
+  if (grupos.size === 0) return;
+
+  const nombres = [...new Set([...grupos.values()].map((g) => g.regla.categoria))];
+  const { data, error } = await supabase
+    .from("categorias")
+    .upsert(
+      nombres.map((nombre) => ({ nombre })),
+      { onConflict: "user_id,nombre" }
+    )
+    .select("id, nombre");
+  if (error) throw comoError(error);
+  const idDe = new Map((data ?? []).map((c) => [c.nombre as string, c.id as string]));
+
+  for (const { regla, ids } of grupos.values()) {
+    const categoriaId = idDe.get(regla.categoria);
+    if (!categoriaId) continue;
+    // Los ids van en la URL: en lotes para no pasar su límite.
+    for (let i = 0; i < ids.length; i += LOTE_IDS) {
+      const cambio = await supabase
+        .from("transacciones")
+        .update({ categoria_id: categoriaId, comercio: regla.comercio })
+        .in("id", ids.slice(i, i + LOTE_IDS));
+      if (cambio.error) throw comoError(cambio.error);
+    }
+  }
 }
 
 export interface MuestraParaEnviar {

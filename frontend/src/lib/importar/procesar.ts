@@ -7,6 +7,7 @@ import { anonimizar } from "./anonimizar";
 import { lectorBanamex } from "./banamex";
 import { lectorBanamexTdc } from "./banamexTdc";
 import { aCentavos, deCentavos, type Lector, type Paginas, type RenglonCrudo } from "./comun";
+import { completarLineasConImagenes, type DetallePagina } from "./glifos";
 import { lectorInvexTdc } from "./invexTdc";
 
 export const LECTORES: readonly Lector[] = [lectorBanamex, lectorBanamexTdc, lectorInvexTdc];
@@ -106,7 +107,23 @@ export function muestraAnonimizada(paginas: Paginas): string {
     .slice(0, MAXIMO_MUESTRA);
 }
 
-export function procesarPaginas(paginas: Paginas, lectores: readonly Lector[] = LECTORES): ResultadoImportacion {
+/** Las páginas con las filas-imagen ya traducidas, si el lector lo pide y hay
+ * detalle de posiciones (en las pruebas sin PDF no lo hay). */
+function paginasParaLeer(paginas: Paginas, lector: Lector, detalles: readonly DetallePagina[] | undefined): Paginas {
+  const imagenes = lector.imagenes;
+  if (!imagenes || !detalles || detalles.length !== paginas.length) return paginas;
+  return detalles.map((detalle) =>
+    completarLineasConImagenes(detalle, imagenes.esIncompleta, imagenes.esEncabezado ?? null)
+      .map((l) => l.trim())
+      .filter((l) => l !== "")
+  );
+}
+
+export function procesarPaginas(
+  paginas: Paginas,
+  lectores: readonly Lector[] = LECTORES,
+  detalles?: readonly DetallePagina[]
+): ResultadoImportacion {
   const muestra = muestraAnonimizada(paginas);
   const total = paginas.length;
   if (paginas.every((lineas) => lineas.length === 0))
@@ -115,7 +132,7 @@ export function procesarPaginas(paginas: Paginas, lectores: readonly Lector[] = 
   const lector = detectarLector(paginas, lectores);
   if (!lector) return { reconocido: false, motivo: "banco-desconocido", banco: null, muestra, paginas: total };
 
-  const lectura = lector.leer(paginas);
+  const lectura = lector.leer(paginasParaLeer(paginas, lector, detalles));
   const { movimientos, errores } = normalizar(lectura.renglones);
   if (movimientos.length === 0) return { reconocido: false, motivo: "sin-movimientos", banco: lector.banco, muestra, paginas: total };
 
