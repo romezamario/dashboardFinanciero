@@ -7,6 +7,7 @@ import { categorizar } from "../lib/importar/reglasBase";
 import { fechaCorta, monedaConCentavos } from "../lib/formato";
 import { esArchivoDeTabla } from "../lib/importar/excel";
 import { descargarPlantilla } from "../lib/importar/plantillaExcel";
+import { OpcionesSubida } from "./OpcionesSubida";
 import { ResultadoExcel } from "./SubirExcel";
 import { estiloEntrada } from "../lib/estilos";
 import { Boton, Nota } from "./SubirPiezas";
@@ -68,49 +69,7 @@ export function SubirEstadoCuenta({ onGuardado }: { onGuardado: () => void }) {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>
-          Subir estado de cuenta
-        </h2>
-        <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-          Elige el PDF que descargas de tu banca en línea. Se lee aquí mismo, en tu navegador: el archivo no se sube a
-          ningún lado y solo guardamos los movimientos. Por ahora leemos {BANCOS_SOPORTADOS}.
-        </p>
-        <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-          ¿Tu banco no está o prefieres capturar tus movimientos?{" "}
-          <button
-            type="button"
-            className="font-medium underline"
-            style={{ color: "var(--series-1)" }}
-            onClick={() => void descargarPlantilla()}
-          >
-            Descarga la plantilla de Excel
-          </button>
-          , llénala y súbela aquí mismo.
-        </p>
-      </div>
-
-      <label
-        className="tarjeta flex cursor-pointer flex-col items-center gap-1 rounded-lg p-6 text-center"
-        style={{ borderStyle: "dashed" }}
-      >
-        <span className="text-sm font-medium" style={{ color: "var(--series-1)" }}>
-          Elegir archivo
-        </span>
-        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-          PDF de tu banco o la plantilla de Excel (.xlsx o .csv). Puedes elegir varios a la vez
-        </span>
-        <input
-          type="file"
-          accept="application/pdf,.pdf,.xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-          multiple
-          className="sr-only"
-          onChange={(e) => {
-            for (const archivo of Array.from(e.target.files ?? [])) void leer(archivo);
-            e.target.value = "";
-          }}
-        />
-      </label>
+      <OpcionesSubida onArchivos={(lista) => lista.forEach((archivo) => void leer(archivo))} />
 
       {archivos.map((a) => (
         <TarjetaArchivo key={a.id} archivo={a} onGuardado={onGuardado} />

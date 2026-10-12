@@ -117,7 +117,7 @@ send it to `muestras_estados_cuenta` (migration `20261012000000_…`: insert/sel
 size-capped; in `aislamiento.sql`). Those samples are for Claude to propose a new lector (structure only: anonymized amounts are
 all 0), reviewed by the owner — the repo is public, so samples must never be copied into issues, logs or artifacts.
 **Excel template upload (2026-10-12, user's request: "una plantilla de excel que permita cargar transacciones")** — producto
-edition, same screen and same file input as the PDFs (`SubirEstadoCuenta` routes `.xlsx`/`.csv` to `SubirExcel.tsx`; shared
+edition, same screen and same file input as the PDFs (`SubirEstadoCuenta` routes `.xlsx`/`.csv` to `SubirExcel.tsx`; the screen is two cards side by side, "Estado de cuenta en PDF" and "Plantilla de Excel", each with its own drop zone — `OpcionesSubida.tsx`, user's request 2026-10-12 "como dos secciones diferentes"; header button "Subir movimientos"; shared
 `Boton`/`Nota` in `SubirPiezas.tsx`). "Descarga la plantilla de Excel" builds `plantilla-ordena-tu-lana.xlsx` in the browser
 (`lib/importar/plantillaExcel.ts`, `write-excel-file/universal`, lazy): sheet *Movimientos* (headers only: Fecha,
 Descripción, Cargo (gasto), Abono (ingreso), Categoría/Comercio opcionales) + *Instrucciones* with an example. Reading

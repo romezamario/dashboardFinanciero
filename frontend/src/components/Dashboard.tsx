@@ -482,8 +482,8 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
               style={{ color: enSubir ? "var(--series-1)" : "var(--text-secondary)" }}
               aria-current={enSubir ? "page" : undefined}
             >
-              <span className="sm:hidden">Subir PDF</span>
-              <span className="hidden sm:inline">Subir estado de cuenta</span>
+              <span className="sm:hidden">Subir</span>
+              <span className="hidden sm:inline">Subir movimientos</span>
             </button>
           )}
           {EDICION === "producto" && esAdmin && (
@@ -574,7 +574,7 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
             enCuenta
               ? "Mi cuenta"
               : enSubir
-                ? "Subir estado de cuenta"
+                ? "Subir movimientos"
                 : enAdmin
                   ? "Administración"
                   : `la pestaña ${
@@ -633,14 +633,14 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
           EDICION === "producto" ? (
             <div className="tarjeta space-y-3 rounded-lg p-6 text-center">
               <p className="text-sm" style={{ color: "var(--text-primary)" }}>
-                Todavía no tienes movimientos. Empieza subiendo el PDF de tu estado de cuenta.
+                Todavía no tienes movimientos. Empieza subiendo el PDF de tu estado de cuenta o la plantilla de Excel.
               </p>
               <button
                 onClick={() => cambiarVista(VISTA_SUBIR)}
                 className="rounded-md px-4 py-2 text-sm font-medium text-white"
                 style={{ background: "var(--series-1)" }}
               >
-                Subir estado de cuenta
+                Subir movimientos
               </button>
             </div>
           ) : (
