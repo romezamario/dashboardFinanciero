@@ -11,12 +11,15 @@ import {
 } from "recharts";
 import type { SaldoAgente } from "../../functions/api/agente-saldo";
 import type { CuentaAlpaca, OrdenAgente, PosicionAgente } from "../../functions/api/agente-saldo";
+import type { PuntoHistorialAlpaca, RangoAlpaca } from "../../functions/api/alpaca-historial";
 import {
   estadoOrdenAlpaca,
   fraccionEnEfectivo,
   nombreActivo,
   nombreSimboloAlpaca,
+  historialGuardadoComoPuntos,
   obtenerAlpacaEnVivo,
+  obtenerHistorialAlpaca,
   obtenerSaldoAgente,
   ordenesRecientesPrimero,
   resumirAlpaca,
@@ -30,6 +33,9 @@ import {
   dolares,
   entero,
   dolaresConSigno,
+  diaMes,
+  diaMesAnio,
+  hora,
   fechaCorta,
   fechaHora,
   moneda,
@@ -41,6 +47,7 @@ import {
   precioUsd,
 } from "../lib/formato";
 import { Tabla } from "./IndicadoresUI";
+import { Segmentado } from "./Segmentado";
 
 const COLOR_SALDO = "var(--series-1)";
 
@@ -141,6 +148,128 @@ function Encabezado({ titulo, detalle, accion }: { titulo: string; detalle: stri
         {accion}
       </div>
       <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{detalle}</p>
+    </div>
+  );
+}
+
+const OPCIONES_RANGO: { id: RangoAlpaca; etiqueta: string }[] = [
+  { id: "1D", etiqueta: "1D" },
+  { id: "1M", etiqueta: "1M" },
+  { id: "1A", etiqueta: "1A" },
+  { id: "todo", etiqueta: "Todo" },
+];
+
+/** Eje y tooltip según el rango: horas en 1 día, día y hora en 1 mes, fechas en el resto. */
+const FORMATO_EJE: Record<RangoAlpaca, (ms: number) => string> = {
+  "1D": hora,
+  "1M": diaMes,
+  "1A": diaMesAnio,
+  todo: diaMesAnio,
+};
+const FORMATO_TOOLTIP: Record<RangoAlpaca, (ms: number) => string> = {
+  "1D": (ms) => `${diaMes(ms)}, ${hora(ms)}`,
+  "1M": (ms) => `${diaMes(ms)}, ${hora(ms)}`,
+  "1A": diaMesAnio,
+  todo: diaMesAnio,
+};
+
+/** Medianoche local de cada día que cubren los puntos (la primera dentro del rango). */
+function medianochesEntre(puntos: PuntoHistorialAlpaca[]): number[] {
+  if (puntos.length === 0) return [];
+  const fin = puntos[puntos.length - 1].t;
+  const d = new Date(puntos[0].t);
+  d.setHours(24, 0, 0, 0);
+  const marcas: number[] = [];
+  for (; d.getTime() <= fin; d.setDate(d.getDate() + 1)) marcas.push(d.getTime());
+  return marcas;
+}
+
+/** Valor de la cuenta de Alpaca en el tiempo, como la gráfica de Alpaca: eje de tiempo real (los
+ * puntos quedan donde ocurrieron) y línea recta entre puntos, sin suavizar, para no inventar
+ * movimientos entre un dato y otro. La referencia punteada es el valor al inicio del rango. */
+function GraficaAlpaca({ titulo, puntos, rango, selector, aviso }: {
+  titulo: string;
+  puntos: PuntoHistorialAlpaca[] | null;
+  rango: RangoAlpaca;
+  selector: React.ReactNode;
+  aviso: string | null;
+}) {
+  const inicio = puntos && puntos.length > 0 ? puntos[0].valor : null;
+  const fin = puntos && puntos.length > 0 ? puntos[puntos.length - 1].valor : null;
+  // En 1 mes los puntos son por hora: sin marcas propias el eje repetiría "11 oct" varias veces.
+  const marcas = useMemo(() => (rango === "1M" && puntos ? medianochesEntre(puntos) : undefined), [rango, puntos]);
+  return (
+    <div className="rounded-lg p-4 tarjeta">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h4 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>{titulo}</h4>
+          {inicio !== null && fin !== null && (
+            <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+              Cambio en el periodo: <MontoUsd valor={fin - inicio} fraccion={inicio ? (fin - inicio) / inicio : null} />
+            </p>
+          )}
+        </div>
+        {selector}
+      </div>
+      {aviso && (
+        <p className="mt-2 text-xs" style={{ color: "var(--status-critical)" }}>{aviso}</p>
+      )}
+      <div className="mt-3 h-72">
+        {puntos === null ? (
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Cargando…</p>
+        ) : puntos.length === 0 ? (
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Alpaca todavía no tiene datos en este rango.</p>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={puntos}>
+              <CartesianGrid vertical={false} stroke="var(--gridline)" strokeWidth={1} />
+              <XAxis
+                dataKey="t"
+                type="number"
+                scale="time"
+                domain={["dataMin", "dataMax"]}
+                tick={{ fill: "var(--text-muted)", fontSize: 12 }}
+                axisLine={false}
+                tickLine={false}
+                minTickGap={40}
+                ticks={marcas}
+                tickFormatter={(ms: number) => FORMATO_EJE[rango](ms)}
+              />
+              <YAxis
+                tick={{ fill: "var(--text-muted)", fontSize: 12 }}
+                axisLine={false}
+                tickLine={false}
+                domain={["auto", "auto"]}
+                tickFormatter={(v: number) => entero.format(v)}
+                width={64}
+              />
+              {inicio !== null && (
+                <ReferenceLine
+                  y={inicio}
+                  stroke="var(--baseline)"
+                  strokeDasharray="4 4"
+                  ifOverflow="extendDomain"
+                  label={{ value: "Inicio del periodo", position: "insideTopLeft", fill: "var(--text-muted)", fontSize: 11 }}
+                />
+              )}
+              <Tooltip
+                contentStyle={estiloTooltip}
+                itemStyle={{ color: "var(--text-primary)" }}
+                labelFormatter={(ms) => FORMATO_TOOLTIP[rango](Number(ms))}
+                formatter={(v) => [dolares.format(Number(v)), "Valor"]}
+              />
+              <Line
+                type="linear"
+                dataKey="valor"
+                stroke={COLOR_SALDO}
+                strokeWidth={2}
+                dot={puntos.length < 15}
+                isAnimationActive={false}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </div>
     </div>
   );
 }
@@ -263,12 +392,32 @@ function SeccionAlpaca({ inicial }: { inicial: CuentaAlpaca }) {
       .then(setCuenta)
       .catch((e: unknown) => setErrorActualizar(e instanceof Error ? e.message : String(e)))
       .finally(() => setActualizando(false));
+    setVersionHistorial((v) => v + 1);
   };
   const r = useMemo(() => resumirAlpaca(cuenta), [cuenta]);
-  const historial = useMemo(
-    () => (cuenta.historial ?? []).map((p) => ({ date: p.date, valor: p.equity })),
-    [cuenta.historial]
-  );
+
+  // La gráfica se pide en vivo con el detalle de Alpaca (cada 5 min en "1D"); output/alpaca.json solo
+  // trae un punto por día, que queda de respaldo si la consulta en vivo falla.
+  const [rango, setRango] = useState<RangoAlpaca>("1D");
+  const [versionHistorial, setVersionHistorial] = useState(0);
+  const [historiales, setHistoriales] = useState<Partial<Record<RangoAlpaca, PuntoHistorialAlpaca[]>>>({});
+  // El error se guarda con la consulta que lo produjo: al cambiar de rango o actualizar deja de aplicar.
+  const [fallo, setFallo] = useState<{ clave: string; mensaje: string } | null>(null);
+  const claveHistorial = `${rango}:${versionHistorial}`;
+  useEffect(() => {
+    let vigente = true;
+    obtenerHistorialAlpaca(rango)
+      .then((puntos) => vigente && setHistoriales((h) => ({ ...h, [rango]: puntos })))
+      .catch((e: unknown) => vigente && setFallo({ clave: claveHistorial, mensaje: e instanceof Error ? e.message : String(e) }));
+    return () => {
+      vigente = false;
+    };
+  }, [rango, claveHistorial]);
+  const errorHistorial = fallo?.clave === claveHistorial ? fallo.mensaje : null;
+  const enVivo = historiales[rango];
+  const guardado = useMemo(() => historialGuardadoComoPuntos(cuenta.historial ?? []), [cuenta.historial]);
+  const usarGuardado = !enVivo && errorHistorial !== null;
+  const puntosGrafica = enVivo ?? (usarGuardado ? guardado : null);
   return (
     <section className="flex flex-col gap-4">
       <Encabezado
@@ -300,15 +449,17 @@ function SeccionAlpaca({ inicial }: { inicial: CuentaAlpaca }) {
         />
         <Dato titulo="Ganancia no realizada" valor={<MontoUsd valor={r.noRealizada} />} />
       </div>
-      {historial.length > 0 && (
-        <GraficaSaldo
-          titulo={`Valor de la cuenta en Alpaca (${cuenta.moneda})`}
-          puntos={historial}
-          inicial={historial[0].valor}
-          formato={(v) => dolares.format(v)}
-          formatoEje={(v) => entero.format(v)}
-        />
-      )}
+      <GraficaAlpaca
+        titulo={`Valor de la cuenta en Alpaca (${cuenta.moneda})`}
+        puntos={puntosGrafica}
+        rango={usarGuardado ? "1A" : rango}
+        selector={<Segmentado opciones={OPCIONES_RANGO} valor={rango} onCambiar={setRango} chico />}
+        aviso={
+          errorHistorial
+            ? `No se pudo leer el historial en vivo: ${errorHistorial} (${usarGuardado ? "se muestra el cierre diario guardado" : "se muestran los últimos datos leídos"}).`
+            : null
+        }
+      />
       <Tabla
         titulo={`Posiciones en Alpaca (${cuenta.posiciones.length})`}
         vacio="Todavía no hay posiciones: las órdenes siguen en espera."

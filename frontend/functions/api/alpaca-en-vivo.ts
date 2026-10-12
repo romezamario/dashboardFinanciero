@@ -86,17 +86,31 @@ export function armarCuentaAlpaca(
   };
 }
 
+/** GET a la API de la cuenta paper (nunca otra URL ni otro método). */
+export async function pedirAlpaca<T>(llave: string, secreto: string, ruta: string): Promise<T> {
+  const respuesta = await fetch(URL_ALPACA_PAPER + ruta, {
+    headers: { "APCA-API-KEY-ID": llave, "APCA-API-SECRET-KEY": secreto, Accept: "application/json" },
+  });
+  if (respuesta.status === 401 || respuesta.status === 403) {
+    throw new Error("Alpaca rechazó las llaves: revisa ALPACA_API_KEY_ID y ALPACA_API_SECRET_KEY en Cloudflare Pages");
+  }
+  if (!respuesta.ok) throw new Error(`Alpaca respondió ${respuesta.status} en ${ruta.split("?")[0]}`);
+  return (await respuesta.json()) as T;
+}
+
+/** 503 en español cuando faltan las llaves en Cloudflare Pages. */
+export function faltanLlaves(): Response {
+  return Response.json(
+    {
+      error:
+        "Para leer Alpaca en vivo falta guardar ALPACA_API_KEY_ID y ALPACA_API_SECRET_KEY en Cloudflare Pages (Settings → Variables and Secrets)",
+    },
+    { status: 503 }
+  );
+}
+
 export async function obtenerCuentaAlpacaEnVivo(llave: string, secreto: string): Promise<CuentaAlpaca> {
-  const pedir = async <T>(ruta: string): Promise<T> => {
-    const respuesta = await fetch(URL_ALPACA_PAPER + ruta, {
-      headers: { "APCA-API-KEY-ID": llave, "APCA-API-SECRET-KEY": secreto, Accept: "application/json" },
-    });
-    if (respuesta.status === 401 || respuesta.status === 403) {
-      throw new Error("Alpaca rechazó las llaves: revisa ALPACA_API_KEY_ID y ALPACA_API_SECRET_KEY en Cloudflare Pages");
-    }
-    if (!respuesta.ok) throw new Error(`Alpaca respondió ${respuesta.status} en ${ruta.split("?")[0]}`);
-    return (await respuesta.json()) as T;
-  };
+  const pedir = <T>(ruta: string) => pedirAlpaca<T>(llave, secreto, ruta);
   const [cuenta, posiciones, ordenes, historial] = await Promise.all([
     pedir<Crudo>("/v2/account"),
     pedir<Crudo[]>("/v2/positions"),
@@ -112,15 +126,7 @@ export async function obtenerCuentaAlpacaEnVivo(llave: string, secreto: string):
 export async function onRequestGet({ env }: { request: Request; env?: Entorno }): Promise<Response> {
   const llave = env?.ALPACA_API_KEY_ID;
   const secreto = env?.ALPACA_API_SECRET_KEY;
-  if (!llave || !secreto) {
-    return Response.json(
-      {
-        error:
-          "Para actualizar en vivo falta guardar ALPACA_API_KEY_ID y ALPACA_API_SECRET_KEY en Cloudflare Pages (Settings → Variables and Secrets)",
-      },
-      { status: 503 }
-    );
-  }
+  if (!llave || !secreto) return faltanLlaves();
   try {
     const cuenta = await obtenerCuentaAlpacaEnVivo(llave, secreto);
     return Response.json(cuenta, { headers: { "Cache-Control": "no-store" } });

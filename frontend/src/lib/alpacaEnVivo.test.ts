@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { armarCuentaAlpaca } from "../../functions/api/alpaca-en-vivo";
+import { PARAMETROS_RANGO, esRangoAlpaca, puntosDeHistorial } from "../../functions/api/alpaca-historial";
+import { historialGuardadoComoPuntos } from "./agente";
 
 describe("armarCuentaAlpaca", () => {
   const ahora = new Date("2026-10-12T15:30:00.123Z");
@@ -35,5 +37,29 @@ describe("armarCuentaAlpaca", () => {
     const c = armarCuentaAlpaca({ equity: "1" }, [], [], {}, ahora);
     expect(c.moneda).toBe("USD");
     expect(c.historial).toEqual([{ date: "2026-10-12", equity: 1 }]);
+  });
+});
+
+describe("historial de Alpaca por rango", () => {
+  it("quita ceros y nulos, ordena y pasa a milisegundos", () => {
+    expect(puntosDeHistorial({ timestamp: [300, 100, 200, 400], equity: [100010.555, 0, 100000, null] })).toEqual([
+      { t: 200000, valor: 100000 },
+      { t: 300000, valor: 100010.56 },
+    ]);
+    expect(puntosDeHistorial({})).toEqual([]);
+  });
+
+  it("1D pide puntos de 5 minutos las 24 horas", () => {
+    expect(PARAMETROS_RANGO["1D"]).toContain("timeframe=5Min");
+    expect(PARAMETROS_RANGO["1D"]).toContain("intraday_reporting=continuous");
+    expect(esRangoAlpaca("1M")).toBe(true);
+    expect(esRangoAlpaca("5Y")).toBe(false);
+    expect(esRangoAlpaca(null)).toBe(false);
+  });
+
+  it("el historial guardado cae en su fecha local", () => {
+    const [p] = historialGuardadoComoPuntos([{ date: "2026-10-11", equity: 5 }]);
+    const d = new Date(p.t);
+    expect([d.getFullYear(), d.getMonth() + 1, d.getDate(), p.valor]).toEqual([2026, 10, 11, 5]);
   });
 });
