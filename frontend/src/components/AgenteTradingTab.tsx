@@ -16,6 +16,7 @@ import {
   fraccionEnEfectivo,
   nombreActivo,
   nombreSimboloAlpaca,
+  obtenerAlpacaEnVivo,
   obtenerSaldoAgente,
   ordenesRecientesPrimero,
   resumirAlpaca,
@@ -79,7 +80,7 @@ export function AgenteTradingTab() {
 
   return (
     <div className="flex flex-col gap-8">
-      {saldo.alpaca && <SeccionAlpaca cuenta={saldo.alpaca} />}
+      {saldo.alpaca && <SeccionAlpaca inicial={saldo.alpaca} />}
       <details
         className="flex flex-col"
         open={simulacionAbierta || !saldo.alpaca}
@@ -132,10 +133,13 @@ export function AgenteTradingTab() {
   );
 }
 
-function Encabezado({ titulo, detalle }: { titulo: string; detalle: string }) {
+function Encabezado({ titulo, detalle, accion }: { titulo: string; detalle: string; accion?: React.ReactNode }) {
   return (
     <div className="border-b pb-2" style={{ borderColor: "var(--border)" }}>
-      <h3 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>{titulo}</h3>
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>{titulo}</h3>
+        {accion}
+      </div>
       <p className="text-xs" style={{ color: "var(--text-secondary)" }}>{detalle}</p>
     </div>
   );
@@ -246,7 +250,20 @@ function Ordenes({ ordenes }: { ordenes: OrdenAgente[] }) {
 
 /** La cuenta de prueba (paper) en Alpaca: un broker de verdad recibe las mismas decisiones que la
  * simulación, con dinero simulado. Está en dólares y no cuadra exacto con la simulación en pesos. */
-function SeccionAlpaca({ cuenta }: { cuenta: CuentaAlpaca }) {
+function SeccionAlpaca({ inicial }: { inicial: CuentaAlpaca }) {
+  // Arranca con la foto que guardó el agente (output/alpaca.json); "Actualizar" la reemplaza por la
+  // que da Alpaca en este momento (/api/alpaca-en-vivo).
+  const [cuenta, setCuenta] = useState(inicial);
+  const [actualizando, setActualizando] = useState(false);
+  const [errorActualizar, setErrorActualizar] = useState<string | null>(null);
+  const actualizar = () => {
+    setActualizando(true);
+    setErrorActualizar(null);
+    obtenerAlpacaEnVivo()
+      .then(setCuenta)
+      .catch((e: unknown) => setErrorActualizar(e instanceof Error ? e.message : String(e)))
+      .finally(() => setActualizando(false));
+  };
   const r = useMemo(() => resumirAlpaca(cuenta), [cuenta]);
   const historial = useMemo(
     () => (cuenta.historial ?? []).map((p) => ({ date: p.date, valor: p.equity })),
@@ -258,7 +275,22 @@ function SeccionAlpaca({ cuenta }: { cuenta: CuentaAlpaca }) {
         titulo={`Cuenta de prueba en Alpaca (${cuenta.moneda})`}
         detalle={`Broker real con dinero simulado: recibe cada noche las órdenes del agente. Actualizado el
           ${fechaHora(cuenta.actualizado)}; las órdenes de ETFs esperan a que abra la bolsa.`}
+        accion={
+          <button
+            onClick={actualizar}
+            disabled={actualizando}
+            className="shrink-0 text-xs underline disabled:opacity-50"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            {actualizando ? "Actualizando…" : "Actualizar"}
+          </button>
+        }
       />
+      {errorActualizar && (
+        <p className="text-xs" style={{ color: "var(--status-critical)" }}>
+          No se pudo actualizar: {errorActualizar} (se muestran los últimos datos guardados).
+        </p>
+      )}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Dato titulo="Valor de la cuenta" valor={dolares.format(r.valor)} />
         <Dato titulo="Efectivo" valor={dolares.format(r.efectivo)} />
