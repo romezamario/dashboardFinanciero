@@ -14,7 +14,7 @@ export interface SeccionWiki {
   cuerpo: ReactNode;
 }
 
-export const ULTIMA_REVISION = "11 de octubre de 2026";
+export const ULTIMA_REVISION = "12 de octubre de 2026";
 
 export const SECCIONES: SeccionWiki[] = [
   // ------------------------------------------------------------ inicio
@@ -1248,6 +1248,14 @@ export const SECCIONES: SeccionWiki[] = [
             de ETFs mandadas de noche quedan "En espera (abre la bolsa)" hasta la apertura. No cuadra
             exacto con la simulación en pesos: Alpaca no opera BNB, ignora ajustes chicos y ejecuta a
             precios reales.
+          </li>
+          <li>
+            <B>Actualizar</B> (a la derecha del título de Alpaca): pide la cuenta en ese momento a la API de
+            Alpaca con <C>/api/alpaca-en-vivo</C>, una función de Cloudflare que solo hace lecturas contra la
+            cuenta paper, en vez de esperar la siguiente corrida del agente. Usa las variables{" "}
+            <C>ALPACA_API_KEY_ID</C> y <C>ALPACA_API_SECRET_KEY</C> de Cloudflare Pages; si faltan o Alpaca
+            falla, se queda con los datos guardados y lo dice en rojo. Lo actualizado no se guarda: al
+            recargar la página vuelve a la foto de <C>output/alpaca.json</C>.
           </li>
           <li>Solo en la edición personal.</li>
         </Lista>

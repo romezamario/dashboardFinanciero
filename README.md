@@ -410,7 +410,10 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
   cambio contra el cierre anterior, ganancia no realizada, posiciones y las últimas órdenes con su
   estado real (ejecutada, en espera de que abra la bolsa, cancelada…). Sale de `output/alpaca.json`
   de ese repo, que se actualiza cada noche y en la apertura y cierre de la bolsa; si no existe, esa
-  parte no se muestra. Lo lee
+  parte no se muestra. El botón **Actualizar** de ese bloque la lee en ese momento de la API de Alpaca
+  (`/api/alpaca-en-vivo`, solo lecturas y solo la cuenta paper); necesita las variables
+  `ALPACA_API_KEY_ID` y `ALPACA_API_SECRET_KEY` en Cloudflare Pages (las mismas llaves que el agente
+  tiene en GitHub) y, si faltan, lo dice en rojo y deja los datos guardados. Lo lee
   `/api/agente-saldo` (función de Cloudflare) del archivo `output/balance.json` de ese repo. Como
   el repo es privado, necesita la variable `GITHUB_TOKEN_AGENTE` en Cloudflare Pages (Settings →
   Variables and Secrets, producción): un token *fine-grained* de GitHub con acceso solo a

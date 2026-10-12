@@ -130,6 +130,14 @@ export function estadoOrdenAlpaca(estado: string | null): string {
 
 /** Trae el saldo de /api/agente-saldo (Pages Function). El error viene con
  * un mensaje en español listo para mostrarse. */
+/** La cuenta de Alpaca leída en este momento (botón "Actualizar"), no la foto de la última corrida. */
+export async function obtenerAlpacaEnVivo(): Promise<CuentaAlpaca> {
+  const respuesta = await fetch("/api/alpaca-en-vivo", { cache: "no-store" });
+  const cuerpo = (await respuesta.json().catch(() => ({}))) as CuentaAlpaca & { error?: string };
+  if (!respuesta.ok) throw new Error(cuerpo.error ?? `El servidor respondió ${respuesta.status}`);
+  return cuerpo;
+}
+
 export async function obtenerSaldoAgente(): Promise<SaldoAgente> {
   const respuesta = await fetch("/api/agente-saldo");
   const cuerpo = (await respuesta.json().catch(() => ({}))) as SaldoAgente & { error?: string };
