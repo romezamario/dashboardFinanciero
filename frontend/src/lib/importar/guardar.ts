@@ -15,11 +15,11 @@ import { categorizar, type Regla } from "./reglasBase";
 const LOTE = 500;
 const LOTE_IDS = 150;
 
-function comoError(error: { message?: string } | null): Error {
+export function comoError(error: { message?: string } | null): Error {
   return new Error(error?.message ?? "Error de Supabase");
 }
 
-async function idBanco(nombre: string): Promise<string> {
+export async function idBanco(nombre: string): Promise<string> {
   const buscar = () => supabase.from("bancos").select("id").eq("nombre", nombre).maybeSingle();
   const existente = await buscar();
   if (existente.error) throw comoError(existente.error);

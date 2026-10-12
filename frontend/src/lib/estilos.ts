@@ -14,3 +14,10 @@ export const estiloTooltip: CSSProperties = {
   borderRadius: 8,
   color: "var(--text-primary)",
 };
+
+/** Caja de un campo de texto o select sobre una tarjeta. */
+export const estiloEntrada: CSSProperties = {
+  background: "var(--page-plane)",
+  border: "1px solid var(--border)",
+  color: "var(--text-primary)",
+};

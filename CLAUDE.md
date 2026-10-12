@@ -116,6 +116,22 @@ page text (may include the full account number) is dropped once processed. **Unr
 send it to `muestras_estados_cuenta` (migration `20261012000000_…`: insert/select/delete own, only `estado='nueva'`, no update;
 size-capped; in `aislamiento.sql`). Those samples are for Claude to propose a new lector (structure only: anonymized amounts are
 all 0), reviewed by the owner — the repo is public, so samples must never be copied into issues, logs or artifacts.
+**Excel template upload (2026-10-12, user's request: "una plantilla de excel que permita cargar transacciones")** — producto
+edition, same screen and same file input as the PDFs (`SubirEstadoCuenta` routes `.xlsx`/`.csv` to `SubirExcel.tsx`; shared
+`Boton`/`Nota` in `SubirPiezas.tsx`). "Descarga la plantilla de Excel" builds `plantilla-ordena-tu-lana.xlsx` in the browser
+(`lib/importar/plantillaExcel.ts`, `write-excel-file/universal`, lazy): sheet *Movimientos* (headers only: Fecha,
+Descripción, Cargo (gasto), Abono (ingreso), Categoría/Comercio opcionales) + *Instrucciones* with an example. Reading
+(`lib/importar/excel.ts`, dependency `read-excel-file`, its `/universal` build loaded lazily — no web worker): columns found
+by header (accent/case-insensitive synonyms, within the first 20 rows), so the "Exportar mis datos" CSV (monto + tipo) and
+bank exports with Cargo/Abono or a signed Monto/Importe also work; dates = Excel dates, serial numbers or text
+DD/MM/AAAA (day first) / AAAA-MM-DD; amounts rounded to cents right away. Bad rows are listed with their row number
+and not saved. Saving (`guardarExcel.ts`): the customer picks one of their accounts or a new one (alias, optional last 4,
+"Es tarjeta de crédito" → bank `Archivo Excel TDC`, else `Archivo Excel`, so `esTarjetaCredito` works); the document is
+the ACCOUNT, not the file (`hash = "excel:<cuenta_id>"`, period widened on each upload) and `linea_cruda` = `"(excel)
+fecha | descripción | monto | tipo"` (+ " (2)" for identical rows, `pagina` 0) — no row number, so re-uploading the file
+with new rows only adds those. Categoría/comercio typed in the Excel are always applied; empty → base rules only on rows
+with neither. Tested in `excel.test.ts` (template round-trip, dates, amounts, CSV, errors, category precedence) and in
+Playwright against mocked Supabase (download, upload, preview, save payload).
 **Base categorization rules (2026-10-12, user's request "toma mis reglas de categorización y haz una base general")**:
 `lib/importar/reglasBase.ts` (`REGLAS_BASE`, ~230 rules, same semantics as `categorizar()`: case-insensitive substring, first match
 wins) was curated from the owner's 872 desktop rules keeping only chains, services and bank terms — no local businesses, trips,
@@ -1403,7 +1419,7 @@ ladoDominante, gasto hormiga), `alertas` (duplicates, $0 echo lines, price chang
 and several-charges-a-month cases, new subscription), `gastosEstadoCuenta` (only TDC cargos of
 non-hidden categories add up; sinSumar reasons; day order; esTarjetaCredito), `tecnico`
 (SMA, RSI edges), `conciliarCorreo` (one-to-one matching, eventosHeredables, filaAGastoCorreo),
-`metaDiaria` (week/month averages vs. the goal), `importar/procesar` (browser PDF lectores, line grouping, anonymizer), `importar/glifos` (image-row decoding, Python fingerprint), `importar/reglasBase` (no shadowed rules), `administracion`, `cuentaUsuario` (hash routes, auth links, error
+`metaDiaria` (week/month averages vs. the goal), `importar/procesar` (browser PDF lectores, line grouping, anonymizer), `importar/glifos` (image-row decoding, Python fingerprint), `importar/reglasBase` (no shadowed rules), `importar/excel` (Excel template upload), `administracion`, `cuentaUsuario` (hash routes, auth links, error
 translation, password rules), `exportarDatos` (CSV escaping), `promedios` (averages from the first month with
 spending), `shophunters` and `patrones/*` (levels and chart patterns on synthetic series from
 `src/test/series.ts`). `npx tsc -b` and `npm run lint` are the other checks; CI runs all three.

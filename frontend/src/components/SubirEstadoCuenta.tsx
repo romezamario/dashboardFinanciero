@@ -5,6 +5,11 @@ import { huellaArchivo, leerPaginasPdf, PdfConContrasena } from "../lib/importar
 import { detectarLector, periodo, procesarPaginas, totales, type ResultadoImportacion } from "../lib/importar/procesar";
 import { categorizar } from "../lib/importar/reglasBase";
 import { fechaCorta, monedaConCentavos } from "../lib/formato";
+import { esArchivoDeTabla } from "../lib/importar/excel";
+import { descargarPlantilla } from "../lib/importar/plantillaExcel";
+import { ResultadoExcel } from "./SubirExcel";
+import { estiloEntrada } from "../lib/estilos";
+import { Boton, Nota } from "./SubirPiezas";
 
 // "Subir estado de cuenta" de Ordena tu Lana (fase 2): el PDF se lee aquí, en
 // el navegador; el archivo nunca se sube. Solo se guardan los movimientos. Si
@@ -13,6 +18,7 @@ import { fechaCorta, monedaConCentavos } from "../lib/formato";
 
 type EstadoArchivo =
   | { fase: "leyendo" }
+  | { fase: "excel"; archivo: File }
   | { fase: "error"; mensaje: string }
   | { fase: "listo"; hash: string; resultado: ResultadoImportacion };
 
@@ -24,12 +30,6 @@ interface Archivo {
 
 const BANCOS_SOPORTADOS = "Banamex (cuenta de cheques y tarjetas de crédito) e Invex (tarjeta de crédito)";
 
-const estiloEntrada = {
-  background: "var(--page-plane)",
-  border: "1px solid var(--border)",
-  color: "var(--text-primary)",
-};
-
 let siguienteId = 1;
 
 export function SubirEstadoCuenta({ onGuardado }: { onGuardado: () => void }) {
@@ -40,6 +40,11 @@ export function SubirEstadoCuenta({ onGuardado }: { onGuardado: () => void }) {
 
   async function leer(archivo: File) {
     const id = siguienteId++;
+    // Excel y CSV se leen en su propia tarjeta (SubirExcel.tsx).
+    if (esArchivoDeTabla(archivo.name)) {
+      setArchivos((lista) => [...lista, { id, nombre: archivo.name, estado: { fase: "excel", archivo } }]);
+      return;
+    }
     setArchivos((lista) => [...lista, { id, nombre: archivo.name, estado: { fase: "leyendo" } }]);
     try {
       const datos = await archivo.arrayBuffer();
@@ -71,6 +76,18 @@ export function SubirEstadoCuenta({ onGuardado }: { onGuardado: () => void }) {
           Elige el PDF que descargas de tu banca en línea. Se lee aquí mismo, en tu navegador: el archivo no se sube a
           ningún lado y solo guardamos los movimientos. Por ahora leemos {BANCOS_SOPORTADOS}.
         </p>
+        <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+          ¿Tu banco no está o prefieres capturar tus movimientos?{" "}
+          <button
+            type="button"
+            className="font-medium underline"
+            style={{ color: "var(--series-1)" }}
+            onClick={() => void descargarPlantilla()}
+          >
+            Descarga la plantilla de Excel
+          </button>
+          , llénala y súbela aquí mismo.
+        </p>
       </div>
 
       <label
@@ -78,14 +95,14 @@ export function SubirEstadoCuenta({ onGuardado }: { onGuardado: () => void }) {
         style={{ borderStyle: "dashed" }}
       >
         <span className="text-sm font-medium" style={{ color: "var(--series-1)" }}>
-          Elegir PDF
+          Elegir archivo
         </span>
         <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-          Puedes elegir varios a la vez
+          PDF de tu banco o la plantilla de Excel (.xlsx o .csv). Puedes elegir varios a la vez
         </span>
         <input
           type="file"
-          accept="application/pdf,.pdf"
+          accept="application/pdf,.pdf,.xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           multiple
           className="sr-only"
           onChange={(e) => {
@@ -113,43 +130,6 @@ function Tarjeta({ titulo, children }: { titulo: string; children: ReactNode }) 
   );
 }
 
-function Boton({
-  children,
-  onClick,
-  deshabilitado,
-  secundario,
-}: {
-  children: ReactNode;
-  onClick: () => void;
-  deshabilitado?: boolean;
-  secundario?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={deshabilitado}
-      className="rounded-md px-3 py-1.5 text-sm font-medium disabled:opacity-50"
-      style={
-        secundario
-          ? { border: "1px solid var(--border)", color: "var(--text-primary)" }
-          : { background: "var(--series-1)", color: "white" }
-      }
-    >
-      {children}
-    </button>
-  );
-}
-
-function Nota({ tipo, children }: { tipo: "error" | "exito" | "aviso"; children: ReactNode }) {
-  const color = { error: "var(--status-critical)", exito: "var(--status-good)", aviso: "var(--text-secondary)" }[tipo];
-  return (
-    <p role={tipo === "error" ? "alert" : "status"} className="mt-2 text-sm" style={{ color }}>
-      {children}
-    </p>
-  );
-}
-
 function TarjetaArchivo({ archivo, onGuardado }: { archivo: Archivo; onGuardado: () => void }) {
   const { estado } = archivo;
   if (estado.fase === "leyendo")
@@ -158,6 +138,12 @@ function TarjetaArchivo({ archivo, onGuardado }: { archivo: Archivo; onGuardado:
         <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
           Leyendo…
         </p>
+      </Tarjeta>
+    );
+  if (estado.fase === "excel")
+    return (
+      <Tarjeta titulo={archivo.nombre}>
+        <ResultadoExcel archivo={estado.archivo} onGuardado={onGuardado} />
       </Tarjeta>
     );
   if (estado.fase === "error")
@@ -343,12 +329,26 @@ function Reconocido({ resultado, hash, onGuardado }: { resultado: Reconocido; ha
   );
 }
 
+function LigaPlantilla() {
+  return (
+    <button
+      type="button"
+      className="font-medium underline"
+      style={{ color: "var(--series-1)" }}
+      onClick={() => void descargarPlantilla()}
+    >
+      plantilla de Excel
+    </button>
+  );
+}
+
 function NoReconocido({ resultado }: { resultado: NoReconocidoT }) {
   if (resultado.motivo === "sin-texto")
     return (
       <Nota tipo="aviso">
         Este PDF no trae texto (parece una imagen o un documento escaneado), así que no se puede leer. Descarga el estado
-        de cuenta original desde tu banca en línea y vuelve a intentarlo.
+        de cuenta original desde tu banca en línea y vuelve a intentarlo, o captura tus movimientos con la{" "}
+        <LigaPlantilla />.
       </Nota>
     );
   return (
@@ -361,7 +361,8 @@ function NoReconocido({ resultado }: { resultado: NoReconocidoT }) {
       <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
         Puedes enviarnos una muestra anonimizada para que preparemos el lector de tu banco. Así se ve lo que nos
         llegaría: cada número se vuelve 0 y cada nombre se vuelve X, así que no viajan tus montos, nombres ni números de
-        cuenta. Solo nos sirve para conocer el formato.
+        cuenta. Solo nos sirve para conocer el formato. Mientras, puedes subir tus movimientos con la{" "}
+        <LigaPlantilla />.
       </p>
       <EnviarMuestra motivo={resultado.motivo} banco={resultado.banco} paginas={resultado.paginas} texto={resultado.muestra} />
     </div>
