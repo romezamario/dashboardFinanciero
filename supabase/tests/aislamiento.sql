@@ -328,4 +328,77 @@ begin
   end if;
 end $$;
 
+-- ------------------------------------------- empezar desde cero (administrador)
+-- B no es administrador: no puede llamarla. El administrador borra solo lo
+-- suyo (movimientos, cuentas, catálogos, avisos) y conserva su perfil; lo de
+-- B queda intacto.
+set role authenticated;
+set request.jwt.claim.sub = 'bbbbbbbb-0000-0000-0000-000000000001';
+do $$
+begin
+  begin
+    perform reiniciar_mis_datos();
+    raise exception 'FALLO: B (no administrador) pudo borrar sus datos con reiniciar_mis_datos';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+
+reset role;
+set role anon;
+set request.jwt.claim.sub = '';
+do $$
+begin
+  begin
+    perform reiniciar_mis_datos();
+    raise exception 'FALLO: anon pudo llamar reiniciar_mis_datos';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+
+reset role;
+create temp table antes_de_b as
+  select (select count(*) from transacciones where user_id = 'bbbbbbbb-0000-0000-0000-000000000001') as t,
+         (select count(*) from cuentas where user_id = 'bbbbbbbb-0000-0000-0000-000000000001') as c,
+         (select count(*) from categorias where user_id = 'bbbbbbbb-0000-0000-0000-000000000001') as k;
+grant select on antes_de_b to authenticated;
+
+set role authenticated;
+set request.jwt.claim.sub = 'dddddddd-0000-0000-0000-000000000001';
+insert into cuentas (id, banco_id, alias, ultimos_4_digitos)
+  values ('dddddddd-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-0000000000b1', 'Cuenta D', '4444');
+insert into categorias (id, nombre) values ('dddddddd-0000-0000-0000-0000000000a1', 'Comida');
+insert into eventos (id, nombre) values ('dddddddd-0000-0000-0000-0000000000e1', 'Viaje D');
+insert into documentos (id, cuenta_id, hash)
+  values ('dddddddd-0000-0000-0000-0000000000d1', 'dddddddd-0000-0000-0000-0000000000c1', 'hash-d');
+insert into transacciones (documento_id, categoria_id, evento_id, fecha, descripcion, monto, tipo, pagina, linea_cruda)
+  values ('dddddddd-0000-0000-0000-0000000000d1', 'dddddddd-0000-0000-0000-0000000000a1',
+          'dddddddd-0000-0000-0000-0000000000e1', '2026-10-01', 'TACOS', 99, 'cargo', 1, 'linea d1'),
+         ('dddddddd-0000-0000-0000-0000000000d1', null, null, '2026-10-02', 'CAFE', 50, 'cargo', 1, 'linea d2');
+insert into gastos_correo (mensaje_id, fecha, hora, tarjeta, comercio, categoria, monto, evento_id)
+  values ('msg-d', '2026-10-01', '12:00', '444', 'Tacos', 'Comida', 99, 'dddddddd-0000-0000-0000-0000000000e1');
+do $$
+begin
+  if reiniciar_mis_datos() <> 2 then raise exception 'FALLO: reiniciar_mis_datos no reportó 2 movimientos'; end if;
+  if exists (select 1 from transacciones) or exists (select 1 from documentos) or exists (select 1 from cuentas)
+     or exists (select 1 from categorias) or exists (select 1 from eventos) or exists (select 1 from gastos_correo) then
+    raise exception 'FALLO: reiniciar_mis_datos dejó datos del administrador';
+  end if;
+  if not exists (select 1 from perfiles) then
+    raise exception 'FALLO: reiniciar_mis_datos borró el perfil del administrador';
+  end if;
+end $$;
+
+reset role;
+do $$
+begin
+  if (select count(*) from transacciones where user_id = 'bbbbbbbb-0000-0000-0000-000000000001') <> (select t from antes_de_b)
+     or (select count(*) from cuentas where user_id = 'bbbbbbbb-0000-0000-0000-000000000001') <> (select c from antes_de_b)
+     or (select count(*) from categorias where user_id = 'bbbbbbbb-0000-0000-0000-000000000001') <> (select k from antes_de_b) then
+    raise exception 'FALLO: reiniciar_mis_datos del administrador tocó datos de B';
+  end if;
+  if (select t from antes_de_b) = 0 then
+    raise exception 'FALLO: la prueba no tiene movimientos de B para comprobar';
+  end if;
+end $$;
+
 \echo 'Aislamiento entre usuarios: OK'

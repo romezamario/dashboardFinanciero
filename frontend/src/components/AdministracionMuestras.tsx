@@ -7,12 +7,14 @@ import {
   MOTIVOS_MUESTRA,
   obtenerMuestras,
   obtenerTextoMuestra,
+  reiniciarMisDatos,
   textoParaClaude,
   type EstadoMuestra,
   type Muestra,
 } from "../lib/administracion";
+import { confirmaBorrado, PALABRA_BORRAR } from "../lib/cuentaUsuario";
 import { descargarTexto } from "../lib/exportarDatos";
-import { fechaHora } from "../lib/formato";
+import { entero, fechaHora } from "../lib/formato";
 
 // Administración de Ordena tu Lana (solo la ve quien es_administrador()): las
 // muestras anonimizadas que mandan los clientes cuando no leemos su PDF. El
@@ -27,7 +29,13 @@ const estiloEntrada = {
   color: "var(--text-primary)",
 };
 
-export function AdministracionMuestras() {
+export function AdministracionMuestras({
+  totalMovimientos,
+  onDatosBorrados,
+}: {
+  totalMovimientos: number;
+  onDatosBorrados: () => void;
+}) {
   const [muestras, setMuestras] = useState<Muestra[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<Filtro>("pendientes");
@@ -110,7 +118,94 @@ export function AdministracionMuestras() {
       {visibles.map((m) => (
         <TarjetaMuestra key={m.id} muestra={m} onCambio={(cambio) => actualizar(m.id, cambio)} />
       ))}
+
+      <EmpezarDesdeCero totalMovimientos={totalMovimientos} onDatosBorrados={onDatosBorrados} />
     </div>
+  );
+}
+
+// Pedido del dueño (2026-10-12): borrar todo lo cargado para probar desde cero
+// sin darse de baja y volver a registrarse. Solo borra lo de su propia sesión.
+function EmpezarDesdeCero({
+  totalMovimientos,
+  onDatosBorrados,
+}: {
+  totalMovimientos: number;
+  onDatosBorrados: () => void;
+}) {
+  const [abierto, setAbierto] = useState(false);
+  const [texto, setTexto] = useState("");
+  const [borrando, setBorrando] = useState(false);
+  const [mensaje, setMensaje] = useState<{ tipo: "error" | "exito"; texto: string } | null>(null);
+
+  async function borrar() {
+    setBorrando(true);
+    setMensaje(null);
+    try {
+      const borradas = await reiniciarMisDatos();
+      setAbierto(false);
+      setTexto("");
+      setMensaje({
+        tipo: "exito",
+        texto: `Listo: se borraron ${entero.format(borradas)} movimiento${borradas === 1 ? "" : "s"} con sus cuentas, categorías y eventos.`,
+      });
+      onDatosBorrados();
+    } catch (e) {
+      setMensaje({ tipo: "error", texto: `No se pudieron borrar tus datos: ${(e as Error).message}` });
+    } finally {
+      setBorrando(false);
+    }
+  }
+
+  return (
+    <section
+      className="tarjeta space-y-3 rounded-lg p-4"
+      style={{ borderColor: "var(--status-critical)" }}
+      aria-labelledby="empezar-desde-cero"
+    >
+      <h3 id="empezar-desde-cero" className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+        Empezar desde cero
+      </h3>
+      <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+        Borra todo lo que cargaste en tu propia cuenta ({entero.format(totalMovimientos)} movimiento
+        {totalMovimientos === 1 ? "" : "s"}), junto con tus estados de cuenta, cuentas, categorías y eventos. Tu
+        cuenta, tu nombre, tus preferencias y las muestras de clientes se quedan. No toca los datos de ningún
+        cliente. No se puede deshacer.
+      </p>
+      {!abierto ? (
+        <Accion onClick={() => (setAbierto(true), setMensaje(null))} deshabilitado={borrando} peligro>
+          Borrar mis movimientos…
+        </Accion>
+      ) : (
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="block min-w-48 flex-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+            Escribe {PALABRA_BORRAR} para confirmar
+            <input
+              value={texto}
+              onChange={(e) => setTexto(e.target.value)}
+              autoComplete="off"
+              className="mt-1 w-full rounded-md px-3 py-2 text-sm"
+              style={estiloEntrada}
+            />
+          </label>
+          <Accion onClick={borrar} deshabilitado={!confirmaBorrado(texto) || borrando} peligro>
+            {borrando ? "Borrando…" : "Borrar definitivamente"}
+          </Accion>
+          <Accion onClick={() => (setAbierto(false), setTexto(""))} deshabilitado={borrando}>
+            Cancelar
+          </Accion>
+        </div>
+      )}
+      {mensaje && (
+        <p
+          className="text-sm"
+          style={{ color: mensaje.tipo === "error" ? "var(--status-critical)" : "var(--status-good)" }}
+          role={mensaje.tipo === "error" ? "alert" : "status"}
+        >
+          {mensaje.texto}
+        </p>
+      )}
+    </section>
   );
 }
 

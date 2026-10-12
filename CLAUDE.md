@@ -150,7 +150,7 @@ caller's CONFIRMED email is in that table; callable by anon too, returns false, 
 (producto edition) and shows "Administración" (`VISTA_ADMIN`, lazy `AdministracionMuestras.tsx`, `lib/administracion.ts`): list
 without the text (loaded on demand), filter (pendientes = nueva + en-revisión), "Copiar para Claude" (context + text; marks a
 "nueva" as "en-revisión"), view, download .txt, change estado, delete with confirmation. Covered by `aislamiento.sql` (confirmed
-admin sees/updates/deletes B's sample, unconfirmed same email and B don't, `administradores` unreadable, anon gets 0 rows). Tested in `lib/importar/procesar.test.ts` and in
+admin sees/updates/deletes B's sample, unconfirmed same email and B don't, `administradores` unreadable, anon gets 0 rows). **"Empezar desde cero" (2026-10-12, owner's request: wipe what he loaded without deleting and re-creating his account)**: last card of the admin screen; typing BORRAR calls RPC `reiniciar_mis_datos()` (migration `20261012030000_…`, **security invoker** so RLS still applies, raises 42501 unless `es_administrador()`), which deletes in one transaction the CALLER's transacciones, gastos_correo, documentos, cuentas, categorias and eventos (keeps perfil, preferencias, muestras) and returns how many movements went; then `Dashboard` reloads. Covered by `aislamiento.sql` (B and anon refused, admin's rows gone, profile kept, B's rows untouched). Tested in `lib/importar/procesar.test.ts` and in
 Playwright with generated PDFs (Banamex cheques, Invex V2, unknown bank, scanned) against mocked Supabase endpoints; not yet
 with real statements in the browser.
 **Landing page (2026-10-11, user's request)**: in the producto edition only, `App` shows `Landing.tsx` while

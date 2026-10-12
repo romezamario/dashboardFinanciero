@@ -592,7 +592,10 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
         ) : enSubir ? (
           <SubirEstadoCuenta onGuardado={() => void recargarTransacciones()} />
         ) : enAdmin ? (
-          <AdministracionMuestras />
+          <AdministracionMuestras
+            totalMovimientos={transacciones.length}
+            onDatosBorrados={() => void recargarTransacciones()}
+          />
         ) : vistaActiva === PESTANA_WIKI ? (
           <WikiTab />
         ) : vistaActiva === PESTANA_TECNICO ? (

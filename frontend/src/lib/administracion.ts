@@ -76,6 +76,18 @@ export async function borrarMuestra(id: string): Promise<void> {
   if (!data?.length) throw new Error("No tienes permiso para borrar esta muestra.");
 }
 
+/**
+ * "Empezar desde cero": borra los movimientos, avisos de correo, estados de
+ * cuenta, cuentas, categorías y eventos de quien llama (solo administradores;
+ * lo decide la base). Conserva perfil, preferencias y muestras. No se puede
+ * deshacer. Devuelve cuántos movimientos se borraron.
+ */
+export async function reiniciarMisDatos(): Promise<number> {
+  const { data, error } = await supabase.rpc("reiniciar_mis_datos");
+  if (error) throw comoError(error);
+  return typeof data === "number" ? data : 0;
+}
+
 /** Pendientes = nuevas y en revisión, lo que falta atender. */
 export function filtrarMuestras(muestras: readonly Muestra[], filtro: EstadoMuestra | "pendientes" | "todas"): Muestra[] {
   if (filtro === "todas") return [...muestras];
