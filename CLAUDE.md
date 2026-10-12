@@ -120,7 +120,11 @@ all 0), reviewed by the owner — the repo is public, so samples must never be c
 edition, same screen and same file input as the PDFs (`SubirEstadoCuenta` routes `.xlsx`/`.csv` to `SubirExcel.tsx`; the screen is two cards side by side, "Estado de cuenta en PDF" and "Plantilla de Excel", each with its own drop zone — `OpcionesSubida.tsx`, user's request 2026-10-12 "como dos secciones diferentes"; header button "Subir movimientos"; shared
 `Boton`/`Nota` in `SubirPiezas.tsx`). "Descarga la plantilla de Excel" builds `plantilla-ordena-tu-lana.xlsx` in the browser
 (`lib/importar/plantillaExcel.ts`, `write-excel-file/universal`, lazy): sheet *Movimientos* (headers only: Fecha,
-Descripción, Cargo (gasto), Abono (ingreso), Categoría/Comercio opcionales) + *Instrucciones* with an example. Reading
+Descripción, Monto, Tipo (Gasto o Ingreso), Categoría/Comercio opcionales — ONE unsigned amount column + a Tipo
+dropdown, user's decision 2026-10-12: separate Cargo/Abono columns invited filling everything in one; the dropdown and
+"Monto > 0" are Excel data validations injected by the `validacionesMovimientos` write-excel-file Feature, checked with
+openpyxl and LibreOffice; an empty/unknown Tipo is a row error, never guessed — only a negative Monto without Tipo
+counts as gasto; the old Cargo/Abono columns are still read) + *Instrucciones* with an example. Reading
 (`lib/importar/excel.ts`, dependency `read-excel-file`, its `/universal` build loaded lazily — no web worker): columns found
 by header (accent/case-insensitive synonyms, within the first 20 rows), so the "Exportar mis datos" CSV (monto + tipo) and
 bank exports with Cargo/Abono or a signed Monto/Importe also work; dates = Excel dates, serial numbers or text

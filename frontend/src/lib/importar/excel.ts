@@ -22,12 +22,18 @@ export const MAXIMO_FILAS = 20_000;
 /** Prefijo de `linea_cruda`: distingue lo capturado en Excel de un renglón de PDF. */
 export const PREFIJO_EXCEL = "(excel) ";
 
-/** Encabezados de la plantilla, en orden. */
+/** Encabezados de la plantilla, en orden. Una sola columna de monto (sin
+ * signo) y el tipo aparte, con lista Gasto/Ingreso: con dos columnas
+ * Cargo/Abono era fácil llenarlo todo en una. Las columnas Cargo/Abono de la
+ * primera versión se siguen leyendo. */
+export const TIPO_GASTO = "Gasto";
+export const TIPO_INGRESO = "Ingreso";
+
 export const ENCABEZADOS = [
   "Fecha",
   "Descripción",
-  "Cargo (gasto)",
-  "Abono (ingreso)",
+  "Monto",
+  "Tipo (Gasto o Ingreso)",
   "Categoría (opcional)",
   "Comercio (opcional)",
 ] as const;
@@ -206,7 +212,7 @@ export function interpretarFilas(filas: Filas): LecturaExcel {
     }
     const conValor = [cargo, abono, monto].filter((v) => v !== null && v !== 0);
     if (conValor.length === 0) {
-      errores.push(`Fila ${numero}: falta el monto (escríbelo en Cargo o en Abono).`);
+      errores.push(`Fila ${numero}: falta el monto.`);
       continue;
     }
     if (conValor.length > 1) {
@@ -216,12 +222,21 @@ export function interpretarFilas(filas: Filas): LecturaExcel {
     if (cargo) centavos = -Math.abs(cargo);
     else if (abono) centavos = Math.abs(abono);
     else {
-      // Una sola columna Monto: con columna Tipo manda el tipo; sin ella,
-      // negativo = gasto.
+      // Una sola columna Monto: con columna Tipo manda el tipo; sin ella
+      // (exportaciones de bancos), negativo = gasto.
       const tipo = sinAcentos(texto(celda(fila, "tipo")));
       if (tipo.startsWith("cargo") || tipo.startsWith("gasto")) centavos = -Math.abs(monto!);
       else if (tipo.startsWith("abono") || tipo.startsWith("ingreso")) centavos = Math.abs(monto!);
-      else centavos = monto!;
+      else if (!col.has("tipo") || (tipo === "" && monto! < 0)) centavos = monto!;
+      else {
+        // Nunca adivinar: un gasto sin tipo contado como ingreso descuadra todo.
+        errores.push(
+          tipo === ""
+            ? `Fila ${numero}: falta el tipo; elige ${TIPO_GASTO} o ${TIPO_INGRESO}.`
+            : `Fila ${numero}: el tipo "${texto(celda(fila, "tipo"))}" no se entiende; usa ${TIPO_GASTO} o ${TIPO_INGRESO}.`
+        );
+        continue;
+      }
     }
 
     const tipo = centavos < 0 ? "cargo" : "abono";

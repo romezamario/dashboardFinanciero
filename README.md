@@ -590,8 +590,8 @@ armada a partir de las reglas de la app de escritorio, solo con cadenas y servic
 PDF no pisa lo que el cliente ya cambió.
 
 **Plantilla de Excel**: en la misma pantalla, "Descarga la plantilla de Excel" baja
-`plantilla-ordena-tu-lana.xlsx` (hoja *Movimientos* con Fecha, Descripción, Cargo, Abono, Categoría y Comercio
-opcionales, y hoja *Instrucciones* con un ejemplo). El cliente la llena y la sube por el mismo botón (también acepta
+`plantilla-ordena-tu-lana.xlsx` (hoja *Movimientos* con Fecha, Descripción, Monto, Tipo —lista Gasto/Ingreso— y Categoría y
+Comercio opcionales, y hoja *Instrucciones* con un ejemplo). El cliente la llena y la sube por el mismo botón (también acepta
 `.csv`, incluido el de "Exportar mis datos"); se lee en el navegador, ve la vista previa con totales y las filas que no
 se entendieron, y elige a qué cuenta van (una que ya tiene o una nueva, con últimos 4 opcionales y si es tarjeta de
 crédito). Volver a subir el archivo con filas nuevas solo agrega las nuevas.

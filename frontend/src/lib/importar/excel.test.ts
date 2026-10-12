@@ -3,7 +3,7 @@ import writeExcel from "write-excel-file/universal";
 import { describe, expect, it } from "vitest";
 import { type Celda, filasDeCsv, HOJA_MOVIMIENTOS, interpretarFilas, leerFecha, leerMonto } from "./excel";
 import { cambiosDeCategoria } from "./guardarExcel";
-import { hojasPlantilla } from "./plantillaExcel";
+import { hojasPlantilla, validacionesMovimientos } from "./plantillaExcel";
 
 const ENC = ["Fecha", "Descripción", "Cargo (gasto)", "Abono (ingreso)", "Categoría (opcional)", "Comercio (opcional)"];
 
@@ -37,7 +37,39 @@ describe("leerMonto", () => {
   });
 });
 
-describe("interpretarFilas", () => {
+const PLANTILLA = ["Fecha", "Descripción", "Monto", "Tipo (Gasto o Ingreso)", "Categoría (opcional)", "Comercio (opcional)"];
+
+describe("interpretarFilas con la plantilla (Monto + Tipo)", () => {
+  it("el tipo decide gasto o ingreso; el signo del monto no importa", () => {
+    const { movimientos, errores } = interpretarFilas([
+      PLANTILLA,
+      ["01/10/2026", "Nómina", 18500, "Ingreso", "Sueldo", null],
+      ["02/10/2026", "OXXO", 87.5, "Gasto", null, null],
+      ["02/10/2026", "Taxi", -50, "gasto", null, null],
+    ]);
+    expect(errores).toEqual([]);
+    expect(movimientos.map((m) => [m.tipo, m.monto])).toEqual([
+      ["abono", "18500.00"],
+      ["cargo", "87.50"],
+      ["cargo", "50.00"],
+    ]);
+  });
+  it("sin tipo no adivina (salvo un monto negativo, que es gasto)", () => {
+    const { movimientos, errores } = interpretarFilas([
+      PLANTILLA,
+      ["01/10/2026", "Sin tipo", 100, null],
+      ["01/10/2026", "Raro", 100, "otro"],
+      ["01/10/2026", "Negativo", -30, null],
+    ]);
+    expect(errores).toEqual([
+      "Fila 2: falta el tipo; elige Gasto o Ingreso.",
+      'Fila 3: el tipo "otro" no se entiende; usa Gasto o Ingreso.',
+    ]);
+    expect(movimientos).toMatchObject([{ descripcion: "Negativo", tipo: "cargo" }]);
+  });
+});
+
+describe("interpretarFilas (Cargo/Abono de la primera plantilla y otros formatos)", () => {
   it("lee cargos y abonos de la plantilla, con categoría opcional", () => {
     const { movimientos, errores } = interpretarFilas([
       ENC,
@@ -102,11 +134,12 @@ describe("filasDeCsv", () => {
 
 describe("plantilla", () => {
   it("se lee de vuelta: la hoja Movimientos trae los encabezados que reconoce el lector", async () => {
-    const blob = await writeExcel(hojasPlantilla()).toBlob();
+    const blob = await writeExcel(hojasPlantilla(), { features: [validacionesMovimientos] }).toBlob();
     const hojas = await readExcel(await blob.arrayBuffer());
     expect(hojas.map((h) => h.sheet)).toEqual([HOJA_MOVIMIENTOS, "Instrucciones"]);
     const movimientos = hojas[0].data as unknown as Celda[][];
-    expect(interpretarFilas([...movimientos, ["05/10/2026", "Uber", 132.4, null]]).movimientos).toHaveLength(1);
+    expect(movimientos[0]).toEqual(PLANTILLA);
+    expect(interpretarFilas([...movimientos, ["05/10/2026", "Uber", 132.4, "Gasto"]]).movimientos).toHaveLength(1);
   });
 
   it("un Excel llenado con fechas y montos de verdad se lee igual", async () => {

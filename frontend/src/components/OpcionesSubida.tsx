@@ -81,7 +81,7 @@ export function OpcionesSubida({ onArchivos }: { onArchivos: (archivos: File[]) 
               </button>
             </Paso>
             <Paso numero={2} color="var(--status-good)">
-              Llénala: fecha, descripción y monto
+              Llénala: fecha, descripción, monto y si fue gasto o ingreso
             </Paso>
             <Paso numero={3} color="var(--status-good)">
               Súbela aquí (.xlsx o .csv)
