@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import { defineConfig, type Plugin } from 'vite'
 import { onRequestGet as agenteSaldo } from './functions/api/agente-saldo.ts'
 import { onRequestGet as alpacaEnVivo } from './functions/api/alpaca-en-vivo.ts'
+import { onRequestGet as alpacaHistorial } from './functions/api/alpaca-historial.ts'
 import { onRequestGet as cotizaciones } from './functions/api/cotizaciones.ts'
 import { obtenerDatosMacro } from './scripts/fred.ts'
 
@@ -15,6 +16,14 @@ const RUTAS_API: Record<string, (contexto: { request: Request }) => Promise<Resp
   '/macro.json': async () => Response.json(await obtenerDatosMacro()),
   '/api/agente-saldo': (contexto) =>
     agenteSaldo({ ...contexto, env: { GITHUB_TOKEN_AGENTE: process.env.GITHUB_TOKEN_AGENTE } }),
+  '/api/alpaca-historial': (contexto) =>
+    alpacaHistorial({
+      ...contexto,
+      env: {
+        ALPACA_API_KEY_ID: process.env.ALPACA_API_KEY_ID,
+        ALPACA_API_SECRET_KEY: process.env.ALPACA_API_SECRET_KEY,
+      },
+    }),
   '/api/alpaca-en-vivo': (contexto) =>
     alpacaEnVivo({
       ...contexto,

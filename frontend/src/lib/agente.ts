@@ -2,6 +2,7 @@
 // (repo aparte, romezamario/trading-agent). Aquí solo se lee y se resume;
 // el agente decide y calcula todo en su propio repo.
 import type { CuentaAlpaca, OrdenAgente, PosicionAgente, SaldoAgente } from "../../functions/api/agente-saldo";
+import type { PuntoHistorialAlpaca, RangoAlpaca } from "../../functions/api/alpaca-historial";
 
 export interface ResumenAgente {
   saldoActual: number;
@@ -130,6 +131,20 @@ export function estadoOrdenAlpaca(estado: string | null): string {
 
 /** Trae el saldo de /api/agente-saldo (Pages Function). El error viene con
  * un mensaje en español listo para mostrarse. */
+/** Valor de la cuenta de Alpaca en el rango pedido, con el detalle de Alpaca (cada 5 min en "1D"). */
+export async function obtenerHistorialAlpaca(rango: RangoAlpaca): Promise<PuntoHistorialAlpaca[]> {
+  const respuesta = await fetch(`/api/alpaca-historial?rango=${rango}`, { cache: "no-store" });
+  const cuerpo = (await respuesta.json().catch(() => ({}))) as PuntoHistorialAlpaca[] & { error?: string };
+  if (!respuesta.ok) throw new Error(cuerpo.error ?? `El servidor respondió ${respuesta.status}`);
+  return cuerpo;
+}
+
+/** El historial diario de output/alpaca.json ("2026-10-11") como puntos del eje de tiempo, al
+ * mediodía local para que la fecha no se corra un día con la zona horaria. */
+export function historialGuardadoComoPuntos(historial: { date: string; equity: number }[]): PuntoHistorialAlpaca[] {
+  return historial.map((p) => ({ t: new Date(`${p.date}T12:00:00`).getTime(), valor: p.equity }));
+}
+
 /** La cuenta de Alpaca leída en este momento (botón "Actualizar"), no la foto de la última corrida. */
 export async function obtenerAlpacaEnVivo(): Promise<CuentaAlpaca> {
   const respuesta = await fetch("/api/alpaca-en-vivo", { cache: "no-store" });

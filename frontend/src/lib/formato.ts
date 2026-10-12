@@ -52,6 +52,24 @@ export function fechaHora(instanteIso: string): string {
   return formatoFechaHora.format(new Date(instanteIso));
 }
 
+const formatoHora = new Intl.DateTimeFormat("es-MX", { hour: "2-digit", minute: "2-digit" });
+/** Milisegundos → "16:53" en la hora local del navegador (eje de la gráfica de 1 día). */
+export function hora(ms: number): string {
+  return formatoHora.format(new Date(ms));
+}
+
+const formatoDiaMes = new Intl.DateTimeFormat("es-MX", { day: "numeric", month: "short" });
+/** Milisegundos → "11 oct" en la hora local del navegador. */
+export function diaMes(ms: number): string {
+  return formatoDiaMes.format(new Date(ms));
+}
+
+const formatoDiaMesAnio = new Intl.DateTimeFormat("es-MX", { day: "numeric", month: "short", year: "numeric" });
+/** Milisegundos → "11 oct 2026" en la hora local del navegador. */
+export function diaMesAnio(ms: number): string {
+  return formatoDiaMesAnio.format(new Date(ms));
+}
+
 /** "+US$1,234.56" -- ganancias y pérdidas en dólares, con signo. */
 export const dolaresConSigno = new Intl.NumberFormat("es-MX", {
   style: "currency",
