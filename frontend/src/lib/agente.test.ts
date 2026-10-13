@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CuentaAlpaca, OrdenAgente, OrdenAlpaca, PosicionAgente, SaldoAgente } from "../../functions/api/agente-saldo";
 import {
+  descartarSaltosImposibles,
   estadoOrdenAlpaca,
   fraccionEnEfectivo,
   gananciasDeVentasAlpaca,
@@ -152,5 +153,19 @@ describe("gananciasDeVentasAlpaca", () => {
     expect(r[0]?.pnl).toBe(40);
     expect(r[0]?.pct).toBeCloseTo(0.2, 10);
     expect(r[3]).toBeNull();
+  });
+});
+
+describe("descartarSaltosImposibles", () => {
+  it("oculta el tramo inicial al doble del valor real (visto el 2026-10-13)", () => {
+    const valores = [199_000, 199_200, 198_900, 99_300, 99_100, 99_212];
+    const r = descartarSaltosImposibles(valores.map((valor, i) => ({ t: i, valor })));
+    expect(r.descartados).toBe(3);
+    expect(r.puntos.map((p) => p.valor)).toEqual([99_300, 99_100, 99_212]);
+  });
+  it("conserva movimientos normales y una serie vacía", () => {
+    const puntos = [100, 92, 95, 101].map((valor, i) => ({ t: i, valor }));
+    expect(descartarSaltosImposibles(puntos)).toEqual({ puntos, descartados: 0 });
+    expect(descartarSaltosImposibles([])).toEqual({ puntos: [], descartados: 0 });
   });
 });
