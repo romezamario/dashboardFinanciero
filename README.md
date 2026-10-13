@@ -612,20 +612,24 @@ nada se cobra de verdad. Lo hacen tres Edge Functions de Supabase (`supabase/fun
 `funciones-producto.yml` al proyecto de clientes. Para que cobren (con usuarios de prueba):
 
 1. En [Mercado Pago Developers](https://www.mercadopago.com.mx/developers/panel/app) crea una aplicación
-   (Suscripciones) y, en *Cuentas de prueba*, un **vendedor** y un **comprador** de prueba.
-2. Entra con el vendedor de prueba a su panel de developers y copia su **Access Token** de *Credenciales de
-   producción* (en una cuenta de prueba no mueve dinero real).
-3. En esa aplicación, *Webhooks → Configurar notificaciones*: URL
+   (**Suscripciones**) en tu cuenta real y, en *Cuentas de prueba*, un **comprador** de prueba.
+2. En *Credenciales de prueba* de esa aplicación pulsa *Activar credenciales* y copia el **Access Token** y la
+   **Public Key** (ambos empiezan con `APP_USR-`; lo que importa es que sean los de prueba).
+3. *Webhooks → Configurar notificaciones → Modo de prueba*: URL
    `https://<project-ref de clientes>.supabase.co/functions/v1/webhook-mercadopago`, evento **Planes y
-   suscripciones**; guarda y copia la **clave secreta** que muestra.
-4. GitHub Secrets: `PRODUCTO_MP_ACCESS_TOKEN` (paso 2), `PRODUCTO_MP_WEBHOOK_SECRET` (paso 3) y
-   `PRODUCTO_MP_CORREO_COMPRADOR_PRUEBA` (el correo del comprador de prueba: con credenciales de prueba
-   solo un comprador de prueba puede pagar). Después corre *Actions → Funciones de cobro → Run workflow*.
-5. Prueba en https://pruebas.ordenatulana.pages.dev: Mi cuenta → Suscribirme → paga en Mercado Pago
-   **con la sesión del comprador de prueba** y su tarjeta de prueba → al volver, Mi cuenta confirma el plan.
+   suscripciones**; guarda y copia la **clave secreta**.
+4. GitHub Secrets: `PRODUCTO_MP_ACCESS_TOKEN` y `PRODUCTO_MP_PUBLIC_KEY` (paso 2), `PRODUCTO_MP_WEBHOOK_SECRET`
+   (paso 3) y `PRODUCTO_MP_CORREO_COMPRADOR_PRUEBA`: el correo **real** del comprador de prueba (entra con su
+   usuario y contraseña a mercadopago.com.mx y míralo en su perfil; uno adivinado da 400 "User bad request").
+   Después corre *Actions → Funciones de cobro → Run workflow* (y un deploy, para la Public Key).
+5. Prueba en https://pruebas.ordenatulana.pages.dev: Mi cuenta → Suscribirme → el formulario de tarjeta de
+   Mercado Pago aparece ahí mismo (tarjeta de prueba `5474 9254 3267 0366`, CVV `123`, titular `APRO`) y el
+   plan se activa al momento. Sin la Public Key, "Suscribirme" lleva a la página de Mercado Pago; al abrir
+   Mi cuenta se consulta a Mercado Pago cualquier suscripción pendiente, aunque el webhook no avise.
 
 Para cobrar de verdad (fase 4): cambia los secretos por las credenciales reales, borra
-`PRODUCTO_MP_CORREO_COMPRADOR_PRUEBA` y pon `PAGOS_EN_PRUEBA = false`. Los límites de cada plan (cuentas,
+`PRODUCTO_MP_CORREO_COMPRADOR_PRUEBA`, pon `PAGOS_EN_PRUEBA = false` y el secreto de función
+`MP_ERRORES_DETALLADOS=no` (si no, los errores muestran la respuesta cruda de Mercado Pago). Los límites de cada plan (cuentas,
 historial, reglas) están en la tabla `planes` pero **todavía no se aplican**.
 
 **Aislamiento entre usuarios**: `supabase/tests/correr.sh` aplica todas las migraciones a un Postgres
