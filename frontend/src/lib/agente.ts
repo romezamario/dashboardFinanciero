@@ -1,7 +1,7 @@
 // Pestaña "Agente de trading": el saldo de la cuenta simulada del agente
 // (repo aparte, romezamario/trading-agent). Aquí solo se lee y se resume;
 // el agente decide y calcula todo en su propio repo.
-import type { CuentaAlpaca, OrdenAgente, PosicionAgente, SaldoAgente } from "../../functions/api/agente-saldo";
+import type { CuentaAlpaca, OrdenAgente, OrdenAlpaca, PosicionAgente, SaldoAgente } from "../../functions/api/agente-saldo";
 import type { PuntoHistorialAlpaca, RangoAlpaca } from "../../functions/api/alpaca-historial";
 
 export interface ResumenAgente {
@@ -106,6 +106,44 @@ export function resumirAlpaca(cuenta: CuentaAlpaca): ResumenAlpaca {
 /** "BTCUSD" o "BTC/USD" → "BTC"; "QQQ" se queda igual. */
 export function nombreSimboloAlpaca(simbolo: string): string {
   return simbolo.replace(/\/?USD$/, "") || simbolo;
+}
+
+export interface GananciaVenta {
+  pnl: number;
+  pct: number;
+}
+
+/** Ganancia o pérdida de cada venta ejecutada de Alpaca contra el precio promedio de compra de ese
+ * activo (costo promedio, como lo calcula Alpaca), antes de comisiones. Devuelve un arreglo
+ * alineado con `ordenes`: null en compras, en órdenes sin ejecutar y en ventas cuyas compras ya no
+ * vienen en la lista (solo trae las últimas 100 órdenes, y sin el costo no se puede calcular). */
+export function gananciasDeVentasAlpaca(ordenes: OrdenAlpaca[]): (GananciaVenta | null)[] {
+  const resultado: (GananciaVenta | null)[] = ordenes.map(() => null);
+  const ejecutadas = ordenes
+    .map((orden, i) => ({ orden, i }))
+    .filter(({ orden }) => orden.filled_qty && orden.filled_avg_price != null)
+    .sort((a, b) => (a.orden.filled_at ?? a.orden.submitted_at ?? "").localeCompare(b.orden.filled_at ?? b.orden.submitted_at ?? ""));
+  const tenencia = new Map<string, { cantidad: number; costo: number }>();
+  for (const { orden, i } of ejecutadas) {
+    const clave = nombreSimboloAlpaca(orden.symbol);
+    const cantidad = orden.filled_qty as number;
+    const precio = orden.filled_avg_price as number;
+    const actual = tenencia.get(clave) ?? { cantidad: 0, costo: 0 };
+    if (orden.side === "buy") {
+      tenencia.set(clave, { cantidad: actual.cantidad + cantidad, costo: actual.costo + cantidad * precio });
+      continue;
+    }
+    // Tolerancia de 1% por la comisión de criptos, que Alpaca cobra en el propio activo.
+    if (actual.cantidad <= 0 || cantidad > actual.cantidad * 1.01) {
+      tenencia.delete(clave);
+      continue;
+    }
+    const promedio = actual.costo / actual.cantidad;
+    const vendida = Math.min(cantidad, actual.cantidad);
+    resultado[i] = { pnl: Math.round((precio - promedio) * cantidad * 100) / 100, pct: precio / promedio - 1 };
+    tenencia.set(clave, { cantidad: actual.cantidad - vendida, costo: actual.costo - vendida * promedio });
+  }
+  return resultado;
 }
 
 const ESTADOS_ORDEN: Record<string, string> = {

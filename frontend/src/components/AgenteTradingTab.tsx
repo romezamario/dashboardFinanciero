@@ -15,6 +15,7 @@ import type { PuntoHistorialAlpaca, RangoAlpaca } from "../../functions/api/alpa
 import {
   estadoOrdenAlpaca,
   fraccionEnEfectivo,
+  gananciasDeVentasAlpaca,
   nombreActivo,
   nombreSimboloAlpaca,
   historialGuardadoComoPuntos,
@@ -395,6 +396,7 @@ function SeccionAlpaca({ inicial }: { inicial: CuentaAlpaca }) {
     setVersionHistorial((v) => v + 1);
   };
   const r = useMemo(() => resumirAlpaca(cuenta), [cuenta]);
+  const ganancias = useMemo(() => gananciasDeVentasAlpaca(cuenta.ordenes), [cuenta]);
 
   // La gráfica se pide en vivo con el detalle de Alpaca (cada 5 min en "1D"); output/alpaca.json solo
   // trae un punto por día, que queda de respaldo si la consulta en vivo falla.
@@ -477,8 +479,8 @@ function SeccionAlpaca({ inicial }: { inicial: CuentaAlpaca }) {
       <Tabla
         titulo={`Órdenes en Alpaca (últimas ${cuenta.ordenes.length})`}
         vacio="Todavía no se ha mandado ninguna orden."
-        encabezados={["Enviada", "Activo", "Operación", "Monto pedido", "Estado", "Cantidad ejecutada", "Precio de ejecución"]}
-        filas={cuenta.ordenes.map((o) => [
+        encabezados={["Enviada", "Activo", "Operación", "Monto pedido", "Estado", "Cantidad ejecutada", "Precio de ejecución", "Ganancia/pérdida (antes de comisión)"]}
+        filas={cuenta.ordenes.map((o, i) => [
           o.submitted_at ? fechaHora(o.submitted_at) : "—",
           nombreSimboloAlpaca(o.symbol),
           o.side === "buy" ? "Compra" : "Venta",
@@ -486,6 +488,7 @@ function SeccionAlpaca({ inicial }: { inicial: CuentaAlpaca }) {
           estadoOrdenAlpaca(o.status),
           o.filled_qty ? cantidad.format(o.filled_qty) : "—",
           o.filled_avg_price != null ? precioUsd(o.filled_avg_price) : "—",
+          ganancias[i] ? <MontoUsd key="g" valor={ganancias[i].pnl} fraccion={ganancias[i].pct} /> : o.side === "sell" && o.filled_qty ? "Sin costo de compra" : "—",
         ])}
       />
     </section>

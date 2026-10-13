@@ -408,7 +408,8 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
   Alpaca** (broker real, dinero simulado, en USD) donde el agente manda las mismas decisiones: la
   gráfica del valor de la cuenta por día, valor de la cuenta, efectivo,
   cambio contra el cierre anterior, ganancia no realizada, posiciones y las últimas órdenes con su
-  estado real (ejecutada, en espera de que abra la bolsa, cancelada…). Sale de `output/alpaca.json`
+  estado real (ejecutada, en espera de que abra la bolsa, cancelada…); en cada venta, la ganancia o
+  pérdida contra el precio promedio de compra de ese activo (antes de comisiones). Sale de `output/alpaca.json`
   de ese repo, que se actualiza cada noche y en la apertura y cierre de la bolsa; si no existe, esa
   parte no se muestra. El botón **Actualizar** de ese bloque la lee en ese momento de la API de Alpaca
   (`/api/alpaca-en-vivo`, solo lecturas y solo la cuenta paper); necesita las variables
