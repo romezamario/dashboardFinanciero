@@ -146,6 +146,14 @@ export async function leerPlanYSuscripciones(): Promise<{ plan: MiPlan | null; l
   return { plan: await obtenerMiPlan(), lista };
 }
 
+/** Solo administradores, para probar desde cero: cancela en Mercado Pago y
+ * borra las suscripciones propias (la función reiniciar-pagos lo verifica). */
+export async function reiniciarMisPagos(): Promise<number> {
+  const { data, error } = await supabase.functions.invoke("reiniciar-pagos", { body: {} });
+  if (error) throw await errorDeFuncion(error);
+  return (data as { borradas?: number } | null)?.borradas ?? 0;
+}
+
 export async function cancelarSuscripcion(): Promise<void> {
   const { error } = await supabase.functions.invoke("cancelar-suscripcion", { body: {} });
   if (error) throw await errorDeFuncion(error);

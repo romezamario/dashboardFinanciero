@@ -14,6 +14,7 @@ import {
 } from "../lib/administracion";
 import { confirmaBorrado, PALABRA_BORRAR } from "../lib/cuentaUsuario";
 import { descargarTexto } from "../lib/exportarDatos";
+import { PAGOS_EN_PRUEBA, reiniciarMisPagos } from "../lib/suscripcion";
 import { entero, fechaHora } from "../lib/formato";
 
 // Administración de Ordena tu Lana (solo la ve quien es_administrador()): las
@@ -119,8 +120,90 @@ export function AdministracionMuestras({
         <TarjetaMuestra key={m.id} muestra={m} onCambio={(cambio) => actualizar(m.id, cambio)} />
       ))}
 
+      {PAGOS_EN_PRUEBA && <ReiniciarPagos />}
       <EmpezarDesdeCero totalMovimientos={totalMovimientos} onDatosBorrados={onDatosBorrados} />
     </div>
+  );
+}
+
+// Pedido del dueño (2026-10-13): volver a probar el cobro como un cliente
+// nuevo. Cancela en Mercado Pago y borra solo las suscripciones propias; con
+// eso Mi cuenta vuelve a la prueba gratis (o a Gratis). Solo en modo de prueba.
+function ReiniciarPagos() {
+  const [abierto, setAbierto] = useState(false);
+  const [texto, setTexto] = useState("");
+  const [borrando, setBorrando] = useState(false);
+  const [mensaje, setMensaje] = useState<{ tipo: "error" | "exito"; texto: string } | null>(null);
+
+  async function reiniciar() {
+    setBorrando(true);
+    setMensaje(null);
+    try {
+      const borradas = await reiniciarMisPagos();
+      setAbierto(false);
+      setTexto("");
+      setMensaje({
+        tipo: "exito",
+        texto:
+          borradas === 0
+            ? "No tenías suscripciones; tu plan ya está como el de un cliente nuevo."
+            : `Listo: se cancelaron y borraron ${borradas === 1 ? "tu suscripción" : `tus ${entero.format(borradas)} suscripciones`}. Abre Mi cuenta para contratar de nuevo.`,
+      });
+    } catch (e) {
+      setMensaje({ tipo: "error", texto: `No se pudieron reiniciar tus pagos: ${(e as Error).message}` });
+    } finally {
+      setBorrando(false);
+    }
+  }
+
+  return (
+    <section
+      className="tarjeta space-y-3 rounded-lg p-4"
+      style={{ borderColor: "var(--series-4)" }}
+      aria-labelledby="reiniciar-pagos"
+    >
+      <h3 id="reiniciar-pagos" className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+        Reiniciar pagos (modo de prueba)
+      </h3>
+      <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+        Cancela en Mercado Pago tus suscripciones y borra su historial en tu propia cuenta, para volver a probar el
+        cobro como un cliente nuevo. Tu plan regresa a la prueba gratis mientras dure (o a Gratis). Tus movimientos no
+        se tocan, ni los de ningún cliente.
+      </p>
+      {!abierto ? (
+        <Accion onClick={() => (setAbierto(true), setMensaje(null))} deshabilitado={borrando} peligro>
+          Reiniciar mis pagos…
+        </Accion>
+      ) : (
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="block min-w-48 flex-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+            Escribe {PALABRA_BORRAR} para confirmar
+            <input
+              value={texto}
+              onChange={(e) => setTexto(e.target.value)}
+              autoComplete="off"
+              className="mt-1 w-full rounded-md px-3 py-2 text-sm"
+              style={estiloEntrada}
+            />
+          </label>
+          <Accion onClick={reiniciar} deshabilitado={!confirmaBorrado(texto) || borrando} peligro>
+            {borrando ? "Reiniciando…" : "Reiniciar pagos"}
+          </Accion>
+          <Accion onClick={() => (setAbierto(false), setTexto(""))} deshabilitado={borrando}>
+            Cancelar
+          </Accion>
+        </div>
+      )}
+      {mensaje && (
+        <p
+          className="text-sm"
+          style={{ color: mensaje.tipo === "error" ? "var(--status-critical)" : "var(--status-good)" }}
+          role={mensaje.tipo === "error" ? "alert" : "status"}
+        >
+          {mensaje.texto}
+        </p>
+      )}
+    </section>
   );
 }
 

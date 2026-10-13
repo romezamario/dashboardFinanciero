@@ -70,4 +70,5 @@ jobs:
           supabase functions deploy crear-suscripcion --project-ref "$PROYECTO" --use-api
           supabase functions deploy cancelar-suscripcion --project-ref "$PROYECTO" --use-api
           supabase functions deploy verificar-suscripcion --project-ref "$PROYECTO" --use-api
+          supabase functions deploy reiniciar-pagos --project-ref "$PROYECTO" --use-api
           supabase functions deploy webhook-mercadopago --project-ref "$PROYECTO" --use-api --no-verify-jwt

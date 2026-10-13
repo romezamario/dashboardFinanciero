@@ -192,7 +192,10 @@ its MP profile) — a guessed one gives a bare 400 "User bad request". First sub
 (missing config or a Resend error is only logged). Activation mails only from the call that flips the row to activa (`update … neq estado activa`, so
 webhook + verify can't both send); cancellation from `cancelar-suscripcion`. `funciones-producto.yml` passes `RESEND_API_KEY` = `PRODUCTO_SMTP_PASS`
 (Resend's SMTP password is its API key; skipped when `PRODUCTO_SMTP_HOST` is another provider) and `CORREO_REMITENTE` = `PRODUCTO_SMTP_REMITENTE`.
-**MP sends no webhook notices for test-mode subscriptions** (panel showed 0 sent; "Simular notificación" reached the endpoint with 200), hence the verify.
+**MP sends no webhook notices for test-mode subscriptions** (panel showed 0 sent; "Simular notificación" reached the endpoint with 200), hence the verify. **"Reiniciar pagos (modo de prueba)" (2026-10-13, owner's request: test the payment flow from a clean state)**: card in Administración, shown only
+while `PAGOS_EN_PRUEBA`; typing BORRAR calls the Edge Function `reiniciar-pagos` (JWT; refuses unless the caller's CONFIRMED email is in
+`administradores`), which cancels the CALLER's live subscriptions in MP (a live one that fails to cancel aborts, so nothing keeps charging unseen) and
+deletes all their `suscripciones` rows; `mi_plan()` then falls back to the 14-day trial (if still within it) or Gratis.
 **Landing page (2026-10-11, user's request)**: in the producto edition only, `App` shows `Landing.tsx` while
 there's no session (personal still goes straight to `Login`); `#entrar` keeps the landing and opens `Login`
 (`producto` prop → `PantallaCuenta flotante`) as a popover under the header's "Entrar" button (`VentanaEntrar`:
