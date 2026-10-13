@@ -85,10 +85,23 @@ export async function mercadoPago<T = Record<string, unknown>>(
     datos = { message: texto.slice(0, 300) };
   }
   if (!respuesta.ok) {
-    const mensaje = (datos as { message?: string } | null)?.message ?? `HTTP ${respuesta.status}`;
+    const mensaje = mensajeDeErrorMp(datos) ?? `HTTP ${respuesta.status}`;
+    console.error("mercadopago", metodo, ruta, respuesta.status, texto.slice(0, 1000));
     throw new ErrorMercadoPago(respuesta.status, `Mercado Pago respondió: ${mensaje}`);
   }
   return datos as T;
+}
+
+/** El "message" de Mercado Pago suele ser genérico ("User bad request"); el
+ * motivo real viene en `cause[].description`. */
+function mensajeDeErrorMp(datos: unknown): string | null {
+  const d = datos as { message?: string; cause?: unknown } | null;
+  if (!d) return null;
+  const causas = (Array.isArray(d.cause) ? d.cause : d.cause ? [d.cause] : [])
+    .map((c) => (c as { description?: string; code?: unknown })?.description ?? String((c as { code?: unknown })?.code ?? ""))
+    .filter(Boolean);
+  const partes = [d.message, ...causas].filter((x): x is string => typeof x === "string" && x !== "");
+  return partes.length ? partes.join(" · ") : null;
 }
 
 /** Lo que leemos de un preapproval de Mercado Pago. */
