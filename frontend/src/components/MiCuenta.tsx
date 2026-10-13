@@ -229,8 +229,8 @@ function PagoTerminado({
       <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
         {activa
           ? proximo
-            ? `Próximo cobro: ${moneda.format(proximo.monto)} el ${fechaCorta(proximo.periodo_fin!.slice(0, 10))}. Te llegará el comprobante de Mercado Pago a tu correo.`
-            : "Te llegará el comprobante de Mercado Pago a tu correo."
+            ? `Próximo cobro: ${moneda.format(proximo.monto)} el ${fechaCorta(proximo.periodo_fin!.slice(0, 10))}`
+            : "Ya puedes usar todo lo que incluye."
           : `Mercado Pago todavía lo está confirmando. Tu plan ${plan.nombre} se activará solo en unos minutos; vuelve a abrir Mi cuenta para verlo.`}
       </p>
       <div className="mt-3">
@@ -247,7 +247,9 @@ function SeccionPlan({ correo }: { correo: string }) {
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState<string | null>(null);
   const [confirmarCancelar, setConfirmarCancelar] = useState(false);
-  const [cancelada, setCancelada] = useState(false);
+  // Lo que se canceló, para decir hasta cuándo conserva el plan.
+  const [cancelada, setCancelada] = useState<Suscripcion | null>(null);
+  const [errorCancelar, setErrorCancelar] = useState<string | null>(null);
   const [confirmacion, setConfirmacion] = useState<Confirmacion>(() => (regresoPendiente ? "esperando" : null));
   // Plan cuyo formulario de tarjeta embebido está abierto.
   const [pagando, setPagando] = useState<Plan | null>(null);
@@ -301,7 +303,7 @@ function SeccionPlan({ correo }: { correo: string }) {
     setError(null);
     if (LLAVE_PUBLICA_MP) {
       setConfirmacion(null);
-      setCancelada(false);
+      setCancelada(null);
       setPagado(null);
       return setPagando(plan);
     }
@@ -315,16 +317,21 @@ function SeccionPlan({ correo }: { correo: string }) {
   }
 
   async function cancelar() {
-    setError(null);
+    if (!viva) return;
+    const anterior = viva;
+    setErrorCancelar(null);
     setEnviando("cancelar");
     try {
       await cancelarSuscripcion();
       setConfirmarCancelar(false);
       setConfirmacion(null);
-      setCancelada(true);
+      setPagado(null);
+      setCancelada(anterior);
       await cargar();
     } catch (e) {
-      setError(`No se pudo cancelar: ${(e as Error).message}`);
+      setErrorCancelar(
+        `No se pudo cancelar: ${(e as Error).message}. Tu suscripción sigue activa; inténtalo de nuevo en un momento.`
+      );
     } finally {
       setEnviando(null);
     }
@@ -365,34 +372,71 @@ function SeccionPlan({ correo }: { correo: string }) {
           {!confirmarCancelar ? (
             <button
               type="button"
-              onClick={() => setConfirmarCancelar(true)}
+              onClick={() => {
+                setErrorCancelar(null);
+                setConfirmarCancelar(true);
+              }}
               className="mt-2 text-sm underline"
               style={{ color: "var(--status-critical)" }}
             >
               Cancelar suscripción
             </button>
           ) : (
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span>
-                Ya no se te cobrará; conservas el plan {nombreDePlan(viva.plan_id)}
-                {viva.periodo_fin ? ` hasta el ${fechaCorta(viva.periodo_fin.slice(0, 10))}` : ""}.
-              </span>
-              <Boton peligro deshabilitado={enviando === "cancelar"} onClick={cancelar}>
-                {enviando === "cancelar" ? "Cancelando..." : "Sí, cancelar"}
-              </Boton>
-              <button
-                type="button"
-                onClick={() => setConfirmarCancelar(false)}
-                className="px-2 py-1.5 text-sm"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                No
-              </button>
+            <div
+              className="mt-3 rounded-lg p-4"
+              style={{ border: "1px solid var(--status-critical)", background: "var(--page-plane)" }}
+            >
+              <p className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>
+                ¿Cancelar tu plan {nombreDePlan(viva.plan_id)} {viva.periodo}?
+              </p>
+              <ul className="mt-2 space-y-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+                <li>• No se te volverá a cobrar.</li>
+                <li>
+                  • Sigues con {nombreDePlan(viva.plan_id)}
+                  {viva.periodo_fin ? ` hasta el ${fechaCorta(viva.periodo_fin.slice(0, 10))}` : " hasta el fin del periodo pagado"};
+                  después pasas al plan Gratis.
+                </li>
+                <li>• Tus movimientos y cuentas no se borran.</li>
+              </ul>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <Boton deshabilitado={enviando === "cancelar"} onClick={() => setConfirmarCancelar(false)}>
+                  Mantener mi plan
+                </Boton>
+                <button
+                  type="button"
+                  disabled={enviando === "cancelar"}
+                  onClick={() => void cancelar()}
+                  className="rounded-md px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+                  style={{ border: "1px solid var(--status-critical)", color: "var(--status-critical)" }}
+                >
+                  {enviando === "cancelar" ? "Cancelando…" : "Sí, cancelar"}
+                </button>
+              </div>
+              {errorCancelar && <Mensaje tipo="error">{errorCancelar}</Mensaje>}
             </div>
           )}
         </div>
       )}
-      {cancelada && <Mensaje tipo="exito">Suscripción cancelada. No habrá más cobros.</Mensaje>}
+      {cancelada && (
+        <div
+          role="status"
+          className="mt-3 rounded-lg p-4"
+          style={{ border: "1px solid var(--status-good)", background: "var(--page-plane)" }}
+        >
+          <p className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>
+            ✓ Suscripción cancelada. No habrá más cobros.
+          </p>
+          <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+            {cancelada.periodo_fin
+              ? `Sigues con ${nombreDePlan(cancelada.plan_id)} hasta el ${fechaCorta(cancelada.periodo_fin.slice(0, 10))}. `
+              : ""}
+            Si cambias de opinión, puedes volver a suscribirte cuando quieras.
+          </p>
+          <div className="mt-3">
+            <Boton onClick={() => setCancelada(null)}>Entendido</Boton>
+          </div>
+        </div>
+      )}
 
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
@@ -490,6 +534,9 @@ function SeccionPlan({ correo }: { correo: string }) {
       <p className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>
         {LLAVE_PUBLICA_MP ? "Pagas con tarjeta aquí mismo, procesado por Mercado Pago" : "Pagas en Mercado Pago con tarjeta o saldo"}; el cobro se repite cada {periodo === "anual" ? "año" : "mes"} hasta
         que canceles aquí.{viva ? " Al pagar el plan nuevo, el anterior deja de cobrarse." : ""}
+        {!viva && miPlan?.origen === "suscripcion" && miPlan.vigente_hasta
+          ? " Si te suscribes de nuevo antes de que termine tu plan cancelado, el cobro empieza hoy."
+          : ""}
       </p>
       {error && <Mensaje tipo="error">{error}</Mensaje>}
     </Seccion>
