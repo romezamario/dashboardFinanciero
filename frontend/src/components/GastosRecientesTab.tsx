@@ -6,6 +6,7 @@ import { GastosCorreoTab } from "./GastosCorreoTab";
 import { GastosEstadoCuentaTab } from "./GastosEstadoCuentaTab";
 import { VISTA_CALENDARIO_INICIAL, type VistaCalendario } from "../lib/gastosUI";
 import { Segmentado } from "./Segmentado";
+import { EDICION, incluyeFuncion } from "../lib/edicion";
 
 interface GastosRecientesTabProps {
   transacciones: Transaccion[];
@@ -31,7 +32,10 @@ interface GastosRecientesTabProps {
  * ya sincronizados: todo el historial y todas las cuentas, pero con el atraso
  * del último corte. Al abrir la pestaña se muestra la de correo. */
 export function GastosRecientesTab(props: GastosRecientesTabProps) {
-  const [fuente, setFuente] = useState<"correo" | "estados">("correo");
+  // En el producto, "Por correo" está oculto hasta que el cliente pueda conectar su correo
+  // (fase 2): solo se ve el calendario de los estados de cuenta, sin selector ni coincidencias.
+  const conCorreo = incluyeFuncion(EDICION, "correo");
+  const [fuente, setFuente] = useState<"correo" | "estados">(conCorreo ? "correo" : "estados");
   // El mes y el día elegidos se comparten entre las dos fuentes: al cambiar de
   // una a otra el calendario se queda donde estaba (acotado a lo que haya).
   const [vista, setVista] = useState<VistaCalendario>(VISTA_CALENDARIO_INICIAL);
@@ -39,7 +43,7 @@ export function GastosRecientesTab(props: GastosRecientesTabProps) {
   // Si la carga en segundo plano falló, se intenta otra vez al abrir la pestaña (antes cada
   // apertura volvía a consultar; así un fallo momentáneo no deja el error toda la sesión).
   useEffect(() => {
-    if (errorCorreo) onReintentarCorreo();
+    if (conCorreo && errorCorreo) onReintentarCorreo();
     // Solo al montar: reintentar en cada cambio del error podría ciclar si sigue fallando.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -73,15 +77,17 @@ export function GastosRecientesTab(props: GastosRecientesTabProps) {
   }
   return (
     <div className="space-y-6">
-      <Segmentado
-        opciones={[
-          { id: "correo", etiqueta: "Por correo" },
-          { id: "estados", etiqueta: "Por estado de cuenta" },
-        ]}
-        valor={fuente}
-        onCambiar={setFuente}
-      />
-      {fuente === "correo" ? (
+      {conCorreo && (
+        <Segmentado
+          opciones={[
+            { id: "correo", etiqueta: "Por correo" },
+            { id: "estados", etiqueta: "Por estado de cuenta" },
+          ]}
+          valor={fuente}
+          onCambiar={setFuente}
+        />
+      )}
+      {conCorreo && fuente === "correo" ? (
         <GastosCorreoTab
           gastos={gastosCorreo}
           error={errorCorreo}
@@ -93,6 +99,7 @@ export function GastosRecientesTab(props: GastosRecientesTabProps) {
       ) : (
         <GastosEstadoCuentaTab
           {...resto}
+          conCorreo={conCorreo}
           gastosCorreo={gastosCorreo}
           errorCorreo={errorCorreo}
           vista={vista}

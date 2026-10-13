@@ -6,13 +6,16 @@
 //   de Supabase y de Pages). Sin las pestañas que solo tienen sentido para el
 //   dueño: QQQ/TQQQ + Macro (datos de Yahoo que no se pueden revender),
 //   Shophunters (un evento personal), la Wiki interna y el agente de trading.
+//   "correo" (los avisos de Gmail en "Gastos recientes") también se oculta en el
+//   producto, pero solo por ahora: se activará cuando el cliente pueda conectar
+//   su correo (fase 2). Para volver a mostrarlo basta con quitarlo de SOLO_PERSONAL.
 
 export type Edicion = "personal" | "producto";
 
 /** Funciones del tablero que solo existen en la edición personal. */
-export type FuncionPersonal = "tecnico" | "shophunters" | "wiki" | "agente";
+export type FuncionPersonal = "tecnico" | "shophunters" | "wiki" | "agente" | "correo";
 
-const SOLO_PERSONAL: ReadonlySet<FuncionPersonal> = new Set(["tecnico", "shophunters", "wiki", "agente"]);
+const SOLO_PERSONAL: ReadonlySet<FuncionPersonal> = new Set(["tecnico", "shophunters", "wiki", "agente", "correo"]);
 
 export function edicionDe(valor: string | undefined): Edicion {
   return valor === "producto" ? "producto" : "personal";

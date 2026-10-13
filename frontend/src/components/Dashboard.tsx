@@ -273,7 +273,8 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
   // termina la carga inicial (en segundo plano), y se quedan aquí toda la sesión: abrir la
   // pestaña ya no espera a bajar miles de avisos, y volver a ella no los pide otra vez.
   const cargaInicialLista = datos !== null;
-  const avisosCorreo = useGastosCorreo(cargaInicialLista);
+  // En el producto no hay avisos de correo hasta que el cliente pueda conectar su correo (fase 2).
+  const avisosCorreo = useGastosCorreo(cargaInicialLista && incluyeFuncion(EDICION, "correo"));
   useEffect(() => {
     if (cargaInicialLista) import("./GastosRecientesTab").catch(() => {});
   }, [cargaInicialLista]);

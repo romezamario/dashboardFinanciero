@@ -14,6 +14,7 @@ describe("edicion", () => {
     expect(incluyeFuncion("personal", "shophunters")).toBe(true);
     expect(incluyeFuncion("personal", "wiki")).toBe(true);
     expect(incluyeFuncion("personal", "agente")).toBe(true);
+    expect(incluyeFuncion("personal", "correo")).toBe(true);
   });
 
   it("el producto no incluye QQQ/Macro, Shophunters ni la Wiki", () => {
@@ -21,6 +22,8 @@ describe("edicion", () => {
     expect(incluyeFuncion("producto", "shophunters")).toBe(false);
     expect(incluyeFuncion("producto", "wiki")).toBe(false);
     expect(incluyeFuncion("producto", "agente")).toBe(false);
+    // Hasta que el cliente pueda conectar su correo (fase 2).
+    expect(incluyeFuncion("producto", "correo")).toBe(false);
   });
 
   it("nombre de la app por edición", () => {

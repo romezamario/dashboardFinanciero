@@ -41,6 +41,9 @@ interface GastosEstadoCuentaTabProps {
   eventosOcultos: Set<string>;
   onCambiarEventosOcultos: (cambio: (anteriores: Set<string>) => Set<string>) => void;
   onActualizado: (ids?: string[]) => void | Promise<void>;
+  /** false = sin avisos de correo (edición producto, hasta la fase 2): no se buscan
+   * coincidencias ni herencia de eventos y las filas no abren la tarjeta del correo. */
+  conCorreo: boolean;
   /** Avisos de correo (null = cargando) con los que se buscan coincidencias. */
   gastosCorreo: GastoCorreo[] | null;
   errorCorreo: string | null;
@@ -64,6 +67,7 @@ export function GastosEstadoCuentaTab({
   eventosOcultos,
   onCambiarEventosOcultos,
   onActualizado,
+  conCorreo,
   gastosCorreo,
   errorCorreo,
   vista,
@@ -81,8 +85,8 @@ export function GastosEstadoCuentaTab({
   // categorías o eventos no debe cambiar qué aviso le toca a cada cargo.
   const movimientos = useMemo(() => transacciones.flatMap((t) => aMovimiento(t) ?? []), [transacciones]);
   const coincidencias = useMemo(
-    () => (gastosCorreo ? conciliarConCorreo(movimientos, gastosCorreo) : new Map<string, Coincidencia>()),
-    [movimientos, gastosCorreo]
+    () => (conCorreo && gastosCorreo ? conciliarConCorreo(movimientos, gastosCorreo) : new Map<string, Coincidencia>()),
+    [conCorreo, movimientos, gastosCorreo]
   );
   // Eventos que el correo ya tiene y el cargo emparejado todavía no (evento -> ids).
   const heredables = useMemo(() => eventosHeredables(movimientos, coincidencias), [movimientos, coincidencias]);
@@ -318,7 +322,7 @@ export function GastosEstadoCuentaTab({
               sugerencias={sugerencias}
               onActualizado={onActualizado}
               coincidencias={coincidencias}
-              correo={correo}
+              correo={conCorreo ? correo : null}
             />
           ) : null;
         }}

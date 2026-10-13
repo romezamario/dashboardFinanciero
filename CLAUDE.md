@@ -45,7 +45,7 @@ dashboard (this file's subject) and **FinanzasPersonales**, the paid product for
 from the same `frontend/` and the same `supabase/migrations/`, but deployed to **separate** Supabase
 and Cloudflare Pages projects (the customer instance has no Cloudflare Access). `VITE_EDICION=producto`
 (`src/lib/edicion.ts`, tested) hides QQQ/TQQQ + Macro (Yahoo data can't be resold), Shophunters and the
-Wiki, and names the app "Ordena tu Lana" (brand renamed 2026-10-11 with the domain ordenatulana.com, user's decision; "FinanzasPersonales" survives only in code comments and the `PRODUCTO_*` secret names); unset = personal, exactly as before. `deploy-producto.yml`
+Wiki, and — until customers can connect their email (Gmail, phase 2) — the "Por correo" side of "Gastos recientes" (`FuncionPersonal` `"correo"`, 2026-10-13, user's request: the tab shows only "Por estado de cuenta", no selector, no correo matches/inheritance, and the notices aren't fetched; remove `"correo"` from `SOLO_PERSONAL` to bring it back), and names the app "Ordena tu Lana" (brand renamed 2026-10-11 with the domain ordenatulana.com, user's decision; "FinanzasPersonales" survives only in code comments and the `PRODUCTO_*` secret names); unset = personal, exactly as before. `deploy-producto.yml`
 builds that edition (without `functions/`) to the Pages project `ordenatulana` (created by the workflow itself, `continue-on-error`; it replaced `finanzaspersonales` on 2026-10-11, user's request, so names don't cross), and
 `db-migrate.yml`'s `migrate-producto` job applies the migrations there; both skip with a notice until
 the `PRODUCTO_*` secrets exist (README, "Instancia de clientes"). The plan doc (tiers MXN 0/29/59,

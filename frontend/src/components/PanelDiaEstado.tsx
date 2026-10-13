@@ -58,7 +58,8 @@ export function PanelDiaEstado({
   sugerencias: Sugerencias;
   onActualizado: (ids?: string[]) => void | Promise<void>;
   coincidencias: Map<string, Coincidencia>;
-  correo: EstadoCorreo;
+  /** null = sin correo (edición producto): las filas no abren la tarjeta de coincidencia. */
+  correo: EstadoCorreo | null;
 }) {
   const { descargando, errorExcel, descargar } = useDescargaExcel(() =>
     descargarDiaEstadoExcel(dia)
@@ -110,7 +111,7 @@ export function PanelDiaEstado({
   }
 
   return (
-    <ContextoCoincidencia.Provider value={contextoCoincidencia}>
+    <ContextoCoincidencia.Provider value={correo ? contextoCoincidencia : null}>
     <section
       className="rounded-md"
       style={{ background: "var(--surface-1)", border: "1px solid var(--series-1)" }}
@@ -193,7 +194,7 @@ export function PanelDiaEstado({
           nota="Los eventos empiezan ocultos: sus cargos dejan de sumar al día hasta que los muestres en «Ocultar categorías y eventos»."
         />
       </div>
-      {flotante && (
+      {flotante && correo && (
         <CoincidenciaFlotante
           mov={flotante.mov}
           x={flotante.x}
@@ -522,9 +523,9 @@ function FilaMovimiento({
     <>
       <tr
         onClick={contexto ? (e) => contexto.abrir(e, mov) : undefined}
-        className="cursor-pointer"
+        className={contexto ? "cursor-pointer" : undefined}
         style={{ borderBottom: "1px solid var(--border)" }}
-        title="Clic para ver la posible coincidencia en el correo"
+        title={contexto ? "Clic para ver la posible coincidencia en el correo" : undefined}
       >
         {children}
       </tr>
