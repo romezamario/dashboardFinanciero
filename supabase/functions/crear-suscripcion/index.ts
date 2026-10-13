@@ -3,10 +3,11 @@
 // él, la crea pendiente y devuelve la dirección de Mercado Pago donde se
 // autoriza. El precio sale de la tabla `planes`, nunca del navegador; el estado
 // siempre se lee de vuelta de Mercado Pago (sincronizarPreapproval).
-import { cuerpoPreapproval, esPeriodo, esPlanPago, urlDeRegreso } from "../_compartido/mercadopago.ts";
+import { cuerpoPreapproval, entornoDeOrigen, esPeriodo, esPlanPago, urlDeRegreso } from "../_compartido/mercadopago.ts";
 import {
   clienteAdmin,
   ErrorMercadoPago,
+  esAdministrador,
   mercadoPago,
   preflight,
   responder,
@@ -26,6 +27,15 @@ Deno.serve(async (req) => {
 
   const { plan, periodo, origen, tokenTarjeta } = await req.json().catch(() => ({}));
   if (!esPlanPago(plan) || !esPeriodo(periodo)) return responder(req, 400, { error: "Plan o periodo no válido." });
+
+  // El sitio desde el que se paga decide las credenciales (Origin lo pone el
+  // navegador). En pruebas se paga con tarjetas de prueba, que son públicas:
+  // como la base es la misma que la de producción, ese plan valdría también en
+  // ordenatulana.com, así que en pruebas solo pagan los administradores.
+  const entorno = entornoDeOrigen(req.headers.get("Origin"));
+  if (entorno === "prueba" && !(await esAdministrador(admin, usuario))) {
+    return responder(req, 403, { error: "En el sitio de pruebas solo los administradores pueden hacer pagos de prueba." });
+  }
 
   const { data: vigente } = await admin
     .from("suscripciones")
@@ -48,8 +58,9 @@ Deno.serve(async (req) => {
   try {
     // Con credenciales de prueba, quien paga tiene que ser un comprador de
     // prueba de Mercado Pago, no el correo real del cliente.
-    const correo = Deno.env.get("MP_CORREO_COMPRADOR_PRUEBA") || usuario.email;
+    const correo = (entorno === "prueba" && Deno.env.get("MP_CORREO_COMPRADOR_PRUEBA")) || usuario.email;
     const preapproval = await mercadoPago<{ id: string; init_point: string }>(
+      entorno,
       "POST",
       "/preapproval",
       cuerpoPreapproval({
@@ -70,10 +81,11 @@ Deno.serve(async (req) => {
       estado: "pendiente",
       proveedor: "mercadopago",
       proveedor_id: preapproval.id,
+      entorno,
     });
     if (error) throw new Error(error.message);
     if (tokenTarjeta) {
-      const resultado = await sincronizarPreapproval(preapproval.id);
+      const resultado = await sincronizarPreapproval(preapproval.id, entorno);
       return responder(req, 200, { resultado });
     }
     return responder(req, 200, { url: preapproval.init_point });

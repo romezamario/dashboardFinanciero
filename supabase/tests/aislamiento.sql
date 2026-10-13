@@ -444,9 +444,9 @@ end $$;
 
 -- Lo que hace el webhook (service_role): G paga Pro.
 set role service_role;
-insert into suscripciones (id, user_id, plan_id, periodo, monto, estado, proveedor_id, periodo_fin)
+insert into suscripciones (id, user_id, plan_id, periodo, monto, estado, proveedor_id, periodo_fin, entorno)
   values ('12121212-0000-0000-0000-0000000000a9', '12121212-0000-0000-0000-000000000001', 'pro', 'mensual', 59,
-          'activa', 'mp-e-1', now() + interval '20 days');
+          'activa', 'mp-e-1', now() + interval '20 days', 'produccion');
 
 set role authenticated;
 set request.jwt.claim.sub = '12121212-0000-0000-0000-000000000001';

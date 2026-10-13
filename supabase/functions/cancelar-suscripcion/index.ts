@@ -2,10 +2,10 @@
 // en Mercado Pago todas las suscripciones vivas de quien llama. Ya no habrá
 // más cobros; el plan sigue hasta el fin del periodo pagado (periodo_fin, que
 // mi_plan() respeta).
-import { clienteAdmin, cancelarEnMercadoPago, preflight, responder, sitiosPermitidos, usuarioQueLlama } from "../_compartido/servidor.ts";
+import { clienteAdmin, cancelarEnMercadoPago, preflight, responder, usuarioQueLlama } from "../_compartido/servidor.ts";
 import { correoPlanCancelado } from "../_compartido/correosCobro.ts";
 import { destinatario, enviarCorreo } from "../_compartido/avisarPorCorreo.ts";
-import { nombrePlan, type PlanPago } from "../_compartido/mercadopago.ts";
+import { type Entorno, nombrePlan, type PlanPago, SITIO_DE_ENTORNO } from "../_compartido/mercadopago.ts";
 
 Deno.serve(async (req) => {
   const opciones = preflight(req);
@@ -18,17 +18,17 @@ Deno.serve(async (req) => {
 
   const { data: vivas, error } = await admin
     .from("suscripciones")
-    .select("id, proveedor, proveedor_id, estado, plan_id, periodo, periodo_fin")
+    .select("id, proveedor, proveedor_id, estado, plan_id, periodo, periodo_fin, entorno")
     .eq("user_id", usuario.id)
     .in("estado", ["pendiente", "activa", "pausada"]);
   if (error) return responder(req, 500, { error: error.message });
 
   let canceladas = 0;
-  let ultima: { plan_id: string; periodo: "mensual" | "anual"; periodo_fin: string | null } | null = null;
+  let ultima: { plan_id: string; periodo: "mensual" | "anual"; periodo_fin: string | null; entorno: Entorno } | null = null;
   for (const s of vivas ?? []) {
     if (s.proveedor !== "mercadopago") continue;
     try {
-      await cancelarEnMercadoPago(s.proveedor_id);
+      await cancelarEnMercadoPago(s.entorno, s.proveedor_id);
     } catch (e) {
       // Una pendiente que nunca se pagó puede no existir ya en Mercado Pago;
       // una activa sin cancelar seguiría cobrando: eso sí es un error.
@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
           plan: nombrePlan(ultima.plan_id as PlanPago),
           periodo: ultima.periodo,
           hasta: ultima.periodo_fin,
-          sitio: sitiosPermitidos()[0],
+          sitio: SITIO_DE_ENTORNO[ultima.entorno],
         })
       );
     }

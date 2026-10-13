@@ -1,8 +1,16 @@
 // Sincroniza una suscripción con lo que dice Mercado Pago. Compartido por el
 // webhook (cuando MP avisa) y por verificar-suscripcion (cuando el cliente
 // abre Mi cuenta), para que el plan se active aunque el aviso no llegue.
-import { estadoDesdeMercadoPago, nombrePlan, periodoDesdeFrecuencia, planPorMonto, type PlanPago } from "./mercadopago.ts";
-import { cancelarEnMercadoPago, clienteAdmin, mercadoPago, sitiosPermitidos, type Preapproval } from "./servidor.ts";
+import {
+  type Entorno,
+  estadoDesdeMercadoPago,
+  nombrePlan,
+  periodoDesdeFrecuencia,
+  planPorMonto,
+  type PlanPago,
+  SITIO_DE_ENTORNO,
+} from "./mercadopago.ts";
+import { cancelarEnMercadoPago, clienteAdmin, mercadoPago, type Preapproval } from "./servidor.ts";
 import { correoPlanActivo } from "./correosCobro.ts";
 import { destinatario, enviarCorreo } from "./avisarPorCorreo.ts";
 
@@ -22,14 +30,14 @@ export interface CobroAutorizado {
 export async function cancelarLasDemas(userId: string, idVigente: string): Promise<number> {
   const { data } = await admin
     .from("suscripciones")
-    .select("id, proveedor_id, estado")
+    .select("id, proveedor_id, estado, entorno")
     .eq("user_id", userId)
     .eq("proveedor", "mercadopago")
     .neq("id", idVigente)
     .in("estado", ["pendiente", "activa", "pausada"]);
   for (const s of data ?? []) {
     try {
-      await cancelarEnMercadoPago(s.proveedor_id);
+      await cancelarEnMercadoPago(s.entorno, s.proveedor_id);
     } catch (e) {
       if (s.estado !== "pendiente") throw e;
     }
@@ -40,18 +48,26 @@ export async function cancelarLasDemas(userId: string, idVigente: string): Promi
 
 /** Lee la suscripción en Mercado Pago y escribe en `suscripciones` lo que
  * dice (estado, próximo cobro, último cobro). La usan el webhook y
- * verificar-suscripcion; nunca se confía en lo que trae el aviso. */
-export async function sincronizarPreapproval(preapprovalId: string, cobro: CobroAutorizado | null = null): Promise<string> {
-  const mp = await mercadoPago<Preapproval>("GET", `/preapproval/${encodeURIComponent(preapprovalId)}`);
-  const estado = estadoDesdeMercadoPago(mp.status);
-  if (!estado) return `estado desconocido: ${mp.status}`;
-
+ * verificar-suscripcion; nunca se confía en lo que trae el aviso. Si ya hay
+ * fila, su `entorno` decide con qué credenciales se consulta; si no, el
+ * `entorno` que sugiere quien llama. */
+export async function sincronizarPreapproval(
+  preapprovalId: string,
+  entornoSugerido: Entorno,
+  cobro: CobroAutorizado | null = null
+): Promise<string> {
+  const columnas = "id, user_id, periodo_fin, estado, plan_id, periodo, monto, entorno";
   const { data: existente } = await admin
     .from("suscripciones")
-    .select("id, user_id, periodo_fin, estado, plan_id, periodo, monto")
+    .select(columnas)
     .eq("proveedor", "mercadopago")
-    .eq("proveedor_id", mp.id)
+    .eq("proveedor_id", preapprovalId)
     .maybeSingle();
+  const entorno: Entorno = existente?.entorno ?? entornoSugerido;
+
+  const mp = await mercadoPago<Preapproval>(entorno, "GET", `/preapproval/${encodeURIComponent(preapprovalId)}`);
+  const estado = estadoDesdeMercadoPago(mp.status);
+  if (!estado) return `estado desconocido: ${mp.status}`;
 
   let fila = existente;
   if (!fila) {
@@ -62,7 +78,7 @@ export async function sincronizarPreapproval(preapprovalId: string, cobro: Cobro
       : { data: { user: null } };
     if (!usuario?.user) {
       // Nadie a quien darle el plan (p. ej. borró su cuenta): que no cobre.
-      if (estado === "activa" || estado === "pausada") await cancelarEnMercadoPago(mp.id);
+      if (estado === "activa" || estado === "pausada") await cancelarEnMercadoPago(entorno, mp.id);
       return "sin usuario: cancelada en Mercado Pago";
     }
     const periodo = periodoDesdeFrecuencia(mp.auto_recurring?.frequency, mp.auto_recurring?.frequency_type);
@@ -72,8 +88,8 @@ export async function sincronizarPreapproval(preapprovalId: string, cobro: Cobro
     if (!periodo || !plan) return `no corresponde a ningún plan (${monto} MXN)`;
     const { data: nueva, error } = await admin
       .from("suscripciones")
-      .insert({ user_id: userId, plan_id: plan, periodo, monto, estado, proveedor: "mercadopago", proveedor_id: mp.id })
-      .select("id, user_id, periodo_fin, estado, plan_id, periodo, monto")
+      .insert({ user_id: userId, plan_id: plan, periodo, monto, estado, proveedor: "mercadopago", proveedor_id: mp.id, entorno })
+      .select(columnas)
       .single();
     if (error) throw new Error(error.message);
     // Recién creada aquí: todavía no había avisado a nadie de que se activó.
@@ -110,7 +126,7 @@ export async function sincronizarPreapproval(preapprovalId: string, cobro: Cobro
             monto: Number(fila.monto),
             proximoCobro: (cambios.periodo_fin as string | undefined) ?? fila.periodo_fin ?? null,
             cambioDePlan: anteriores > 0,
-            sitio: sitiosPermitidos()[0],
+            sitio: SITIO_DE_ENTORNO[entorno],
           })
         );
       }

@@ -7,6 +7,8 @@ interface ImportMetaEnv {
   readonly VITE_EDICION?: string;
   /** Public Key de Mercado Pago (edición producto): formulario de tarjeta embebido. */
   readonly VITE_MP_PUBLIC_KEY?: string;
+  /** "produccion" solo en el build de ordenatulana.com; sin valor = prueba. */
+  readonly VITE_MP_MODO?: string;
 }
 
 interface ImportMeta {

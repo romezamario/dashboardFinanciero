@@ -10,6 +10,7 @@ import {
   periodoDesdeFrecuencia,
   planPorMonto,
   SITIOS_POR_DEFECTO,
+  entornoDeOrigen,
   urlDeRegreso,
 } from "./mercadopago.ts";
 
@@ -120,5 +121,19 @@ describe("alta de la suscripción", () => {
     });
     expect(cuerpo).toMatchObject({ card_token_id: "tok-123", status: "authorized" });
     expect(cuerpo.auto_recurring.frequency).toBe(1);
+  });
+});
+
+describe("entornoDeOrigen", () => {
+  it("solo ordenatulana.com cobra con credenciales de producción", () => {
+    expect(entornoDeOrigen("https://ordenatulana.com")).toBe("produccion");
+    expect(entornoDeOrigen("https://www.ordenatulana.com")).toBe("produccion");
+    expect(entornoDeOrigen("https://ordenatulana.pages.dev")).toBe("produccion");
+  });
+  it("pruebas, localhost, otros sitios o sin origen: prueba", () => {
+    expect(entornoDeOrigen("https://pruebas.ordenatulana.pages.dev")).toBe("prueba");
+    expect(entornoDeOrigen("http://localhost:5173")).toBe("prueba");
+    expect(entornoDeOrigen("https://ordenatulana.com.malo.example")).toBe("prueba");
+    expect(entornoDeOrigen(null)).toBe("prueba");
   });
 });

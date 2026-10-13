@@ -1,10 +1,13 @@
 // Avisos de Mercado Pago (Tus integraciones → Webhooks, eventos "Planes y
-// suscripciones"). Valida la firma x-signature con MP_WEBHOOK_SECRET y, aun
+// suscripciones"). Mercado Pago configura una URL por modo: la de producción
+// es la URL tal cual y la de prueba lleva `?entorno=prueba`, para consultar
+// con las credenciales de ese modo. Valida la firma x-signature con
+// MP_WEBHOOK_SECRET_PRODUCCION (o MP_WEBHOOK_SECRET en prueba) y, aun
 // así, nunca confía en el aviso: vuelve a consultar la suscripción en la API y
 // escribe lo que Mercado Pago dice. Es la única vía por la que una
 // suscripción se vuelve activa. Se despliega sin verificación de JWT
 // (config.toml): Mercado Pago no trae sesión de Supabase.
-import { datosDelAviso, firmaValida } from "../_compartido/mercadopago.ts";
+import { datosDelAviso, type Entorno, firmaValida } from "../_compartido/mercadopago.ts";
 import { clienteAdmin, ErrorMercadoPago, mercadoPago } from "../_compartido/servidor.ts";
 import { type CobroAutorizado, sincronizarPreapproval } from "../_compartido/sincronizar.ts";
 
@@ -15,11 +18,11 @@ async function anotar(aviso: Record<string, unknown>) {
   if (error) console.error("avisos_pago", error.message);
 }
 
-async function procesar(tipo: string, id: string): Promise<string> {
-  if (tipo === "subscription_preapproval" || tipo === "preapproval") return sincronizarPreapproval(id);
+async function procesar(entorno: Entorno, tipo: string, id: string): Promise<string> {
+  if (tipo === "subscription_preapproval" || tipo === "preapproval") return sincronizarPreapproval(id, entorno);
   if (tipo === "subscription_authorized_payment" || tipo === "authorized_payment") {
-    const cobro = await mercadoPago<CobroAutorizado>("GET", `/authorized_payments/${encodeURIComponent(id)}`);
-    return sincronizarPreapproval(cobro.preapproval_id, cobro);
+    const cobro = await mercadoPago<CobroAutorizado>(entorno, "GET", `/authorized_payments/${encodeURIComponent(id)}`);
+    return sincronizarPreapproval(cobro.preapproval_id, entorno, cobro);
   }
   return `tipo ignorado: ${tipo}`;
 }
@@ -27,6 +30,11 @@ async function procesar(tipo: string, id: string): Promise<string> {
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("ok");
   const url = new URL(req.url);
+  const entorno: Entorno = url.searchParams.get("entorno") === "prueba" ? "prueba" : "produccion";
+  const secreto =
+    (entorno === "produccion" ? Deno.env.get("MP_WEBHOOK_SECRET_PRODUCCION") : undefined) ??
+    Deno.env.get("MP_WEBHOOK_SECRET") ??
+    "";
   const cuerpo = await req.json().catch(() => null);
   const aviso = datosDelAviso(url, cuerpo);
   const requestId = req.headers.get("x-request-id");
@@ -34,9 +42,9 @@ Deno.serve(async (req) => {
     cabeceraFirma: req.headers.get("x-signature"),
     requestId,
     dataId: url.searchParams.get("data.id") ?? aviso?.id ?? null,
-    secreto: Deno.env.get("MP_WEBHOOK_SECRET") ?? "",
+    secreto,
   });
-  const registro = { tipo: aviso?.tipo ?? null, recurso_id: aviso?.id ?? null, request_id: requestId, firma_valida: valida };
+  const registro = { tipo: aviso?.tipo ? `${aviso.tipo} (${entorno})` : null, recurso_id: aviso?.id ?? null, request_id: requestId, firma_valida: valida };
 
   if (!valida) {
     await anotar({ ...registro, resultado: "firma no válida" });
@@ -47,7 +55,7 @@ Deno.serve(async (req) => {
     return new Response("ok");
   }
   try {
-    const resultado = await procesar(aviso.tipo, aviso.id);
+    const resultado = await procesar(entorno, aviso.tipo, aviso.id);
     await anotar({ ...registro, resultado });
     return new Response("ok");
   } catch (e) {

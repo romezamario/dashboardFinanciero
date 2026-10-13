@@ -607,8 +607,11 @@ La app de escritorio sigue sincronizando solo con tu instancia personal.
 **Planes y cobros (fase 3, modo de prueba)**: en **Mi cuenta → Plan** el cliente ve su plan (los primeros
 14 días desde el registro son una prueba de Básico sin tarjeta; después, Gratis), elige Básico o Pro, anual
 o mensual, y paga en Mercado Pago; también cancela ahí (deja de cobrarse y conserva el plan hasta el fin de
-lo pagado). Mientras `PAGOS_EN_PRUEBA` (`frontend/src/lib/suscripcion.ts`) sea `true`, Mi cuenta avisa que
-nada se cobra de verdad. Lo hacen tres Edge Functions de Supabase (`supabase/functions/`), que despliega
+lo pagado). **El sitio de pruebas cobra con credenciales de prueba y ordenatulana.com con las de
+producción**, sobre la misma base: el build de producción lleva `VITE_MP_MODO=produccion` (sin él,
+`PAGOS_EN_PRUEBA` es `true` y Mi cuenta avisa que nada se cobra de verdad), las funciones eligen el token
+por el sitio que llama y cada suscripción guarda su `entorno`. Como las tarjetas de prueba son públicas y
+un plan de prueba valdría también en producción, en el sitio de pruebas solo pagan los administradores. Lo hacen tres Edge Functions de Supabase (`supabase/functions/`), que despliega
 `funciones-producto.yml` al proyecto de clientes. Para que cobren (con usuarios de prueba):
 
 1. En [Mercado Pago Developers](https://www.mercadopago.com.mx/developers/panel/app) crea una aplicación
@@ -616,7 +619,7 @@ nada se cobra de verdad. Lo hacen tres Edge Functions de Supabase (`supabase/fun
 2. En *Credenciales de prueba* de esa aplicación pulsa *Activar credenciales* y copia el **Access Token** y la
    **Public Key** (ambos empiezan con `APP_USR-`; lo que importa es que sean los de prueba).
 3. *Webhooks → Configurar notificaciones → Modo de prueba*: URL
-   `https://<project-ref de clientes>.supabase.co/functions/v1/webhook-mercadopago`, evento **Planes y
+   `https://<project-ref de clientes>.supabase.co/functions/v1/webhook-mercadopago?entorno=prueba`, evento **Planes y
    suscripciones**; guarda y copia la **clave secreta**.
 4. GitHub Secrets: `PRODUCTO_MP_ACCESS_TOKEN` y `PRODUCTO_MP_PUBLIC_KEY` (paso 2), `PRODUCTO_MP_WEBHOOK_SECRET`
    (paso 3) y `PRODUCTO_MP_CORREO_COMPRADOR_PRUEBA`: el correo **real** del comprador de prueba (entra con su
@@ -627,9 +630,13 @@ nada se cobra de verdad. Lo hacen tres Edge Functions de Supabase (`supabase/fun
    plan se activa al momento. Sin la Public Key, "Suscribirme" lleva a la página de Mercado Pago; al abrir
    Mi cuenta se consulta a Mercado Pago cualquier suscripción pendiente, aunque el webhook no avise.
 
-Para cobrar de verdad (fase 4): cambia los secretos por las credenciales reales, borra
-`PRODUCTO_MP_CORREO_COMPRADOR_PRUEBA`, pon `PAGOS_EN_PRUEBA = false` y el secreto de función
-`MP_ERRORES_DETALLADOS=no` (si no, los errores muestran la respuesta cruda de Mercado Pago). Los límites de cada plan (cuentas,
+Para cobrar de verdad en ordenatulana.com: en *Credenciales de producción* de la misma aplicación copia el
+**Access Token** y la **Public Key**; en *Webhooks → Modo productivo* pon la URL **sin** `?entorno=prueba`,
+evento **Planes y suscripciones**, y copia su clave secreta. GitHub Secrets:
+`PRODUCTO_MP_ACCESS_TOKEN_PRODUCCION`, `PRODUCTO_MP_PUBLIC_KEY_PRODUCCION` y
+`PRODUCTO_MP_WEBHOOK_SECRET_PRODUCCION` (los `PRODUCTO_MP_*` sin sufijo siguen siendo los de prueba). Corre
+*Funciones de cobro* y luego *Deploy Ordena tu Lana* con destino `produccion`. Sin el Access Token de
+producción, ordenatulana.com responde "Los pagos todavía no están disponibles". Los límites de cada plan (cuentas,
 historial, reglas) están en la tabla `planes` pero **todavía no se aplican**.
 
 **Aislamiento entre usuarios**: `supabase/tests/correr.sh` aplica todas las migraciones a un Postgres

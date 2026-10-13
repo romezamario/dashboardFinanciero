@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
   const desde = new Date(Date.now() - DIAS_PENDIENTE * 86_400_000).toISOString();
   const { data, error } = await admin
     .from("suscripciones")
-    .select("proveedor_id")
+    .select("proveedor_id, entorno")
     .eq("user_id", usuario.id)
     .eq("proveedor", "mercadopago")
     .eq("estado", "pendiente")
@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
   const resultados: string[] = [];
   for (const s of data ?? []) {
     try {
-      resultados.push(await sincronizarPreapproval(s.proveedor_id));
+      resultados.push(await sincronizarPreapproval(s.proveedor_id, s.entorno));
     } catch (e) {
       if (e instanceof ErrorMercadoPago && e.estado === 404) continue;
       console.error("verificar-suscripcion", (e as Error).message);

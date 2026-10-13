@@ -37,7 +37,13 @@ jobs:
       VITE_SUPABASE_URL: ${{ secrets.PRODUCTO_VITE_SUPABASE_URL }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.PRODUCTO_VITE_SUPABASE_ANON_KEY }}
       VITE_EDICION: producto
-      VITE_MP_PUBLIC_KEY: ${{ secrets.PRODUCTO_MP_PUBLIC_KEY }}
+      # Mercado Pago: pruebas cobra con las credenciales de PRUEBA (y muestra el
+      # aviso "Modo de prueba"); producción, con las de PRODUCCIÓN. Sin la llave
+      # pública de producción, ordenatulana.com manda a pagar a Mercado Pago
+      # (sin formulario embebido) y las funciones responden que los pagos aún
+      # no están disponibles mientras falte su Access Token.
+      VITE_MP_PUBLIC_KEY: ${{ inputs.destino == 'produccion' && secrets.PRODUCTO_MP_PUBLIC_KEY_PRODUCCION || secrets.PRODUCTO_MP_PUBLIC_KEY }}
+      VITE_MP_MODO: ${{ inputs.destino == 'produccion' && 'produccion' || 'prueba' }}
       # Rama de Pages: "main" es producción; cualquier otra es vista previa.
       RAMA_PAGES: ${{ inputs.destino == 'produccion' && 'main' || 'pruebas' }}
     steps:

@@ -2,9 +2,10 @@
 // probar el flujo de cobro desde cero): cancela en Mercado Pago las
 // suscripciones vivas de QUIEN LLAMA y borra sus filas de `suscripciones`, así
 // Mi cuenta vuelve a mostrar la prueba gratis (o Gratis) como un cliente
-// nuevo. Solo para administradores (mismo criterio que es_administrador():
+// nuevo. Solo borra las de PRUEBA (las pagadas con dinero real en
+// ordenatulana.com nunca). Solo para administradores (mismo criterio que es_administrador():
 // correo confirmado y registrado en `administradores`). No toca a nadie más.
-import { clienteAdmin, cancelarEnMercadoPago, preflight, responder, usuarioQueLlama } from "../_compartido/servidor.ts";
+import { clienteAdmin, cancelarEnMercadoPago, esAdministrador, preflight, responder, usuarioQueLlama } from "../_compartido/servidor.ts";
 
 Deno.serve(async (req) => {
   const opciones = preflight(req);
@@ -15,16 +16,13 @@ Deno.serve(async (req) => {
   const usuario = await usuarioQueLlama(req, admin);
   if (!usuario) return responder(req, 401, { error: "Inicia sesión." });
 
-  const correo = usuario.email?.toLowerCase();
-  const { data: esAdmin } = correo && usuario.email_confirmed_at
-    ? await admin.from("administradores").select("correo").eq("correo", correo).maybeSingle()
-    : { data: null };
-  if (!esAdmin) return responder(req, 403, { error: "Solo un administrador puede reiniciar sus pagos." });
+  if (!(await esAdministrador(admin, usuario))) return responder(req, 403, { error: "Solo un administrador puede reiniciar sus pagos." });
 
   const { data: filas, error } = await admin
     .from("suscripciones")
     .select("id, proveedor, proveedor_id, estado")
-    .eq("user_id", usuario.id);
+    .eq("user_id", usuario.id)
+    .eq("entorno", "prueba");
   if (error) return responder(req, 500, { error: error.message });
 
   // Primero que deje de cobrar: una viva que no se pudo cancelar en Mercado
@@ -32,7 +30,7 @@ Deno.serve(async (req) => {
   for (const s of filas ?? []) {
     if (s.proveedor !== "mercadopago" || !["activa", "pausada", "pendiente"].includes(s.estado)) continue;
     try {
-      await cancelarEnMercadoPago(s.proveedor_id);
+      await cancelarEnMercadoPago("prueba", s.proveedor_id);
     } catch (e) {
       if (s.estado !== "pendiente") {
         console.error("reiniciar-pagos", (e as Error).message);
@@ -41,7 +39,11 @@ Deno.serve(async (req) => {
     }
   }
 
-  const { error: errorBorrar } = await admin.from("suscripciones").delete().eq("user_id", usuario.id);
+  const { error: errorBorrar } = await admin
+    .from("suscripciones")
+    .delete()
+    .eq("user_id", usuario.id)
+    .eq("entorno", "prueba");
   if (errorBorrar) return responder(req, 500, { error: errorBorrar.message });
   return responder(req, 200, { borradas: filas?.length ?? 0 });
 });

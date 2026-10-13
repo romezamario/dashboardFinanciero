@@ -62,6 +62,30 @@ export const SITIOS_POR_DEFECTO = [
   "https://pruebas.ordenatulana.pages.dev",
 ];
 
+/** Con qué credenciales de Mercado Pago se cobra (decisión del dueño,
+ * 2026-10-13): ordenatulana.com con las de producción (dinero real); el sitio
+ * de pruebas y `npm run dev` con las de prueba. Ambos sitios comparten la base,
+ * así que cada suscripción guarda su entorno (columna `entorno`). */
+export type Entorno = "prueba" | "produccion";
+
+/** Los únicos orígenes que cobran de verdad. Cualquier otro (pruebas,
+ * localhost, un origen desconocido) es prueba. */
+export const SITIOS_PRODUCCION = [
+  "https://ordenatulana.com",
+  "https://www.ordenatulana.com",
+  "https://ordenatulana.pages.dev",
+];
+
+export const SITIO_DE_ENTORNO: Record<Entorno, string> = {
+  produccion: "https://ordenatulana.com",
+  prueba: "https://pruebas.ordenatulana.pages.dev",
+};
+
+export const esEntorno = (x: unknown): x is Entorno => x === "prueba" || x === "produccion";
+
+export const entornoDeOrigen = (origen: string | null | undefined): Entorno =>
+  origen && SITIOS_PRODUCCION.includes(origen) ? "produccion" : "prueba";
+
 /** Parámetro con el que el sitio reconoce que viene de pagar
  * (frontend/src/lib/suscripcion.ts lo lee). Mercado Pago agrega
  * `&preapproval_id=…` a la dirección de regreso. */

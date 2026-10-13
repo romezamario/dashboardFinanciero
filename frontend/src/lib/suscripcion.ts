@@ -8,9 +8,11 @@ import { fechaCorta } from "./formato";
 // solo las escriben las Edge Functions (supabase/functions/), que hablan con
 // Mercado Pago.
 
-/** Mientras Mercado Pago use credenciales de prueba: nada se cobra de verdad.
- * Pasar a false (y cambiar los secretos PRODUCTO_MP_*) es el lanzamiento. */
-export const PAGOS_EN_PRUEBA = true;
+/** Credenciales de prueba de Mercado Pago: nada se cobra de verdad. Lo decide
+ * el build (deploy-producto.yml): ordenatulana.com se construye con
+ * VITE_MP_MODO=produccion; el sitio de pruebas y `npm run dev`, en prueba. Las
+ * Edge Functions eligen las mismas credenciales según el sitio que llama. */
+export const PAGOS_EN_PRUEBA = import.meta.env.VITE_MP_MODO !== "produccion";
 
 /** Public Key de Mercado Pago (pública por diseño: solo sirve para tokenizar
  * tarjetas en el navegador). Con ella, Mi cuenta muestra el formulario de

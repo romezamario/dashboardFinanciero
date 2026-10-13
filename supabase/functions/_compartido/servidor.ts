@@ -2,7 +2,7 @@
 // con CORS, el cliente de Supabase con la llave service_role (la inyecta
 // Supabase; nunca sale de ahí), quién llama y las llamadas a Mercado Pago.
 import { createClient, type SupabaseClient, type User } from "npm:@supabase/supabase-js@2";
-import { SITIOS_POR_DEFECTO } from "./mercadopago.ts";
+import { type Entorno, SITIOS_POR_DEFECTO } from "./mercadopago.ts";
 
 export const API_MP = "https://api.mercadopago.com";
 
@@ -59,15 +59,29 @@ export class ErrorMercadoPago extends Error {
   }
 }
 
-/** Llamada a la API de Mercado Pago con el Access Token del vendedor (en
- * modo de prueba, el del usuario de prueba vendedor). */
+/** ¿Quien llama es administrador? Mismo criterio que es_administrador() en la
+ * base: correo confirmado y registrado en `administradores`. */
+export async function esAdministrador(admin: SupabaseClient, usuario: User): Promise<boolean> {
+  const correo = usuario.email?.toLowerCase();
+  if (!correo || !usuario.email_confirmed_at) return false;
+  const { data } = await admin.from("administradores").select("correo").eq("correo", correo).maybeSingle();
+  return !!data;
+}
+
+/** Access Token de Mercado Pago de cada entorno: MP_ACCESS_TOKEN es el de
+ * prueba (el que existe desde la fase 3) y MP_ACCESS_TOKEN_PRODUCCION el real. */
+const tokenDe = (entorno: Entorno) =>
+  Deno.env.get(entorno === "produccion" ? "MP_ACCESS_TOKEN_PRODUCCION" : "MP_ACCESS_TOKEN");
+
+/** Llamada a la API de Mercado Pago con el Access Token del entorno. */
 export async function mercadoPago<T = Record<string, unknown>>(
+  entorno: Entorno,
   metodo: "GET" | "POST" | "PUT",
   ruta: string,
   cuerpo?: unknown
 ): Promise<T> {
-  const token = Deno.env.get("MP_ACCESS_TOKEN");
-  if (!token) throw new ErrorMercadoPago(503, "Los pagos todavía no están configurados.");
+  const token = tokenDe(entorno);
+  if (!token) throw new ErrorMercadoPago(503, "Los pagos todavía no están disponibles. Vuelve a intentarlo pronto.");
   const respuesta = await fetch(`${API_MP}${ruta}`, {
     method: metodo,
     headers: {
@@ -87,9 +101,10 @@ export async function mercadoPago<T = Record<string, unknown>>(
   if (!respuesta.ok) {
     const mensaje = mensajeDeErrorMp(datos) ?? `HTTP ${respuesta.status}`;
     console.error("mercadopago", metodo, ruta, respuesta.status, texto.slice(0, 1000));
-    // Mientras los pagos estén en modo de prueba, la respuesta completa ayuda a
-    // diagnosticar ("User bad request" solo no dice qué campo rechazó).
-    const detalle = Deno.env.get("MP_ERRORES_DETALLADOS") === "no" ? "" : ` [${respuesta.status} ${texto.slice(0, 400)}]`;
+    // En pruebas, la respuesta completa ayuda a diagnosticar ("User bad
+    // request" solo no dice qué campo rechazó); a un cliente real no se le
+    // muestra.
+    const detalle = entorno === "prueba" ? ` [${respuesta.status} ${texto.slice(0, 400)}]` : "";
     throw new ErrorMercadoPago(respuesta.status, `Mercado Pago respondió: ${mensaje}${detalle}`);
   }
   return datos as T;
@@ -116,5 +131,5 @@ export interface Preapproval {
   auto_recurring?: { frequency?: number; frequency_type?: string; transaction_amount?: number };
 }
 
-export const cancelarEnMercadoPago = (id: string) =>
-  mercadoPago<Preapproval>("PUT", `/preapproval/${encodeURIComponent(id)}`, { status: "cancelled" });
+export const cancelarEnMercadoPago = (entorno: Entorno, id: string) =>
+  mercadoPago<Preapproval>(entorno, "PUT", `/preapproval/${encodeURIComponent(id)}`, { status: "cancelled" });
