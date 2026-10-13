@@ -297,6 +297,8 @@ function SeccionPlan({ correo }: { correo: string }) {
   }, [cargar]);
 
   const viva = suscripcionViva(suscripciones);
+  // Canceló pero el periodo pagado sigue: el plan aún lo tiene, sin cobros.
+  const canceladoVigente = !viva && miPlan?.origen === "suscripcion" && miPlan.vigente_hasta ? miPlan : null;
 
   async function suscribir(plan: Plan) {
     if (plan.id === "gratis") return;
@@ -441,7 +443,7 @@ function SeccionPlan({ correo }: { correo: string }) {
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-          {viva ? "Cambiar de plan" : "Elige un plan"}
+          {viva ? "Cambiar de plan" : canceladoVigente ? "¿Cambiaste de opinión? Vuelve a suscribirte" : "Elige un plan"}
         </p>
         <Segmentado<Periodo>
           opciones={[
@@ -493,7 +495,9 @@ function SeccionPlan({ correo }: { correo: string }) {
                       ? "Abriendo Mercado Pago..."
                       : viva
                         ? `Cambiar a ${plan.nombre}`
-                        : "Suscribirme"}
+                        : canceladoVigente?.plan_id === plan.id
+                          ? `Reactivar ${plan.nombre}`
+                          : "Suscribirme"}
                 </Boton>
               </div>
             </div>
@@ -534,7 +538,7 @@ function SeccionPlan({ correo }: { correo: string }) {
       <p className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>
         {LLAVE_PUBLICA_MP ? "Pagas con tarjeta aquí mismo, procesado por Mercado Pago" : "Pagas en Mercado Pago con tarjeta o saldo"}; el cobro se repite cada {periodo === "anual" ? "año" : "mes"} hasta
         que canceles aquí.{viva ? " Al pagar el plan nuevo, el anterior deja de cobrarse." : ""}
-        {!viva && miPlan?.origen === "suscripcion" && miPlan.vigente_hasta
+        {canceladoVigente
           ? " Si te suscribes de nuevo antes de que termine tu plan cancelado, el cobro empieza hoy."
           : ""}
       </p>

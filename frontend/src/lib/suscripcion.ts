@@ -60,7 +60,7 @@ export function describirPlan(plan: MiPlan, ahora: Date): string {
   if (plan.origen === "suscripcion") {
     const periodo = plan.periodo === "anual" ? "anual" : "mensual";
     return plan.vigente_hasta
-      ? `Plan ${nombre} ${periodo}, cancelado: lo tienes hasta el ${fechaCorta(plan.vigente_hasta.slice(0, 10))}.`
+      ? `Plan ${nombre} ${periodo} cancelado: ya no se te cobrará. Lo sigues usando hasta el ${fechaCorta(plan.vigente_hasta.slice(0, 10))}; después pasas al plan Gratis.`
       : `Plan ${nombre} ${periodo}.`;
   }
   return "Plan Gratis.";

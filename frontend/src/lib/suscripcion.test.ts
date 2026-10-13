@@ -50,7 +50,7 @@ describe("plan del cliente", () => {
     );
     expect(
       describirPlan({ plan_id: "pro", origen: "suscripcion", vigente_hasta: "2026-11-05T00:00:00Z", periodo: "mensual" }, ahora)
-    ).toMatch(/^Plan Pro mensual, cancelado: lo tienes hasta el /);
+    ).toMatch(/^Plan Pro mensual cancelado: ya no se te cobrará\. Lo sigues usando hasta el .*; después pasas al plan Gratis\.$/);
     expect(describirPlan({ plan_id: "gratis", origen: "gratis", vigente_hasta: null, periodo: null }, ahora)).toBe("Plan Gratis.");
   });
 
