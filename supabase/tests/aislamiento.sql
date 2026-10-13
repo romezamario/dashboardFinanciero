@@ -167,9 +167,15 @@ set request.jwt.claim.sub = '';
 do $$
 begin
   if (select count(*) from transacciones) + (select count(*) from cuentas)
-     + (select count(*) from muestras_estados_cuenta) <> 0 or es_administrador() then
+     + (select count(*) from muestras_estados_cuenta) <> 0 then
     raise exception 'FALLO: anon ve datos';
   end if;
+  -- Sin sesión no se puede ni preguntar (alerta del Security Advisor).
+  begin
+    perform es_administrador();
+    raise exception 'FALLO: anon ejecuta es_administrador()';
+  exception when insufficient_privilege then null;
+  end;
 end $$;
 
 -- ------------------------------------------------- borrar la cuenta de A
@@ -519,3 +525,20 @@ end $$;
 reset role;
 
 \echo 'Aislamiento entre usuarios: OK'
+
+-- ------------------------------- funciones con permisos del dueño fuera de la API
+-- Alerta del Security Advisor: ninguna función SECURITY DEFINER en `public`
+-- (el esquema que expone la Data API); viven en `privado`.
+do $$
+declare
+  n text;
+begin
+  select string_agg(p.proname, ', ') into n
+  from pg_proc p join pg_namespace s on s.oid = p.pronamespace
+  where s.nspname = 'public' and p.prosecdef
+    and (has_function_privilege('anon', p.oid, 'execute')
+         or has_function_privilege('authenticated', p.oid, 'execute'));
+  if n is not null then
+    raise exception 'FALLO: funciones SECURITY DEFINER ejecutables desde la API: %', n;
+  end if;
+end $$;
