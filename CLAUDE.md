@@ -179,8 +179,14 @@ into `REGRESO_DE_PAGO` (`lib/regresoPago.ts`) and strips it, the Dashboard opens
 until that subscription is activa. Checked: RLS test (customer can't insert/update a subscription or read the log, trial vs.
 gratis, cancelled keeps the plan until `periodo_fin`, delete refused while active, cascade), Playwright with mocked
 endpoints (subscribe → return → confirmed → cancel; 503 message; 390 px dark), and a Deno smoke test of the webhook with a fake
-fetch (bad signature 401, activation cancels the old one, authorized payment recorded, unknown id → 200). **Not yet against
-real Mercado Pago**: needs the test seller's token + webhook secret from the owner (README, "Planes y cobros").
+fetch (bad signature 401, activation cancels the old one, authorized payment recorded, unknown id → 200). **Embedded card payment + verify (2026-10-13, user's request "quiero que el pago sea embebido")**: with
+`VITE_MP_PUBLIC_KEY` (secret `PRODUCTO_MP_PUBLIC_KEY`), "Suscribirme" opens `PagoConTarjeta.tsx` (lazy, `@mercadopago/sdk-react`
+Card Payment Brick; every prop memoized or the Brick re-mounts on each render) and `crear-suscripcion` gets `tokenTarjeta` →
+`card_token_id` + `status: authorized`, then syncs at once; without the key it falls back to the redirect. `verificar-suscripcion`
+(JWT) re-reads the caller's pendiente rows of the last 7 days in MP when Mi cuenta opens — the first real test showed the webhook
+alone didn't activate the plan (cause not yet known). Webhook and verify share `_compartido/sincronizar.ts`. Test-mode facts
+(2026-10-13): the app's own "Credenciales de prueba" (APP_USR-…) work; `payer_email` must be the test buyer's REAL email (seen in
+its MP profile) — a guessed one gives a bare 400 "User bad request". First subscription (Básico anual, redirect) authorized end to end.
 **Landing page (2026-10-11, user's request)**: in the producto edition only, `App` shows `Landing.tsx` while
 there's no session (personal still goes straight to `Login`); `#entrar` keeps the landing and opens `Login`
 (`producto` prop → `PantallaCuenta flotante`) as a popover under the header's "Entrar" button (`VentanaEntrar`:
