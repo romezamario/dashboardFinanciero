@@ -1262,7 +1262,9 @@ export const SECCIONES: SeccionWiki[] = [
             selector 1D / 1M / 1A / Todo, con el mismo detalle que la gráfica de Alpaca: un punto cada 5
             minutos en 1D (24 horas: las criptos operan siempre), cada hora en 1M y uno por día en 1A y Todo.
             La línea va recta de punto a punto (no se suaviza para no inventar movimientos) y la referencia
-            punteada es el valor al inicio del rango. Si la consulta falla, muestra el cierre diario
+            punteada es el valor al inicio del rango. Si Alpaca reporta puntos con un valor imposible (el
+            13 de octubre mandó un tramo al doble del valor real), se ocultan los que difieren más de 30% de
+            la lectura siguiente y la gráfica dice cuántos fueron. Si la consulta falla, muestra el cierre diario
             guardado en <C>output/alpaca.json</C> y lo dice en rojo.
           </li>
           <li>Solo en la edición personal.</li>

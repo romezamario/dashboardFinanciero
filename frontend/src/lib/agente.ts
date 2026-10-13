@@ -177,6 +177,25 @@ export async function obtenerHistorialAlpaca(rango: RangoAlpaca): Promise<PuntoH
   return cuerpo;
 }
 
+/** Alpaca a veces reporta en su historial intradía un tramo con un valor imposible (visto el
+ * 2026-10-13: el doble del valor real desde el inicio del día hasta la 1:10 a.m.). Se recorre de
+ * la lectura más reciente hacia atrás y se descarta todo punto que difiera más de `tolerancia`
+ * del último punto aceptado: la cuenta no puede moverse 30% en 5 minutos sin apalancamiento. */
+export function descartarSaltosImposibles(
+  puntos: PuntoHistorialAlpaca[],
+  tolerancia = 0.3,
+): { puntos: PuntoHistorialAlpaca[]; descartados: number } {
+  const aceptados: PuntoHistorialAlpaca[] = [];
+  let referencia: number | null = null;
+  for (let i = puntos.length - 1; i >= 0; i--) {
+    const p = puntos[i];
+    if (referencia !== null && Math.abs(p.valor / referencia - 1) > tolerancia) continue;
+    aceptados.push(p);
+    referencia = p.valor;
+  }
+  return { puntos: aceptados.reverse(), descartados: puntos.length - aceptados.length };
+}
+
 /** El historial diario de output/alpaca.json ("2026-10-11") como puntos del eje de tiempo, al
  * mediodía local para que la fecha no se corra un día con la zona horaria. */
 export function historialGuardadoComoPuntos(historial: { date: string; equity: number }[]): PuntoHistorialAlpaca[] {

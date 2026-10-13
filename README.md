@@ -417,7 +417,7 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
   tiene en GitHub) y, si faltan, lo dice en rojo y deja los datos guardados. La gráfica de esa cuenta
   también se pide en vivo, con selector **1D / 1M / 1A / Todo** como la de Alpaca: cada 5 minutos en
   1D (las 24 horas, porque las criptos no cierran), cada hora en 1M y por día en el resto
-  (`/api/alpaca-historial`); si no se puede leer, muestra el cierre diario guardado. Lo lee
+  (`/api/alpaca-historial`); si no se puede leer, muestra el cierre diario guardado. Si Alpaca manda puntos con un valor imposible (a veces reporta el doble del valor real en un tramo), se ocultan los que se alejan más de 30% de las lecturas vecinas y la gráfica avisa cuántos. Lo lee
   `/api/agente-saldo` (función de Cloudflare) del archivo `output/balance.json` de ese repo. Como
   el repo es privado, necesita la variable `GITHUB_TOKEN_AGENTE` en Cloudflare Pages (Settings →
   Variables and Secrets, producción): un token *fine-grained* de GitHub con acceso solo a

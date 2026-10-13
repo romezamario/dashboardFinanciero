@@ -13,6 +13,7 @@ import type { SaldoAgente } from "../../functions/api/agente-saldo";
 import type { CuentaAlpaca, OrdenAgente, PosicionAgente } from "../../functions/api/agente-saldo";
 import type { PuntoHistorialAlpaca, RangoAlpaca } from "../../functions/api/alpaca-historial";
 import {
+  descartarSaltosImposibles,
   estadoOrdenAlpaca,
   fraccionEnEfectivo,
   gananciasDeVentasAlpaca,
@@ -416,7 +417,9 @@ function SeccionAlpaca({ inicial }: { inicial: CuentaAlpaca }) {
     };
   }, [rango, claveHistorial]);
   const errorHistorial = fallo?.clave === claveHistorial ? fallo.mensaje : null;
-  const enVivo = historiales[rango];
+  const leido = historiales[rango];
+  const filtrado = useMemo(() => (leido ? descartarSaltosImposibles(leido) : null), [leido]);
+  const enVivo = filtrado?.puntos;
   const guardado = useMemo(() => historialGuardadoComoPuntos(cuenta.historial ?? []), [cuenta.historial]);
   const usarGuardado = !enVivo && errorHistorial !== null;
   const puntosGrafica = enVivo ?? (usarGuardado ? guardado : null);
@@ -459,7 +462,9 @@ function SeccionAlpaca({ inicial }: { inicial: CuentaAlpaca }) {
         aviso={
           errorHistorial
             ? `No se pudo leer el historial en vivo: ${errorHistorial} (${usarGuardado ? "se muestra el cierre diario guardado" : "se muestran los últimos datos leídos"}).`
-            : null
+            : filtrado && filtrado.descartados > 0 && !usarGuardado
+              ? `Se ocultaron ${filtrado.descartados} punto(s) que Alpaca reportó con un valor imposible (más de 30% lejos de las lecturas vecinas); el valor real de la cuenta es el de arriba.`
+              : null
         }
       />
       <Tabla
