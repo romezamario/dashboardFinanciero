@@ -12,6 +12,11 @@ import { fechaCorta } from "./formato";
  * Pasar a false (y cambiar los secretos PRODUCTO_MP_*) es el lanzamiento. */
 export const PAGOS_EN_PRUEBA = true;
 
+/** Public Key de Mercado Pago (pública por diseño: solo sirve para tokenizar
+ * tarjetas en el navegador). Con ella, Mi cuenta muestra el formulario de
+ * tarjeta embebido; sin ella, "Suscribirme" lleva a la página de Mercado Pago. */
+export const LLAVE_PUBLICA_MP: string | null = import.meta.env.VITE_MP_PUBLIC_KEY || null;
+
 export type OrigenPlan = "suscripcion" | "prueba" | "gratis";
 export type EstadoSuscripcion = "pendiente" | "activa" | "pausada" | "cancelada";
 
@@ -107,6 +112,20 @@ export async function iniciarSuscripcion(plan: Exclude<IdPlan, "gratis">, period
   });
   if (error) throw await errorDeFuncion(error);
   return (data as { url: string }).url;
+}
+
+/** Crea la suscripción con la tarjeta capturada en el formulario embebido
+ * (token de Mercado Pago, nunca el número): queda autorizada al momento. */
+export async function suscribirConTarjeta(
+  plan: Exclude<IdPlan, "gratis">,
+  periodo: Periodo,
+  tokenTarjeta: string
+): Promise<{ activa: boolean }> {
+  const { data, error } = await supabase.functions.invoke("crear-suscripcion", {
+    body: { plan, periodo, origen: window.location.origin, tokenTarjeta },
+  });
+  if (error) throw await errorDeFuncion(error);
+  return { activa: (data as { resultado?: string } | null)?.resultado === "suscripción activa" };
 }
 
 /** Pide al servidor que consulte en Mercado Pago las suscripciones pendientes

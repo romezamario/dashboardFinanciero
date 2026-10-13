@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
 import { REGRESO_DE_PAGO, supabase } from "../lib/supabase";
 import { borrarMiCuenta, guardarNombre, obtenerPerfil, type Perfil } from "../lib/perfil";
 import {
@@ -17,6 +17,7 @@ import {
   cancelarSuscripcion,
   describirPlan,
   iniciarSuscripcion,
+  LLAVE_PUBLICA_MP,
   nombreDePlan,
   leerPlanYSuscripciones,
   obtenerSuscripciones,
@@ -27,6 +28,8 @@ import {
   type Suscripcion,
 } from "../lib/suscripcion";
 import { Segmentado } from "./Segmentado";
+
+const PagoConTarjeta = lazy(() => import("./PagoConTarjeta"));
 
 // "Mi cuenta" de FinanzasPersonales (fase 1): perfil, plan, contraseña,
 // exportar los datos y borrar la cuenta. El plan se paga con Mercado Pago
@@ -46,7 +49,7 @@ export function MiCuenta({ correo, transacciones }: { correo: string; transaccio
         Mi cuenta
       </h2>
       <SeccionPerfil correo={correo} />
-      <SeccionPlan />
+      <SeccionPlan correo={correo} />
       <SeccionContrasena />
       <SeccionExportar transacciones={transacciones} />
       <SeccionBorrar correo={correo} />
@@ -188,7 +191,7 @@ let regresoPendiente = REGRESO_DE_PAGO;
 
 type Confirmacion = "esperando" | "confirmado" | "sin-confirmar" | null;
 
-function SeccionPlan() {
+function SeccionPlan({ correo }: { correo: string }) {
   const [miPlan, setMiPlan] = useState<MiPlan | null>(null);
   const [suscripciones, setSuscripciones] = useState<Suscripcion[]>([]);
   const [periodo, setPeriodo] = useState<Periodo>("anual");
@@ -197,6 +200,8 @@ function SeccionPlan() {
   const [confirmarCancelar, setConfirmarCancelar] = useState(false);
   const [cancelada, setCancelada] = useState(false);
   const [confirmacion, setConfirmacion] = useState<Confirmacion>(() => (regresoPendiente ? "esperando" : null));
+  // Plan cuyo formulario de tarjeta embebido está abierto.
+  const [pagando, setPagando] = useState<Plan | null>(null);
 
   const cargar = useCallback(async () => {
     const { plan, lista } = await leerPlanYSuscripciones();
@@ -244,6 +249,11 @@ function SeccionPlan() {
   async function suscribir(plan: Plan) {
     if (plan.id === "gratis") return;
     setError(null);
+    if (LLAVE_PUBLICA_MP) {
+      setConfirmacion(null);
+      setCancelada(false);
+      return setPagando(plan);
+    }
     setEnviando(plan.id);
     try {
       window.location.assign(await iniciarSuscripcion(plan.id, periodo));
@@ -333,6 +343,7 @@ function SeccionPlan() {
       )}
       {cancelada && <Mensaje tipo="exito">Suscripción cancelada. No habrá más cobros.</Mensaje>}
 
+
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
           {viva ? "Cambiar de plan" : "Elige un plan"}
@@ -343,7 +354,10 @@ function SeccionPlan() {
             { id: "mensual", etiqueta: "Mensual" },
           ]}
           valor={periodo}
-          onCambiar={setPeriodo}
+          onCambiar={(p) => {
+            setPeriodo(p);
+            setPagando(null);
+          }}
           chico
         />
       </div>
@@ -373,7 +387,10 @@ function SeccionPlan() {
                 ))}
               </ul>
               <div className="mt-3">
-                <Boton deshabilitado={esElActual || enviando !== null} onClick={() => void suscribir(plan)}>
+                <Boton
+                  deshabilitado={esElActual || enviando !== null || pagando?.id === plan.id}
+                  onClick={() => void suscribir(plan)}
+                >
                   {esElActual
                     ? "Tu plan actual"
                     : enviando === plan.id
@@ -387,8 +404,30 @@ function SeccionPlan() {
           );
         })}
       </div>
+      {pagando && (
+        <Suspense
+          fallback={
+            <p className="mt-4 text-sm" style={{ color: "var(--text-muted)" }}>
+              Cargando el formulario de pago…
+            </p>
+          }
+        >
+          <PagoConTarjeta
+            plan={pagando}
+            periodo={periodo}
+            monto={periodo === "anual" ? pagando.precioAnual! : pagando.precioMensual}
+            correo={correo}
+            onCancelar={() => setPagando(null)}
+            onPagado={(activa) => {
+              setPagando(null);
+              setConfirmacion(activa ? "confirmado" : "sin-confirmar");
+              void cargar().catch(() => undefined);
+            }}
+          />
+        </Suspense>
+      )}
       <p className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>
-        Pagas en Mercado Pago con tarjeta o saldo; el cobro se repite cada {periodo === "anual" ? "año" : "mes"} hasta
+        {LLAVE_PUBLICA_MP ? "Pagas con tarjeta aquí mismo, procesado por Mercado Pago" : "Pagas en Mercado Pago con tarjeta o saldo"}; el cobro se repite cada {periodo === "anual" ? "año" : "mes"} hasta
         que canceles aquí.{viva ? " Al pagar el plan nuevo, el anterior deja de cobrarse." : ""}
       </p>
       {error && <Mensaje tipo="error">{error}</Mensaje>}

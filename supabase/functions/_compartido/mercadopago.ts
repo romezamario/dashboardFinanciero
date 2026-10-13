@@ -83,7 +83,11 @@ export function cuerpoPreapproval(datos: {
   userId: string;
   correo: string;
   urlRegreso: string;
+  /** Token de la tarjeta capturada en el formulario embebido (Card Payment
+   * Brick): con él la suscripción nace autorizada, sin ir a Mercado Pago. */
+  tokenTarjeta?: string | null;
 }) {
+  const conTarjeta = datos.tokenTarjeta ? { card_token_id: datos.tokenTarjeta, status: "authorized" } : { status: "pending" };
   return {
     reason: `Ordena tu Lana · Plan ${nombrePlan(datos.plan)} ${datos.periodo}`,
     external_reference: datos.userId,
@@ -95,7 +99,7 @@ export function cuerpoPreapproval(datos: {
       currency_id: "MXN",
     },
     back_url: datos.urlRegreso,
-    status: "pending",
+    ...conTarjeta,
   };
 }
 

@@ -37,6 +37,7 @@ jobs:
       VITE_SUPABASE_URL: ${{ secrets.PRODUCTO_VITE_SUPABASE_URL }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.PRODUCTO_VITE_SUPABASE_ANON_KEY }}
       VITE_EDICION: producto
+      VITE_MP_PUBLIC_KEY: ${{ secrets.PRODUCTO_MP_PUBLIC_KEY }}
       # Rama de Pages: "main" es producción; cualquier otra es vista previa.
       RAMA_PAGES: ${{ inputs.destino == 'produccion' && 'main' || 'pruebas' }}
     steps:

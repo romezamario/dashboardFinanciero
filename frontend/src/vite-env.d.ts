@@ -5,6 +5,8 @@ interface ImportMetaEnv {
   readonly VITE_SUPABASE_ANON_KEY: string;
   /** "producto" = FinanzasPersonales (instancia de clientes); sin valor = personal. */
   readonly VITE_EDICION?: string;
+  /** Public Key de Mercado Pago (edición producto): formulario de tarjeta embebido. */
+  readonly VITE_MP_PUBLIC_KEY?: string;
 }
 
 interface ImportMeta {

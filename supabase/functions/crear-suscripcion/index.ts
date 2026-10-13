@@ -1,7 +1,8 @@
-// "Suscribirme" en Mi cuenta: crea la suscripción pendiente en Mercado Pago y
-// devuelve la dirección donde el cliente la autoriza. El precio sale de la
-// tabla `planes`, nunca del navegador. La suscripción se vuelve activa solo
-// cuando el webhook lo confirma con Mercado Pago.
+// "Suscribirme" en Mi cuenta. Con `tokenTarjeta` (formulario de tarjeta
+// embebido) crea la suscripción ya autorizada y la sincroniza al momento; sin
+// él, la crea pendiente y devuelve la dirección de Mercado Pago donde se
+// autoriza. El precio sale de la tabla `planes`, nunca del navegador; el estado
+// siempre se lee de vuelta de Mercado Pago (sincronizarPreapproval).
 import { cuerpoPreapproval, esPeriodo, esPlanPago, urlDeRegreso } from "../_compartido/mercadopago.ts";
 import {
   clienteAdmin,
@@ -12,6 +13,7 @@ import {
   sitiosPermitidos,
   usuarioQueLlama,
 } from "../_compartido/servidor.ts";
+import { sincronizarPreapproval } from "../_compartido/sincronizar.ts";
 
 Deno.serve(async (req) => {
   const opciones = preflight(req);
@@ -22,7 +24,7 @@ Deno.serve(async (req) => {
   const usuario = await usuarioQueLlama(req, admin);
   if (!usuario?.email) return responder(req, 401, { error: "Inicia sesión para suscribirte." });
 
-  const { plan, periodo, origen } = await req.json().catch(() => ({}));
+  const { plan, periodo, origen, tokenTarjeta } = await req.json().catch(() => ({}));
   if (!esPlanPago(plan) || !esPeriodo(periodo)) return responder(req, 400, { error: "Plan o periodo no válido." });
 
   const { data: vigente } = await admin
@@ -57,6 +59,7 @@ Deno.serve(async (req) => {
         userId: usuario.id,
         correo,
         urlRegreso: urlDeRegreso(typeof origen === "string" ? origen : null, sitiosPermitidos()),
+        tokenTarjeta: typeof tokenTarjeta === "string" && tokenTarjeta ? tokenTarjeta : null,
       })
     );
     const { error } = await admin.from("suscripciones").insert({
@@ -69,6 +72,10 @@ Deno.serve(async (req) => {
       proveedor_id: preapproval.id,
     });
     if (error) throw new Error(error.message);
+    if (tokenTarjeta) {
+      const resultado = await sincronizarPreapproval(preapproval.id);
+      return responder(req, 200, { resultado });
+    }
     return responder(req, 200, { url: preapproval.init_point });
   } catch (e) {
     const estado = e instanceof ErrorMercadoPago ? (e.estado === 503 ? 503 : 502) : 500;

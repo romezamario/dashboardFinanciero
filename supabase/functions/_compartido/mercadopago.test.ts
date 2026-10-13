@@ -105,5 +105,20 @@ describe("alta de la suscripción", () => {
     expect(cuerpo.external_reference).toBe("u-1");
     expect(cuerpo.status).toBe("pending");
     expect(cuerpo.reason).toBe("Ordena tu Lana · Plan Básico anual");
+    expect(cuerpo).not.toHaveProperty("card_token_id");
+  });
+
+  it("con token de tarjeta (formulario embebido) nace autorizada", () => {
+    const cuerpo = cuerpoPreapproval({
+      plan: "pro",
+      periodo: "mensual",
+      monto: 59,
+      userId: "u-1",
+      correo: "c@x.mx",
+      urlRegreso: "https://ordenatulana.com/?pago=mercadopago",
+      tokenTarjeta: "tok-123",
+    });
+    expect(cuerpo).toMatchObject({ card_token_id: "tok-123", status: "authorized" });
+    expect(cuerpo.auto_recurring.frequency).toBe(1);
   });
 });
