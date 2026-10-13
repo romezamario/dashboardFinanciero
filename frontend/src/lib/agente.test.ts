@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { CuentaAlpaca, OrdenAgente, PosicionAgente, SaldoAgente } from "../../functions/api/agente-saldo";
+import type { CuentaAlpaca, OrdenAgente, OrdenAlpaca, PosicionAgente, SaldoAgente } from "../../functions/api/agente-saldo";
 import {
   estadoOrdenAlpaca,
   fraccionEnEfectivo,
+  gananciasDeVentasAlpaca,
   nombreSimboloAlpaca,
   ordenesRecientesPrimero,
   resumirAlpaca,
@@ -119,5 +120,37 @@ describe("cuenta de Alpaca", () => {
     expect(nombreSimboloAlpaca("QQQ")).toBe("QQQ");
     expect(estadoOrdenAlpaca("filled")).toBe("Ejecutada");
     expect(estadoOrdenAlpaca("algo_nuevo")).toBe("algo_nuevo");
+  });
+});
+
+describe("gananciasDeVentasAlpaca", () => {
+  const orden = (o: Partial<OrdenAlpaca>): OrdenAlpaca => ({
+    submitted_at: null, filled_at: null, symbol: "BTC/USD", side: "buy", notional: null, qty: null,
+    filled_qty: null, filled_avg_price: null, status: "filled", ...o,
+  });
+
+  it("calcula la venta contra el costo promedio, alineado con la lista (recientes primero)", () => {
+    const ordenes = [
+      orden({ side: "sell", filled_at: "2026-10-12T07:43:56Z", filled_qty: 0.04925, filled_avg_price: 83859.9 }),
+      orden({ symbol: "TQQQ", status: "canceled" }),
+      orden({ symbol: "BTCUSD", filled_at: "2026-10-11T22:53:41Z", filled_qty: 0.058532, filled_avg_price: 83595.75 }),
+    ];
+    const r = gananciasDeVentasAlpaca(ordenes);
+    expect(r[0]?.pnl).toBeCloseTo(13.01, 2);
+    expect(r[0]?.pct).toBeCloseTo(83859.9 / 83595.75 - 1, 8);
+    expect(r[1]).toBeNull();
+    expect(r[2]).toBeNull();
+  });
+
+  it("usa el promedio de varias compras y no inventa costo si la compra ya no está en la lista", () => {
+    const r = gananciasDeVentasAlpaca([
+      orden({ symbol: "SPY", side: "sell", filled_at: "2026-10-03", filled_qty: 2, filled_avg_price: 120 }),
+      orden({ symbol: "SPY", filled_at: "2026-10-02", filled_qty: 1, filled_avg_price: 110 }),
+      orden({ symbol: "SPY", filled_at: "2026-10-01", filled_qty: 1, filled_avg_price: 90 }),
+      orden({ symbol: "XLE", side: "sell", filled_at: "2026-10-01", filled_qty: 5, filled_avg_price: 60 }),
+    ]);
+    expect(r[0]?.pnl).toBe(40);
+    expect(r[0]?.pct).toBeCloseTo(0.2, 10);
+    expect(r[3]).toBeNull();
   });
 });

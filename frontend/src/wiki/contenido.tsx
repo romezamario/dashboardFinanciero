@@ -14,7 +14,7 @@ export interface SeccionWiki {
   cuerpo: ReactNode;
 }
 
-export const ULTIMA_REVISION = "12 de octubre de 2026";
+export const ULTIMA_REVISION = "13 de octubre de 2026";
 
 export const SECCIONES: SeccionWiki[] = [
   // ------------------------------------------------------------ inicio
@@ -1242,7 +1242,7 @@ export const SECCIONES: SeccionWiki[] = [
             <B>Cuenta de prueba en Alpaca</B> (en USD, primer bloque; la simulación queda plegada abajo y se abre con un clic): gráfica del
             valor de la cuenta por día, valor de la cuenta, efectivo, cambio contra
             el cierre del día hábil anterior, ganancia no realizada, posiciones (cantidad, valor, costo,
-            precio de entrada y actual) y las últimas 100 órdenes con su estado real en Alpaca. Sale de{" "}
+            precio de entrada y actual) y las últimas 100 órdenes con su estado real en Alpaca (en las ventas, la ganancia o pérdida contra el precio promedio de compra de ese activo, antes de comisiones). Sale de{" "}
             <C>output/alpaca.json</C> del mismo repo, que el agente actualiza después de mandar las órdenes
             de la noche y en la apertura y el cierre de la bolsa (workflow "Estado de Alpaca"). Las órdenes
             de ETFs mandadas de noche quedan "En espera (abre la bolsa)" hasta la apertura. No cuadra
