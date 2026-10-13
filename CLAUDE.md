@@ -186,7 +186,13 @@ Card Payment Brick; every prop memoized or the Brick re-mounts on each render) a
 (JWT) re-reads the caller's pendiente rows of the last 7 days in MP when Mi cuenta opens — the first real test showed the webhook
 alone didn't activate the plan (cause not yet known). Webhook and verify share `_compartido/sincronizar.ts`. Test-mode facts
 (2026-10-13): the app's own "Credenciales de prueba" (APP_USR-…) work; `payer_email` must be the test buyer's REAL email (seen in
-its MP profile) — a guessed one gives a bare 400 "User bad request". First subscription (Básico anual, redirect) authorized end to end.
+its MP profile) — a guessed one gives a bare 400 "User bad request". First subscription (Básico anual, redirect) authorized end to end. **Own billing emails (2026-10-13, user's request: MP's receipts go to the payer, i.e. the fake test buyer)**: `_compartido/correosCobro.ts`
+(pure, Vitest) builds "Tu plan X está activo" (amount, next charge, "tu plan anterior ya no se cobrará" on a plan change) and "Cancelaste tu plan X"
+(kept until `periodo_fin`); `avisarPorCorreo.ts` sends them through Resend's HTTP API to the customer's APP email (+ `perfiles.nombre`), best-effort
+(missing config or a Resend error is only logged). Activation mails only from the call that flips the row to activa (`update … neq estado activa`, so
+webhook + verify can't both send); cancellation from `cancelar-suscripcion`. `funciones-producto.yml` passes `RESEND_API_KEY` = `PRODUCTO_SMTP_PASS`
+(Resend's SMTP password is its API key; skipped when `PRODUCTO_SMTP_HOST` is another provider) and `CORREO_REMITENTE` = `PRODUCTO_SMTP_REMITENTE`.
+**MP sends no webhook notices for test-mode subscriptions** (panel showed 0 sent; "Simular notificación" reached the endpoint with 200), hence the verify.
 **Landing page (2026-10-11, user's request)**: in the producto edition only, `App` shows `Landing.tsx` while
 there's no session (personal still goes straight to `Login`); `#entrar` keeps the landing and opens `Login`
 (`producto` prop → `PantallaCuenta flotante`) as a popover under the header's "Entrar" button (`VentanaEntrar`:

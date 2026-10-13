@@ -1,8 +1,10 @@
 // Sincroniza una suscripción con lo que dice Mercado Pago. Compartido por el
 // webhook (cuando MP avisa) y por verificar-suscripcion (cuando el cliente
 // abre Mi cuenta), para que el plan se active aunque el aviso no llegue.
-import { estadoDesdeMercadoPago, periodoDesdeFrecuencia, planPorMonto } from "./mercadopago.ts";
-import { cancelarEnMercadoPago, clienteAdmin, mercadoPago, type Preapproval } from "./servidor.ts";
+import { estadoDesdeMercadoPago, nombrePlan, periodoDesdeFrecuencia, planPorMonto, type PlanPago } from "./mercadopago.ts";
+import { cancelarEnMercadoPago, clienteAdmin, mercadoPago, sitiosPermitidos, type Preapproval } from "./servidor.ts";
+import { correoPlanActivo } from "./correosCobro.ts";
+import { destinatario, enviarCorreo } from "./avisarPorCorreo.ts";
 
 const admin = clienteAdmin();
 
@@ -17,7 +19,7 @@ export interface CobroAutorizado {
 /** Cancela (aquí y en Mercado Pago) las otras suscripciones vivas del
  * usuario: al pagar un plan nuevo, el anterior deja de cobrarse. Lo ya pagado
  * de la anterior sigue valiendo hasta su periodo_fin. */
-export async function cancelarLasDemas(userId: string, idVigente: string) {
+export async function cancelarLasDemas(userId: string, idVigente: string): Promise<number> {
   const { data } = await admin
     .from("suscripciones")
     .select("id, proveedor_id, estado")
@@ -33,6 +35,7 @@ export async function cancelarLasDemas(userId: string, idVigente: string) {
     }
     await admin.from("suscripciones").update({ estado: "cancelada", actualizado_en: new Date().toISOString() }).eq("id", s.id);
   }
+  return (data ?? []).filter((s) => s.estado !== "pendiente").length;
 }
 
 /** Lee la suscripción en Mercado Pago y escribe en `suscripciones` lo que
@@ -45,7 +48,7 @@ export async function sincronizarPreapproval(preapprovalId: string, cobro: Cobro
 
   const { data: existente } = await admin
     .from("suscripciones")
-    .select("id, user_id, periodo_fin")
+    .select("id, user_id, periodo_fin, estado, plan_id, periodo, monto")
     .eq("proveedor", "mercadopago")
     .eq("proveedor_id", mp.id)
     .maybeSingle();
@@ -70,10 +73,11 @@ export async function sincronizarPreapproval(preapprovalId: string, cobro: Cobro
     const { data: nueva, error } = await admin
       .from("suscripciones")
       .insert({ user_id: userId, plan_id: plan, periodo, monto, estado, proveedor: "mercadopago", proveedor_id: mp.id })
-      .select("id, user_id, periodo_fin")
+      .select("id, user_id, periodo_fin, estado, plan_id, periodo, monto")
       .single();
     if (error) throw new Error(error.message);
-    fila = nueva;
+    // Recién creada aquí: todavía no había avisado a nadie de que se activó.
+    fila = { ...nueva, estado: "pendiente" };
   }
 
   const cambios: Record<string, unknown> = { estado, actualizado_en: new Date().toISOString() };
@@ -84,9 +88,33 @@ export async function sincronizarPreapproval(preapprovalId: string, cobro: Cobro
     cambios.ultimo_cobro_en = cobro.debit_date ?? cobro.date_created ?? null;
     cambios.ultimo_cobro_estado = cobro.payment?.status ?? cobro.status ?? null;
   }
-  const { error } = await admin.from("suscripciones").update(cambios).eq("id", fila.id);
+  // Solo quien la pasa a activa avisa por correo: el webhook y
+  // verificar-suscripcion pueden llegar a la vez.
+  const seActiva = estado === "activa" && fila.estado !== "activa";
+  let consulta = admin.from("suscripciones").update(cambios).eq("id", fila.id);
+  if (seActiva) consulta = consulta.neq("estado", "activa");
+  const { data: actualizadas, error } = await consulta.select("id");
   if (error) throw new Error(error.message);
 
-  if (estado === "activa") await cancelarLasDemas(fila.user_id, fila.id);
+  if (estado === "activa") {
+    const anteriores = await cancelarLasDemas(fila.user_id, fila.id);
+    if (seActiva && actualizadas?.length) {
+      const para = await destinatario(admin, fila.user_id);
+      if (para) {
+        await enviarCorreo(
+          para.correo,
+          correoPlanActivo({
+            nombre: para.nombre,
+            plan: nombrePlan(fila.plan_id as PlanPago),
+            periodo: fila.periodo,
+            monto: Number(fila.monto),
+            proximoCobro: (cambios.periodo_fin as string | undefined) ?? fila.periodo_fin ?? null,
+            cambioDePlan: anteriores > 0,
+            sitio: sitiosPermitidos()[0],
+          })
+        );
+      }
+    }
+  }
   return `suscripción ${estado}`;
 }

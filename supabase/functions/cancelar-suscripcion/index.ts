@@ -2,7 +2,10 @@
 // en Mercado Pago todas las suscripciones vivas de quien llama. Ya no habrá
 // más cobros; el plan sigue hasta el fin del periodo pagado (periodo_fin, que
 // mi_plan() respeta).
-import { clienteAdmin, cancelarEnMercadoPago, preflight, responder, usuarioQueLlama } from "../_compartido/servidor.ts";
+import { clienteAdmin, cancelarEnMercadoPago, preflight, responder, sitiosPermitidos, usuarioQueLlama } from "../_compartido/servidor.ts";
+import { correoPlanCancelado } from "../_compartido/correosCobro.ts";
+import { destinatario, enviarCorreo } from "../_compartido/avisarPorCorreo.ts";
+import { nombrePlan, type PlanPago } from "../_compartido/mercadopago.ts";
 
 Deno.serve(async (req) => {
   const opciones = preflight(req);
@@ -15,12 +18,13 @@ Deno.serve(async (req) => {
 
   const { data: vivas, error } = await admin
     .from("suscripciones")
-    .select("id, proveedor, proveedor_id, estado")
+    .select("id, proveedor, proveedor_id, estado, plan_id, periodo, periodo_fin")
     .eq("user_id", usuario.id)
     .in("estado", ["pendiente", "activa", "pausada"]);
   if (error) return responder(req, 500, { error: error.message });
 
   let canceladas = 0;
+  let ultima: { plan_id: string; periodo: "mensual" | "anual"; periodo_fin: string | null } | null = null;
   for (const s of vivas ?? []) {
     if (s.proveedor !== "mercadopago") continue;
     try {
@@ -37,7 +41,25 @@ Deno.serve(async (req) => {
       .from("suscripciones")
       .update({ estado: "cancelada", actualizado_en: new Date().toISOString() })
       .eq("id", s.id);
-    if (s.estado !== "pendiente") canceladas++;
+    if (s.estado !== "pendiente") {
+      canceladas++;
+      ultima = s;
+    }
+  }
+  if (ultima) {
+    const para = await destinatario(admin, usuario.id);
+    if (para) {
+      await enviarCorreo(
+        para.correo,
+        correoPlanCancelado({
+          nombre: para.nombre,
+          plan: nombrePlan(ultima.plan_id as PlanPago),
+          periodo: ultima.periodo,
+          hasta: ultima.periodo_fin,
+          sitio: sitiosPermitidos()[0],
+        })
+      );
+    }
   }
   return responder(req, 200, { canceladas });
 });

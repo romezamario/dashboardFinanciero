@@ -22,6 +22,11 @@ jobs:
       MP_ACCESS_TOKEN: ${{ secrets.PRODUCTO_MP_ACCESS_TOKEN }}
       MP_WEBHOOK_SECRET: ${{ secrets.PRODUCTO_MP_WEBHOOK_SECRET }}
       MP_CORREO_COMPRADOR_PRUEBA: ${{ secrets.PRODUCTO_MP_CORREO_COMPRADOR_PRUEBA }}
+      # Correos de cobro (plan activo / cancelado) por la API de Resend: la
+      # contraseña SMTP de Resend es su llave de API. Con otro SMTP (p. ej.
+      # Gmail) no se pasa y esos correos no se mandan.
+      RESEND_API_KEY: ${{ (secrets.PRODUCTO_SMTP_HOST == '' || secrets.PRODUCTO_SMTP_HOST == 'smtp.resend.com') && secrets.PRODUCTO_SMTP_PASS || '' }}
+      CORREO_REMITENTE: ${{ secrets.PRODUCTO_SMTP_REMITENTE }}
     steps:
       - name: ¿Está configurada la instancia de clientes?
         id: config
@@ -42,11 +47,11 @@ jobs:
 
       # Solo los secretos que existen; sin MP_ACCESS_TOKEN las funciones
       # responden "Los pagos todavía no están configurados".
-      - name: Secretos de Mercado Pago
+      - name: Secretos de Mercado Pago y de correo
         if: steps.config.outputs.lista == 'true'
         run: |
           : > secretos.env
-          for nombre in MP_ACCESS_TOKEN MP_WEBHOOK_SECRET MP_CORREO_COMPRADOR_PRUEBA; do
+          for nombre in MP_ACCESS_TOKEN MP_WEBHOOK_SECRET MP_CORREO_COMPRADOR_PRUEBA RESEND_API_KEY CORREO_REMITENTE; do
             if [ -n "${!nombre}" ]; then echo "$nombre=${!nombre}" >> secretos.env; fi
           done
           if [ -s secretos.env ]; then
