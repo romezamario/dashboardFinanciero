@@ -4,119 +4,24 @@
 // escribe lo que Mercado Pago dice. Es la única vía por la que una
 // suscripción se vuelve activa. Se despliega sin verificación de JWT
 // (config.toml): Mercado Pago no trae sesión de Supabase.
-import {
-  datosDelAviso,
-  estadoDesdeMercadoPago,
-  firmaValida,
-  periodoDesdeFrecuencia,
-  planPorMonto,
-} from "../_compartido/mercadopago.ts";
-import {
-  cancelarEnMercadoPago,
-  clienteAdmin,
-  ErrorMercadoPago,
-  mercadoPago,
-  type Preapproval,
-} from "../_compartido/servidor.ts";
+import { datosDelAviso, firmaValida } from "../_compartido/mercadopago.ts";
+import { clienteAdmin, ErrorMercadoPago, mercadoPago } from "../_compartido/servidor.ts";
+import { type CobroAutorizado, sincronizarPreapproval } from "../_compartido/sincronizar.ts";
 
 const admin = clienteAdmin();
-
-interface CobroAutorizado {
-  preapproval_id: string;
-  status?: string;
-  debit_date?: string | null;
-  date_created?: string | null;
-  payment?: { status?: string } | null;
-}
 
 async function anotar(aviso: Record<string, unknown>) {
   const { error } = await admin.from("avisos_pago").insert(aviso);
   if (error) console.error("avisos_pago", error.message);
 }
 
-/** Cancela (aquí y en Mercado Pago) las otras suscripciones vivas del
- * usuario: al pagar un plan nuevo, el anterior deja de cobrarse. Lo ya pagado
- * de la anterior sigue valiendo hasta su periodo_fin. */
-async function cancelarLasDemas(userId: string, idVigente: string) {
-  const { data } = await admin
-    .from("suscripciones")
-    .select("id, proveedor_id, estado")
-    .eq("user_id", userId)
-    .eq("proveedor", "mercadopago")
-    .neq("id", idVigente)
-    .in("estado", ["pendiente", "activa", "pausada"]);
-  for (const s of data ?? []) {
-    try {
-      await cancelarEnMercadoPago(s.proveedor_id);
-    } catch (e) {
-      if (s.estado !== "pendiente") throw e;
-    }
-    await admin.from("suscripciones").update({ estado: "cancelada", actualizado_en: new Date().toISOString() }).eq("id", s.id);
-  }
-}
-
 async function procesar(tipo: string, id: string): Promise<string> {
-  let preapprovalId: string;
-  let cobro: CobroAutorizado | null = null;
-  if (tipo === "subscription_preapproval" || tipo === "preapproval") {
-    preapprovalId = id;
-  } else if (tipo === "subscription_authorized_payment" || tipo === "authorized_payment") {
-    cobro = await mercadoPago<CobroAutorizado>("GET", `/authorized_payments/${encodeURIComponent(id)}`);
-    preapprovalId = cobro.preapproval_id;
-  } else {
-    return `tipo ignorado: ${tipo}`;
+  if (tipo === "subscription_preapproval" || tipo === "preapproval") return sincronizarPreapproval(id);
+  if (tipo === "subscription_authorized_payment" || tipo === "authorized_payment") {
+    const cobro = await mercadoPago<CobroAutorizado>("GET", `/authorized_payments/${encodeURIComponent(id)}`);
+    return sincronizarPreapproval(cobro.preapproval_id, cobro);
   }
-
-  const mp = await mercadoPago<Preapproval>("GET", `/preapproval/${encodeURIComponent(preapprovalId)}`);
-  const estado = estadoDesdeMercadoPago(mp.status);
-  if (!estado) return `estado desconocido: ${mp.status}`;
-
-  const { data: existente } = await admin
-    .from("suscripciones")
-    .select("id, user_id, periodo_fin")
-    .eq("proveedor", "mercadopago")
-    .eq("proveedor_id", mp.id)
-    .maybeSingle();
-
-  let fila = existente;
-  if (!fila) {
-    // Sin fila nuestra: solo si external_reference es un usuario que existe.
-    const userId = mp.external_reference ?? "";
-    const { data: usuario } = /^[0-9a-f-]{36}$/i.test(userId)
-      ? await admin.auth.admin.getUserById(userId)
-      : { data: { user: null } };
-    if (!usuario?.user) {
-      // Nadie a quien darle el plan (p. ej. borró su cuenta): que no cobre.
-      if (estado === "activa" || estado === "pausada") await cancelarEnMercadoPago(mp.id);
-      return "sin usuario: cancelada en Mercado Pago";
-    }
-    const periodo = periodoDesdeFrecuencia(mp.auto_recurring?.frequency, mp.auto_recurring?.frequency_type);
-    const monto = Number(mp.auto_recurring?.transaction_amount);
-    const { data: planes } = await admin.from("planes").select("id, precio_mensual, precio_anual");
-    const plan = periodo ? planPorMonto(planes ?? [], monto, periodo) : null;
-    if (!periodo || !plan) return `no corresponde a ningún plan (${monto} MXN)`;
-    const { data: nueva, error } = await admin
-      .from("suscripciones")
-      .insert({ user_id: userId, plan_id: plan, periodo, monto, estado, proveedor: "mercadopago", proveedor_id: mp.id })
-      .select("id, user_id, periodo_fin")
-      .single();
-    if (error) throw new Error(error.message);
-    fila = nueva;
-  }
-
-  const cambios: Record<string, unknown> = { estado, actualizado_en: new Date().toISOString() };
-  // Mientras cobra, periodo_fin = próximo cobro. Al cancelarse se conserva el
-  // último conocido: hasta ahí está pagado.
-  if (mp.next_payment_date && (estado === "activa" || !fila.periodo_fin)) cambios.periodo_fin = mp.next_payment_date;
-  if (cobro) {
-    cambios.ultimo_cobro_en = cobro.debit_date ?? cobro.date_created ?? null;
-    cambios.ultimo_cobro_estado = cobro.payment?.status ?? cobro.status ?? null;
-  }
-  const { error } = await admin.from("suscripciones").update(cambios).eq("id", fila.id);
-  if (error) throw new Error(error.message);
-
-  if (estado === "activa") await cancelarLasDemas(fila.user_id, fila.id);
-  return `suscripción ${estado}`;
+  return `tipo ignorado: ${tipo}`;
 }
 
 Deno.serve(async (req) => {

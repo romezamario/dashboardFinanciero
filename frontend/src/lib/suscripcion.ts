@@ -109,6 +109,24 @@ export async function iniciarSuscripcion(plan: Exclude<IdPlan, "gratis">, period
   return (data as { url: string }).url;
 }
 
+/** Pide al servidor que consulte en Mercado Pago las suscripciones pendientes
+ * (por si el aviso del webhook no llegó) y lee después la lista. */
+export async function verificarSuscripciones(): Promise<void> {
+  const { error } = await supabase.functions.invoke("verificar-suscripcion", { body: {} });
+  if (error) throw await errorDeFuncion(error);
+}
+
+/** Plan y suscripciones; si hay una pendiente, primero se verifica en Mercado
+ * Pago (un fallo ahí no impide mostrar lo que ya hay). */
+export async function leerPlanYSuscripciones(): Promise<{ plan: MiPlan | null; lista: Suscripcion[] }> {
+  let lista = await obtenerSuscripciones();
+  if (lista.some((s) => s.estado === "pendiente")) {
+    const verificada = await verificarSuscripciones().then(() => true, () => false);
+    if (verificada) lista = await obtenerSuscripciones();
+  }
+  return { plan: await obtenerMiPlan(), lista };
+}
+
 export async function cancelarSuscripcion(): Promise<void> {
   const { error } = await supabase.functions.invoke("cancelar-suscripcion", { body: {} });
   if (error) throw await errorDeFuncion(error);

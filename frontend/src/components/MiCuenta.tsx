@@ -18,7 +18,7 @@ import {
   describirPlan,
   iniciarSuscripcion,
   nombreDePlan,
-  obtenerMiPlan,
+  leerPlanYSuscripciones,
   obtenerSuscripciones,
   PAGOS_EN_PRUEBA,
   pagoConfirmado,
@@ -199,15 +199,15 @@ function SeccionPlan() {
   const [confirmacion, setConfirmacion] = useState<Confirmacion>(() => (regresoPendiente ? "esperando" : null));
 
   const cargar = useCallback(async () => {
-    const [plan, lista] = await Promise.all([obtenerMiPlan(), obtenerSuscripciones()]);
+    const { plan, lista } = await leerPlanYSuscripciones();
     setMiPlan(plan);
     setSuscripciones(lista);
     return lista;
   }, []);
 
   useEffect(() => {
-    Promise.all([obtenerMiPlan(), obtenerSuscripciones()])
-      .then(([plan, lista]) => {
+    leerPlanYSuscripciones()
+      .then(({ plan, lista }) => {
         setMiPlan(plan);
         setSuscripciones(lista);
       })
