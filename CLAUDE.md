@@ -153,6 +153,34 @@ without the text (loaded on demand), filter (pendientes = nueva + en-revisión),
 admin sees/updates/deletes B's sample, unconfirmed same email and B don't, `administradores` unreadable, anon gets 0 rows). **"Empezar desde cero" (2026-10-12, owner's request: wipe what he loaded without deleting and re-creating his account)**: last card of the admin screen; typing BORRAR calls RPC `reiniciar_mis_datos()` (migration `20261012030000_…`, **security invoker** so RLS still applies, raises 42501 unless `es_administrador()`), which deletes in one transaction the CALLER's transacciones, gastos_correo, documentos, cuentas, categorias and eventos (keeps perfil, preferencias, muestras) and returns how many movements went; then `Dashboard` reloads. Covered by `aislamiento.sql` (B and anon refused, admin's rows gone, profile kept, B's rows untouched). Tested in `lib/importar/procesar.test.ts` and in
 Playwright with generated PDFs (Banamex cheques, Invex V2, unknown bank, scanned) against mocked Supabase endpoints; not yet
 with real statements in the browser.
+**Plans and payments, phase 3 (2026-10-13, user's "si, arranca la fase 3") — Mercado Pago in TEST mode**: migration
+`20261013010000_planes_y_suscripciones.sql`: `planes` (gratis/basico/pro, prices = `lib/planes.ts`, checked by
+`supabase/functions/_compartido/precios.test.ts`; limits `max_cuentas`/`meses_historial`/`max_reglas` stored but **NOT enforced
+yet** — enforcing them in RLS must not hit the personal instance, where nobody subscribes), `suscripciones` (plan_id, periodo
+mensual|anual, monto, estado pendiente|activa|pausada|cancelada, `proveedor` default 'mercadopago' + `proveedor_id` unique, so
+Stripe stays possible; `periodo_fin` = next charge, kept on cancel = paid-through date; customers can only SELECT their rows,
+writes are service_role only) and `avisos_pago` (webhook log, no API access). `mi_plan()` (security definer) decides the
+effective plan: live subscription (active, or paused/cancelled before `periodo_fin`; highest plan wins) → else a **14-day
+Básico trial from `auth.users.created_at`, ours, no card** (not Mercado Pago's free_trial) → else gratis. `borrar_mi_cuenta()`
+now refuses while a subscription is active/paused (Mi cuenta cancels it first). Edge Functions (Deno, `supabase/functions/`,
+pure helpers in `_compartido/mercadopago.ts` tested by Vitest — `vitest.config.ts` includes that folder; CI also runs
+`deno check`): `crear-suscripcion` (JWT; price from `planes`; POST `/preapproval` without plan, `external_reference` =
+user_id, status pending, `back_url` = `<origin>/?pago=mercadopago` only for `SITIOS_PERMITIDOS`; inserts a pendiente row;
+returns `init_point`; `MP_CORREO_COMPRADOR_PRUEBA` overrides `payer_email` because test credentials only accept a test buyer),
+`cancelar-suscripcion` (cancels every live one in MP, then marks cancelada) and `webhook-mercadopago` (`verify_jwt = false`
+in config.toml + `--no-verify-jwt`; checks `x-signature` HMAC with `MP_WEBHOOK_SECRET`, then ALWAYS re-fetches the
+preapproval / authorized_payment; unknown user → cancels it in MP; on activa cancels the user's other live subscriptions =
+plan change; MP 404 → 200, other errors → 500 so MP retries). `funciones-producto.yml` deploys them to the customer project
+(`--use-api`, no Docker) and sets `PRODUCTO_MP_ACCESS_TOKEN`/`_WEBHOOK_SECRET`/`_CORREO_COMPRADOR_PRUEBA` as function secrets
+(skips with notices without them). Front: Mi cuenta → "Plan" (`lib/suscripcion.ts`; `PAGOS_EN_PRUEBA = true` shows the
+"Modo de prueba" banner — flip it at launch): current plan line, next charge, cancel with inline confirm, Básico/Pro cards
+with an Anual|Mensual toggle → `functions.invoke` → redirect to MP. Back from MP, `lib/supabase.ts` reads `?pago=mercadopago&preapproval_id=…`
+into `REGRESO_DE_PAGO` (`lib/regresoPago.ts`) and strips it, the Dashboard opens Mi cuenta, and it polls every 3 s (20 tries)
+until that subscription is activa. Checked: RLS test (customer can't insert/update a subscription or read the log, trial vs.
+gratis, cancelled keeps the plan until `periodo_fin`, delete refused while active, cascade), Playwright with mocked
+endpoints (subscribe → return → confirmed → cancel; 503 message; 390 px dark), and a Deno smoke test of the webhook with a fake
+fetch (bad signature 401, activation cancels the old one, authorized payment recorded, unknown id → 200). **Not yet against
+real Mercado Pago**: needs the test seller's token + webhook secret from the owner (README, "Planes y cobros").
 **Landing page (2026-10-11, user's request)**: in the producto edition only, `App` shows `Landing.tsx` while
 there's no session (personal still goes straight to `Login`); `#entrar` keeps the landing and opens `Login`
 (`producto` prop → `PantallaCuenta flotante`) as a popover under the header's "Entrar" button (`VentanaEntrar`:
@@ -1161,8 +1189,9 @@ the GitHub Actions UI. It runs `supabase link` + `supabase db push` using three 
 `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_ID`, `SUPABASE_DB_PASSWORD`.
 
 Tables: `bancos` (shared catalog, no `user_id`) and `cuentas`/`categorias`/`documentos`/
-`transacciones`/`eventos`/`gastos_correo`/`preferencias`/`perfiles`/`muestras_estados_cuenta` (`administradores` is
-RLS-on with no API access, see the admin screen above) (all RLS-scoped to the row's `user_id`, four
+`transacciones`/`eventos`/`gastos_correo`/`preferencias`/`perfiles`/`muestras_estados_cuenta` (`administradores` and
+`avisos_pago` are RLS-on with no API access, `planes` is readable by everyone and `suscripciones` select-own with writes
+only by service_role — see phase 3 above) (all RLS-scoped to the row's `user_id`, four
 policies each — select/insert/update/delete; `gastos_correo` is described under the Gmail tab above;
 `preferencias` holds per-user settings, one row per `(user_id, clave)` with a `valor jsonb`, e.g. the
 daily-spend goal under `meta_gasto_diario`). `eventos` (added in `20260922010000_add_eventos.sql`) is a per-user
@@ -1320,6 +1349,8 @@ commits:
   `borrar_mi_cuenta()` deletes only the caller and anon can't call it. Also triggers on `supabase/**`.
 - `.github/workflows/db-migrate.yml` — triggers on `supabase/migrations/**`. Applies pending Supabase migrations
   to the personal project and (job `migrate-producto`, skipped without its secrets) to FinanzasPersonales'.
+- `.github/workflows/funciones-producto.yml` (2026-10-13) — triggers on `supabase/functions/**` and `supabase/config.toml`;
+  deploys the payment Edge Functions + their Mercado Pago secrets to the customer Supabase project (phase 3 above).
 - `.github/workflows/correos-producto.yml` (2026-10-11) — triggers on `supabase/correos/**`; applies the
   auth email templates (+ SMTP sender when its secrets exist) to the customer Supabase project.
 - `.github/workflows/deploy-producto.yml` (2026-10-11) — same trigger as `deploy.yml`; builds with
@@ -1423,7 +1454,7 @@ ladoDominante, gasto hormiga), `alertas` (duplicates, $0 echo lines, price chang
 and several-charges-a-month cases, new subscription), `gastosEstadoCuenta` (only TDC cargos of
 non-hidden categories add up; sinSumar reasons; day order; esTarjetaCredito), `tecnico`
 (SMA, RSI edges), `conciliarCorreo` (one-to-one matching, eventosHeredables, filaAGastoCorreo),
-`metaDiaria` (week/month averages vs. the goal), `importar/procesar` (browser PDF lectores, line grouping, anonymizer), `importar/glifos` (image-row decoding, Python fingerprint), `importar/reglasBase` (no shadowed rules), `importar/excel` (Excel template upload), `administracion`, `cuentaUsuario` (hash routes, auth links, error
+`metaDiaria` (week/month averages vs. the goal), `importar/procesar` (browser PDF lectores, line grouping, anonymizer), `importar/glifos` (image-row decoding, Python fingerprint), `importar/reglasBase` (no shadowed rules), `importar/excel` (Excel template upload), `administracion`, `suscripcion` (Mercado Pago return URL, plan text), `cuentaUsuario` (hash routes, auth links, error
 translation, password rules), `exportarDatos` (CSV escaping), `promedios` (averages from the first month with
 spending), `shophunters` and `patrones/*` (levels and chart patterns on synthetic series from
 `src/test/series.ts`). `npx tsc -b` and `npm run lint` are the other checks; CI runs all three.

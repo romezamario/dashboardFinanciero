@@ -1,5 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { supabase } from "../lib/supabase";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { REGRESO_DE_PAGO, supabase } from "../lib/supabase";
 import { borrarMiCuenta, guardarNombre, obtenerPerfil, type Perfil } from "../lib/perfil";
 import {
   confirmaBorrado,
@@ -10,12 +10,28 @@ import {
 } from "../lib/cuentaUsuario";
 import { descargarTexto, nombreArchivoExportacion, transaccionesACsv } from "../lib/exportarDatos";
 import { hoyIso } from "../lib/fechas";
-import { fechaCorta } from "../lib/formato";
+import { fechaCorta, moneda } from "../lib/formato";
 import type { Transaccion } from "../lib/types";
+import { ahorroAnual, PLANES, precioPorMes, type Periodo, type Plan } from "../lib/planes";
+import {
+  cancelarSuscripcion,
+  describirPlan,
+  iniciarSuscripcion,
+  nombreDePlan,
+  obtenerMiPlan,
+  obtenerSuscripciones,
+  PAGOS_EN_PRUEBA,
+  pagoConfirmado,
+  suscripcionViva,
+  type MiPlan,
+  type Suscripcion,
+} from "../lib/suscripcion";
+import { Segmentado } from "./Segmentado";
 
 // "Mi cuenta" de FinanzasPersonales (fase 1): perfil, plan, contraseña,
-// exportar los datos y borrar la cuenta. Cambiar o cancelar el plan llega con
-// los cobros (fase 3).
+// exportar los datos y borrar la cuenta. El plan se paga con Mercado Pago
+// (fase 3): aquí se elige, se cancela y se ve el próximo cobro, porque
+// Mercado Pago no tiene un portal de cliente.
 
 const estiloEntrada = {
   background: "var(--page-plane)",
@@ -30,15 +46,7 @@ export function MiCuenta({ correo, transacciones }: { correo: string; transaccio
         Mi cuenta
       </h2>
       <SeccionPerfil correo={correo} />
-      <Seccion titulo="Plan">
-        <p className="text-sm" style={{ color: "var(--text-primary)" }}>
-          Beta gratuita: tienes todas las funciones mientras dure la beta.
-        </p>
-        <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
-          Cuando lleguen los planes de pago te avisaremos antes de cobrar cualquier cosa, y aquí podrás cambiar o
-          cancelar tu plan.
-        </p>
-      </Seccion>
+      <SeccionPlan />
       <SeccionContrasena />
       <SeccionExportar transacciones={transacciones} />
       <SeccionBorrar correo={correo} />
@@ -170,6 +178,224 @@ function SeccionPerfil({ correo }: { correo: string }) {
   );
 }
 
+// Al volver de pagar, Mercado Pago tarda unos segundos en avisar al webhook:
+// mientras, se consulta la suscripción cada INTERVALO_CONFIRMACION ms.
+const INTERVALO_CONFIRMACION = 3000;
+const INTENTOS_CONFIRMACION = 20;
+// El regreso se atiende una sola vez: al confirmarse (o rendirse) ya no se
+// vuelve a esperar aunque se salga y se vuelva a Mi cuenta.
+let regresoPendiente = REGRESO_DE_PAGO;
+
+type Confirmacion = "esperando" | "confirmado" | "sin-confirmar" | null;
+
+function SeccionPlan() {
+  const [miPlan, setMiPlan] = useState<MiPlan | null>(null);
+  const [suscripciones, setSuscripciones] = useState<Suscripcion[]>([]);
+  const [periodo, setPeriodo] = useState<Periodo>("anual");
+  const [error, setError] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState<string | null>(null);
+  const [confirmarCancelar, setConfirmarCancelar] = useState(false);
+  const [cancelada, setCancelada] = useState(false);
+  const [confirmacion, setConfirmacion] = useState<Confirmacion>(() => (regresoPendiente ? "esperando" : null));
+
+  const cargar = useCallback(async () => {
+    const [plan, lista] = await Promise.all([obtenerMiPlan(), obtenerSuscripciones()]);
+    setMiPlan(plan);
+    setSuscripciones(lista);
+    return lista;
+  }, []);
+
+  useEffect(() => {
+    Promise.all([obtenerMiPlan(), obtenerSuscripciones()])
+      .then(([plan, lista]) => {
+        setMiPlan(plan);
+        setSuscripciones(lista);
+      })
+      .catch((e: Error) => setError(`No se pudo leer tu plan: ${e.message}`));
+  }, []);
+
+  useEffect(() => {
+    const regreso = regresoPendiente;
+    if (!regreso) return;
+    let intentos = 0;
+    let vivo = true;
+    const revisar = async () => {
+      if (!vivo) return;
+      intentos++;
+      const lista = await cargar().catch(() => null);
+      if (!vivo) return;
+      const confirmado = lista !== null && pagoConfirmado(lista, regreso.preapprovalId);
+      if (confirmado || intentos >= INTENTOS_CONFIRMACION) {
+        regresoPendiente = null;
+        // El plan se leyó junto con la lista; se relee ya con el pago firme.
+        if (confirmado) void cargar().catch(() => undefined);
+        return setConfirmacion(confirmado ? "confirmado" : "sin-confirmar");
+      }
+      setTimeout(revisar, INTERVALO_CONFIRMACION);
+    };
+    void revisar();
+    return () => {
+      vivo = false;
+    };
+  }, [cargar]);
+
+  const viva = suscripcionViva(suscripciones);
+
+  async function suscribir(plan: Plan) {
+    if (plan.id === "gratis") return;
+    setError(null);
+    setEnviando(plan.id);
+    try {
+      window.location.assign(await iniciarSuscripcion(plan.id, periodo));
+    } catch (e) {
+      setError((e as Error).message);
+      setEnviando(null);
+    }
+  }
+
+  async function cancelar() {
+    setError(null);
+    setEnviando("cancelar");
+    try {
+      await cancelarSuscripcion();
+      setConfirmarCancelar(false);
+      setConfirmacion(null);
+      setCancelada(true);
+      await cargar();
+    } catch (e) {
+      setError(`No se pudo cancelar: ${(e as Error).message}`);
+    } finally {
+      setEnviando(null);
+    }
+  }
+
+  return (
+    <Seccion titulo="Plan">
+      {PAGOS_EN_PRUEBA && (
+        <p
+          className="mb-3 rounded-md px-3 py-2 text-xs"
+          style={{ background: "var(--page-plane)", border: "1px dashed var(--series-4)", color: "var(--text-secondary)" }}
+        >
+          <strong style={{ color: "var(--text-primary)" }}>Modo de prueba:</strong> los pagos usan cuentas de prueba de
+          Mercado Pago y no se cobra nada real.
+        </p>
+      )}
+      {confirmacion === "esperando" && <Mensaje tipo="exito">Confirmando tu pago con Mercado Pago…</Mensaje>}
+      {confirmacion === "confirmado" && (
+        <Mensaje tipo="exito">¡Listo! Tu pago quedó confirmado y tu plan ya está activo.</Mensaje>
+      )}
+      {confirmacion === "sin-confirmar" && (
+        <Mensaje tipo="error">
+          Mercado Pago todavía no nos confirma el pago. Si lo completaste, tu plan se activará solo en unos minutos;
+          vuelve a abrir Mi cuenta para verlo.
+        </Mensaje>
+      )}
+      <p className="mt-1 text-sm" style={{ color: "var(--text-primary)" }}>
+        {miPlan ? describirPlan(miPlan, new Date()) : "Leyendo tu plan…"}
+      </p>
+      {viva && (
+        <div className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+          {viva.periodo_fin && (
+            <p>
+              Próximo cobro: {moneda.format(viva.monto)} el {fechaCorta(viva.periodo_fin.slice(0, 10))}
+              {viva.estado === "pausada" && " (pausada en Mercado Pago)"}.
+            </p>
+          )}
+          {!confirmarCancelar ? (
+            <button
+              type="button"
+              onClick={() => setConfirmarCancelar(true)}
+              className="mt-2 text-sm underline"
+              style={{ color: "var(--status-critical)" }}
+            >
+              Cancelar suscripción
+            </button>
+          ) : (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span>
+                Ya no se te cobrará; conservas el plan {nombreDePlan(viva.plan_id)}
+                {viva.periodo_fin ? ` hasta el ${fechaCorta(viva.periodo_fin.slice(0, 10))}` : ""}.
+              </span>
+              <Boton peligro deshabilitado={enviando === "cancelar"} onClick={cancelar}>
+                {enviando === "cancelar" ? "Cancelando..." : "Sí, cancelar"}
+              </Boton>
+              <button
+                type="button"
+                onClick={() => setConfirmarCancelar(false)}
+                className="px-2 py-1.5 text-sm"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                No
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+      {cancelada && <Mensaje tipo="exito">Suscripción cancelada. No habrá más cobros.</Mensaje>}
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+          {viva ? "Cambiar de plan" : "Elige un plan"}
+        </p>
+        <Segmentado<Periodo>
+          opciones={[
+            { id: "anual", etiqueta: "Anual" },
+            { id: "mensual", etiqueta: "Mensual" },
+          ]}
+          valor={periodo}
+          onCambiar={setPeriodo}
+          chico
+        />
+      </div>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        {PLANES.filter((p) => p.id !== "gratis").map((plan) => {
+          const esElActual = viva?.plan_id === plan.id && viva.periodo === periodo;
+          return (
+            <div
+              key={plan.id}
+              className="rounded-lg p-3"
+              style={{ border: `1px solid ${plan.destacado ? "var(--series-1)" : "var(--border)"}` }}
+            >
+              <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                {plan.nombre}
+              </p>
+              <p className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
+                {moneda.format(periodo === "anual" ? plan.precioAnual! : plan.precioMensual)}
+                <span className="text-xs font-normal" style={{ color: "var(--text-muted)" }}>
+                  {periodo === "anual"
+                    ? ` al año (${moneda.format(Math.round(precioPorMes(plan, "anual")))} al mes, ahorras ${moneda.format(ahorroAnual(plan))})`
+                    : " al mes"}
+                </span>
+              </p>
+              <ul className="mt-2 space-y-0.5 text-xs" style={{ color: "var(--text-secondary)" }}>
+                {plan.incluye.map((linea) => (
+                  <li key={linea}>✓ {linea}</li>
+                ))}
+              </ul>
+              <div className="mt-3">
+                <Boton deshabilitado={esElActual || enviando !== null} onClick={() => void suscribir(plan)}>
+                  {esElActual
+                    ? "Tu plan actual"
+                    : enviando === plan.id
+                      ? "Abriendo Mercado Pago..."
+                      : viva
+                        ? `Cambiar a ${plan.nombre}`
+                        : "Suscribirme"}
+                </Boton>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>
+        Pagas en Mercado Pago con tarjeta o saldo; el cobro se repite cada {periodo === "anual" ? "año" : "mes"} hasta
+        que canceles aquí.{viva ? " Al pagar el plan nuevo, el anterior deja de cobrarse." : ""}
+      </p>
+      {error && <Mensaje tipo="error">{error}</Mensaje>}
+    </Seccion>
+  );
+}
+
 function SeccionContrasena() {
   const [password, setPassword] = useState("");
   const [confirmacion, setConfirmacion] = useState("");
@@ -254,6 +480,9 @@ function SeccionBorrar({ correo }: { correo: string }) {
     setBorrando(true);
     setError(null);
     try {
+      // Que no quede un cobro recurrente vivo en Mercado Pago (la base se
+      // niega a borrar mientras haya una suscripción activa).
+      if (suscripcionViva(await obtenerSuscripciones())) await cancelarSuscripcion();
       await borrarMiCuenta();
       // La cuenta ya no existe: solo queda olvidar la sesión en este navegador.
       await supabase.auth.signOut({ scope: "local" });
@@ -266,8 +495,8 @@ function SeccionBorrar({ correo }: { correo: string }) {
   return (
     <Seccion titulo="Borrar mi cuenta" peligro>
       <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-        Borra tu cuenta ({correo}) y todos tus datos: movimientos, cuentas, categorías, eventos y preferencias. No
-        se puede deshacer. Si quieres conservar tus movimientos, descárgalos antes.
+        Borra tu cuenta ({correo}) y todos tus datos: movimientos, cuentas, categorías, eventos y preferencias. Si
+        tienes una suscripción, se cancela. No se puede deshacer. Si quieres conservar tus movimientos, descárgalos antes.
       </p>
       {!abierto ? (
         <div className="mt-3">

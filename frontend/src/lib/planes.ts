@@ -1,7 +1,8 @@
 // Planes de FinanzasPersonales tal como se anuncian en la landing page
 // (decididos el 2026-10-11 en el plan de suscripciones). Esto es solo lo que
-// se MUESTRA: el plan efectivo de cada usuario lo decidirá la base de datos
-// (tablas planes/suscripciones, fase 3), nunca el frontend.
+// se MUESTRA: el plan efectivo de cada usuario lo decide la base de datos
+// (tablas planes/suscripciones y mi_plan(), fase 3), nunca el frontend. Los
+// precios de la tabla planes tienen que coincidir (precios.test.ts lo revisa).
 
 export type IdPlan = "gratis" | "basico" | "pro";
 export type Periodo = "anual" | "mensual";

@@ -1,0 +1,67 @@
+name: Funciones de cobro (Supabase de clientes)
+
+# Despliega las Edge Functions de supabase/functions/ (cobros con Mercado
+# Pago: crear-suscripcion, cancelar-suscripcion, webhook-mercadopago) al
+# proyecto de Supabase de clientes, y les pasa sus secretos. El proyecto
+# personal no las usa ni las recibe.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/functions/**"
+      - "supabase/config.toml"
+      - ".github/workflows/funciones-producto.yml"
+  workflow_dispatch: {}
+
+jobs:
+  desplegar:
+    runs-on: ubuntu-24.04
+    env:
+      PROYECTO: ${{ secrets.PRODUCTO_SUPABASE_PROJECT_ID }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.PRODUCTO_SUPABASE_ACCESS_TOKEN || secrets.SUPABASE_ACCESS_TOKEN }}
+      MP_ACCESS_TOKEN: ${{ secrets.PRODUCTO_MP_ACCESS_TOKEN }}
+      MP_WEBHOOK_SECRET: ${{ secrets.PRODUCTO_MP_WEBHOOK_SECRET }}
+      MP_CORREO_COMPRADOR_PRUEBA: ${{ secrets.PRODUCTO_MP_CORREO_COMPRADOR_PRUEBA }}
+    steps:
+      - name: ¿Está configurada la instancia de clientes?
+        id: config
+        run: |
+          if [ -n "$PROYECTO" ]; then
+            echo "lista=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Sin PRODUCTO_SUPABASE_PROJECT_ID: no se despliegan las funciones de cobro."
+          fi
+
+      - uses: actions/checkout@v5
+        if: steps.config.outputs.lista == 'true'
+
+      - uses: supabase/setup-cli@v3
+        if: steps.config.outputs.lista == 'true'
+        with:
+          version: latest
+
+      # Solo los secretos que existen; sin MP_ACCESS_TOKEN las funciones
+      # responden "Los pagos todavía no están configurados".
+      - name: Secretos de Mercado Pago
+        if: steps.config.outputs.lista == 'true'
+        run: |
+          : > secretos.env
+          for nombre in MP_ACCESS_TOKEN MP_WEBHOOK_SECRET MP_CORREO_COMPRADOR_PRUEBA; do
+            if [ -n "${!nombre}" ]; then echo "$nombre=${!nombre}" >> secretos.env; fi
+          done
+          if [ -s secretos.env ]; then
+            supabase secrets set --project-ref "$PROYECTO" --env-file secretos.env
+          else
+            echo "::notice::Sin PRODUCTO_MP_ACCESS_TOKEN / PRODUCTO_MP_WEBHOOK_SECRET: las funciones se despliegan, pero no pueden cobrar."
+          fi
+          rm -f secretos.env
+
+      # --use-api: Supabase empaqueta las funciones, sin Docker en el runner.
+      # El webhook va sin verificación de JWT (Mercado Pago no trae sesión; se
+      # valida con su firma), igual que en supabase/config.toml.
+      - name: Desplegar funciones
+        if: steps.config.outputs.lista == 'true'
+        run: |
+          supabase functions deploy crear-suscripcion --project-ref "$PROYECTO" --use-api
+          supabase functions deploy cancelar-suscripcion --project-ref "$PROYECTO" --use-api
+          supabase functions deploy webhook-mercadopago --project-ref "$PROYECTO" --use-api --no-verify-jwt

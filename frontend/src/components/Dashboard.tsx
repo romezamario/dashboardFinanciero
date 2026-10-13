@@ -16,7 +16,7 @@ import { soloShophunters } from "../lib/shophunters";
 import { EDICION, incluyeFuncion, NOMBRE_APP } from "../lib/edicion";
 import { categoriasExcluidasPorDefecto, RANGO_MESES_VACIO, type RangoMeses } from "../lib/indicadores";
 import type { Transaccion } from "../lib/types";
-import { supabase } from "../lib/supabase";
+import { REGRESO_DE_PAGO, supabase } from "../lib/supabase";
 import { esTarjetaCredito } from "../lib/tarjetas";
 import type { VistaTiempo } from "./IngresosGastosChart";
 import { VistaResumen } from "./VistaResumen";
@@ -160,6 +160,7 @@ const CLAVE_PESTANA = "pestana-activa";
  * ser una pestaña que todavía no existe (las de cuenta salen de los datos):
  * mientras tanto se ve el Resumen y, al cargar, se abre la recordada. */
 function vistaInicial(): string {
+  if (REGRESO_DE_PAGO && EDICION === "producto") return VISTA_CUENTA;
   if (window.location.hash.startsWith("#wiki-") && incluyeFuncion(EDICION, "wiki")) {
     return PESTANA_WIKI;
   }

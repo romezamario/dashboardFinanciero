@@ -401,4 +401,121 @@ begin
   end if;
 end $$;
 
+-- ------------------------------------------------- planes y suscripciones
+-- G se registró hace 30 días (ya sin prueba); H hoy (en su prueba de Básico).
+reset role;
+insert into auth.users (id, email, created_at) values
+  ('12121212-0000-0000-0000-000000000001', 'e@prueba.mx', now() - interval '30 days'),
+  ('13131313-0000-0000-0000-000000000001', 'f@prueba.mx', now());
+
+set role authenticated;
+set request.jwt.claim.sub = '12121212-0000-0000-0000-000000000001';
+do $$
+begin
+  if (select plan_id from mi_plan()) <> 'gratis' then raise exception 'FALLO: G sin suscripción no está en gratis'; end if;
+  if (select count(*) from planes) <> 3 then raise exception 'FALLO: G no ve los planes'; end if;
+  -- El cliente no puede darse un plan a sí mismo.
+  begin
+    insert into suscripciones (user_id, plan_id, periodo, monto, estado, proveedor_id)
+      values ('12121212-0000-0000-0000-000000000001', 'pro', 'mensual', 0, 'activa', 'yo-mismo');
+    raise exception 'FALLO: G se creó una suscripción';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform count(*) from avisos_pago;
+    raise exception 'FALLO: G lee la bitácora de avisos de pago';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+
+set request.jwt.claim.sub = '13131313-0000-0000-0000-000000000001';
+do $$
+begin
+  if (select plan_id || '/' || origen from mi_plan()) <> 'basico/prueba' then
+    raise exception 'FALLO: H recién registrado no está en la prueba de Básico';
+  end if;
+end $$;
+
+-- Lo que hace el webhook (service_role): G paga Pro.
+set role service_role;
+insert into suscripciones (id, user_id, plan_id, periodo, monto, estado, proveedor_id, periodo_fin)
+  values ('12121212-0000-0000-0000-0000000000a9', '12121212-0000-0000-0000-000000000001', 'pro', 'mensual', 59,
+          'activa', 'mp-e-1', now() + interval '20 days');
+
+set role authenticated;
+set request.jwt.claim.sub = '12121212-0000-0000-0000-000000000001';
+do $$
+declare
+  n int;
+begin
+  if (select plan_id || '/' || origen from mi_plan()) <> 'pro/suscripcion' then
+    raise exception 'FALLO: G con suscripción activa no está en Pro';
+  end if;
+  update suscripciones set plan_id = 'basico', periodo_fin = now() + interval '10 years';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'FALLO: G cambió su propia suscripción'; end if;
+exception when insufficient_privilege then null;
+end $$;
+do $$
+begin
+  perform borrar_mi_cuenta();
+  raise exception 'FALLO: G borró su cuenta con una suscripción activa';
+exception when raise_exception then
+  if sqlerrm not like 'Cancela tu suscripción%' then raise; end if;
+end $$;
+
+-- H no ve la suscripción de G.
+set request.jwt.claim.sub = '13131313-0000-0000-0000-000000000001';
+do $$
+begin
+  if exists (select 1 from suscripciones) then raise exception 'FALLO: H ve la suscripción de G'; end if;
+end $$;
+
+-- Cancelada: el plan sigue hasta el fin del periodo pagado; después, gratis.
+set role service_role;
+update suscripciones set estado = 'cancelada' where id = '12121212-0000-0000-0000-0000000000a9';
+set role authenticated;
+set request.jwt.claim.sub = '12121212-0000-0000-0000-000000000001';
+do $$
+begin
+  if (select plan_id from mi_plan()) <> 'pro' or (select vigente_hasta from mi_plan()) is null then
+    raise exception 'FALLO: G cancelada perdió Pro antes del fin de su periodo';
+  end if;
+end $$;
+set role service_role;
+update suscripciones set periodo_fin = now() - interval '1 day' where id = '12121212-0000-0000-0000-0000000000a9';
+set role authenticated;
+do $$
+begin
+  if (select plan_id from mi_plan()) <> 'gratis' then raise exception 'FALLO: G sigue en Pro después de su periodo'; end if;
+end $$;
+-- Sin suscripción viva ya puede borrar su cuenta, y la suscripción se va en cascada.
+do $$ begin perform borrar_mi_cuenta(); end $$;
+reset role;
+do $$
+begin
+  if exists (select 1 from suscripciones where user_id = '12121212-0000-0000-0000-000000000001') then
+    raise exception 'FALLO: la suscripción de G sobrevivió al borrado de su cuenta';
+  end if;
+end $$;
+
+-- Sin sesión: ve los precios, pero ni suscripciones ni su plan.
+set role anon;
+reset request.jwt.claim.sub;
+do $$
+begin
+  if (select count(*) from planes) <> 3 then raise exception 'FALLO: anon no ve los precios'; end if;
+  begin
+    perform count(*) from suscripciones;
+    raise exception 'FALLO: anon lee suscripciones';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform mi_plan();
+    raise exception 'FALLO: anon ejecuta mi_plan()';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+
 \echo 'Aislamiento entre usuarios: OK'

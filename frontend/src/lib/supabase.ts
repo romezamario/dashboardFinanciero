@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { leerEnlaceDeAuth, leerVerificacion, urlSinVerificacion } from "./cuentaUsuario";
+import { leerRegresoDePago, urlSinRegresoDePago } from "./regresoPago";
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -24,5 +25,12 @@ export const VERIFICACION_INICIAL =
   typeof window === "undefined" ? null : leerVerificacion(window.location.search);
 if (VERIFICACION_INICIAL)
   window.history.replaceState(null, "", urlSinVerificacion(window.location.href));
+
+/** Si el sitio se abrió al volver de pagar en Mercado Pago: Mi cuenta se abre
+ * esperando la confirmación. Se quita de la URL al leerlo. */
+export const REGRESO_DE_PAGO =
+  typeof window === "undefined" ? null : leerRegresoDePago(window.location.search);
+if (REGRESO_DE_PAGO)
+  window.history.replaceState(null, "", urlSinRegresoDePago(window.location.href));
 
 export const supabase = createClient(url, anonKey);
