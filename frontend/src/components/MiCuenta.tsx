@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { REGRESO_DE_PAGO, supabase } from "../lib/supabase";
 import { borrarMiCuenta, guardarNombre, obtenerPerfil, type Perfil } from "../lib/perfil";
 import {
@@ -191,6 +191,55 @@ let regresoPendiente = REGRESO_DE_PAGO;
 
 type Confirmacion = "esperando" | "confirmado" | "sin-confirmar" | null;
 
+// Aviso que reemplaza al formulario de tarjeta en el mismo lugar cuando el pago
+// termina: el cliente está mirando ahí, no arriba de la sección.
+function PagoTerminado({
+  plan,
+  periodo,
+  activa,
+  viva,
+  onCerrar,
+}: {
+  plan: Plan;
+  periodo: Periodo;
+  activa: boolean;
+  viva: Suscripcion | null;
+  onCerrar: () => void;
+}) {
+  const caja = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    caja.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    caja.current?.focus({ preventScroll: true });
+  }, []);
+  const proximo = activa && viva?.plan_id === plan.id && viva.periodo_fin ? viva : null;
+  return (
+    <div
+      ref={caja}
+      tabIndex={-1}
+      role="status"
+      className="mt-4 rounded-lg p-4 outline-none"
+      style={{
+        border: `1px solid ${activa ? "var(--status-good)" : "var(--series-4)"}`,
+        background: "var(--page-plane)",
+      }}
+    >
+      <p className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>
+        {activa ? `✓ ¡Pago confirmado! Ya tienes el plan ${plan.nombre} ${periodo}.` : "Recibimos tu pago"}
+      </p>
+      <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+        {activa
+          ? proximo
+            ? `Próximo cobro: ${moneda.format(proximo.monto)} el ${fechaCorta(proximo.periodo_fin!.slice(0, 10))}. Te llegará el comprobante de Mercado Pago a tu correo.`
+            : "Te llegará el comprobante de Mercado Pago a tu correo."
+          : `Mercado Pago todavía lo está confirmando. Tu plan ${plan.nombre} se activará solo en unos minutos; vuelve a abrir Mi cuenta para verlo.`}
+      </p>
+      <div className="mt-3">
+        <Boton onClick={onCerrar}>Entendido</Boton>
+      </div>
+    </div>
+  );
+}
+
 function SeccionPlan({ correo }: { correo: string }) {
   const [miPlan, setMiPlan] = useState<MiPlan | null>(null);
   const [suscripciones, setSuscripciones] = useState<Suscripcion[]>([]);
@@ -202,6 +251,7 @@ function SeccionPlan({ correo }: { correo: string }) {
   const [confirmacion, setConfirmacion] = useState<Confirmacion>(() => (regresoPendiente ? "esperando" : null));
   // Plan cuyo formulario de tarjeta embebido está abierto.
   const [pagando, setPagando] = useState<Plan | null>(null);
+  const [pagado, setPagado] = useState<{ plan: Plan; periodo: Periodo; activa: boolean } | null>(null);
 
   const cargar = useCallback(async () => {
     const { plan, lista } = await leerPlanYSuscripciones();
@@ -252,6 +302,7 @@ function SeccionPlan({ correo }: { correo: string }) {
     if (LLAVE_PUBLICA_MP) {
       setConfirmacion(null);
       setCancelada(false);
+      setPagado(null);
       return setPagando(plan);
     }
     setEnviando(plan.id);
@@ -357,6 +408,7 @@ function SeccionPlan({ correo }: { correo: string }) {
           onCambiar={(p) => {
             setPeriodo(p);
             setPagando(null);
+            setPagado(null);
           }}
           chico
         />
@@ -419,12 +471,21 @@ function SeccionPlan({ correo }: { correo: string }) {
             correo={correo}
             onCancelar={() => setPagando(null)}
             onPagado={(activa) => {
+              setPagado({ plan: pagando, periodo, activa });
               setPagando(null);
-              setConfirmacion(activa ? "confirmado" : "sin-confirmar");
               void cargar().catch(() => undefined);
             }}
           />
         </Suspense>
+      )}
+      {pagado && (
+        <PagoTerminado
+          plan={pagado.plan}
+          periodo={pagado.periodo}
+          activa={pagado.activa}
+          viva={viva}
+          onCerrar={() => setPagado(null)}
+        />
       )}
       <p className="mt-3 text-xs" style={{ color: "var(--text-muted)" }}>
         {LLAVE_PUBLICA_MP ? "Pagas con tarjeta aquí mismo, procesado por Mercado Pago" : "Pagas en Mercado Pago con tarjeta o saldo"}; el cobro se repite cada {periodo === "anual" ? "año" : "mes"} hasta
