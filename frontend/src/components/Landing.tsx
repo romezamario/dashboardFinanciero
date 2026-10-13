@@ -462,7 +462,7 @@ function Precios({ onEntrar }: Props) {
                   : { color: "var(--text-secondary)" }
               }
             >
-              {p === "anual" ? "Anual · 2 meses gratis" : "Mensual"}
+              {p === "anual" ? "Anual · ahorras" : "Mensual"}
             </button>
           ))}
         </div>

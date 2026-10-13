@@ -10,10 +10,12 @@ describe("precios", () => {
     const carpeta = join(__dirname, "../../migrations");
     const sql = readdirSync(carpeta)
       .filter((f) => f.endsWith(".sql"))
+      .sort()
       .map((f) => readFileSync(join(carpeta, f), "utf8"))
       .join("\n");
     for (const plan of PLANES) {
-      const fila = new RegExp(`\\('${plan.id}', '[^']+', (\\d+), (\\d+),`).exec(sql);
+      // La última migración que siembra el plan es la vigente.
+      const fila = [...sql.matchAll(new RegExp(`\\('${plan.id}', '[^']+', (\\d+), (\\d+),`, "g"))].at(-1) ?? null;
       expect(fila, plan.id).not.toBeNull();
       expect(Number(fila![1])).toBe(plan.precioMensual);
       expect(Number(fila![2])).toBe(plan.precioAnual ?? 0);

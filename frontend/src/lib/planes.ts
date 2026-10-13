@@ -40,7 +40,7 @@ export const PLANES: Plan[] = [
     nombre: "Básico",
     descripcion: "Todo el análisis de tus gastos.",
     precioMensual: 29,
-    precioAnual: 290,
+    precioAnual: 299,
     destacado: true,
     incluye: [
       "Hasta 5 cuentas o tarjetas",
@@ -58,7 +58,7 @@ export const PLANES: Plan[] = [
     nombre: "Pro",
     descripcion: "Ayudas automáticas para no perder nada.",
     precioMensual: 59,
-    precioAnual: 590,
+    precioAnual: 599,
     destacado: false,
     incluye: [
       "Todo lo de Básico",
