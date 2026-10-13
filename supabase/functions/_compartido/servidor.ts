@@ -87,7 +87,10 @@ export async function mercadoPago<T = Record<string, unknown>>(
   if (!respuesta.ok) {
     const mensaje = mensajeDeErrorMp(datos) ?? `HTTP ${respuesta.status}`;
     console.error("mercadopago", metodo, ruta, respuesta.status, texto.slice(0, 1000));
-    throw new ErrorMercadoPago(respuesta.status, `Mercado Pago respondió: ${mensaje}`);
+    // Mientras los pagos estén en modo de prueba, la respuesta completa ayuda a
+    // diagnosticar ("User bad request" solo no dice qué campo rechazó).
+    const detalle = Deno.env.get("MP_ERRORES_DETALLADOS") === "no" ? "" : ` [${respuesta.status} ${texto.slice(0, 400)}]`;
+    throw new ErrorMercadoPago(respuesta.status, `Mercado Pago respondió: ${mensaje}${detalle}`);
   }
   return datos as T;
 }
