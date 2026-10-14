@@ -2,7 +2,7 @@
 // suscripciones"). Mercado Pago configura una URL por modo: la de producción
 // es la URL tal cual y la de prueba lleva `?entorno=prueba`, para consultar
 // con las credenciales de ese modo. Valida la firma x-signature con
-// MP_WEBHOOK_SECRET_PRODUCCION (o MP_WEBHOOK_SECRET en prueba) y, aun
+// MP_WEBHOOK_SECRET_PRODUCCION o MP_WEBHOOK_SECRET (cualquiera) y, aun
 // así, nunca confía en el aviso: vuelve a consultar la suscripción en la API y
 // escribe lo que Mercado Pago dice. Es la única vía por la que una
 // suscripción se vuelve activa. Se despliega sin verificación de JWT
@@ -31,19 +31,25 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("ok");
   const url = new URL(req.url);
   const entorno: Entorno = url.searchParams.get("entorno") === "prueba" ? "prueba" : "produccion";
-  const secreto =
-    (entorno === "produccion" ? Deno.env.get("MP_WEBHOOK_SECRET_PRODUCCION") : undefined) ??
-    Deno.env.get("MP_WEBHOOK_SECRET") ??
-    "";
+  // Mercado Pago puede firmar los dos modos con la misma clave (al regenerarla
+  // en un modo cambia la del otro), así que se acepta cualquiera de las dos
+  // claves propias, empezando por la del entorno del aviso.
+  const prueba = Deno.env.get("MP_WEBHOOK_SECRET") ?? "";
+  const produccion = Deno.env.get("MP_WEBHOOK_SECRET_PRODUCCION") ?? "";
+  const secretos = (entorno === "produccion" ? [produccion, prueba] : [prueba, produccion]).filter(Boolean);
   const cuerpo = await req.json().catch(() => null);
   const aviso = datosDelAviso(url, cuerpo);
   const requestId = req.headers.get("x-request-id");
-  const valida = await firmaValida({
-    cabeceraFirma: req.headers.get("x-signature"),
-    requestId,
-    dataId: url.searchParams.get("data.id") ?? aviso?.id ?? null,
-    secreto,
-  });
+  let valida = false;
+  for (const secreto of secretos) {
+    valida = await firmaValida({
+      cabeceraFirma: req.headers.get("x-signature"),
+      requestId,
+      dataId: url.searchParams.get("data.id") ?? aviso?.id ?? null,
+      secreto,
+    });
+    if (valida) break;
+  }
   const registro = { tipo: aviso?.tipo ? `${aviso.tipo} (${entorno})` : null, recurso_id: aviso?.id ?? null, request_id: requestId, firma_valida: valida };
 
   if (!valida) {

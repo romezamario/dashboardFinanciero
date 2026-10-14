@@ -635,7 +635,9 @@ Para cobrar de verdad en ordenatulana.com: en *Credenciales de producción* de l
 evento **Planes y suscripciones**, y copia su clave secreta. GitHub Secrets:
 `PRODUCTO_MP_ACCESS_TOKEN_PRODUCCION`, `PRODUCTO_MP_PUBLIC_KEY_PRODUCCION` y
 `PRODUCTO_MP_WEBHOOK_SECRET_PRODUCCION` (los `PRODUCTO_MP_*` sin sufijo siguen siendo los de prueba). Corre
-*Funciones de cobro* y luego *Deploy Ordena tu Lana* con destino `produccion`. Sin el Access Token de
+*Funciones de cobro* y luego *Deploy Ordena tu Lana* con destino `produccion` (cada vez que cambies un secreto
+`PRODUCTO_MP_*`, vuelve a correr *Funciones de cobro*). El webhook acepta la firma con cualquiera de las dos
+claves, porque Mercado Pago puede usar la misma en ambos modos. Sin el Access Token de
 producción, ordenatulana.com responde "Los pagos todavía no están disponibles". Los límites de cada plan (cuentas,
 historial, reglas) están en la tabla `planes` pero **todavía no se aplican**.
 
