@@ -13,6 +13,7 @@
 import { supabase } from "../supabase";
 import type { MovimientoExcel } from "./excel";
 import { comoError, idBanco } from "./guardar";
+import { lineaLibre, type MovimientoManual } from "./manual";
 import { periodo } from "./procesar";
 import { categorizar } from "./reglasBase";
 
@@ -176,9 +177,12 @@ async function aplicarCategorias(grupos: Map<string, { categoria?: string; comer
   }
 }
 
+const idCuenta = (destino: DestinoExcel) =>
+  destino.tipo === "existente" ? Promise.resolve(destino.cuentaId) : idCuentaNueva(destino);
+
 /** Guarda y devuelve cuántos movimientos se guardaron. */
 export async function guardarExcel(destino: DestinoExcel, movimientos: readonly MovimientoExcel[]): Promise<number> {
-  const cuentaId = destino.tipo === "existente" ? destino.cuentaId : await idCuentaNueva(destino);
+  const cuentaId = await idCuenta(destino);
   const documentoId = await idDocumento(cuentaId, periodo(movimientos));
   const porLinea = new Map(movimientos.map((m) => [m.linea_cruda, m]));
   const filas = movimientos.map((m) => ({
@@ -201,4 +205,52 @@ export async function guardarExcel(destino: DestinoExcel, movimientos: readonly 
   }
   await aplicarCategorias(cambiosDeCategoria(guardadas, porLinea));
   return filas.length;
+}
+
+/** Un movimiento capturado a mano (CapturaManual.tsx). Cae en el mismo
+ * documento de la cuenta que las plantillas de Excel; a diferencia de ellas
+ * siempre AGREGA: si ya hay uno idéntico (dos cafés iguales el mismo día), el
+ * nuevo se guarda como "… (2)". Devuelve su id (para "Deshacer") y el de la
+ * cuenta (para que la siguiente captura la ofrezca ya elegida). */
+export async function guardarManual(
+  destino: DestinoExcel,
+  movimiento: MovimientoManual
+): Promise<{ id: string; cuentaId: string }> {
+  const cuentaId = await idCuenta(destino);
+  const documentoId = await idDocumento(cuentaId, { inicio: movimiento.fecha, fin: movimiento.fecha });
+  // `like` puede traer de más (un "_" o "%" en la descripción es comodín):
+  // lineaLibre compara exacto.
+  const { data: parecidas, error } = await supabase
+    .from("transacciones")
+    .select("linea_cruda")
+    .eq("documento_id", documentoId)
+    .eq("pagina", movimiento.pagina)
+    .like("linea_cruda", `${movimiento.linea_cruda}%`);
+  if (error) throw comoError(error);
+  const linea = lineaLibre(
+    movimiento.linea_cruda,
+    (parecidas ?? []).map((f) => f.linea_cruda as string)
+  );
+  const { data, error: errorAlta } = await supabase
+    .from("transacciones")
+    .insert({
+      documento_id: documentoId,
+      fecha: movimiento.fecha,
+      descripcion: movimiento.descripcion,
+      monto: movimiento.monto,
+      tipo: movimiento.tipo,
+      pagina: movimiento.pagina,
+      linea_cruda: linea,
+    })
+    .select("id, linea_cruda, descripcion, categoria_id, comercio")
+    .single();
+  if (errorAlta) throw comoError(errorAlta);
+  await aplicarCategorias(cambiosDeCategoria([data as FilaGuardada], new Map([[linea, movimiento]])));
+  return { id: data.id as string, cuentaId };
+}
+
+/** "Deshacer" de una captura manual: la RLS solo deja borrar filas propias. */
+export async function borrarMovimiento(id: string): Promise<void> {
+  const { error } = await supabase.from("transacciones").delete().eq("id", id);
+  if (error) throw comoError(error);
 }

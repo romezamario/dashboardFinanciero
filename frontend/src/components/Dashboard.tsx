@@ -592,7 +592,7 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
         {enCuenta ? (
           <MiCuenta correo={correo} transacciones={transacciones} />
         ) : enSubir ? (
-          <SubirEstadoCuenta onGuardado={() => void recargarTransacciones()} />
+          <SubirEstadoCuenta transacciones={transacciones} onGuardado={() => void recargarTransacciones()} />
         ) : enAdmin ? (
           <AdministracionMuestras
             totalMovimientos={transacciones.length}
@@ -638,7 +638,7 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
           EDICION === "producto" ? (
             <div className="tarjeta space-y-3 rounded-lg p-6 text-center">
               <p className="text-sm" style={{ color: "var(--text-primary)" }}>
-                Todavía no tienes movimientos. Empieza subiendo el PDF de tu estado de cuenta o la plantilla de Excel.
+                Todavía no tienes movimientos. Empieza subiendo el PDF de tu estado de cuenta, la plantilla de Excel o capturándolos a mano.
               </p>
               <button
                 onClick={() => cambiarVista(VISTA_SUBIR)}

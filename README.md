@@ -597,6 +597,11 @@ Comercio opcionales, y hoja *Instrucciones* con un ejemplo). El cliente la llena
 se entendieron, y elige a qué cuenta van (una que ya tiene o una nueva, con últimos 4 opcionales y si es tarjeta de
 crédito). Volver a subir el archivo con filas nuevas solo agrega las nuevas.
 
+**Capturar a mano**: debajo de las dos tarjetas, un formulario para un movimiento a la vez (gasto o ingreso, fecha,
+monto, descripción, categoría y comercio opcionales —si la categoría queda vacía se usan las reglas base— y la cuenta).
+Cae en la misma cuenta que la plantilla; dos movimientos idénticos se guardan como dos. Los capturados en esa visita
+se pueden "Deshacer".
+
 **Administración**: quien tiene su correo (confirmado) en la tabla `administradores` ve el botón
 **Administración** con las muestras de los clientes: copiar el texto para pedirle a Claude el lector,
 descargarlo, cambiar su estado (nueva, en revisión, resuelta, descartada) o borrarla. Para agregar un

@@ -136,6 +136,16 @@ fecha | descripción | monto | tipo"` (+ " (2)" for identical rows, `pagina` 0) 
 with new rows only adds those. Categoría/comercio typed in the Excel are always applied; empty → base rules only on rows
 with neither. Tested in `excel.test.ts` (template round-trip, dates, amounts, CSV, errors, category precedence) and in
 Playwright against mocked Supabase (download, upload, preview, save payload).
+**Manual entry (2026-10-14, user's request "ofrecer también subir las transacciones de manera manual")**: a third card
+under the PDF/Excel ones, "Capturar a mano" (`CapturaManual.tsx`, rendered by `SubirEstadoCuenta`, which now gets
+`transacciones` for the categoría/comercio datalists): tipo Gasto|Ingreso, fecha (≤ today), monto, descripción,
+categoría/comercio optional (empty categoría → `REGLAS_BASE`, shown as "Sugerida"), and the account through
+`ElegirCuenta` (`SubirPiezas.tsx`, now shared with the Excel preview; its state helpers in `lib/importar/cuentaElegida.ts`).
+Validation in `lib/importar/manual.ts` (tested). `guardarManual` (guardarExcel.ts) stores it in the account's
+`excel:<cuenta_id>` document with `linea_cruda` = `"(manual) fecha | descripción | monto | tipo"`, and always ADDS: an
+identical existing line gets " (2)", " (3)"… (`lineaLibre`) — unlike the Excel upsert. Rows captured in that visit can be
+undone (`borrarMovimiento`, RLS delete). Checked in Playwright with mocked Supabase (save, ingreso, bad amount, undo; 1280 px
+light, 390 px dark). Plan limits don't apply yet (not enforced anywhere).
 **Base categorization rules (2026-10-12, user's request "toma mis reglas de categorización y haz una base general")**:
 `lib/importar/reglasBase.ts` (`REGLAS_BASE`, ~230 rules, same semantics as `categorizar()`: case-insensitive substring, first match
 wins) was curated from the owner's 872 desktop rules keeping only chains, services and bank terms — no local businesses, trips,
@@ -1469,7 +1479,7 @@ ladoDominante, gasto hormiga), `alertas` (duplicates, $0 echo lines, price chang
 and several-charges-a-month cases, new subscription), `gastosEstadoCuenta` (only TDC cargos of
 non-hidden categories add up; sinSumar reasons; day order; esTarjetaCredito), `tecnico`
 (SMA, RSI edges), `conciliarCorreo` (one-to-one matching, eventosHeredables, filaAGastoCorreo),
-`metaDiaria` (week/month averages vs. the goal), `importar/procesar` (browser PDF lectores, line grouping, anonymizer), `importar/glifos` (image-row decoding, Python fingerprint), `importar/reglasBase` (no shadowed rules), `importar/excel` (Excel template upload), `administracion`, `suscripcion` (Mercado Pago return URL, plan text), `cuentaUsuario` (hash routes, auth links, error
+`metaDiaria` (week/month averages vs. the goal), `importar/procesar` (browser PDF lectores, line grouping, anonymizer), `importar/glifos` (image-row decoding, Python fingerprint), `importar/reglasBase` (no shadowed rules), `importar/excel` (Excel template upload), `importar/manual` (manual-entry validation), `administracion`, `suscripcion` (Mercado Pago return URL, plan text), `cuentaUsuario` (hash routes, auth links, error
 translation, password rules), `exportarDatos` (CSV escaping), `promedios` (averages from the first month with
 spending), `shophunters` and `patrones/*` (levels and chart patterns on synthetic series from
 `src/test/series.ts`). `npx tsc -b` and `npm run lint` are the other checks; CI runs all three.

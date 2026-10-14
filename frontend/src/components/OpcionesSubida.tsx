@@ -67,7 +67,7 @@ export function OpcionesSubida({ onArchivos }: { onArchivos: (archivos: File[]) 
           icono={<IconoExcel />}
           etiqueta="Cualquier banco"
           titulo="Plantilla de Excel"
-          descripcion="Para otros bancos, efectivo o lo que quieras capturar tú."
+          descripcion="Para otros bancos o muchos movimientos a la vez."
         >
           <ol className="space-y-2">
             <Paso numero={1} color="var(--status-good)">
@@ -100,7 +100,7 @@ export function OpcionesSubida({ onArchivos }: { onArchivos: (archivos: File[]) 
   );
 }
 
-function Opcion({
+export function Opcion({
   color,
   icono,
   etiqueta,

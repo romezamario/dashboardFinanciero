@@ -7,7 +7,9 @@ import { categorizar } from "../lib/importar/reglasBase";
 import { fechaCorta, monedaConCentavos } from "../lib/formato";
 import { esArchivoDeTabla } from "../lib/importar/excel";
 import { descargarPlantilla } from "../lib/importar/plantillaExcel";
+import { CapturaManual } from "./CapturaManual";
 import { OpcionesSubida } from "./OpcionesSubida";
+import type { Transaccion } from "../lib/types";
 import { ResultadoExcel } from "./SubirExcel";
 import { estiloEntrada } from "../lib/estilos";
 import { Boton, Nota } from "./SubirPiezas";
@@ -33,7 +35,14 @@ const BANCOS_SOPORTADOS = "Banamex (cuenta de cheques y tarjetas de crédito) e 
 
 let siguienteId = 1;
 
-export function SubirEstadoCuenta({ onGuardado }: { onGuardado: () => void }) {
+export function SubirEstadoCuenta({
+  transacciones,
+  onGuardado,
+}: {
+  /** Para sugerir categorías y comercios al capturar a mano. */
+  transacciones: readonly Transaccion[];
+  onGuardado: () => void;
+}) {
   const [archivos, setArchivos] = useState<Archivo[]>([]);
 
   const actualizar = (id: number, estado: EstadoArchivo) =>
@@ -74,6 +83,8 @@ export function SubirEstadoCuenta({ onGuardado }: { onGuardado: () => void }) {
       {archivos.map((a) => (
         <TarjetaArchivo key={a.id} archivo={a} onGuardado={onGuardado} />
       ))}
+
+      <CapturaManual transacciones={transacciones} onGuardado={onGuardado} />
     </div>
   );
 }
