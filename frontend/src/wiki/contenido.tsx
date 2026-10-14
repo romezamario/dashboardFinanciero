@@ -14,7 +14,7 @@ export interface SeccionWiki {
   cuerpo: ReactNode;
 }
 
-export const ULTIMA_REVISION = "13 de octubre de 2026";
+export const ULTIMA_REVISION = "14 de octubre de 2026";
 
 export const SECCIONES: SeccionWiki[] = [
   // ------------------------------------------------------------ inicio
@@ -1240,7 +1240,7 @@ export const SECCIONES: SeccionWiki[] = [
           </li>
           <li>
             <B>Cuenta de prueba en Alpaca</B> (en USD, primer bloque; la simulación queda plegada abajo y se abre con un clic): gráfica del
-            valor de la cuenta por día, valor de la cuenta, efectivo, cambio contra
+            valor de la cuenta por día, valor de la cuenta (con su diferencia contra los US$100,000 con que abrió), efectivo, cambio contra
             el cierre del día hábil anterior, ganancia no realizada, posiciones (cantidad, valor, costo,
             precio de entrada y actual) y las últimas 100 órdenes con su estado real en Alpaca (en las ventas, la ganancia o pérdida contra el precio promedio de compra de ese activo, antes de comisiones). Sale de{" "}
             <C>output/alpaca.json</C> del mismo repo, que el agente actualiza después de mandar las órdenes

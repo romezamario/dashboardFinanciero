@@ -406,7 +406,7 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
   no realizada (posiciones abiertas, con su costo) y efecto del tipo de cambio sobre el efectivo, que
   el agente guarda en dólares. Arriba de todo eso, en su propio bloque, va la **cuenta de prueba en
   Alpaca** (broker real, dinero simulado, en USD) donde el agente manda las mismas decisiones: la
-  gráfica del valor de la cuenta por día, valor de la cuenta, efectivo,
+  gráfica del valor de la cuenta por día, valor de la cuenta (con su diferencia contra los US$100,000 con que abrió), efectivo,
   cambio contra el cierre anterior, ganancia no realizada, posiciones y las últimas órdenes con su
   estado real (ejecutada, en espera de que abra la bolsa, cancelada…); en cada venta, la ganancia o
   pérdida contra el precio promedio de compra de ese activo (antes de comisiones). Sale de `output/alpaca.json`
