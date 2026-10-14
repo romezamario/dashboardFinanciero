@@ -22,7 +22,7 @@ import { Boton, Nota } from "./SubirPiezas";
 type EstadoArchivo =
   | { fase: "leyendo" }
   | { fase: "excel"; archivo: File }
-  | { fase: "error"; mensaje: string }
+  | { fase: "error"; mensaje: string; detalle?: string }
   | { fase: "listo"; hash: string; resultado: ResultadoImportacion };
 
 interface Archivo {
@@ -34,6 +34,11 @@ interface Archivo {
 const BANCOS_SOPORTADOS = "Banamex (cuenta de cheques y tarjetas de crédito) e Invex (tarjeta de crédito)";
 
 let siguienteId = 1;
+
+const detalleDeError = (error: unknown): string => {
+  const e = error instanceof Error ? (error.cause instanceof Error ? error.cause : error) : null;
+  return (e ? `${e.name}: ${e.message}` : String(error)).slice(0, 200);
+};
 
 export function SubirEstadoCuenta({
   transacciones,
@@ -72,6 +77,8 @@ export function SubirEstadoCuenta({
           error instanceof PdfConContrasena
             ? "Este PDF tiene contraseña. Descárgalo de tu banca en línea sin contraseña o quítasela e inténtalo de nuevo."
             : "No pudimos abrir este archivo como PDF. Revisa que sea el estado de cuenta que descargaste de tu banco.",
+        // Sin datos del archivo: solo el error técnico, para saber qué falló.
+        detalle: error instanceof PdfConContrasena ? undefined : detalleDeError(error),
       });
     }
   }
@@ -120,6 +127,11 @@ function TarjetaArchivo({ archivo, onGuardado }: { archivo: Archivo; onGuardado:
     return (
       <Tarjeta titulo={archivo.nombre}>
         <Nota tipo="error">{estado.mensaje}</Nota>
+        {estado.detalle && (
+          <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+            Detalle técnico: {estado.detalle}
+          </p>
+        )}
       </Tarjeta>
     );
   const { resultado, hash } = estado;

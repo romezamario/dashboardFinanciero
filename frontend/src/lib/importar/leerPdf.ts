@@ -105,8 +105,8 @@ export class PdfConContrasena extends Error {
 }
 
 export class PdfIlegible extends Error {
-  constructor() {
-    super("No se pudo abrir el archivo como PDF.");
+  constructor(causa?: unknown) {
+    super("No se pudo abrir el archivo como PDF.", { cause: causa });
   }
 }
 
@@ -131,7 +131,7 @@ export async function leerPaginasPdf(
   } catch (error) {
     await tarea.destroy();
     if (error instanceof Error && error.name === "PasswordException") throw new PdfConContrasena();
-    throw new PdfIlegible();
+    throw new PdfIlegible(error);
   }
 
   try {
