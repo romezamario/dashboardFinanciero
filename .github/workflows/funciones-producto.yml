@@ -22,9 +22,9 @@ jobs:
       # Credenciales de PRUEBA (sitio de pruebas) y de PRODUCCIÓN
       # (ordenatulana.com); cada función elige según el sitio o la suscripción.
       MP_ACCESS_TOKEN: ${{ secrets.PRODUCTO_MP_ACCESS_TOKEN }}
-      MP_WEBHOOK_SECRET: ${{ secrets.PRODUCTO_MP_WEBHOOK_SECRET }}
+      # Mercado Pago firma los avisos de ambos modos con la misma clave.
+      MP_WEBHOOK_SECRET: ${{ secrets.PRODUCTO_MP_WEBHOOK_SECRET_PRODUCCION }}
       MP_ACCESS_TOKEN_PRODUCCION: ${{ secrets.PRODUCTO_MP_ACCESS_TOKEN_PRODUCCION }}
-      MP_WEBHOOK_SECRET_PRODUCCION: ${{ secrets.PRODUCTO_MP_WEBHOOK_SECRET_PRODUCCION }}
       MP_CORREO_COMPRADOR_PRUEBA: ${{ secrets.PRODUCTO_MP_CORREO_COMPRADOR_PRUEBA }}
       # Correos de cobro (plan activo / cancelado) por la API de Resend: la
       # contraseña SMTP de Resend es su llave de API. Con otro SMTP (p. ej.
@@ -55,13 +55,13 @@ jobs:
         if: steps.config.outputs.lista == 'true'
         run: |
           : > secretos.env
-          for nombre in MP_ACCESS_TOKEN MP_WEBHOOK_SECRET MP_ACCESS_TOKEN_PRODUCCION MP_WEBHOOK_SECRET_PRODUCCION MP_CORREO_COMPRADOR_PRUEBA RESEND_API_KEY CORREO_REMITENTE; do
+          for nombre in MP_ACCESS_TOKEN MP_WEBHOOK_SECRET MP_ACCESS_TOKEN_PRODUCCION MP_CORREO_COMPRADOR_PRUEBA RESEND_API_KEY CORREO_REMITENTE; do
             if [ -n "${!nombre}" ]; then echo "$nombre=${!nombre}" >> secretos.env; fi
           done
           if [ -s secretos.env ]; then
             supabase secrets set --project-ref "$PROYECTO" --env-file secretos.env
           else
-            echo "::notice::Sin PRODUCTO_MP_ACCESS_TOKEN / PRODUCTO_MP_WEBHOOK_SECRET: las funciones se despliegan, pero no pueden cobrar."
+            echo "::notice::Sin PRODUCTO_MP_ACCESS_TOKEN / PRODUCTO_MP_WEBHOOK_SECRET_PRODUCCION: las funciones se despliegan, pero no pueden cobrar."
           fi
           rm -f secretos.env
 

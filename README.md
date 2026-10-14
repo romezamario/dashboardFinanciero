@@ -620,9 +620,9 @@ un plan de prueba valdría también en producción, en el sitio de pruebas solo 
    **Public Key** (ambos empiezan con `APP_USR-`; lo que importa es que sean los de prueba).
 3. *Webhooks → Configurar notificaciones → Modo de prueba*: URL
    `https://<project-ref de clientes>.supabase.co/functions/v1/webhook-mercadopago?entorno=prueba`, evento **Planes y
-   suscripciones**; guarda y copia la **clave secreta**.
-4. GitHub Secrets: `PRODUCTO_MP_ACCESS_TOKEN` y `PRODUCTO_MP_PUBLIC_KEY` (paso 2), `PRODUCTO_MP_WEBHOOK_SECRET`
-   (paso 3) y `PRODUCTO_MP_CORREO_COMPRADOR_PRUEBA`: el correo **real** del comprador de prueba (entra con su
+   suscripciones**. La **clave secreta** es la misma que la de Modo productivo y va en
+   `PRODUCTO_MP_WEBHOOK_SECRET_PRODUCCION` (ver abajo).
+4. GitHub Secrets: `PRODUCTO_MP_ACCESS_TOKEN` y `PRODUCTO_MP_PUBLIC_KEY` (paso 2) y `PRODUCTO_MP_CORREO_COMPRADOR_PRUEBA`: el correo **real** del comprador de prueba (entra con su
    usuario y contraseña a mercadopago.com.mx y míralo en su perfil; uno adivinado da 400 "User bad request").
    Después corre *Actions → Funciones de cobro → Run workflow* (y un deploy, para la Public Key).
 5. Prueba en https://pruebas.ordenatulana.pages.dev: Mi cuenta → Suscribirme → el formulario de tarjeta de
@@ -632,12 +632,11 @@ un plan de prueba valdría también en producción, en el sitio de pruebas solo 
 
 Para cobrar de verdad en ordenatulana.com: en *Credenciales de producción* de la misma aplicación copia el
 **Access Token** y la **Public Key**; en *Webhooks → Modo productivo* pon la URL **sin** `?entorno=prueba`,
-evento **Planes y suscripciones**, y copia su clave secreta. GitHub Secrets:
-`PRODUCTO_MP_ACCESS_TOKEN_PRODUCCION`, `PRODUCTO_MP_PUBLIC_KEY_PRODUCCION` y
-`PRODUCTO_MP_WEBHOOK_SECRET_PRODUCCION` (los `PRODUCTO_MP_*` sin sufijo siguen siendo los de prueba). Corre
-*Funciones de cobro* y luego *Deploy Ordena tu Lana* con destino `produccion` (cada vez que cambies un secreto
-`PRODUCTO_MP_*`, vuelve a correr *Funciones de cobro*). El webhook acepta la firma con cualquiera de las dos
-claves, porque Mercado Pago puede usar la misma en ambos modos. Sin el Access Token de
+evento **Planes y suscripciones**. GitHub Secrets: `PRODUCTO_MP_ACCESS_TOKEN_PRODUCCION`,
+`PRODUCTO_MP_PUBLIC_KEY_PRODUCCION` y `PRODUCTO_MP_WEBHOOK_SECRET_PRODUCCION` (la clave secreta del webhook es la
+misma en ambos modos, así que es el único secreto de webhook; los demás `PRODUCTO_MP_*` sin sufijo son los de prueba). Corre *Funciones de cobro* y luego *Deploy Ordena tu Lana* con destino
+`produccion`; cada vez que cambies un secreto `PRODUCTO_MP_*` (p. ej. al regenerar la clave del webhook), vuelve
+a correr *Funciones de cobro*. Sin el Access Token de
 producción, ordenatulana.com responde "Los pagos todavía no están disponibles". Los límites de cada plan (cuentas,
 historial, reglas) están en la tabla `planes` pero **todavía no se aplican**.
 
