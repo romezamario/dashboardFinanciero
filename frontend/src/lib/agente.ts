@@ -88,7 +88,13 @@ export interface ResumenAlpaca {
   cambioDiaPct: number | null;
   /** Suma de la ganancia no realizada de las posiciones abiertas. */
   noRealizada: number;
+  /** Diferencia contra el capital con que se abrió la cuenta (CAPITAL_INICIAL_ALPACA). */
+  vsInicial: number;
+  vsInicialPct: number;
 }
+
+/** Capital con que Alpaca abre una cuenta paper; la API no lo devuelve. */
+export const CAPITAL_INICIAL_ALPACA = 100_000;
 
 export function resumirAlpaca(cuenta: CuentaAlpaca): ResumenAlpaca {
   const valor = cuenta.equity ?? 0;
@@ -100,6 +106,8 @@ export function resumirAlpaca(cuenta: CuentaAlpaca): ResumenAlpaca {
     cambioDia,
     cambioDiaPct: anterior && cambioDia !== null ? cambioDia / anterior : null,
     noRealizada: cuenta.posiciones.reduce((suma, p) => suma + (p.unrealized_pl ?? 0), 0),
+    vsInicial: valor - CAPITAL_INICIAL_ALPACA,
+    vsInicialPct: valor / CAPITAL_INICIAL_ALPACA - 1,
   };
 }
 

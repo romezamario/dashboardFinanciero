@@ -115,6 +115,12 @@ describe("cuenta de Alpaca", () => {
     expect(resumirAlpaca({ ...cuenta, last_equity: null }).cambioDia).toBeNull();
   });
 
+  it("compara el valor contra el capital inicial de US$100,000", () => {
+    const r = resumirAlpaca({ ...cuenta, equity: 99_212.31 });
+    expect(r.vsInicial).toBeCloseTo(-787.69, 2);
+    expect(r.vsInicialPct).toBeCloseTo(-0.0078769, 6);
+  });
+
   it("nombra símbolos y estados en español", () => {
     expect(nombreSimboloAlpaca("BTCUSD")).toBe("BTC");
     expect(nombreSimboloAlpaca("ETH/USD")).toBe("ETH");

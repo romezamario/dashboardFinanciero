@@ -13,6 +13,7 @@ import type { SaldoAgente } from "../../functions/api/agente-saldo";
 import type { CuentaAlpaca, OrdenAgente, PosicionAgente } from "../../functions/api/agente-saldo";
 import type { PuntoHistorialAlpaca, RangoAlpaca } from "../../functions/api/alpaca-historial";
 import {
+  CAPITAL_INICIAL_ALPACA,
   descartarSaltosImposibles,
   estadoOrdenAlpaca,
   fraccionEnEfectivo,
@@ -446,7 +447,16 @@ function SeccionAlpaca({ inicial }: { inicial: CuentaAlpaca }) {
         </p>
       )}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Dato titulo="Valor de la cuenta" valor={dolares.format(r.valor)} />
+        <Dato
+          titulo="Valor de la cuenta"
+          valor={dolares.format(r.valor)}
+          detalle={
+            <>
+              <MontoUsd valor={r.vsInicial} fraccion={r.vsInicialPct} /> vs. el capital inicial de{" "}
+              {dolares.format(CAPITAL_INICIAL_ALPACA)}
+            </>
+          }
+        />
         <Dato titulo="Efectivo" valor={dolares.format(r.efectivo)} />
         <Dato
           titulo="Cambio vs. el cierre anterior"
@@ -521,11 +531,14 @@ function Monto({ valor, fraccion }: { valor: number; fraccion?: number | null })
   );
 }
 
-function Dato({ titulo, valor }: { titulo: string; valor: React.ReactNode }) {
+function Dato({ titulo, valor, detalle }: { titulo: string; valor: React.ReactNode; detalle?: React.ReactNode }) {
   return (
     <div className="rounded-lg p-3 tarjeta">
       <div className="text-xs" style={{ color: "var(--text-secondary)" }}>{titulo}</div>
       <div className="mt-1 text-lg font-semibold" style={{ color: "var(--text-primary)" }}>{valor}</div>
+      {detalle && (
+        <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>{detalle}</div>
+      )}
     </div>
   );
 }
