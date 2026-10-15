@@ -161,6 +161,10 @@ export interface MuestraParaEnviar {
   comentario: string | null;
   paginas: number;
   texto_anonimizado: string;
+  /** Cuántos movimientos sí se leyeron (solo "faltan movimientos"). */
+  movimientos_leidos?: number | null;
+  /** Retroalimentación: la muestra anterior que el cliente estaba probando. */
+  muestra_origen_id?: string | null;
 }
 
 export async function enviarMuestra(muestra: MuestraParaEnviar): Promise<void> {

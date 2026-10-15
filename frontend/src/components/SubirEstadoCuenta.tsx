@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { deCentavos } from "../lib/importar/comun";
 import { enviarMuestra, guardarImportacion, type MuestraParaEnviar } from "../lib/importar/guardar";
 import { huellaArchivo, leerPaginasPdf, PdfConContrasena } from "../lib/importar/leerPdf";
@@ -13,6 +13,17 @@ import type { Transaccion } from "../lib/types";
 import { ResultadoExcel } from "./SubirExcel";
 import { estiloEntrada } from "../lib/estilos";
 import { Boton, Nota } from "./SubirPiezas";
+import { AvisoMuestraLista } from "./AvisoMuestraLista";
+import {
+  comentarioDeFaltantes,
+  confirmarMuestra,
+  felicitacion,
+  muestraParaBanco,
+  obtenerMuestrasPorConfirmar,
+  pareceDatoReal,
+  TIPOS_FALTANTES,
+  type MuestraPorConfirmar,
+} from "../lib/muestras";
 
 // "Subir estado de cuenta" de Ordena tu Lana (fase 2): el PDF se lee aquí, en
 // el navegador; el archivo nunca se sube. Solo se guardan los movimientos. Si
@@ -49,6 +60,19 @@ export function SubirEstadoCuenta({
   onGuardado: () => void;
 }) {
   const [archivos, setArchivos] = useState<Archivo[]>([]);
+  // Muestras del cliente con un lector listo para probar (recompensa por
+  // muestras): al guardar un PDF de ese banco se le pregunta si ya ve todo.
+  const [pendientes, setPendientes] = useState<MuestraPorConfirmar[]>([]);
+  useEffect(() => {
+    let vigente = true;
+    obtenerMuestrasPorConfirmar()
+      .then((lista) => vigente && setPendientes(lista))
+      .catch(() => undefined);
+    return () => {
+      vigente = false;
+    };
+  }, []);
+  const quitarPendiente = (id: string) => setPendientes((lista) => lista.filter((m) => m.id !== id));
 
   const actualizar = (id: number, estado: EstadoArchivo) =>
     setArchivos((lista) => lista.map((a) => (a.id === id ? { ...a, estado } : a)));
@@ -85,10 +109,20 @@ export function SubirEstadoCuenta({
 
   return (
     <div className="space-y-4">
+      {pendientes.map((m) => (
+        <AvisoMuestraLista key={m.id} muestra={m} />
+      ))}
+
       <OpcionesSubida onArchivos={(lista) => lista.forEach((archivo) => void leer(archivo))} />
 
       {archivos.map((a) => (
-        <TarjetaArchivo key={a.id} archivo={a} onGuardado={onGuardado} />
+        <TarjetaArchivo
+          key={a.id}
+          archivo={a}
+          onGuardado={onGuardado}
+          pendientes={pendientes}
+          onMuestraAtendida={quitarPendiente}
+        />
       ))}
 
       <CapturaManual transacciones={transacciones} onGuardado={onGuardado} />
@@ -107,7 +141,17 @@ function Tarjeta({ titulo, children }: { titulo: string; children: ReactNode }) 
   );
 }
 
-function TarjetaArchivo({ archivo, onGuardado }: { archivo: Archivo; onGuardado: () => void }) {
+function TarjetaArchivo({
+  archivo,
+  onGuardado,
+  pendientes,
+  onMuestraAtendida,
+}: {
+  archivo: Archivo;
+  onGuardado: () => void;
+  pendientes: readonly MuestraPorConfirmar[];
+  onMuestraAtendida: (id: string) => void;
+}) {
   const { estado } = archivo;
   if (estado.fase === "leyendo")
     return (
@@ -138,7 +182,13 @@ function TarjetaArchivo({ archivo, onGuardado }: { archivo: Archivo; onGuardado:
   return (
     <Tarjeta titulo={archivo.nombre}>
       {resultado.reconocido ? (
-        <Reconocido resultado={resultado} hash={hash} onGuardado={onGuardado} />
+        <Reconocido
+          resultado={resultado}
+          hash={hash}
+          onGuardado={onGuardado}
+          pendiente={muestraParaBanco(pendientes, resultado.banco)}
+          onMuestraAtendida={onMuestraAtendida}
+        />
       ) : (
         <NoReconocido resultado={resultado} />
       )}
@@ -151,7 +201,19 @@ type NoReconocidoT = Extract<ResultadoImportacion, { reconocido: false }>;
 
 const FILAS_VISTA_PREVIA = 8;
 
-function Reconocido({ resultado, hash, onGuardado }: { resultado: Reconocido; hash: string; onGuardado: () => void }) {
+function Reconocido({
+  resultado,
+  hash,
+  onGuardado,
+  pendiente,
+  onMuestraAtendida,
+}: {
+  resultado: Reconocido;
+  hash: string;
+  onGuardado: () => void;
+  pendiente: MuestraPorConfirmar | null;
+  onMuestraAtendida: (id: string) => void;
+}) {
   const [alias, setAlias] = useState(resultado.alias ?? resultado.banco);
   const [ultimos4, setUltimos4] = useState(resultado.ultimos4 ?? "");
   const [verTodos, setVerTodos] = useState(false);
@@ -159,6 +221,9 @@ function Reconocido({ resultado, hash, onGuardado }: { resultado: Reconocido; ha
   const [guardados, setGuardados] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [muestra, setMuestra] = useState(false);
+  // La muestra que se estaba probando con este PDF (se conserva aunque ya
+  // se haya atendido, para seguir mostrando el resultado).
+  const [probando] = useState(pendiente);
 
   const { cargos, abonos } = totales(resultado.movimientos);
   const rango = periodo(resultado.movimientos);
@@ -295,9 +360,15 @@ function Reconocido({ resultado, hash, onGuardado }: { resultado: Reconocido; ha
       )}
       {error && <Nota tipo="error">{error}</Nota>}
 
-      {!muestra ? (
-        <button type="button" className="text-xs" style={{ color: "var(--text-muted)" }} onClick={() => setMuestra(true)}>
-          ¿Faltan movimientos o algo se leyó mal? Avísanos
+      {probando && guardados !== null ? (
+        <ConfirmarMuestra
+          muestra={probando}
+          resultado={resultado}
+          onAtendida={() => onMuestraAtendida(probando.id)}
+        />
+      ) : !muestra ? (
+        <button type="button" className="text-xs" style={{ color: "var(--series-1)" }} onClick={() => setMuestra(true)}>
+          ¿No ves todos tus movimientos? Envíanos tu muestra anonimizada
         </button>
       ) : (
         <EnviarMuestra
@@ -305,6 +376,7 @@ function Reconocido({ resultado, hash, onGuardado }: { resultado: Reconocido; ha
           banco={resultado.banco}
           paginas={resultado.paginas}
           texto={resultado.muestra}
+          movimientosLeidos={resultado.movimientos.length}
         />
       )}
     </div>
@@ -351,21 +423,108 @@ function NoReconocido({ resultado }: { resultado: NoReconocidoT }) {
   );
 }
 
+/** Tras guardar un PDF del banco cuyo lector se hizo con su muestra: ¿ya
+ * ve todo? Sí → la base decide la recompensa; no → retroalimentación. */
+function ConfirmarMuestra({
+  muestra,
+  resultado,
+  onAtendida,
+}: {
+  muestra: MuestraPorConfirmar;
+  resultado: Reconocido;
+  onAtendida: () => void;
+}) {
+  const [fase, setFase] = useState<"preguntar" | "confirmando" | "retro">("preguntar");
+  const [hecho, setHecho] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function confirmar() {
+    setFase("confirmando");
+    setError(null);
+    try {
+      setHecho(felicitacion(await confirmarMuestra(muestra.id), new Date()));
+      onAtendida();
+    } catch (e) {
+      setError((e as Error).message);
+      setFase("preguntar");
+    }
+  }
+
+  if (hecho) return <Nota tipo="exito">{hecho}</Nota>;
+  if (fase === "retro")
+    return (
+      <div className="space-y-2">
+        <p className="text-sm" style={{ color: "var(--text-primary)" }}>
+          Cuéntanos qué falta y mándanos la muestra anonimizada de este PDF para seguir afinando el lector.
+        </p>
+        <EnviarMuestra
+          motivo="faltan-movimientos"
+          banco={resultado.banco}
+          paginas={resultado.paginas}
+          texto={resultado.muestra}
+          movimientosLeidos={resultado.movimientos.length}
+          origenId={muestra.id}
+          onEnviada={onAtendida}
+        />
+      </div>
+    );
+  return (
+    <section className="space-y-2 rounded-md p-3" style={{ border: "1px solid var(--status-good)" }}>
+      <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+        Este es el estado de cuenta con el que nos ayudaste. ¿Ya ves todos sus movimientos?
+      </p>
+      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+        Compáralo con tu PDF: la app leyó {resultado.movimientos.length} movimientos.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Boton onClick={confirmar} deshabilitado={fase === "confirmando"}>
+          {fase === "confirmando" ? "Confirmando…" : "Sí, ya veo todos"}
+        </Boton>
+        <button
+          type="button"
+          className="rounded-md px-3 py-1.5 text-sm"
+          style={{ border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+          onClick={() => setFase("retro")}
+          disabled={fase === "confirmando"}
+        >
+          Todavía falta algo
+        </button>
+      </div>
+      {error && <Nota tipo="error">{error}</Nota>}
+    </section>
+  );
+}
+
 function EnviarMuestra({
   motivo,
   banco,
   paginas,
   texto,
+  movimientosLeidos = null,
+  origenId = null,
+  onEnviada,
 }: {
   motivo: MuestraParaEnviar["motivo"];
   banco: string | null;
   paginas: number;
   texto: string;
+  movimientosLeidos?: number | null;
+  origenId?: string | null;
+  onEnviada?: () => void;
 }) {
+  const faltan = motivo === "faltan-movimientos";
   const [comentario, setComentario] = useState("");
+  const [tipos, setTipos] = useState<string[]>([]);
+  const [cuantos, setCuantos] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [enviada, setEnviada] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const conDatoReal = pareceDatoReal(comentario);
+  const textoComentario = faltan ? comentarioDeFaltantes(tipos, cuantos, comentario) : comentario.trim();
+  // Para "faltan movimientos" hay que decir qué tipo falta: sin eso no hay
+  // cómo revisarla (y evita mandar muestras de estados que se leían bien).
+  const listo = !conDatoReal && (!faltan || textoComentario !== "");
 
   async function enviar() {
     setEnviando(true);
@@ -374,11 +533,14 @@ function EnviarMuestra({
       await enviarMuestra({
         motivo,
         banco_detectado: banco,
-        comentario: comentario.trim() || null,
+        comentario: textoComentario || null,
         paginas,
         texto_anonimizado: texto,
+        movimientos_leidos: faltan ? movimientosLeidos : null,
+        muestra_origen_id: origenId,
       });
       setEnviada(true);
+      onEnviada?.();
     } catch (e) {
       setError(`No se pudo enviar: ${(e as Error).message}`);
     } finally {
@@ -389,7 +551,9 @@ function EnviarMuestra({
   if (enviada)
     return (
       <Nota tipo="exito">
-        Gracias, recibimos la muestra. Cuando el lector de tu banco esté listo podrás subir este mismo PDF aquí.
+        {faltan
+          ? "Gracias, recibimos tu muestra. La revisamos y te avisamos aquí cuando el lector esté corregido."
+          : "Gracias, recibimos la muestra. Cuando el lector de tu banco esté listo te avisamos aquí para que subas este mismo PDF."}
       </Nota>
     );
 
@@ -406,18 +570,56 @@ function EnviarMuestra({
           {texto}
         </pre>
       </details>
+      {faltan && (
+        <fieldset className="space-y-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+          <legend className="mb-1" style={{ color: "var(--text-primary)" }}>
+            ¿Qué tipo de movimientos no ves?
+          </legend>
+          {TIPOS_FALTANTES.map((t) => (
+            <label key={t} className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={tipos.includes(t)}
+                onChange={(e) => setTipos((lista) => (e.target.checked ? [...lista, t] : lista.filter((x) => x !== t)))}
+              />
+              {t}
+            </label>
+          ))}
+          <label className="mt-2 block w-48">
+            ¿Cuántos faltan, más o menos?
+            <input
+              value={cuantos}
+              onChange={(e) => setCuantos(e.target.value.replace(/\D/g, "").slice(0, 4))}
+              inputMode="numeric"
+              className="mt-1 block w-full rounded-md px-3 py-1.5 text-sm"
+              style={estiloEntrada}
+            />
+          </label>
+        </fieldset>
+      )}
       <label className="block text-sm" style={{ color: "var(--text-secondary)" }}>
-        {motivo === "faltan-movimientos" ? "¿Qué falta o qué se leyó mal?" : "¿De qué banco y producto es? (opcional)"}
+        {faltan ? "Algo más que nos ayude a encontrarlos (opcional)" : "¿De qué banco y producto es? (opcional)"}
         <input
           value={comentario}
           onChange={(e) => setComentario(e.target.value)}
-          maxLength={500}
-          placeholder={motivo === "faltan-movimientos" ? "Ej. falta el pago del día 5" : "Ej. BBVA tarjeta de crédito"}
+          maxLength={300}
+          placeholder={faltan ? "Ej. los de la segunda página, los de la tarjeta adicional" : "Ej. BBVA tarjeta de crédito"}
           className="mt-1 block w-full rounded-md px-3 py-1.5 text-sm"
           style={estiloEntrada}
         />
       </label>
-      <Boton onClick={enviar} deshabilitado={enviando}>
+      {conDatoReal && (
+        <Nota tipo="aviso">
+          No escribas montos, números de cuenta ni correos: describe solo el tipo de movimiento. Nunca te pediremos tus
+          movimientos reales.
+        </Nota>
+      )}
+      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+        Si tu muestra nos ayuda a leer un formato nuevo o a corregir un lector, te regalamos un mes de Pro cuando nos
+        confirmes que ya ves todos tus movimientos. Revisamos cada muestra: si el estado de cuenta ya se leía completo, no
+        hay regalo.
+      </p>
+      <Boton onClick={enviar} deshabilitado={enviando || !listo}>
         {enviando ? "Enviando…" : "Enviar muestra anonimizada"}
       </Boton>
       {error && <Nota tipo="error">{error}</Nota>}

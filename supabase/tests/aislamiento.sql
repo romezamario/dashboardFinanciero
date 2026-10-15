@@ -524,6 +524,165 @@ begin
 end $$;
 reset role;
 
+-- ------------------------------------------- recompensa por muestras
+-- R1 sin plan de pago, R2 con Pro de pago, R3 con Básico de pago.
+reset role;
+insert into auth.users (id, email, created_at) values
+  ('21212121-0000-0000-0000-000000000001', 'r1@prueba.mx', now() - interval '30 days'),
+  ('22222222-0000-0000-0000-000000000001', 'r2@prueba.mx', now() - interval '30 days'),
+  ('23232323-0000-0000-0000-000000000001', 'r3@prueba.mx', now() - interval '30 days');
+insert into suscripciones (id, user_id, plan_id, periodo, monto, estado, proveedor_id, periodo_fin, entorno) values
+  ('22222222-0000-0000-0000-0000000000a9', '22222222-0000-0000-0000-000000000001', 'pro', 'mensual', 59, 'activa', 'mp-r2', now() + interval '10 days', 'produccion'),
+  ('23232323-0000-0000-0000-0000000000a9', '23232323-0000-0000-0000-000000000001', 'basico', 'mensual', 29, 'activa', 'mp-r3', now() + interval '10 days', 'produccion');
+
+set role authenticated;
+set request.jwt.claim.sub = '21212121-0000-0000-0000-000000000001';
+insert into muestras_estados_cuenta (motivo, paginas, texto_anonimizado) values ('banco-desconocido', 1, 'MUESTRA R1 UNO');
+do $$
+begin
+  -- No puede mandar columnas del administrador.
+  begin
+    insert into muestras_estados_cuenta (motivo, paginas, texto_anonimizado, recompensa, clave_cambio)
+      values ('banco-desconocido', 1, 'trampa', true, 'trampa');
+    raise exception 'FALLO: el cliente creó una muestra con recompensa';
+  exception when insufficient_privilege then null;
+  end;
+  -- La misma muestra otra vez, mientras sigue pendiente, no.
+  begin
+    insert into muestras_estados_cuenta (motivo, paginas, texto_anonimizado) values ('banco-desconocido', 1, 'MUESTRA R1 UNO');
+    raise exception 'FALLO: se aceptó una muestra repetida';
+  exception when raise_exception then
+    if sqlerrm not like 'Ya recibimos%' then raise; end if;
+  end;
+  -- No se confirma una muestra que nadie ha revisado.
+  begin
+    perform confirmar_muestra((select id from muestras_estados_cuenta where texto_anonimizado = 'MUESTRA R1 UNO'));
+    raise exception 'FALLO: se confirmó una muestra sin revisar';
+  exception when raise_exception then
+    if sqlerrm not like 'Esta muestra no está%' then raise; end if;
+  end;
+  begin
+    insert into bonificaciones (user_id, plan_id, meses, desde, hasta)
+      values ('21212121-0000-0000-0000-000000000001', 'pro', 12, now(), now() + interval '1 year');
+    raise exception 'FALLO: el cliente se dio una bonificación';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+set request.jwt.claim.sub = '22222222-0000-0000-0000-000000000001';
+insert into muestras_estados_cuenta (motivo, paginas, texto_anonimizado) values ('banco-desconocido', 1, 'MUESTRA R2 MISMO BANCO');
+insert into muestras_estados_cuenta (motivo, paginas, texto_anonimizado) values ('faltan-movimientos', 1, 'MUESTRA R2 OTRO');
+set request.jwt.claim.sub = '23232323-0000-0000-0000-000000000001';
+insert into muestras_estados_cuenta (motivo, paginas, texto_anonimizado) values ('banco-desconocido', 1, 'MUESTRA R3');
+
+-- El administrador las revisa: R1 y R2 trajeron el mismo lector nuevo (paga una vez).
+set request.jwt.claim.sub = 'dddddddd-0000-0000-0000-000000000001';
+update muestras_estados_cuenta
+  set estado = 'lista-para-probar', resultado = 'lector-nuevo', clave_cambio = 'banco-x',
+      banco_lector = 'Banco de prueba', recompensa = true, revisada_en = now()
+  where texto_anonimizado in ('MUESTRA R1 UNO', 'MUESTRA R2 MISMO BANCO');
+update muestras_estados_cuenta
+  set estado = 'lista-para-probar', resultado = 'arreglo', clave_cambio = 'banco-y', recompensa = true, revisada_en = now()
+  where texto_anonimizado = 'MUESTRA R2 OTRO';
+update muestras_estados_cuenta
+  set estado = 'lista-para-probar', resultado = 'lector-nuevo', clave_cambio = 'banco-z', recompensa = true, revisada_en = now()
+  where texto_anonimizado = 'MUESTRA R3';
+
+set request.jwt.claim.sub = '21212121-0000-0000-0000-000000000001';
+do $$
+declare
+  m uuid := (select id from muestras_estados_cuenta where texto_anonimizado = 'MUESTRA R1 UNO');
+  b bonificaciones;
+begin
+  -- Sin un estado de cuenta guardado de ese banco no se confirma.
+  begin
+    perform confirmar_muestra(m);
+    raise exception 'FALLO: R1 confirmó sin haber subido su estado de cuenta';
+  exception when raise_exception then
+    if sqlerrm not like 'Primero sube%' then raise; end if;
+  end;
+  insert into cuentas (id, banco_id, alias, ultimos_4_digitos)
+    values ('21212121-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-0000000000b1', 'R1', '2121');
+  insert into documentos (cuenta_id, hash) values ('21212121-0000-0000-0000-0000000000c1', 'hash-r1');
+  select * into b from confirmar_muestra(m);
+  if b.id is null or b.plan_id <> 'pro' or b.meses <> 1 or b.desde is null then
+    raise exception 'FALLO: R1 sin plan de pago no recibió 1 mes de Pro';
+  end if;
+  if (select plan_id || '/' || origen from mi_plan()) <> 'pro/bonificacion' then
+    raise exception 'FALLO: mi_plan() no ve la bonificación de R1';
+  end if;
+  begin
+    perform confirmar_muestra(m);
+    raise exception 'FALLO: R1 confirmó dos veces';
+  exception when raise_exception then
+    if sqlerrm not like 'Esta muestra no está%' then raise; end if;
+  end;
+end $$;
+-- Retroalimentación: R1 manda otra muestra ligada a una lista para probar.
+insert into muestras_estados_cuenta (motivo, paginas, texto_anonimizado) values ('faltan-movimientos', 1, 'MUESTRA R1 DOS');
+set request.jwt.claim.sub = 'dddddddd-0000-0000-0000-000000000001';
+update muestras_estados_cuenta set estado = 'lista-para-probar', resultado = 'arreglo', revisada_en = now()
+  where texto_anonimizado = 'MUESTRA R1 DOS';
+set request.jwt.claim.sub = '21212121-0000-0000-0000-000000000001';
+insert into muestras_estados_cuenta (motivo, paginas, texto_anonimizado, muestra_origen_id)
+  values ('faltan-movimientos', 1, 'MUESTRA R1 RETRO', (select id from muestras_estados_cuenta where texto_anonimizado = 'MUESTRA R1 DOS'));
+do $$
+begin
+  if (select estado from muestras_estados_cuenta where texto_anonimizado = 'MUESTRA R1 DOS') <> 'con-retro' then
+    raise exception 'FALLO: la muestra anterior no quedó con retroalimentación';
+  end if;
+  -- Cuarta muestra del día: no.
+  begin
+    insert into muestras_estados_cuenta (motivo, paginas, texto_anonimizado) values ('banco-desconocido', 1, 'MUESTRA R1 CUATRO');
+    raise exception 'FALLO: se aceptó una cuarta muestra el mismo día';
+  exception when raise_exception then
+    if sqlerrm not like 'Ya enviaste 3%' then raise; end if;
+  end;
+end $$;
+
+-- R2 (Pro de pago): el lector "banco-x" ya pagó a R1; "banco-y" queda como saldo a favor.
+set request.jwt.claim.sub = '22222222-0000-0000-0000-000000000001';
+do $$
+declare
+  n int;
+  b bonificaciones;
+begin
+  insert into cuentas (id, banco_id, alias, ultimos_4_digitos)
+    values ('22222222-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-0000000000b1', 'R2', '2222');
+  insert into documentos (cuenta_id, hash) values ('22222222-0000-0000-0000-0000000000c1', 'hash-r2');
+  select count(*) into n from confirmar_muestra((select id from muestras_estados_cuenta where texto_anonimizado = 'MUESTRA R2 MISMO BANCO'));
+  if n <> 0 then raise exception 'FALLO: el mismo lector pagó dos veces'; end if;
+  select * into b from confirmar_muestra((select id from muestras_estados_cuenta where texto_anonimizado = 'MUESTRA R2 OTRO'));
+  if b.plan_id <> 'pro' or b.meses <> 1 or b.desde is not null then
+    raise exception 'FALLO: R2 con Pro de pago no recibió 1 mes de Pro a favor';
+  end if;
+  if (select plan_id || '/' || origen from mi_plan()) <> 'pro/suscripcion' then
+    raise exception 'FALLO: el saldo a favor de R2 cambió su plan';
+  end if;
+  if exists (select 1 from bonificaciones where user_id <> '22222222-0000-0000-0000-000000000001') then
+    raise exception 'FALLO: R2 ve bonificaciones de otros';
+  end if;
+end $$;
+set request.jwt.claim.sub = '23232323-0000-0000-0000-000000000001';
+do $$
+declare
+  b bonificaciones;
+begin
+  select * into b from confirmar_muestra((select id from muestras_estados_cuenta where texto_anonimizado = 'MUESTRA R3'));
+  if b.plan_id <> 'basico' or b.meses <> 2 then
+    raise exception 'FALLO: R3 con Básico de pago no recibió 2 meses de Básico';
+  end if;
+end $$;
+-- R2 cancela: el saldo a favor empieza cuando termina lo pagado.
+set role service_role;
+update suscripciones set estado = 'cancelada' where id = '22222222-0000-0000-0000-0000000000a9';
+reset role;
+do $$
+begin
+  if (select desde from bonificaciones where clave_cambio = 'banco-y') < now() + interval '9 days' then
+    raise exception 'FALLO: el saldo a favor de R2 no empieza al terminar lo pagado';
+  end if;
+end $$;
+
 \echo 'Aislamiento entre usuarios: OK'
 
 -- ------------------------------- funciones con permisos del dueño fuera de la API

@@ -116,6 +116,21 @@ page text (may include the full account number) is dropped once processed. **Unr
 send it to `muestras_estados_cuenta` (migration `20261012000000_…`: insert/select/delete own, only `estado='nueva'`, no update;
 size-capped; in `aislamiento.sql`). Those samples are for Claude to propose a new lector (structure only: anonymized amounts are
 all 0), reviewed by the owner — the repo is public, so samples must never be copied into issues, logs or artifacts.
+**Reward for anonymized samples (2026-10-15, user's request; design in /mnt/project-files/notas/recompensa-por-muestras.md)**: migration
+`20261015060000_recompensa_por_muestras.sql`. The admin resolves a sample in Administración (`ResolverMuestra`): resultado
+lector-nuevo | arreglo (with `clave_cambio`, `banco_lector` = `bancos.nombre` of the lector, `recompensa`, `mensaje_cliente`) → estado
+`lista-para-probar`; repetida → same, no reward; ya-se-leia | no-sirve → descartada. The customer sees `AvisoMuestraLista` (dashboard +
+Subir); after saving a PDF of that bank `ConfirmarMuestra` asks "¿Ya ves todos?": yes → RPC `confirmar_muestra()` (privado, definer;
+requires a saved documento of `banco_lector`) grants a row in `bonificaciones`; no → a feedback sample with `muestra_origen_id` (origin →
+`con-retro`). Amounts: paid Pro → 1 month Pro, paid Básico → 2 months Básico, none → 1 month Pro from today; stacked. **A live
+(activa/pausada) subscription gets it as "saldo a favor"** (desde/hasta null), activated by trigger `activar_saldo_a_favor` when it is
+cancelled — Mercado Pago is never touched (default chosen 2026-10-15 while the user decides). Anti-abuse, all in the DB: each
+`clave_cambio` pays once (unique in `bonificaciones`); customers can only insert their own columns (column grants); insert trigger:
+≤3 samples/day, no identical pending sample, 3 "ya-se-leia" in 30 days block "faltan-movimientos". `mi_plan()` returns origen
+`bonificacion`. "¿No ves todos tus movimientos?" asks for TYPES of missing movements (`TIPOS_FALTANTES`, `pareceDatoReal` blocks
+amounts/accounts/emails) and sends `movimientos_leidos`. Covered by `aislamiento.sql`, `lib/muestras.test.ts`, `administracion.test.ts`
+and a Playwright harness with mocked Supabase (confirm → reward → Mi cuenta; feedback; 1280 light / 390 dark). Not done: email notice.
+Original (non-anonymized) statements are NOT collected (recommendation in the design doc; legal review needed first).
 **Excel template upload (2026-10-12, user's request: "una plantilla de excel que permita cargar transacciones")** — producto
 edition, same screen and same file input as the PDFs (`SubirEstadoCuenta` routes `.xlsx`/`.csv` to `SubirExcel.tsx`; the screen is two cards side by side, "Estado de cuenta en PDF" and "Plantilla de Excel", each with its own drop zone — `OpcionesSubida.tsx`, user's request 2026-10-12 "como dos secciones diferentes"; header button "Subir movimientos"; shared
 `Boton`/`Nota` in `SubirPiezas.tsx`). "Descarga la plantilla de Excel" builds `plantilla-ordena-tu-lana.xlsx` in the browser

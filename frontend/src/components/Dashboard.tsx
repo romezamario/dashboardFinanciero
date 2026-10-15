@@ -14,6 +14,8 @@ import {
 import { eventosOcultosPorDefecto, eventosVisiblesTras } from "../lib/gastosEstadoCuenta";
 import { soloShophunters } from "../lib/shophunters";
 import { EDICION, incluyeFuncion, NOMBRE_APP } from "../lib/edicion";
+import { obtenerMuestrasPorConfirmar, type MuestraPorConfirmar } from "../lib/muestras";
+import { AvisoMuestraLista } from "./AvisoMuestraLista";
 import { categoriasExcluidasPorDefecto, RANGO_MESES_VACIO, type RangoMeses } from "../lib/indicadores";
 import type { Transaccion } from "../lib/types";
 import { REGRESO_DE_PAGO, supabase } from "../lib/supabase";
@@ -199,6 +201,20 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
     void import("../lib/administracion")
       .then((m) => m.esAdministrador())
       .then((si) => vigente && setEsAdmin(si));
+    return () => {
+      vigente = false;
+    };
+  }, []);
+
+  // Recompensa por muestras: si una muestra suya ya tiene lector, se le avisa
+  // en el tablero (la confirmación vive en "Subir movimientos").
+  const [muestrasListas, setMuestrasListas] = useState<MuestraPorConfirmar[]>([]);
+  useEffect(() => {
+    if (EDICION !== "producto") return;
+    let vigente = true;
+    obtenerMuestrasPorConfirmar()
+      .then((lista) => vigente && setMuestrasListas(lista))
+      .catch(() => undefined);
     return () => {
       vigente = false;
     };
@@ -538,6 +554,22 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
             </button>
           </div>
         )}
+        {!enSubir &&
+          muestrasListas.map((m) => (
+            <AvisoMuestraLista
+              key={m.id}
+              muestra={m}
+              accion={
+                <button
+                  onClick={() => (setMuestrasListas([]), cambiarVista(VISTA_SUBIR))}
+                  className="rounded-md px-4 py-2 text-sm font-medium text-white"
+                  style={{ background: "var(--series-1)" }}
+                >
+                  Subir mi estado de cuenta
+                </button>
+              }
+            />
+          ))}
         <div
           className="flex gap-1 overflow-x-auto"
           style={{ borderBottom: "1px solid var(--border)" }}

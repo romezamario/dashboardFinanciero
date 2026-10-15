@@ -5,13 +5,20 @@ import {
   ESTADOS_MUESTRA,
   filtrarMuestras,
   MOTIVOS_MUESTRA,
+  obtenerBonificacionesOtorgadas,
   obtenerMuestras,
   obtenerTextoMuestra,
+  prepararResolucion,
   reiniciarMisDatos,
+  resolverMuestra,
+  RESULTADOS_MUESTRA,
   textoParaClaude,
+  type BonificacionOtorgada,
   type EstadoMuestra,
   type Muestra,
+  type ResultadoMuestra,
 } from "../lib/administracion";
+import { LECTORES } from "../lib/importar/procesar";
 import { confirmaBorrado, PALABRA_BORRAR } from "../lib/cuentaUsuario";
 import { descargarTexto } from "../lib/exportarDatos";
 import { PAGOS_EN_PRUEBA, reiniciarMisPagos } from "../lib/suscripcion";
@@ -20,7 +27,8 @@ import { entero, fechaHora } from "../lib/formato";
 // Administración de Ordena tu Lana (solo la ve quien es_administrador()): las
 // muestras anonimizadas que mandan los clientes cuando no leemos su PDF. El
 // dueño copia el texto, se lo pasa a Claude para que proponga el lector, y
-// marca la muestra como resuelta o descartada.
+// la resuelve: lector nuevo / arreglo (con la clave del cambio, que da la
+// recompensa una sola vez cuando el cliente confirma), repetida o descarte.
 
 type Filtro = EstadoMuestra | "pendientes" | "todas";
 
@@ -41,12 +49,16 @@ export function AdministracionMuestras({
   const [error, setError] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<Filtro>("pendientes");
   const [recargas, setRecargas] = useState(0);
+  const [bonificaciones, setBonificaciones] = useState<BonificacionOtorgada[]>([]);
 
   useEffect(() => {
     let vigente = true;
     obtenerMuestras()
       .then((lista) => vigente && (setMuestras(lista), setError(null)))
       .catch((e: Error) => vigente && setError(e.message));
+    obtenerBonificacionesOtorgadas()
+      .then((lista) => vigente && setBonificaciones(lista))
+      .catch(() => undefined);
     return () => {
       vigente = false;
     };
@@ -117,7 +129,13 @@ export function AdministracionMuestras({
         </p>
       )}
       {visibles.map((m) => (
-        <TarjetaMuestra key={m.id} muestra={m} onCambio={(cambio) => actualizar(m.id, cambio)} />
+        <TarjetaMuestra
+          key={m.id}
+          muestra={m}
+          todas={muestras ?? []}
+          bonificaciones={bonificaciones}
+          onCambio={(cambio) => actualizar(m.id, cambio)}
+        />
       ))}
 
       {PAGOS_EN_PRUEBA && <ReiniciarPagos />}
@@ -292,7 +310,17 @@ function EmpezarDesdeCero({
   );
 }
 
-function TarjetaMuestra({ muestra, onCambio }: { muestra: Muestra; onCambio: (cambio: Partial<Muestra> | null) => void }) {
+function TarjetaMuestra({
+  muestra,
+  todas,
+  bonificaciones,
+  onCambio,
+}: {
+  muestra: Muestra;
+  todas: readonly Muestra[];
+  bonificaciones: readonly BonificacionOtorgada[];
+  onCambio: (cambio: Partial<Muestra> | null) => void;
+}) {
   const [texto, setTexto] = useState<string | null>(null);
   const [abierta, setAbierta] = useState(false);
   const [ocupado, setOcupado] = useState(false);
@@ -373,6 +401,22 @@ function TarjetaMuestra({ muestra, onCambio }: { muestra: Muestra; onCambio: (ca
               “{muestra.comentario}”
             </p>
           )}
+          {muestra.movimientos_leidos !== null && (
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              La app sí leyó {entero.format(muestra.movimientos_leidos)} movimientos.
+            </p>
+          )}
+          {muestra.muestra_origen_id && (
+            <p className="text-xs" style={{ color: "var(--series-1)" }}>
+              Retroalimentación: el cliente probó el lector y dice que todavía falta algo
+              {(() => {
+                const origen = todas.find((m) => m.id === muestra.muestra_origen_id);
+                return origen?.clave_cambio ? ` (cambio ${origen.clave_cambio})` : "";
+              })()}
+              .
+            </p>
+          )}
+          <EstadoRecompensa muestra={muestra} bonificaciones={bonificaciones} />
         </div>
         <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
           Estado
@@ -428,6 +472,8 @@ function TarjetaMuestra({ muestra, onCambio }: { muestra: Muestra; onCambio: (ca
         </p>
       )}
 
+      <ResolverMuestra muestra={muestra} todas={todas} bonificaciones={bonificaciones} onCambio={onCambio} />
+
       {abierta && texto !== null && (
         <pre
           className="max-h-96 overflow-auto rounded-md p-3 text-xs leading-snug"
@@ -437,6 +483,193 @@ function TarjetaMuestra({ muestra, onCambio }: { muestra: Muestra; onCambio: (ca
         </pre>
       )}
     </section>
+  );
+}
+
+function EstadoRecompensa({
+  muestra,
+  bonificaciones,
+}: {
+  muestra: Muestra;
+  bonificaciones: readonly BonificacionOtorgada[];
+}) {
+  if (!muestra.resultado) return null;
+  const etiqueta = RESULTADOS_MUESTRA.find((r) => r.id === muestra.resultado)?.etiqueta;
+  const otorgada = bonificaciones.find((b) => b.muestra_id === muestra.id);
+  return (
+    <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+      Resultado: {etiqueta}
+      {muestra.clave_cambio && ` · cambio ${muestra.clave_cambio}`}
+      {muestra.banco_lector && ` · ${muestra.banco_lector}`}
+      {otorgada
+        ? ` · regalo otorgado: ${otorgada.meses === 1 ? "1 mes" : `${otorgada.meses} meses`} de ${otorgada.plan_id === "pro" ? "Pro" : "Básico"}`
+        : muestra.recompensa
+          ? muestra.estado === "confirmada"
+            ? " · sin regalo (ese cambio ya se había pagado)"
+            : " · con regalo al confirmar"
+          : " · sin regalo"}
+    </p>
+  );
+}
+
+/** Resolver la muestra: qué salió de revisarla. Lector nuevo / arreglo con
+ * su clave avisan al cliente para que lo pruebe; el regalo solo sale cuando él
+ * confirma, y cada clave paga una vez (lo garantiza la base). */
+function ResolverMuestra({
+  muestra,
+  todas,
+  bonificaciones,
+  onCambio,
+}: {
+  muestra: Muestra;
+  todas: readonly Muestra[];
+  bonificaciones: readonly BonificacionOtorgada[];
+  onCambio: (cambio: Partial<Muestra>) => void;
+}) {
+  const origen = todas.find((m) => m.id === muestra.muestra_origen_id);
+  const [abierto, setAbierto] = useState(false);
+  const [resultado, setResultado] = useState<ResultadoMuestra>(muestra.resultado ?? "lector-nuevo");
+  const [clave, setClave] = useState(muestra.clave_cambio ?? origen?.clave_cambio ?? "");
+  const [bancoLector, setBancoLector] = useState(
+    muestra.banco_lector ?? origen?.banco_lector ?? muestra.banco_detectado ?? ""
+  );
+  const [recompensa, setRecompensa] = useState(muestra.resultado ? muestra.recompensa : true);
+  const [mensaje, setMensaje] = useState(muestra.mensaje_cliente ?? "");
+  const [ocupado, setOcupado] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (muestra.estado === "confirmada") return null;
+  const conRecompensa = RESULTADOS_MUESTRA.find((r) => r.id === resultado)?.recompensa ?? false;
+  const claveYaPagada = bonificaciones.some((b) => b.clave_cambio === clave.trim());
+  const otraConClave = todas.find(
+    (m) => m.id !== muestra.id && m.clave_cambio === clave.trim() && m.user_id !== muestra.user_id && m.recompensa
+  );
+
+  async function guardar() {
+    const preparada = prepararResolucion({
+      resultado,
+      clave_cambio: clave,
+      banco_lector: bancoLector,
+      recompensa,
+      mensaje_cliente: mensaje,
+    });
+    if ("error" in preparada) return setError(preparada.error);
+    setOcupado(true);
+    setError(null);
+    try {
+      await resolverMuestra(muestra.id, preparada.cambios);
+      onCambio(preparada.cambios);
+      setAbierto(false);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  if (!abierto)
+    return (
+      <Accion onClick={() => setAbierto(true)} deshabilitado={false}>
+        {muestra.resultado ? "Cambiar resultado…" : "Resolver…"}
+      </Accion>
+    );
+
+  return (
+    <div className="space-y-2 rounded-md p-3" style={{ border: "1px solid var(--border)" }}>
+      <div className="flex flex-wrap gap-3">
+        <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+          Resultado
+          <select
+            value={resultado}
+            onChange={(e) => setResultado(e.target.value as ResultadoMuestra)}
+            className="mt-1 block rounded-md px-2 py-1 text-sm"
+            style={estiloEntrada}
+          >
+            {RESULTADOS_MUESTRA.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.etiqueta}
+              </option>
+            ))}
+          </select>
+        </label>
+        {resultado !== "ya-se-leia" && resultado !== "no-sirve" && (
+          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            Banco del lector
+            <input
+              value={bancoLector}
+              onChange={(e) => setBancoLector(e.target.value)}
+              list={`bancos-${muestra.id}`}
+              className="mt-1 block w-48 rounded-md px-2 py-1 text-sm"
+              style={estiloEntrada}
+            />
+            <datalist id={`bancos-${muestra.id}`}>
+              {LECTORES.map((l) => (
+                <option key={l.banco} value={l.banco} />
+              ))}
+            </datalist>
+          </label>
+        )}
+        {conRecompensa && (
+          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+            Clave del cambio
+            <input
+              value={clave}
+              onChange={(e) => setClave(e.target.value)}
+              placeholder="bbva-debito"
+              className="mt-1 block w-48 rounded-md px-2 py-1 text-sm"
+              style={estiloEntrada}
+            />
+          </label>
+        )}
+      </div>
+      {conRecompensa && (
+        <label className="flex items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+          <input type="checkbox" checked={recompensa} onChange={(e) => setRecompensa(e.target.checked)} />
+          Dar regalo cuando el cliente confirme que ve todos sus movimientos
+        </label>
+      )}
+      {conRecompensa && recompensa && claveYaPagada && (
+        <p className="text-xs" style={{ color: "var(--status-critical)" }}>
+          Ese cambio ya se pagó a otro cliente: esta muestra no recibirá regalo.
+        </p>
+      )}
+      {conRecompensa && recompensa && !claveYaPagada && otraConClave && (
+        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+          Otra muestra de otro cliente tiene esa clave con regalo: solo lo recibe quien confirme primero.
+        </p>
+      )}
+      {resultado !== "ya-se-leia" && resultado !== "no-sirve" && (
+        <label className="block text-xs" style={{ color: "var(--text-secondary)" }}>
+          Mensaje para el cliente (opcional)
+          <input
+            value={mensaje}
+            onChange={(e) => setMensaje(e.target.value)}
+            maxLength={500}
+            placeholder="Ya leemos tus estados de cuenta de BBVA débito."
+            className="mt-1 block w-full rounded-md px-2 py-1 text-sm"
+            style={estiloEntrada}
+          />
+        </label>
+      )}
+      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+        {resultado === "ya-se-leia" || resultado === "no-sirve"
+          ? "Se descarta: el cliente no recibe aviso ni regalo."
+          : "Publica primero el lector en el sitio. Al guardar, el cliente ve el aviso para subir de nuevo su PDF y confirmar."}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Accion onClick={guardar} deshabilitado={ocupado} principal>
+          {ocupado ? "Guardando…" : "Guardar resultado"}
+        </Accion>
+        <Accion onClick={() => setAbierto(false)} deshabilitado={ocupado}>
+          Cancelar
+        </Accion>
+      </div>
+      {error && (
+        <p className="text-xs" style={{ color: "var(--status-critical)" }} role="alert">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 

@@ -19,7 +19,7 @@ export const PAGOS_EN_PRUEBA = import.meta.env.VITE_MP_MODO !== "produccion";
  * tarjeta embebido; sin ella, "Suscribirme" lleva a la página de Mercado Pago. */
 export const LLAVE_PUBLICA_MP: string | null = import.meta.env.VITE_MP_PUBLIC_KEY || null;
 
-export type OrigenPlan = "suscripcion" | "prueba" | "gratis";
+export type OrigenPlan = "suscripcion" | "bonificacion" | "prueba" | "gratis";
 export type EstadoSuscripcion = "pendiente" | "activa" | "pausada" | "cancelada";
 
 export interface MiPlan {
@@ -53,16 +53,19 @@ export function diasHasta(fechaIso: string, ahora: Date): number {
 }
 
 /** Una línea que dice qué plan tiene y hasta cuándo. */
-export function describirPlan(plan: MiPlan, ahora: Date): string {
+export function describirPlan(plan: MiPlan, ahora: Date, conTiempoRegaladoDespues = false): string {
   const nombre = nombreDePlan(plan.plan_id);
   if (plan.origen === "prueba" && plan.vigente_hasta) {
     const dias = diasHasta(plan.vigente_hasta, ahora);
     return `Prueba gratis de ${nombre}: ${dias === 1 ? "te queda 1 día" : `te quedan ${dias} días`}.`;
   }
+  if (plan.origen === "bonificacion" && plan.vigente_hasta) {
+    return `${nombre} gratis por ayudarnos a leer un estado de cuenta nuevo, hasta el ${fechaCorta(plan.vigente_hasta.slice(0, 10))}.`;
+  }
   if (plan.origen === "suscripcion") {
     const periodo = plan.periodo === "anual" ? "anual" : "mensual";
     return plan.vigente_hasta
-      ? `Plan ${nombre} ${periodo} cancelado: ya no se te cobrará. Lo sigues usando hasta el ${fechaCorta(plan.vigente_hasta.slice(0, 10))}; después pasas al plan Gratis.`
+      ? `Plan ${nombre} ${periodo} cancelado: ya no se te cobrará. Lo sigues usando hasta el ${fechaCorta(plan.vigente_hasta.slice(0, 10))}; después ${conTiempoRegaladoDespues ? "sigue tu tiempo de regalo" : "pasas al plan Gratis"}.`
       : `Plan ${nombre} ${periodo}.`;
   }
   return "Plan Gratis.";

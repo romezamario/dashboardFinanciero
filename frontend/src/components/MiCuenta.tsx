@@ -28,6 +28,7 @@ import {
   type Suscripcion,
 } from "../lib/suscripcion";
 import { Segmentado } from "./Segmentado";
+import { describirBonificacion, obtenerMisBonificaciones, type Bonificacion } from "../lib/muestras";
 
 const PagoConTarjeta = lazy(() => import("./PagoConTarjeta"));
 
@@ -254,6 +255,13 @@ function SeccionPlan({ correo }: { correo: string }) {
   // Plan cuyo formulario de tarjeta embebido está abierto.
   const [pagando, setPagando] = useState<Plan | null>(null);
   const [pagado, setPagado] = useState<{ plan: Plan; periodo: Periodo; activa: boolean } | null>(null);
+  // Tiempo regalado por ayudar con muestras (no bloquea el resto si falla).
+  const [bonificaciones, setBonificaciones] = useState<Bonificacion[]>([]);
+  useEffect(() => {
+    obtenerMisBonificaciones()
+      .then(setBonificaciones)
+      .catch(() => undefined);
+  }, []);
 
   const cargar = useCallback(async () => {
     const { plan, lista } = await leerPlanYSuscripciones();
@@ -361,8 +369,24 @@ function SeccionPlan({ correo }: { correo: string }) {
         </Mensaje>
       )}
       <p className="mt-1 text-sm" style={{ color: "var(--text-primary)" }}>
-        {miPlan ? describirPlan(miPlan, new Date()) : "Leyendo tu plan…"}
+        {miPlan
+          ? describirPlan(
+              miPlan,
+              new Date(),
+              bonificaciones.some((b) => b.desde === null || new Date(b.desde) > new Date())
+            )
+          : "Leyendo tu plan…"}
       </p>
+      {bonificaciones.length > 0 && (
+        <div className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+          <p style={{ color: "var(--text-primary)" }}>Tiempo de regalo por ayudarnos a leer estados de cuenta nuevos:</p>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5">
+            {bonificaciones.map((b) => (
+              <li key={b.id}>{describirBonificacion(b, new Date())}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {viva && (
         <div className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
           {viva.periodo_fin && (
