@@ -44,6 +44,9 @@ interface Archivo {
 
 const BANCOS_SOPORTADOS = "Banamex (cuenta de cheques y tarjetas de crédito) e Invex (tarjeta de crédito)";
 
+/** Tamaño máximo de un PDF o Excel que se acepta leer. */
+const TAMANO_MAXIMO_ARCHIVO = 20 * 1024 * 1024;
+
 let siguienteId = 1;
 
 const detalleDeError = (error: unknown): string => {
@@ -79,6 +82,13 @@ export function SubirEstadoCuenta({
 
   async function leer(archivo: File) {
     const id = siguienteId++;
+    // Un estado de cuenta pesa unos cuantos MB; algo mucho más grande no es
+    // uno y solo trabaría la pestaña al leerlo.
+    if (archivo.size > TAMANO_MAXIMO_ARCHIVO) {
+      const mensaje = `Este archivo pesa más de ${TAMANO_MAXIMO_ARCHIVO / 1024 / 1024} MB. Un estado de cuenta o una plantilla pesan mucho menos; revisa que sea el archivo correcto.`;
+      setArchivos((lista) => [...lista, { id, nombre: archivo.name, estado: { fase: "error", mensaje } }]);
+      return;
+    }
     // Excel y CSV se leen en su propia tarjeta (SubirExcel.tsx).
     if (esArchivoDeTabla(archivo.name)) {
       setArchivos((lista) => [...lista, { id, nombre: archivo.name, estado: { fase: "excel", archivo } }]);
