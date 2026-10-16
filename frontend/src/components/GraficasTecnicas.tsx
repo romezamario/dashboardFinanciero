@@ -614,9 +614,25 @@ export function GraficaRsi({ puntos }: { puntos: PuntoTecnico[] }) {
   );
 }
 
-export function GraficaMacd({ puntos }: { puntos: PuntoTecnico[] }) {
+/** Va dentro de la tarjeta del precio, debajo del volumen (pedido de Mario,
+ * 2026-10-16: ver precio y MACD en la misma pantalla), con el mismo margen
+ * derecho que el volumen para que las fechas queden alineadas. */
+export function GraficaMacd({
+  puntos,
+  conEtiquetas,
+}: {
+  puntos: PuntoTecnico[];
+  conEtiquetas: boolean;
+}) {
+  const esMovil = useEsMovil();
   return (
-    <div className="tarjeta rounded-lg p-4">
+    <div
+      className="mt-4 border-t pt-3"
+      style={{
+        borderColor: "var(--border)",
+        paddingRight: conEtiquetas && !esMovil ? ANCHO_ETIQUETAS : 0,
+      }}
+    >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
           MACD 12, 26, 9
@@ -626,7 +642,7 @@ export function GraficaMacd({ puntos }: { puntos: PuntoTecnico[] }) {
           <Leyenda color={COLOR_SMA200} texto="Señal" />
         </div>
       </div>
-      <div className="mt-3 h-48">
+      <div className="mt-2 h-56 md:h-64">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={puntos} syncId="tecnico" margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
             <CartesianGrid vertical={false} stroke="var(--gridline)" />
