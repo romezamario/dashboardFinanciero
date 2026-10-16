@@ -970,14 +970,14 @@ Cloudflare's edge cache serves repeat requests for 5 minutes instead of hitting 
 (public data, same for everyone; ignored in `npm run dev`). For it to deploy, `deploy.yml` runs `wrangler pages deploy dist` with
 `workingDirectory: frontend` (wrangler picks up `functions/` from its cwd); in `npm run dev`,
 `vite.config.ts` mounts the same handler as middleware. If Yahoo ever changes/blocks it, only this
-tab shows an error. Indicators are pure functions in `src/lib/tecnico.ts` (SMA 50/200, Bollinger
+tab shows an error. Indicators are pure functions in `src/lib/tecnico.ts` (SMA 20/50/200, Bollinger
 20/2, Wilder RSI 14 and ATR 14, MACD 12/26/9, drawdown, QQQ-vs-TQQQ comparison table with beta
 and "3× QQQ vs real" leverage decay — its base-100 and drawdown charts were removed at the user's
 request, 2026-10-02, only the table remains), computed over the full 10 years and then trimmed to the
 visible range so the SMA 200 has history from the first visible day. UI in `AnalisisTecnicoTab.tsx`
 (price/volume/RSI/MACD charts synced with `syncId`; candles only up to 1 year — beyond that they're
 1–2 px wide). Colors reuse palette slots 1–4: up/down polarity = series-1/2 (like
-`FlujoNetoChart`), SMA 50 = series-3, SMA 200 = series-4. Readings are
+`FlujoNetoChart`), SMA 20 = series-5 (magenta, validated with 1–4 in both modes; added 2026-10-16, user's request), SMA 50 = series-3, SMA 200 = series-4. Readings are
 phrased as indicator states, never as buy/sell recommendations.
 **Support/resistance levels (2026-10-08, user's request, from a reference image)**:
 `calcularNiveles` (`tecnico.ts`, tested) works on the last `SESIONES_NIVELES` = 126 sessions of the

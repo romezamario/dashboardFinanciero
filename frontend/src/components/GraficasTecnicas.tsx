@@ -41,9 +41,10 @@ import { estiloTooltip } from "../lib/estilos";
 // Colores: los mismos 4 slots de la paleta categórica ya validada (dataviz).
 // Velas, volumen e histograma del MACD son polaridad (sube/baja): azul/naranja,
 // como el FlujoNetoChart. Las medias tienen identidad fija en toda la pestaña:
-// SMA 50 = aqua, SMA 200 = amarillo.
+// SMA 20 = magenta (slot 5), SMA 50 = aqua, SMA 200 = amarillo.
 const COLOR_SUBE = "var(--series-1)";
 const COLOR_BAJA = "var(--series-2)";
+export const COLOR_SMA20 = "var(--series-5)";
 export const COLOR_SMA50 = "var(--series-3)";
 export const COLOR_SMA200 = "var(--series-4)";
 // Soportes en verde y resistencias en rojo, como se acostumbra en trading;
@@ -174,7 +175,7 @@ export function GraficaPrecio({
 }: {
   puntos: PuntoTecnico[];
   tipo: "velas" | "linea";
-  capas: { sma50: boolean; sma200: boolean; bollinger: boolean };
+  capas: { sma20: boolean; sma50: boolean; sma200: boolean; bollinger: boolean };
   niveles: NivelTecnico[];
   /** Patrones activos a dibujar sobre el precio. */
   patrones: Patron[];
@@ -194,6 +195,7 @@ export function GraficaPrecio({
     for (const p of puntos) {
       if (tipo === "velas") valores.push(p.minimo, p.maximo);
       else valores.push(p.cierre);
+      if (capas.sma20 && p.sma20 != null) valores.push(p.sma20);
       if (capas.sma50 && p.sma50 != null) valores.push(p.sma50);
       if (capas.sma200 && p.sma200 != null) valores.push(p.sma200);
       if (capas.bollinger && p.bbInferior != null) valores.push(p.bbInferior, p.bbSuperior!);
@@ -273,6 +275,7 @@ export function GraficaPrecio({
                         Cierre {dolares.format(p.cierre)}
                         {p.cambio != null && ` (${pct.format(p.cambio)})`}
                       </div>
+                      {p.sma20 != null && <div>SMA 20: {decimal.format(p.sma20)}</div>}
                       {p.sma50 != null && <div>SMA 50: {decimal.format(p.sma50)}</div>}
                       {p.sma200 != null && <div>SMA 200: {decimal.format(p.sma200)}</div>}
                       {capas.bollinger && p.bbSuperior != null && (
@@ -320,6 +323,16 @@ export function GraficaPrecio({
                 stroke={COLOR_SUBE}
                 strokeWidth={2}
                 dot={false}
+                isAnimationActive={false}
+              />
+            )}
+            {capas.sma20 && (
+              <Line
+                dataKey="sma20"
+                stroke={COLOR_SMA20}
+                strokeWidth={1.5}
+                dot={false}
+                activeDot={false}
                 isAnimationActive={false}
               />
             )}
