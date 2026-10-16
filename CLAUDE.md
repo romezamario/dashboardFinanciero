@@ -124,7 +124,7 @@ Subir); after saving a PDF of that bank `ConfirmarMuestra` asks "¿Ya ves todos?
 requires a saved documento of `banco_lector`) grants a row in `bonificaciones`; no → a feedback sample with `muestra_origen_id` (origin →
 `con-retro`). Amounts: paid Pro → 1 month Pro, paid Básico → 2 months Básico, none → 1 month Pro from today; stacked. **A live
 (activa/pausada) subscription gets it as "saldo a favor"** (desde/hasta null), activated by trigger `activar_saldo_a_favor` when it is
-cancelled — Mercado Pago is never touched (default chosen 2026-10-15 while the user decides). Anti-abuse, all in the DB: each
+cancelled — Mercado Pago is never touched (user's decision 2026-10-16, over pausing MP to skip a charge). Anti-abuse, all in the DB: each
 `clave_cambio` pays once (unique in `bonificaciones`); customers can only insert their own columns (column grants); insert trigger:
 ≤3 samples/day, no identical pending sample, 3 "ya-se-leia" in 30 days block "faltan-movimientos". `mi_plan()` returns origen
 `bonificacion`. "¿No ves todos tus movimientos?" asks for TYPES of missing movements (`TIPOS_FALTANTES`, `pareceDatoReal` blocks
