@@ -975,7 +975,7 @@ tab shows an error. Indicators are pure functions in `src/lib/tecnico.ts` (SMA a
 and "3× QQQ vs real" leverage decay — its base-100 and drawdown charts were removed at the user's
 request, 2026-10-02, only the table remains), computed over the full 10 years and then trimmed to the
 visible range so the SMA 200 has history from the first visible day. UI in `AnalisisTecnicoTab.tsx`
-(price/volume/RSI/MACD charts synced with `syncId`; candles only up to 1 year — beyond that they're
+(price/volume/RSI/MACD charts synced with `syncId`; since 2026-10-16 the MACD is taller and sits in the price card under the volume, user's request "ver las 2 gráficas en la misma pantalla", with RSI full-width below; candles only up to 1 year — beyond that they're
 1–2 px wide). Colors reuse palette slots 1–4: up/down polarity = series-1/2 (like
 `FlujoNetoChart`), period colors shared by SMA and EMA (`lib/medias.ts`): 20 = series-5 (magenta, validated with 1–4 in both modes, 2026-10-16), 50 = series-3, 200 = series-4; SMA solid, EMA dashed. Readings are
 phrased as indicator states, never as buy/sell recommendations.

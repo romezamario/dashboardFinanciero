@@ -307,6 +307,7 @@ function VistaTecnica() {
           resaltadoId={tarjeta?.seleccion.tipo === "patron" ? tarjeta.seleccion.patron.id : null}
         />
         <GraficaVolumen puntos={visibles} conEtiquetas={capas.niveles && niveles.length > 0} />
+        <GraficaMacd puntos={visibles} conEtiquetas={capas.niveles && niveles.length > 0} />
         <p className="mt-3 text-[11px]" style={{ color: "var(--text-muted)" }}>
           Lectura técnica automática, no es una recomendación de inversión.
         </p>
@@ -322,10 +323,7 @@ function VistaTecnica() {
         />
       )}
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <GraficaRsi puntos={visibles} />
-        <GraficaMacd puntos={visibles} />
-      </div>
+      <GraficaRsi puntos={visibles} />
 
       <LecturaTecnica simbolo={simbolo} puntos={completos} qqq={tecnicos.QQQ} />
 
