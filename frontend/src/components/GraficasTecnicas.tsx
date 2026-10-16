@@ -37,14 +37,15 @@ import {
   porcentajeConSigno1 as pct,
 } from "../lib/formato";
 import { estiloTooltip } from "../lib/estilos";
+import { MEDIAS, PUNTEADO_EMA } from "../lib/medias";
 
 // Colores: los mismos 4 slots de la paleta categórica ya validada (dataviz).
 // Velas, volumen e histograma del MACD son polaridad (sube/baja): azul/naranja,
 // como el FlujoNetoChart. Las medias tienen identidad fija en toda la pestaña:
-// SMA 20 = magenta (slot 5), SMA 50 = aqua, SMA 200 = amarillo.
+// 20 = magenta (slot 5), 50 = aqua, 200 = amarillo; la SMA va continua y
+// la EMA del mismo periodo punteada, con el mismo color.
 const COLOR_SUBE = "var(--series-1)";
 const COLOR_BAJA = "var(--series-2)";
-export const COLOR_SMA20 = "var(--series-5)";
 export const COLOR_SMA50 = "var(--series-3)";
 export const COLOR_SMA200 = "var(--series-4)";
 // Soportes en verde y resistencias en rojo, como se acostumbra en trading;
@@ -175,7 +176,7 @@ export function GraficaPrecio({
 }: {
   puntos: PuntoTecnico[];
   tipo: "velas" | "linea";
-  capas: { sma20: boolean; sma50: boolean; sma200: boolean; bollinger: boolean };
+  capas: { sma: boolean; ema: boolean; bollinger: boolean };
   niveles: NivelTecnico[];
   /** Patrones activos a dibujar sobre el precio. */
   patrones: Patron[];
@@ -195,9 +196,12 @@ export function GraficaPrecio({
     for (const p of puntos) {
       if (tipo === "velas") valores.push(p.minimo, p.maximo);
       else valores.push(p.cierre);
-      if (capas.sma20 && p.sma20 != null) valores.push(p.sma20);
-      if (capas.sma50 && p.sma50 != null) valores.push(p.sma50);
-      if (capas.sma200 && p.sma200 != null) valores.push(p.sma200);
+      for (const m of MEDIAS) {
+        const s = p[m.sma];
+        const e = p[m.ema];
+        if (capas.sma && s != null) valores.push(s);
+        if (capas.ema && e != null) valores.push(e);
+      }
       if (capas.bollinger && p.bbInferior != null) valores.push(p.bbInferior, p.bbSuperior!);
     }
     const [loPrecio, hiPrecio] = [Math.min(...valores), Math.max(...valores)];
@@ -275,9 +279,18 @@ export function GraficaPrecio({
                         Cierre {dolares.format(p.cierre)}
                         {p.cambio != null && ` (${pct.format(p.cambio)})`}
                       </div>
-                      {p.sma20 != null && <div>SMA 20: {decimal.format(p.sma20)}</div>}
-                      {p.sma50 != null && <div>SMA 50: {decimal.format(p.sma50)}</div>}
-                      {p.sma200 != null && <div>SMA 200: {decimal.format(p.sma200)}</div>}
+                      {MEDIAS.map((m) => {
+                        const s = p[m.sma];
+                        const e = capas.ema ? p[m.ema] : null;
+                        if (s == null && e == null) return null;
+                        return (
+                          <div key={m.periodo}>
+                            {s != null && `SMA ${m.periodo}: ${decimal.format(s)}`}
+                            {s != null && e != null && " · "}
+                            {e != null && `EMA ${m.periodo}: ${decimal.format(e)}`}
+                          </div>
+                        );
+                      })}
                       {capas.bollinger && p.bbSuperior != null && (
                         <div>
                           Bollinger: {decimal.format(p.bbInferior!)} – {decimal.format(p.bbSuperior)}
@@ -326,42 +339,37 @@ export function GraficaPrecio({
                 isAnimationActive={false}
               />
             )}
-            {capas.sma20 && (
-              <Line
-                dataKey="sma20"
-                stroke={COLOR_SMA20}
-                strokeWidth={1.5}
-                dot={false}
-                activeDot={false}
-                isAnimationActive={false}
-              />
-            )}
-            {capas.sma50 && (
-              <Line
-                dataKey="sma50"
-                stroke={COLOR_SMA50}
-                strokeWidth={1.5}
-                dot={false}
-                activeDot={false}
-                isAnimationActive={false}
-              />
-            )}
-            {capas.sma200 && (
-              <Line
-                dataKey="sma200"
-                stroke={COLOR_SMA200}
-                strokeWidth={1.5}
-                dot={false}
-                activeDot={false}
-                isAnimationActive={false}
-              />
-            )}
+            {MEDIAS.flatMap((m) => [
+              capas.sma && (
+                <Line
+                  key={m.sma}
+                  dataKey={m.sma}
+                  stroke={m.color}
+                  strokeWidth={1.5}
+                  dot={false}
+                  activeDot={false}
+                  isAnimationActive={false}
+                />
+              ),
+              capas.ema && (
+                <Line
+                  key={m.ema}
+                  dataKey={m.ema}
+                  stroke={m.color}
+                  strokeWidth={1.5}
+                  strokeDasharray={PUNTEADO_EMA}
+                  dot={false}
+                  activeDot={false}
+                  isAnimationActive={false}
+                />
+              ),
+            ])}
             {/* Los niveles de una media ya se ven en su línea; solo se trazan
              * punteados si esa media está apagada. */}
             {niveles
               .filter(
                 (n) =>
-                  (n.origen !== "sma50" || !capas.sma50) && (n.origen !== "sma200" || !capas.sma200)
+                  (n.origen !== "sma50" && n.origen !== "sma200") || !capas.sma
               )
               .map((n) => (
                 <ReferenceLine

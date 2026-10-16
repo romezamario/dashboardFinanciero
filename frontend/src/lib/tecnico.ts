@@ -15,6 +15,9 @@ export interface PuntoTecnico extends Vela {
   sma20: number | null;
   sma50: number | null;
   sma200: number | null;
+  ema20: number | null;
+  ema50: number | null;
+  ema200: number | null;
   bbMedia: number | null;
   bbSuperior: number | null;
   bbInferior: number | null;
@@ -130,6 +133,9 @@ export function calcularSerieTecnica(
   const sma50 = sma(cierres, 50);
   const sma200 = sma(cierres, 200);
   const sma20 = sma(cierres, 20);
+  const ema20 = ema(cierres, 20);
+  const ema50 = ema(cierres, 50);
+  const ema200 = ema(cierres, 200);
   const rsi14 = rsi(cierres);
   const ema12 = ema(cierres, 12);
   const ema26 = ema(cierres, 26);
@@ -157,6 +163,9 @@ export function calcularSerieTecnica(
       sma20: sma20[i],
       sma50: sma50[i],
       sma200: sma200[i],
+      ema20: ema20[i],
+      ema50: ema50[i],
+      ema200: ema200[i],
       bbMedia: sma20[i],
       bbSuperior,
       bbInferior,
