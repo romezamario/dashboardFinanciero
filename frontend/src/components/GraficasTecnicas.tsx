@@ -562,13 +562,38 @@ export function GraficaVolumen({
   );
 }
 
-export function GraficaRsi({ puntos }: { puntos: PuntoTecnico[] }) {
+/** Tercer panel de la tarjeta del precio, debajo del MACD (pedido de Mario,
+ * 2026-10-16, con un ejemplo de TrendSpider): mismo margen derecho para que
+ * las fechas queden alineadas con las velas. */
+export function GraficaRsi({
+  puntos,
+  conEtiquetas,
+}: {
+  puntos: PuntoTecnico[];
+  conEtiquetas: boolean;
+}) {
+  const esMovil = useEsMovil();
+  const ultimo = [...puntos].reverse().find((p) => p.rsi != null)?.rsi ?? null;
   return (
-    <div className="tarjeta rounded-lg p-4">
-      <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-        RSI 14 (sobrecompra ≥ 70, sobreventa ≤ 30)
-      </h3>
-      <div className="mt-3 h-48">
+    <div
+      className="mt-4 border-t pt-3"
+      style={{
+        borderColor: "var(--border)",
+        paddingRight: conEtiquetas && !esMovil ? ANCHO_ETIQUETAS : 0,
+      }}
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+          RSI 14 (sobrecompra ≥ 70, sobreventa ≤ 30)
+        </h3>
+        {ultimo != null && (
+          <span className="text-xs" style={{ color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums" }}>
+            Último: <span style={{ color: "var(--text-primary)" }}>{decimal.format(ultimo)}</span> ·{" "}
+            {zonaRsi(ultimo)}
+          </span>
+        )}
+      </div>
+      <div className="mt-2 h-40 md:h-48">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={puntos} syncId="tecnico" margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
             <CartesianGrid vertical={false} stroke="var(--gridline)" />
@@ -583,6 +608,7 @@ export function GraficaRsi({ puntos }: { puntos: PuntoTecnico[] }) {
               tickLine={false}
             />
             <ReferenceLine y={70} stroke="var(--baseline)" strokeDasharray="4 3" />
+            <ReferenceLine y={50} stroke="var(--gridline)" />
             <ReferenceLine y={30} stroke="var(--baseline)" strokeDasharray="4 3" />
             <Tooltip
               cursor={{ stroke: "var(--baseline)" }}
@@ -642,7 +668,7 @@ export function GraficaMacd({
           <Leyenda color={COLOR_SMA200} texto="Señal" />
         </div>
       </div>
-      <div className="mt-2 h-56 md:h-64">
+      <div className="mt-2 h-48 md:h-56">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={puntos} syncId="tecnico" margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
             <CartesianGrid vertical={false} stroke="var(--gridline)" />
