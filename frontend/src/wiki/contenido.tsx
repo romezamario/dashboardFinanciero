@@ -1114,7 +1114,7 @@ export const SECCIONES: SeccionWiki[] = [
             ["Medias móviles", "SMA y EMA de 20, 50 y 200 sesiones (un botón para cada tipo; la EMA va punteada y apagada al abrir; calculadas sobre los 10 años, para que la de 200 exista desde el primer día visible)"],
             ["Bandas de Bollinger", "SMA 20 ± 2 desviaciones estándar"],
             ["RSI", "14 sesiones, suavizado de Wilder"],
-            ["MACD", "EMA 12 − EMA 26, señal EMA 9; va debajo del precio y del volumen, en la misma tarjeta"],
+            ["MACD", "EMA 12 − EMA 26, señal EMA 9; va debajo del precio y del volumen, en la misma tarjeta, y el RSI 14 debajo del MACD"],
             ["ATR", "14 sesiones, suavizado de Wilder"],
             ["Volumen", "Barras por alza/baja vs. el cierre anterior, promedio de 20 sesiones, punto en días > 1.5×"],
             ["QQQ vs. TQQQ", "Tabla con rendimientos, beta y el desgaste del apalancamiento (3× QQQ vs. real)"],

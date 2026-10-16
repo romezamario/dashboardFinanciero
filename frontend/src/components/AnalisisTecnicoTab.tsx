@@ -308,6 +308,7 @@ function VistaTecnica() {
         />
         <GraficaVolumen puntos={visibles} conEtiquetas={capas.niveles && niveles.length > 0} />
         <GraficaMacd puntos={visibles} conEtiquetas={capas.niveles && niveles.length > 0} />
+        <GraficaRsi puntos={visibles} conEtiquetas={capas.niveles && niveles.length > 0} />
         <p className="mt-3 text-[11px]" style={{ color: "var(--text-muted)" }}>
           Lectura técnica automática, no es una recomendación de inversión.
         </p>
@@ -323,7 +324,6 @@ function VistaTecnica() {
         />
       )}
 
-      <GraficaRsi puntos={visibles} />
 
       <LecturaTecnica simbolo={simbolo} puntos={completos} qqq={tecnicos.QQQ} />
 
