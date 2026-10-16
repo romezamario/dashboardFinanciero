@@ -1111,7 +1111,7 @@ export const SECCIONES: SeccionWiki[] = [
         <TablaWiki
           encabezados={["Indicador", "Cálculo"]}
           filas={[
-            ["Medias móviles", "SMA de 20, 50 y 200 sesiones (calculadas sobre los 10 años, para que la de 200 exista desde el primer día visible)"],
+            ["Medias móviles", "SMA y EMA de 20, 50 y 200 sesiones (un botón para cada tipo; la EMA va punteada y apagada al abrir; calculadas sobre los 10 años, para que la de 200 exista desde el primer día visible)"],
             ["Bandas de Bollinger", "SMA 20 ± 2 desviaciones estándar"],
             ["RSI", "14 sesiones, suavizado de Wilder"],
             ["MACD", "EMA 12 − EMA 26, señal EMA 9"],

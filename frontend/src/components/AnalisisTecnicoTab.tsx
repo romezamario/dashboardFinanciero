@@ -38,15 +38,13 @@ import {
 } from "../lib/formato";
 import {
   COLOR_RESISTENCIA,
-  COLOR_SMA200,
-  COLOR_SMA20,
-  COLOR_SMA50,
   GraficaMacd,
   GraficaPrecio,
   GraficaRsi,
   GraficaVolumen,
   TablaNiveles,
 } from "./GraficasTecnicas";
+import { MEDIAS } from "../lib/medias";
 
 const SIMBOLOS: Simbolo[] = ["QQQ", "TQQQ"];
 
@@ -85,7 +83,7 @@ function VistaTecnica() {
   const [simbolo, setSimbolo] = useState<Simbolo>("QQQ");
   const [rango, setRango] = useState<RangoTecnico>("1A");
   const [tipo, setTipo] = useState<"velas" | "linea">("velas");
-  const [capas, setCapas] = useState({ sma20: true, sma50: true, sma200: true, bollinger: false, niveles: true });
+  const [capas, setCapas] = useState({ sma: true, ema: false, bollinger: false, niveles: true });
   // Patrones chartistas: familias que se dibujan, tarjeta flotante (al pasar el
   // ratón; con un clic queda fija) y el panel con las velas que originan lo elegido.
   const [patronesActivos, setPatronesActivos] = useState<Set<FamiliaPatron>>(new Set());
@@ -240,23 +238,15 @@ function VistaTecnica() {
             Precio de {simbolo} (diario)
           </h3>
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <Interruptor
-              activo={capas.sma20}
-              color={COLOR_SMA20}
-              texto="SMA 20"
-              onClick={() => setCapas((c) => ({ ...c, sma20: !c.sma20 }))}
+            <InterruptorMedias
+              activo={capas.sma}
+              tipo="SMA"
+              onClick={() => setCapas((c) => ({ ...c, sma: !c.sma }))}
             />
-            <Interruptor
-              activo={capas.sma50}
-              color={COLOR_SMA50}
-              texto="SMA 50"
-              onClick={() => setCapas((c) => ({ ...c, sma50: !c.sma50 }))}
-            />
-            <Interruptor
-              activo={capas.sma200}
-              color={COLOR_SMA200}
-              texto="SMA 200"
-              onClick={() => setCapas((c) => ({ ...c, sma200: !c.sma200 }))}
+            <InterruptorMedias
+              activo={capas.ema}
+              tipo="EMA"
+              onClick={() => setCapas((c) => ({ ...c, ema: !c.ema }))}
             />
             <Interruptor
               activo={capas.niveles}
@@ -369,6 +359,46 @@ function VistaTecnica() {
 }
 
 // ------------------------------------------------------------- controles
+
+/** Un solo botón para las tres medias de un tipo; cada periodo lleva su color
+ * (continuo = SMA, punteado = EMA), así el botón también sirve de leyenda. */
+function InterruptorMedias({
+  activo,
+  tipo,
+  onClick,
+}: {
+  activo: boolean;
+  tipo: "SMA" | "EMA";
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={activo}
+      className="flex items-center gap-1 rounded-full px-2 py-0.5"
+      style={{
+        border: "1px solid var(--border)",
+        color: activo ? "var(--text-primary)" : "var(--text-muted)",
+        opacity: activo ? 1 : 0.6,
+      }}
+    >
+      {tipo}
+      {MEDIAS.map((m) => (
+        <span key={m.periodo} className="flex items-center gap-0.5">
+          <span
+            className="ml-1 inline-block w-3"
+            style={
+              tipo === "EMA"
+                ? { borderTop: `2px dashed ${m.color}` }
+                : { height: 2, background: m.color }
+            }
+          />
+          {m.periodo}
+        </span>
+      ))}
+    </button>
+  );
+}
 
 function Interruptor({
   activo,
