@@ -12,6 +12,7 @@ export type { SerieCotizaciones, Simbolo, Vela };
 export interface PuntoTecnico extends Vela {
   /** Cambio vs. el cierre anterior (fracción, 0.012 = +1.2%). */
   cambio: number | null;
+  sma20: number | null;
   sma50: number | null;
   sma200: number | null;
   bbMedia: number | null;
@@ -153,6 +154,7 @@ export function calcularSerieTecnica(
     return {
       ...v,
       cambio: i === 0 ? null : v.cierre / velas[i - 1].cierre - 1,
+      sma20: sma20[i],
       sma50: sma50[i],
       sma200: sma200[i],
       bbMedia: sma20[i],

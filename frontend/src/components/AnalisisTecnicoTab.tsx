@@ -39,6 +39,7 @@ import {
 import {
   COLOR_RESISTENCIA,
   COLOR_SMA200,
+  COLOR_SMA20,
   COLOR_SMA50,
   GraficaMacd,
   GraficaPrecio,
@@ -84,7 +85,7 @@ function VistaTecnica() {
   const [simbolo, setSimbolo] = useState<Simbolo>("QQQ");
   const [rango, setRango] = useState<RangoTecnico>("1A");
   const [tipo, setTipo] = useState<"velas" | "linea">("velas");
-  const [capas, setCapas] = useState({ sma50: true, sma200: true, bollinger: false, niveles: true });
+  const [capas, setCapas] = useState({ sma20: true, sma50: true, sma200: true, bollinger: false, niveles: true });
   // Patrones chartistas: familias que se dibujan, tarjeta flotante (al pasar el
   // ratón; con un clic queda fija) y el panel con las velas que originan lo elegido.
   const [patronesActivos, setPatronesActivos] = useState<Set<FamiliaPatron>>(new Set());
@@ -239,6 +240,12 @@ function VistaTecnica() {
             Precio de {simbolo} (diario)
           </h3>
           <div className="flex flex-wrap items-center gap-2 text-xs">
+            <Interruptor
+              activo={capas.sma20}
+              color={COLOR_SMA20}
+              texto="SMA 20"
+              onClick={() => setCapas((c) => ({ ...c, sma20: !c.sma20 }))}
+            />
             <Interruptor
               activo={capas.sma50}
               color={COLOR_SMA50}
