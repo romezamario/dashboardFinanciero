@@ -38,6 +38,8 @@ import {
 } from "../lib/formato";
 import {
   COLOR_RESISTENCIA,
+  COLOR_SMA50,
+  COLOR_SUBE,
   GraficaMacd,
   GraficaPrecio,
   GraficaRsi,
@@ -83,7 +85,7 @@ function VistaTecnica() {
   const [simbolo, setSimbolo] = useState<Simbolo>("QQQ");
   const [rango, setRango] = useState<RangoTecnico>("1A");
   const [tipo, setTipo] = useState<"velas" | "linea">("velas");
-  const [capas, setCapas] = useState({ sma: true, ema: false, bollinger: false, niveles: true });
+  const [capas, setCapas] = useState({ sma: true, ema: false, bollinger: false, niveles: true, macd: true, rsi: true });
   // Patrones chartistas: familias que se dibujan, tarjeta flotante (al pasar el
   // ratón; con un clic queda fija) y el panel con las velas que originan lo elegido.
   const [patronesActivos, setPatronesActivos] = useState<Set<FamiliaPatron>>(new Set());
@@ -261,6 +263,18 @@ function VistaTecnica() {
               texto="Bollinger 20, 2"
               onClick={() => setCapas((c) => ({ ...c, bollinger: !c.bollinger }))}
             />
+            <Interruptor
+              activo={capas.macd}
+              color={COLOR_SMA50}
+              texto="MACD"
+              onClick={() => setCapas((c) => ({ ...c, macd: !c.macd }))}
+            />
+            <Interruptor
+              activo={capas.rsi}
+              color={COLOR_SUBE}
+              texto="RSI"
+              onClick={() => setCapas((c) => ({ ...c, rsi: !c.rsi }))}
+            />
             <Segmentado
               opciones={[
                 {
@@ -307,8 +321,12 @@ function VistaTecnica() {
           resaltadoId={tarjeta?.seleccion.tipo === "patron" ? tarjeta.seleccion.patron.id : null}
         />
         <GraficaVolumen puntos={visibles} conEtiquetas={capas.niveles && niveles.length > 0} />
-        <GraficaMacd puntos={visibles} conEtiquetas={capas.niveles && niveles.length > 0} />
-        <GraficaRsi puntos={visibles} conEtiquetas={capas.niveles && niveles.length > 0} />
+        {capas.macd && (
+          <GraficaMacd puntos={visibles} conEtiquetas={capas.niveles && niveles.length > 0} />
+        )}
+        {capas.rsi && (
+          <GraficaRsi puntos={visibles} conEtiquetas={capas.niveles && niveles.length > 0} />
+        )}
         <p className="mt-3 text-[11px]" style={{ color: "var(--text-muted)" }}>
           Lectura técnica automática, no es una recomendación de inversión.
         </p>

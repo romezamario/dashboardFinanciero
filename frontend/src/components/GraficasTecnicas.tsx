@@ -11,6 +11,7 @@ import {
   ComposedChart,
   Line,
   LineChart,
+  ReferenceArea,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -44,7 +45,7 @@ import { MEDIAS, PUNTEADO_EMA } from "../lib/medias";
 // como el FlujoNetoChart. Las medias tienen identidad fija en toda la pestaña:
 // 20 = magenta (slot 5), 50 = aqua, 200 = amarillo; la SMA va continua y
 // la EMA del mismo periodo punteada, con el mismo color.
-const COLOR_SUBE = "var(--series-1)";
+export const COLOR_SUBE = "var(--series-1)";
 const COLOR_BAJA = "var(--series-2)";
 export const COLOR_SMA50 = "var(--series-3)";
 export const COLOR_SMA200 = "var(--series-4)";
@@ -55,13 +56,65 @@ const COLOR_SOPORTE = "var(--status-good)";
 
 const ANCHO_EJE = 52;
 
-function Leyenda({ color, texto }: { color: string; texto: string }) {
+
+/** Pastilla con el último valor de una serie, sobre el eje derecho (como en
+ * TrendSpider): va como `label` de un ReferenceLine invisible en ese valor. */
+function etiquetaEnEje(valor: number, color: string) {
+  return {
+    position: "right" as const,
+    content: (props: unknown) => {
+      const caja = (props as { viewBox?: { x: number; y: number; width: number } }).viewBox;
+      if (!caja) return null;
+      const x = caja.x + caja.width + 2;
+      return (
+        <g>
+          <rect
+            x={x}
+            y={caja.y - 8}
+            width={ANCHO_EJE - 4}
+            height={16}
+            rx={3}
+            fill="var(--surface-1)"
+            stroke={color}
+            strokeWidth={1.5}
+          />
+          <text
+            x={x + (ANCHO_EJE - 4) / 2}
+            y={caja.y + 4}
+            textAnchor="middle"
+            fontSize={11}
+            fontWeight={500}
+            fill="var(--text-primary)"
+            style={{ fontVariantNumeric: "tabular-nums" }}
+          >
+            {decimal.format(valor)}
+          </text>
+        </g>
+      );
+    },
+  };
+}
+
+function ValorSerie({ color, texto, valor }: { color: string; texto: string; valor: number | null }) {
   return (
     <span className="flex items-center gap-1">
       <span className="inline-block h-0.5 w-3" style={{ background: color }} />
       {texto}
+      {valor != null && (
+        <span style={{ color: "var(--text-primary)", fontVariantNumeric: "tabular-nums" }}>
+          {decimal.format(valor)}
+        </span>
+      )}
     </span>
   );
+}
+
+function ultimoValor<K extends keyof PuntoTecnico>(puntos: PuntoTecnico[], clave: K): number | null {
+  for (let i = puntos.length - 1; i >= 0; i--) {
+    const v = puntos[i][clave];
+    if (typeof v === "number") return v;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------- gráficas
@@ -573,7 +626,7 @@ export function GraficaRsi({
   conEtiquetas: boolean;
 }) {
   const esMovil = useEsMovil();
-  const ultimo = [...puntos].reverse().find((p) => p.rsi != null)?.rsi ?? null;
+  const ultimo = ultimoValor(puntos, "rsi");
   return (
     <div
       className="mt-4 border-t pt-3"
@@ -584,14 +637,12 @@ export function GraficaRsi({
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-          RSI 14 (sobrecompra ≥ 70, sobreventa ≤ 30)
+          RSI (14) · sobrecompra ≥ 70, sobreventa ≤ 30
         </h3>
-        {ultimo != null && (
-          <span className="text-xs" style={{ color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums" }}>
-            Último: <span style={{ color: "var(--text-primary)" }}>{decimal.format(ultimo)}</span> ·{" "}
-            {zonaRsi(ultimo)}
-          </span>
-        )}
+        <div className="flex flex-wrap gap-3 text-xs" style={{ color: "var(--text-secondary)" }}>
+          <ValorSerie color={COLOR_SUBE} texto="RSI" valor={ultimo} />
+          {ultimo != null && <span>{zonaRsi(ultimo)}</span>}
+        </div>
       </div>
       <div className="mt-2 h-40 md:h-48">
         <ResponsiveContainer width="100%" height="100%">
@@ -602,14 +653,28 @@ export function GraficaRsi({
               orientation="right"
               width={ANCHO_EJE}
               domain={[0, 100]}
-              ticks={[30, 50, 70]}
+              ticks={[0, 30, 50, 70, 100]}
               tick={{ fill: "var(--text-muted)", fontSize: 11 }}
               axisLine={false}
               tickLine={false}
             />
-            <ReferenceLine y={70} stroke="var(--baseline)" strokeDasharray="4 3" />
+            <ReferenceArea y1={30} y2={70} fill="var(--series-1)" fillOpacity={0.06} stroke="none" />
+            <ReferenceLine
+              y={70}
+              stroke="var(--baseline)"
+              strokeDasharray="4 3"
+              label={{ value: "Sobrecompra", position: "insideTopLeft", fill: "var(--text-muted)", fontSize: 10 }}
+            />
             <ReferenceLine y={50} stroke="var(--gridline)" />
-            <ReferenceLine y={30} stroke="var(--baseline)" strokeDasharray="4 3" />
+            <ReferenceLine
+              y={30}
+              stroke="var(--baseline)"
+              strokeDasharray="4 3"
+              label={{ value: "Sobreventa", position: "insideBottomLeft", fill: "var(--text-muted)", fontSize: 10 }}
+            />
+            {ultimo != null && (
+              <ReferenceLine y={ultimo} stroke="none" label={etiquetaEnEje(ultimo, COLOR_SUBE)} />
+            )}
             <Tooltip
               cursor={{ stroke: "var(--baseline)" }}
               content={({ active, payload }) => {
@@ -628,6 +693,7 @@ export function GraficaRsi({
             />
             <Line
               dataKey="rsi"
+              name="RSI"
               stroke={COLOR_SUBE}
               strokeWidth={1.5}
               dot={false}
@@ -651,6 +717,9 @@ export function GraficaMacd({
   conEtiquetas: boolean;
 }) {
   const esMovil = useEsMovil();
+  const macd = ultimoValor(puntos, "macd");
+  const senal = ultimoValor(puntos, "senal");
+  const histograma = ultimoValor(puntos, "histograma");
   return (
     <div
       className="mt-4 border-t pt-3"
@@ -661,11 +730,23 @@ export function GraficaMacd({
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
-          MACD 12, 26, 9
+          MACD (12, 26, 9)
         </h3>
-        <div className="flex gap-3 text-xs" style={{ color: "var(--text-secondary)" }}>
-          <Leyenda color={COLOR_SMA50} texto="MACD" />
-          <Leyenda color={COLOR_SMA200} texto="Señal" />
+        <div className="flex flex-wrap gap-3 text-xs" style={{ color: "var(--text-secondary)" }}>
+          <ValorSerie color={COLOR_SMA50} texto="MACD" valor={macd} />
+          <ValorSerie color={COLOR_SMA200} texto="Señal" valor={senal} />
+          <span className="flex items-center gap-1">
+            <span
+              className="inline-block h-2.5 w-2.5 rounded-sm"
+              style={{ background: (histograma ?? 0) >= 0 ? COLOR_SUBE : COLOR_BAJA, opacity: 0.6 }}
+            />
+            Histograma
+            {histograma != null && (
+              <span style={{ color: "var(--text-primary)", fontVariantNumeric: "tabular-nums" }}>
+                {decimal.format(histograma)}
+              </span>
+            )}
+          </span>
         </div>
       </div>
       <div className="mt-2 h-48 md:h-56">
@@ -711,6 +792,12 @@ export function GraficaMacd({
             </Bar>
             <Line dataKey="macd" stroke={COLOR_SMA50} strokeWidth={1.5} dot={false} isAnimationActive={false} />
             <Line dataKey="senal" stroke={COLOR_SMA200} strokeWidth={1.5} dot={false} isAnimationActive={false} />
+            {senal != null && (
+              <ReferenceLine y={senal} stroke="none" label={etiquetaEnEje(senal, COLOR_SMA200)} />
+            )}
+            {macd != null && (
+              <ReferenceLine y={macd} stroke="none" label={etiquetaEnEje(macd, COLOR_SMA50)} />
+            )}
           </ComposedChart>
         </ResponsiveContainer>
       </div>
