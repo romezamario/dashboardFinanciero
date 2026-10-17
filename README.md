@@ -514,6 +514,26 @@ Esto se configura fuera del código, en el dashboard de Cloudflare Zero Trust:
 4. Guarda. A partir de ahí, cualquier visita al sitio pide login de Cloudflare Access antes de llegar
    siquiera a la pantalla de login de Supabase Auth.
 
+### 4. Acceso compartido (un segundo usuario con tus datos)
+
+Un invitado entra con **su propia** cuenta y ve y edita **tus** datos (movimientos, cuentas,
+categorías, eventos, avisos de correo, meta diaria), pero no las pestañas Trading ni Wiki. Lo
+resuelve la RLS (`supabase/migrations/20261017170000_acceso_compartido.sql`); su correo no va
+al repo (es público). Para agregar a alguien:
+
+1. **GitHub → Settings → Secrets → Actions**: crea `CORREOS_INVITADOS` con su correo (varios,
+   separados por coma). Luego corre a mano *Actions → Migrar base de datos → Run workflow*: el
+   paso "Sincronizar invitados" deja la tabla igual al secreto.
+2. **Supabase → Authentication → Users → Invite user** con ese correo (el invitado pone su
+   contraseña desde el correo). Solo cuenta un correo **confirmado**.
+3. **Cloudflare Zero Trust → Access → Applications →** la del dashboard → su política: agrega
+   ese correo, o Access no lo deja llegar al sitio.
+
+Trading solo responde a los correos de la variable `CORREOS_TRADING` de Cloudflare Pages
+(separados por coma; sin ella, `romezamario@gmail.com`), según el correo con el que se entró a
+Access. Para quitar a alguien: bórralo del secreto y vuelve a correr el workflow (o borra su
+usuario en Supabase y de la política de Access).
+
 ## Instancia de clientes: Ordena tu Lana (fase 0 del plan de suscripciones)
 
 El mismo código se despliega dos veces: tu dashboard personal (todo lo de arriba, sin cambios) y

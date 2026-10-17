@@ -14,7 +14,7 @@ export interface SeccionWiki {
   cuerpo: ReactNode;
 }
 
-export const ULTIMA_REVISION = "16 de octubre de 2026";
+export const ULTIMA_REVISION = "17 de octubre de 2026";
 
 export const SECCIONES: SeccionWiki[] = [
   // ------------------------------------------------------------ inicio
@@ -220,6 +220,15 @@ export const SECCIONES: SeccionWiki[] = [
           de octubre de 2026 las políticas también exigen que la cuenta, el documento, la categoría
           o el evento a los que apunta una fila sean tuyos, y borrar un usuario borra todas sus
           filas; una prueba automática en CI lo comprueba con dos usuarios.
+        </P>
+        <P>
+          <B>Acceso compartido</B> (17 de octubre de 2026): una persona invitada entra con su
+          propia cuenta (las mismas dos puertas) y trabaja sobre <B>tus</B> datos, con lectura y
+          escritura: la RLS compara contra <C>usuario_efectivo()</C>, que para un invitado con
+          correo confirmado en <C>accesos_compartidos</C> es tu id. Lo que crea (una categoría,
+          un evento) queda a tu nombre. No ve Trading ni esta Wiki, y las funciones de{" "}
+          <C>/api</C> la rechazan según el correo que reporta Cloudflare Access. La lista de
+          invitados sale del secreto <C>CORREOS_INVITADOS</C> de GitHub, no del repo.
         </P>
         <P>
           La app de escritorio también sube con tu usuario y contraseña (no con la llave de

@@ -14,6 +14,7 @@ import {
 import { eventosOcultosPorDefecto, eventosVisiblesTras } from "../lib/gastosEstadoCuenta";
 import { soloShophunters } from "../lib/shophunters";
 import { EDICION, incluyeFuncion, NOMBRE_APP } from "../lib/edicion";
+import { PESTANAS_SOLO_DUENO, soyInvitado } from "../lib/accesoCompartido";
 import { obtenerMuestrasPorConfirmar, type MuestraPorConfirmar } from "../lib/muestras";
 import { AvisoMuestraLista } from "./AvisoMuestraLista";
 import { categoriasExcluidasPorDefecto, RANGO_MESES_VACIO, type RangoMeses } from "../lib/indicadores";
@@ -206,6 +207,19 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
     };
   }, []);
 
+  // Acceso compartido (edición personal): un invitado no ve Trading ni la
+  // Wiki. Mientras no se sabe, tampoco se muestran (el dueño las ve al llegar
+  // la respuesta y, si estaba en una, vuelve a ella).
+  const [esDueno, setEsDueno] = useState(EDICION === "producto");
+  useEffect(() => {
+    if (EDICION !== "personal") return;
+    let vigente = true;
+    void soyInvitado().then((invitado) => vigente && setEsDueno(!invitado));
+    return () => {
+      vigente = false;
+    };
+  }, []);
+
   // Recompensa por muestras: si una muestra suya ya tiene lector, se le avisa
   // en el tablero (la confirmación vive en "Subir movimientos").
   const [muestrasListas, setMuestrasListas] = useState<MuestraPorConfirmar[]>([]);
@@ -374,7 +388,7 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
     // Solo en la edición personal (ver lib/edicion.ts).
     ...(incluyeFuncion(EDICION, "tecnico") ? [{ id: PESTANA_TECNICO, etiqueta: "Trading" }] : []),
     ...(incluyeFuncion(EDICION, "wiki") ? [{ id: PESTANA_WIKI, etiqueta: "Wiki" }] : []),
-  ];
+  ].filter((p) => esDueno || !PESTANAS_SOLO_DUENO.has(p.id));
 
   // Si la pestaña activa desaparece (p. ej. tras reasignar todos los
   // documentos de una cuenta a otra desde el editor), vuelve al Resumen.

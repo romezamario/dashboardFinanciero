@@ -29,6 +29,37 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
+      # Acceso compartido (solo la instancia personal): quién puede trabajar
+      # sobre los datos del dueño (ver 20261017170000_acceso_compartido.sql).
+      # Los correos viven en el secreto CORREOS_INVITADOS (separados por coma),
+      # no en el repo, que es público. Deja la tabla igual al secreto: agrega
+      # los que falten y quita los que ya no estén. Sin el secreto, no se toca.
+      - name: Sincronizar invitados
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROYECTO: ${{ secrets.SUPABASE_PROJECT_ID }}
+          CORREOS_INVITADOS: ${{ secrets.CORREOS_INVITADOS }}
+          CORREO_DUENO: romezamario@gmail.com
+        run: |
+          if [ -z "$CORREOS_INVITADOS" ]; then
+            echo "::notice::Sin el secreto CORREOS_INVITADOS: no se cambian los invitados."
+            exit 0
+          fi
+          # Cada correo va como literal de SQL con comillas escapadas.
+          valores=$(printf '%s' "$CORREOS_INVITADOS" | tr ',' '\n' | sed 's/^ *//; s/ *$//' | grep -v '^$' \
+            | tr 'A-Z' 'a-z' | sed "s/'/''/g; s/.*/('&', '$CORREO_DUENO')/" | paste -sd, -)
+          consulta="begin; delete from public.accesos_compartidos; insert into public.accesos_compartidos (correo_invitado, correo_dueno) values $valores; commit;"
+          respuesta=$(jq -n --arg q "$consulta" '{query: $q}' | curl -sS -w '\n%{http_code}' -X POST \
+            "https://api.supabase.com/v1/projects/$PROYECTO/database/query" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" --data @-)
+          codigo=$(printf '%s' "$respuesta" | tail -n1)
+          if [ "${codigo:0:1}" != "2" ]; then
+            echo "::error::No se pudieron guardar los invitados (HTTP $codigo)."
+            printf '%s\n' "$respuesta" | head -n -1
+            exit 1
+          fi
+          echo "Invitados guardados: $(printf '%s' "$valores" | grep -o '(' | wc -l)"
+
   # Instancia de clientes (FinanzasPersonales): otro proyecto de Supabase, las
   # mismas migraciones. Mientras no existan sus secretos, se salta sin fallar.
   # SUPABASE_ACCESS_TOKEN es el de la cuenta, el mismo para los dos proyectos.

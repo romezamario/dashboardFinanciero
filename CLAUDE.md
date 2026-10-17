@@ -51,6 +51,23 @@ builds that edition (without `functions/`) to the Pages project `ordenatulana` (
 the `PRODUCTO_*` secrets exist (README, "Instancia de clientes"). The plan doc (tiers MXN 0/29/59,
 Mercado Pago, phases) lives outside the repo; the desktop app keeps syncing only the personal instance.
 
+**Shared access, personal edition (2026-10-17, user's request: a second user "con las mismas funcionalidades, con excepción de trading y wiki")**:
+the guest signs in with their OWN Supabase Auth user and works on the OWNER's data (read + write). Migration
+`20261017170000_acceso_compartido.sql`: table `accesos_compartidos (correo_invitado, correo_dueno)` (no API access) and
+`usuario_efectivo()` (privado definer + public invoker wrapper) = the owner's id when the caller's CONFIRMED email is a
+guest, else `auth.uid()`. Every policy of cuentas/categorias/documentos/transacciones/eventos/gastos_correo/preferencias
+was rewritten from pg_policies replacing `auth.uid()` with it (now `to authenticated`), and their `user_id` defaults to
+it, so what a guest creates belongs to the owner. **Write new policies on those tables with `usuario_efectivo()`, not
+`auth.uid()`.** The table is empty in every instance; only `db-migrate.yml`'s personal job fills it from the secret
+`CORREOS_INVITADOS` (via the Management API SQL endpoint; the repo is public, so guest emails never go in it). The
+frontend hides Trading and Wiki when RPC `soy_invitado()` is true (`lib/accesoCompartido.ts`; hidden until known, an
+RPC error counts as owner); `functions/api/_middleware.ts` (all of `/api` is Trading) returns 403 unless the
+`Cf-Access-Authenticated-User-Email` is in the Pages env `CORREOS_TRADING` (default `romezamario@gmail.com`; no header =
+not blocked). Not hidden: the Wiki's text ships in the JS bundle, and `/macro.json` (public FRED data) is a static file.
+Manual setup (README "Acceso compartido"): the secret, a Supabase Auth invite, and the email in the Cloudflare Access policy.
+Covered by `aislamiento.sql` (guest sees/edits the owner's rows and creates categories for them, unconfirmed email
+gets nothing, others unaffected) and `accesoCompartido.test.ts`.
+
 **Accounts, phase 1 (2026-10-11, user's "arranca la fase 1")** — producto edition only; the personal one
 still goes straight to the plain `Login`. No router: the URL hash picks the public screen
 (`rutaDeHash` in `lib/cuentaUsuario.ts`: `#entrar`, `#registro`, `#recuperar`, `#terminos`, `#privacidad`;
