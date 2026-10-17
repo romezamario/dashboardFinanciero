@@ -275,6 +275,27 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
     }
   }
 
+  // "Actualizar": vuelve a leer de Supabase lo que la app de escritorio sincronizó mientras
+  // el tablero estaba abierto (movimientos y avisos de correo), sin recargar la página: se
+  // conservan la pestaña, los filtros y el periodo elegidos. Los datos viejos siguen en
+  // pantalla mientras llegan los nuevos; si falla, se avisa y se quedan los que había.
+  const [actualizando, setActualizando] = useState(false);
+  const [errorActualizar, setErrorActualizar] = useState<string | null>(null);
+  async function actualizar() {
+    if (actualizando) return;
+    setActualizando(true);
+    setErrorActualizar(null);
+    try {
+      setDatos(await obtenerDatosTransacciones());
+      setErrorRecarga(null);
+      if (incluyeFuncion(EDICION, "correo")) avisosCorreo.reintentar();
+    } catch (e) {
+      setErrorActualizar(e instanceof Error ? e.message : String(e));
+    } finally {
+      setActualizando(false);
+    }
+  }
+
   useEffect(() => {
     let vigente = true;
     obtenerDatosTransacciones().then(
@@ -482,6 +503,20 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
         </h1>
         <div className="flex items-center gap-2 sm:gap-4">
           <button
+            onClick={() => void actualizar()}
+            disabled={actualizando}
+            className="rounded-full px-3 py-1 text-xs font-medium"
+            style={{
+              background: "var(--surface-1)",
+              border: "1px solid var(--border)",
+              color: "var(--text-secondary)",
+              opacity: actualizando ? 0.6 : 1,
+            }}
+            title="Volver a leer los datos sin recargar la página (por ejemplo, después de sincronizar desde la app de escritorio)"
+          >
+            {actualizando ? "Actualizando…" : "↻ Actualizar"}
+          </button>
+          <button
             onClick={alternarTema}
             className="rounded-full px-3 py-1 text-xs font-medium"
             style={{
@@ -536,6 +571,15 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
       </header>
 
       <main className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6">
+        {errorActualizar && (
+          <div
+            role="alert"
+            className="rounded-md px-4 py-2 text-xs"
+            style={{ border: "1px solid var(--status-critical)", color: "var(--text-primary)" }}
+          >
+            No se pudieron actualizar los datos; sigues viendo los anteriores: {errorActualizar}
+          </div>
+        )}
         {errorRecarga && (
           <div
             role="alert"

@@ -1133,7 +1133,7 @@ parallel, then one at a time while the last page came back full (the estimate ca
 **After an edit, only the edited rows are re-fetched**: `onActualizado(ids)` →
 `recargarTransacciones(ids)` re-reads the catalogs (a new categoría/evento or a document moved to
 another cuenta lives there) + those ids, and `reemplazarFilas` swaps them in; `onActualizado()`
-without ids reloads everything. A failed reload never unmounts the dashboard: it shows a
+without ids reloads everything. **Header "↻ Actualizar" (2026-10-17, user's request: stop reloading the page after a desktop sync)**: `actualizar()` in `Dashboard` re-reads all transactions + catalogs and re-fetches the correo notices (`useGastosCorreo().reintentar`), keeping tab/filters/period; old data stays on screen while loading, a failure shows its own banner and keeps it. A failed reload never unmounts the dashboard: it shows a
 "Los cambios se guardaron, pero no se pudo recargar la vista … Reintentar" banner (only the
 *initial* load failing shows the full-page error). Errors from PostgREST are wrapped into real
 `Error`s (`comoError`) so callers can show their message. Bulk updates
