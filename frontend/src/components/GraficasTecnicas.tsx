@@ -2,7 +2,7 @@
 // RSI y MACD), separadas de AnalisisTecnicoTab.tsx para que cada archivo se
 // pueda leer completo. Comparten eje X (syncId) y los colores de abajo.
 
-import { useMemo } from "react";
+import { useMemo, useRef, useState, type PointerEvent } from "react";
 import {
   Area,
   Bar,
@@ -12,6 +12,7 @@ import {
   Line,
   LineChart,
   ReferenceArea,
+  ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -21,6 +22,8 @@ import {
 import { useEsMovil } from "../hooks/useEsMovil";
 import { CONFIG_DETECCION, type Patron } from "../lib/patrones";
 import {
+  indiceEnX,
+  medirRango,
   nombreFecha,
   SESIONES_NIVELES,
   zonaRsi,
@@ -293,9 +296,82 @@ export function GraficaPrecio({
   // que el espacio que reserva la gráfica de volumen y queden alineadas.
   const conEtiquetas = !esMovil && todosLosNiveles.length > 0;
 
+  // Medir un rango (pedido de Mario, 2026-10-17, como en la app Bolsa): solo
+  // mientras se arrastra con el mouse (o uno o dos dedos); al soltar se borra.
+  const contenedor = useRef<HTMLDivElement>(null);
+  const punteros = useRef(new Map<number, number>());
+  const [arrastre, setArrastre] = useState<{ inicio: number; fin: number } | null>(null);
+  const indiceDe = (clientX: number) => {
+    const caja = contenedor.current?.getBoundingClientRect();
+    if (!caja) return 0;
+    return indiceEnX(
+      clientX - caja.left,
+      caja.width - ANCHO_EJE,
+      puntos.length,
+      tipo === "velas" ? "bandas" : "puntos"
+    );
+  };
+  const actualizarArrastre = () => {
+    const xs = [...punteros.current.values()];
+    if (xs.length === 0) return setArrastre(null);
+    setArrastre((previo) =>
+      xs.length >= 2
+        ? { inicio: indiceDe(xs[0]), fin: indiceDe(xs[1]) }
+        : { inicio: previo?.inicio ?? indiceDe(xs[0]), fin: indiceDe(xs[0]) }
+    );
+  };
+  const alPresionar = (e: PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    punteros.current.set(e.pointerId, e.clientX);
+    actualizarArrastre();
+  };
+  const alMover = (e: PointerEvent<HTMLDivElement>) => {
+    if (!punteros.current.has(e.pointerId)) return;
+    // La captura empieza al arrastrar, no al presionar: así un clic simple
+    // sigue llegando a los patrones y niveles dibujados encima.
+    if (!e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.setPointerCapture(e.pointerId);
+    punteros.current.set(e.pointerId, e.clientX);
+    actualizarArrastre();
+  };
+  const alSoltar = (e: PointerEvent<HTMLDivElement>) => {
+    punteros.current.delete(e.pointerId);
+    if (punteros.current.size === 0) setArrastre(null);
+  };
+  // Un clic sin mover no mide nada: hacen falta dos velas distintas.
+  const rango =
+    arrastre && arrastre.inicio !== arrastre.fin
+      ? medirRango(puntos, arrastre.inicio, arrastre.fin)
+      : null;
+  const colorRango = rango && rango.cambio < 0 ? COLOR_RESISTENCIA : COLOR_SOPORTE;
+
   return (
     <div className="mt-3 flex">
-      <div className="min-w-0 flex-1" style={{ height: alto }}>
+      <div
+        ref={contenedor}
+        className="relative min-w-0 flex-1 select-none"
+        style={{ height: alto, touchAction: "pan-y" }}
+        onPointerDown={alPresionar}
+        onPointerMove={alMover}
+        onPointerUp={alSoltar}
+        onPointerCancel={alSoltar}
+      >
+        {rango && (
+          <div
+            className="pointer-events-none absolute left-1/2 top-1 z-10 -translate-x-1/2 rounded-lg px-3 py-1.5 text-center text-xs"
+            style={{ ...estiloTooltip, fontVariantNumeric: "tabular-nums" }}
+          >
+            <div className="font-medium" style={{ color: "var(--text-primary)" }}>
+              {nombreFecha(rango.desde.fecha)} – {nombreFecha(rango.hasta.fecha)}
+            </div>
+            <div className="flex justify-center gap-4 font-medium" style={{ color: colorRango }}>
+              <span>
+                {rango.cambio >= 0 ? "▲ +" : "▼ "}
+                {decimal.format(rango.cambio)}
+              </span>
+              <span>{pct.format(rango.cambioPct)}</span>
+            </div>
+          </div>
+        )}
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={puntos}
@@ -318,7 +394,7 @@ export function GraficaPrecio({
             <Tooltip
               cursor={{ stroke: "var(--baseline)" }}
               content={({ active, payload }) => {
-                if (!active || !payload?.length) return null;
+                if (!active || !payload?.length || rango) return null;
                 const p = payload[0].payload as PuntoTecnico;
                 return (
                   <div className="rounded-lg px-3 py-2 text-xs" style={estiloTooltip}>
@@ -434,6 +510,19 @@ export function GraficaPrecio({
                 />
               ))}
             {elementosDePatrones(patrones, eventosPatron, resaltadoId, puntos.length)}
+            {rango &&
+              [rango.desde, rango.hasta].flatMap((p) => [
+                <ReferenceLine key={`l${p.fecha}`} x={p.fecha} stroke={colorRango} strokeWidth={1.5} />,
+                <ReferenceDot
+                  key={`d${p.fecha}`}
+                  x={p.fecha}
+                  y={p.cierre}
+                  r={5}
+                  fill={colorRango}
+                  stroke="var(--surface-1)"
+                  strokeWidth={2}
+                />,
+              ])}
           </ComposedChart>
         </ResponsiveContainer>
       </div>

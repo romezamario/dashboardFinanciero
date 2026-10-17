@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { calcularNiveles, calcularSerieTecnica, rsi, sma, type Vela } from "./tecnico";
+import {
+  calcularNiveles,
+  calcularSerieTecnica,
+  indiceEnX,
+  medirRango,
+  rsi,
+  sma,
+  type PuntoTecnico,
+  type Vela,
+} from "./tecnico";
 
 /** Velas sintéticas a partir de cierres: máximo/mínimo = cierre ± 1. */
 function velas(cierres: number[]): Vela[] {
@@ -68,5 +77,41 @@ describe("rsi", () => {
     expect(sube[19]).toBe(100);
     const baja = rsi(Array.from({ length: 20 }, (_, i) => 100 - i), 14);
     expect(baja[19]).toBe(0);
+  });
+});
+
+describe("medirRango", () => {
+  const p = (fecha: string, cierre: number) => ({ fecha, cierre }) as PuntoTecnico;
+  const puntos = [p("2026-08-26", 73.32), p("2026-09-10", 70), p("2026-09-29", 78.05)];
+
+  it("mide de cierre a cierre sin importar hacia dónde se arrastra", () => {
+    for (const [a, b] of [[0, 2], [2, 0]]) {
+      const r = medirRango(puntos, a, b)!;
+      expect(r.desde.fecha).toBe("2026-08-26");
+      expect(r.hasta.fecha).toBe("2026-09-29");
+      expect(r.cambio).toBeCloseTo(4.73, 2);
+      expect(r.cambioPct).toBeCloseTo(0.0645, 4);
+    }
+  });
+
+  it("baja da cambio negativo y fuera de rango da null", () => {
+    expect(medirRango(puntos, 0, 1)!.cambio).toBeLessThan(0);
+    expect(medirRango(puntos, 0, 9)).toBeNull();
+  });
+});
+
+describe("indiceEnX", () => {
+  it("con velas reparte el ancho en bandas iguales y recorta a los extremos", () => {
+    expect(indiceEnX(0, 100, 4, "bandas")).toBe(0);
+    expect(indiceEnX(49, 100, 4, "bandas")).toBe(1);
+    expect(indiceEnX(99.9, 100, 4, "bandas")).toBe(3);
+    expect(indiceEnX(-10, 100, 4, "bandas")).toBe(0);
+    expect(indiceEnX(150, 100, 4, "bandas")).toBe(3);
+  });
+
+  it("con línea toma el punto más cercano, de borde a borde", () => {
+    expect(indiceEnX(0, 90, 4, "puntos")).toBe(0);
+    expect(indiceEnX(40, 90, 4, "puntos")).toBe(1);
+    expect(indiceEnX(90, 90, 4, "puntos")).toBe(3);
   });
 });
