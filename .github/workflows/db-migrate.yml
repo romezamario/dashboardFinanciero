@@ -13,7 +13,7 @@ jobs:
   migrate:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: supabase/setup-cli@v3
         with:
@@ -50,7 +50,7 @@ jobs:
             echo "::notice::Sin PRODUCTO_SUPABASE_PROJECT_ID / PRODUCTO_SUPABASE_DB_PASSWORD: no se migra la instancia de clientes."
           fi
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         if: steps.config.outputs.lista == 'true'
 
       - uses: supabase/setup-cli@v3
