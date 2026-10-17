@@ -382,3 +382,38 @@ export function zonaRsi(valor: number): string {
   if (valor <= 30) return "Sobreventa (≤ 30)";
   return "Zona neutral";
 }
+
+/** Medición entre dos velas al arrastrar sobre el precio (pedido de Mario,
+ * 2026-10-17, como en la app Bolsa): de cierre a cierre, en orden de fecha. */
+export interface RangoMedido {
+  desde: PuntoTecnico;
+  hasta: PuntoTecnico;
+  cambio: number;
+  cambioPct: number;
+}
+
+export function medirRango(puntos: PuntoTecnico[], a: number, b: number): RangoMedido | null {
+  const [i, j] = a <= b ? [a, b] : [b, a];
+  const desde = puntos[i];
+  const hasta = puntos[j];
+  if (!desde || !hasta || desde.cierre === 0) return null;
+  const cambio = hasta.cierre - desde.cierre;
+  return { desde, hasta, cambio, cambioPct: cambio / desde.cierre };
+}
+
+/** Índice de la vela bajo la coordenada x (px desde el borde izquierdo del
+ * área de trazo). Con velas Recharts usa una banda igual por vela; con solo
+ * la línea (sin barras), una escala de puntos de borde a borde. */
+export function indiceEnX(
+  x: number,
+  anchoTrazo: number,
+  cantidad: number,
+  escala: "bandas" | "puntos"
+): number {
+  if (cantidad <= 0 || anchoTrazo <= 0) return 0;
+  const i =
+    escala === "bandas"
+      ? Math.floor((x / anchoTrazo) * cantidad)
+      : Math.round((x / anchoTrazo) * (cantidad - 1));
+  return Math.min(cantidad - 1, Math.max(0, i));
+}
