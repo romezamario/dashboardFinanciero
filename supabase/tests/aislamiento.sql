@@ -701,3 +701,82 @@ begin
     raise exception 'FALLO: funciones SECURITY DEFINER ejecutables desde la API: %', n;
   end if;
 end $$;
+
+-- ------------------------------------------------------- acceso compartido
+-- Un invitado (correo confirmado en accesos_compartidos) trabaja sobre los
+-- datos del dueño; uno sin confirmar, no. Los demás no cambian.
+reset role;
+insert into auth.users (id, email, email_confirmed_at) values
+  ('d0d0d0d0-0000-0000-0000-000000000001', 'dueno@prueba.mx', now()),
+  ('1e1e1e1e-0000-0000-0000-000000000001', 'Invitada@prueba.mx', now()),
+  ('5e5e5e5e-0000-0000-0000-000000000001', 'sinconfirmar@prueba.mx', null);
+insert into accesos_compartidos (correo_invitado, correo_dueno) values
+  ('invitada@prueba.mx', 'dueno@prueba.mx'),
+  ('sinconfirmar@prueba.mx', 'dueno@prueba.mx');
+
+set role authenticated;
+set request.jwt.claim.sub = 'd0d0d0d0-0000-0000-0000-000000000001';
+insert into cuentas (id, banco_id, alias, ultimos_4_digitos)
+  values ('d0d0d0d0-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-0000000000b1', 'Cuenta D', '4444');
+insert into documentos (id, cuenta_id, hash)
+  values ('d0d0d0d0-0000-0000-0000-0000000000d1', 'd0d0d0d0-0000-0000-0000-0000000000c1', 'hash-d');
+insert into transacciones (id, documento_id, fecha, descripcion, monto, tipo, pagina, linea_cruda)
+  values ('d0d0d0d0-0000-0000-0000-0000000000f1', 'd0d0d0d0-0000-0000-0000-0000000000d1',
+          '2026-10-02', 'SUPER', 500, 'cargo', 1, 'linea d');
+do $$
+begin
+  if soy_invitado() then raise exception 'FALLO: el dueño aparece como invitado'; end if;
+  if (select count(*) from accesos_compartidos) <> 0 then
+    raise exception 'FALLO: un usuario lee accesos_compartidos';
+  end if;
+exception when insufficient_privilege then null;
+end $$;
+
+set request.jwt.claim.sub = '1e1e1e1e-0000-0000-0000-000000000001';
+-- Como el editor masivo: crea una categoría (upsert sin user_id) y la asigna.
+insert into categorias (nombre) values ('Súper') on conflict (user_id, nombre) do update set nombre = excluded.nombre;
+update transacciones set categoria_id = (select id from categorias where nombre = 'Súper')
+  where id = 'd0d0d0d0-0000-0000-0000-0000000000f1';
+insert into preferencias (clave, valor) values ('meta_gasto_diario', '800')
+  on conflict (user_id, clave) do update set valor = excluded.valor;
+do $$
+begin
+  if not soy_invitado() then raise exception 'FALLO: la invitada no aparece como invitada'; end if;
+  if (select count(*) from transacciones) <> 1 or (select count(*) from cuentas) <> 1 then
+    raise exception 'FALLO: la invitada no ve exactamente los datos del dueño';
+  end if;
+  if exists (select 1 from transacciones where user_id <> 'd0d0d0d0-0000-0000-0000-000000000001') then
+    raise exception 'FALLO: la invitada ve filas de otro usuario';
+  end if;
+end $$;
+
+set request.jwt.claim.sub = 'd0d0d0d0-0000-0000-0000-000000000001';
+do $$
+begin
+  if (select c.nombre from transacciones t join categorias c on c.id = t.categoria_id) is distinct from 'Súper' then
+    raise exception 'FALLO: el dueño no ve la categoría que asignó la invitada';
+  end if;
+  if (select valor from preferencias where clave = 'meta_gasto_diario') <> '800'::jsonb then
+    raise exception 'FALLO: la meta que guardó la invitada no es la del dueño';
+  end if;
+end $$;
+
+set request.jwt.claim.sub = '5e5e5e5e-0000-0000-0000-000000000001';
+do $$
+begin
+  if soy_invitado() or (select count(*) from transacciones) <> 0 then
+    raise exception 'FALLO: un correo sin confirmar entra a los datos del dueño';
+  end if;
+end $$;
+
+-- A sigue viendo solo lo suyo.
+set request.jwt.claim.sub = 'aaaaaaaa-0000-0000-0000-000000000001';
+do $$
+begin
+  if exists (select 1 from transacciones where user_id <> 'aaaaaaaa-0000-0000-0000-000000000001') then
+    raise exception 'FALLO: A ve filas del dueño o de la invitada';
+  end if;
+end $$;
+reset role;
+
+\echo 'Acceso compartido: OK'
