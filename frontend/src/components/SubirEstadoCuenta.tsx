@@ -14,6 +14,7 @@ import { ResultadoExcel } from "./SubirExcel";
 import { estiloEntrada } from "../lib/estilos";
 import { Boton, Nota } from "./SubirPiezas";
 import { AvisoMuestraLista } from "./AvisoMuestraLista";
+import { PAGOS_EN_PRUEBA } from "../lib/suscripcion";
 import {
   comentarioDeFaltantes,
   confirmarMuestra,
@@ -181,7 +182,8 @@ function TarjetaArchivo({
     return (
       <Tarjeta titulo={archivo.nombre}>
         <Nota tipo="error">{estado.mensaje}</Nota>
-        {estado.detalle && (
+        {/* Solo en el sitio de pruebas: en producción el cliente ve el mensaje sencillo. */}
+        {PAGOS_EN_PRUEBA && estado.detalle && (
           <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
             Detalle técnico: {estado.detalle}
           </p>
