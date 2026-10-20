@@ -179,7 +179,7 @@ function HerenciaEvento({
           }
         }}
         className="rounded-md px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-        style={{ background: "var(--series-1)" }}
+        style={{ background: "var(--marca)" }}
       >
         {estado === "trabajando" ? "Guardando…" : `Asignar «${evento}» a este movimiento`}
       </button>

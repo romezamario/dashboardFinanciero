@@ -171,7 +171,7 @@ function VistaPrevia({
           <button
             type="button"
             className="mt-1 text-xs"
-            style={{ color: "var(--series-1)" }}
+            style={{ color: "var(--marca)" }}
             onClick={() => setVerTodos((v) => !v)}
           >
             {verTodos ? "Ver menos" : `Ver los ${movimientos.length}`}

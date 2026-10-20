@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  calcularIndicadores,
   calcularGastoHormiga,
   categoriasExcluidasPorDefecto,
   ladoDominante,
@@ -65,5 +66,21 @@ describe("calcularGastoHormiga", () => {
     expect(r.cantidad).toBe(1);
     expect(r.total).toBe(50);
     expect(r.proporcion).toBeCloseTo(50 / 250);
+  });
+});
+
+describe("gastos recurrentes en los indicadores", () => {
+  it("nunca suman más que el gasto de su ventana", () => {
+    // Un comercio cobra $1,000 en 3 de 6 meses; otro gasto de $100 en los 6.
+    const meses = ["2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08"];
+    const filas = [
+      ...meses.map((m) => transaccion({ fecha: `${m}-10`, monto: 100, comercio: "Tiendita" })),
+      ...["2026-06", "2026-07", "2026-08"].map((m) => transaccion({ fecha: `${m}-05`, monto: 1000, comercio: "Gimnasio" })),
+    ];
+    const periodo = resolverPeriodo({ desde: "2026-08", hasta: "2026-08" }, HOY);
+    const ind = calcularIndicadores(filas, null, periodo);
+    // (6 × 100 + 3 × 1,000) / 6 meses; antes era 100 + 1,000 = 1,100 al mes.
+    expect(ind.totalRecurrenteMensual).toBe(600);
+    expect(ind.fraccionRecurrente).toBe(1);
   });
 });

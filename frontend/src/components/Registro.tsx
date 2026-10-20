@@ -82,11 +82,11 @@ export function Registro() {
         <input type="checkbox" checked={acepta} onChange={(e) => setAcepta(e.target.checked)} className="mt-1" />
         <span>
           Acepto los{" "}
-          <a href="#terminos" target="_blank" rel="noopener" style={{ color: "var(--series-1)" }}>
+          <a href="#terminos" target="_blank" rel="noopener" style={{ color: "var(--marca)" }}>
             términos de servicio
           </a>{" "}
           y el{" "}
-          <a href="#privacidad" target="_blank" rel="noopener" style={{ color: "var(--series-1)" }}>
+          <a href="#privacidad" target="_blank" rel="noopener" style={{ color: "var(--marca)" }}>
             aviso de privacidad
           </a>
           .

@@ -51,6 +51,18 @@ builds that edition (without `functions/`) to the Pages project `ordenatulana` (
 the `PRODUCTO_*` secrets exist (README, "Instancia de clientes"). The plan doc (tiers MXN 0/29/59,
 Mercado Pago, phases) lives outside the repo; the desktop app keeps syncing only the personal instance.
 
+**Brand identity, producto edition (2026-10-20, user's request "ajusta el sitio a esta nueva imagen corporativa"; brand manual v2 in the project files, `marca/`)**:
+`components/Marca.tsx` (`SimboloMarca`, `LogoMarca`: the O + three cards symbol, halo = page background, and the two-line wordmark) replaces
+the old blue "$" square in the landing header/footer, the dashboard header and the full-screen login (personal edition keeps its plain text title).
+Colors: `--marca` is the UI accent (buttons, links, active tab, chips, borders) and `--series-1` stays the CHART blue; in personal `--marca` =
+`--series-1`, in producto `:root[data-edicion="producto"]` sets #1073EE (#3D8FF2 dark), ink #020D21 text, Inter for everything and League Spartan
+(`.titular-marca`) for the wordmark and the landing h1. Fonts are self-hosted (`@fontsource-variable/inter`, `@fontsource/league-spartan`, imported
+in `main.tsx`). `vite.config.ts`'s `marcaProducto` plugin adds `data-edicion`, title, description, Open Graph tags (image
+`https://ordenatulana.com/marca/compartir.png`), apple-touch-icon and manifest to `index.html` only when `VITE_EDICION=producto`. Brand images live in
+`frontend/public/marca/` (favicon, 180/192/512 icons, 1200×630 share image, two email logos); emails (`supabase/correos/base.html`, `correosCobro.ts`)
+load the logo from `https://ordenatulana.com/marca/…`, so it only shows once production is published. New UI code: accent = `var(--marca)`, never
+`--series-1` (that one is for data).
+
 **Shared access, personal edition (2026-10-17, user's request: a second user "con las mismas funcionalidades, con excepción de trading y wiki")**:
 the guest signs in with their OWN Supabase Auth user and works on the OWNER's data (read + write). Migration
 `20261017170000_acceso_compartido.sql`: table `accesos_compartidos (correo_invitado, correo_dueno)` (no API access) and

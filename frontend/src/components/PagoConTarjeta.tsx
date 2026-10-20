@@ -86,7 +86,7 @@ export default function PagoConTarjeta({
   );
 
   return (
-    <div ref={caja} className="mt-4 rounded-lg p-3" style={{ border: "1px solid var(--series-1)" }}>
+    <div ref={caja} className="mt-4 rounded-lg p-3" style={{ border: "1px solid var(--marca)" }}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
           Plan {plan.nombre} {periodo}: {moneda.format(monto)} {periodo === "anual" ? "al año" : "al mes"}
@@ -104,7 +104,7 @@ export default function PagoConTarjeta({
         <p
           role="status"
           className="mt-2 rounded-md px-3 py-2 text-sm font-medium"
-          style={{ background: "var(--page-plane)", border: "1px solid var(--series-1)", color: "var(--text-primary)" }}
+          style={{ background: "var(--page-plane)", border: "1px solid var(--marca)", color: "var(--text-primary)" }}
         >
           Procesando tu pago con Mercado Pago… No cierres ni recargues la página.
         </p>

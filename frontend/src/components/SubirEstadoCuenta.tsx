@@ -328,7 +328,7 @@ function Reconocido({
           <button
             type="button"
             className="mt-1 text-xs"
-            style={{ color: "var(--series-1)" }}
+            style={{ color: "var(--marca)" }}
             onClick={() => setVerTodos((v) => !v)}
           >
             {verTodos ? "Ver menos" : `Ver los ${resultado.movimientos.length}`}
@@ -379,7 +379,7 @@ function Reconocido({
           onAtendida={() => onMuestraAtendida(probando.id)}
         />
       ) : !muestra ? (
-        <button type="button" className="text-xs" style={{ color: "var(--series-1)" }} onClick={() => setMuestra(true)}>
+        <button type="button" className="text-xs" style={{ color: "var(--marca)" }} onClick={() => setMuestra(true)}>
           ¿No ves todos tus movimientos? Envíanos tu muestra anonimizada
         </button>
       ) : (
@@ -400,7 +400,7 @@ function LigaPlantilla() {
     <button
       type="button"
       className="font-medium underline"
-      style={{ color: "var(--series-1)" }}
+      style={{ color: "var(--marca)" }}
       onClick={() => void descargarPlantilla()}
     >
       plantilla de Excel
@@ -572,7 +572,7 @@ function EnviarMuestra({
   return (
     <div className="space-y-2">
       <details>
-        <summary className="cursor-pointer text-sm" style={{ color: "var(--series-1)" }}>
+        <summary className="cursor-pointer text-sm" style={{ color: "var(--marca)" }}>
           Ver la muestra anonimizada
         </summary>
         <pre

@@ -348,6 +348,7 @@ export function VistaResumen({
     gastoPromedioReferencia,
     recurrentes,
     totalRecurrenteMensual,
+    fraccionRecurrente,
   } = indicadores;
 
   const cambioAhorroPuntos =
@@ -480,7 +481,7 @@ export function VistaResumen({
                 onClick={() => onCambiarFiltros((a) => ({ ...a, [campo]: undefined }))}
                 className="rounded-full px-3 py-1 text-xs font-medium"
                 style={{
-                  background: "var(--series-1)",
+                  background: "var(--marca)",
                   color: "#ffffff",
                 }}
                 title="Quitar este filtro"
@@ -593,8 +594,8 @@ export function VistaResumen({
           etiqueta="Gastos recurrentes (por mes)"
           valor={moneda.format(totalRecurrenteMensual)}
           detalle={
-            gastoPromedio > 0
-              ? `${recurrentes.length} comercio(s), ${porcentaje.format(totalRecurrenteMensual / gastoPromedio)} de tu gasto mensual`
+            fraccionRecurrente !== null
+              ? `${recurrentes.length} comercio(s), ${porcentaje.format(fraccionRecurrente)} de lo que gastaste en los últimos ${VENTANA_RECURRENTES} meses`
               : `${recurrentes.length} comercio(s)`
           }
         />

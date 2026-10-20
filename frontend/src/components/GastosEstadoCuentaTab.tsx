@@ -196,7 +196,7 @@ export function GastosEstadoCuentaTab({
       <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
         Movimientos de tus estados de cuenta, de todas las cuentas. Elige un día para ver su
         detalle. Solo los <strong>cargos de tus tarjetas</strong> suman al total y al color del día; los abonos,
-        la cuenta de cheques (Priority), las categorías y los eventos ocultos se listan aparte. Montos en MXN.
+        los movimientos de cuentas de débito, las categorías y los eventos ocultos se listan aparte. Montos en MXN.
       </p>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs" style={{ color: "var(--text-secondary)" }}>
@@ -401,7 +401,7 @@ function HerenciaDeEventos({
                 onClick={heredarTodos}
                 disabled={trabajando}
                 className="rounded-md px-3 py-1.5 font-medium text-white disabled:opacity-50"
-                style={{ background: "var(--series-1)" }}
+                style={{ background: "var(--marca)" }}
               >
                 {trabajando ? "Guardando…" : "Sí, asignar"}
               </button>
@@ -420,7 +420,7 @@ function HerenciaDeEventos({
               type="button"
               onClick={() => setConfirmando(true)}
               className="rounded-md px-3 py-1.5 font-medium"
-              style={{ border: "1px solid var(--series-1)", color: "var(--series-1)" }}
+              style={{ border: "1px solid var(--marca)", color: "var(--marca)" }}
             >
               Heredar eventos
             </button>

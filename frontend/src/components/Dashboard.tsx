@@ -14,6 +14,7 @@ import {
 import { eventosOcultosPorDefecto, eventosVisiblesTras } from "../lib/gastosEstadoCuenta";
 import { soloShophunters } from "../lib/shophunters";
 import { EDICION, incluyeFuncion, NOMBRE_APP } from "../lib/edicion";
+import { LogoMarca } from "./Marca";
 import { PESTANAS_SOLO_DUENO, soyInvitado } from "../lib/accesoCompartido";
 import { obtenerMuestrasPorConfirmar, type MuestraPorConfirmar } from "../lib/muestras";
 import { AvisoMuestraLista } from "./AvisoMuestraLista";
@@ -513,7 +514,7 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
           className="text-base font-semibold"
           style={{ color: "var(--text-primary)" }}
         >
-          {NOMBRE_APP}
+          {EDICION === "producto" ? <LogoMarca /> : NOMBRE_APP}
         </h1>
         <div className="flex items-center gap-2 sm:gap-4">
           <button
@@ -546,7 +547,7 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
             <button
               onClick={() => cambiarVista(VISTA_SUBIR)}
               className="text-xs font-medium"
-              style={{ color: enSubir ? "var(--series-1)" : "var(--text-secondary)" }}
+              style={{ color: enSubir ? "var(--marca)" : "var(--text-secondary)" }}
               aria-current={enSubir ? "page" : undefined}
             >
               <span className="sm:hidden">Subir</span>
@@ -557,7 +558,7 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
             <button
               onClick={() => cambiarVista(VISTA_ADMIN)}
               className="text-xs font-medium"
-              style={{ color: enAdmin ? "var(--series-1)" : "var(--text-secondary)" }}
+              style={{ color: enAdmin ? "var(--marca)" : "var(--text-secondary)" }}
               aria-current={enAdmin ? "page" : undefined}
             >
               <span className="sm:hidden">Admin</span>
@@ -568,7 +569,7 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
             <button
               onClick={() => cambiarVista(VISTA_CUENTA)}
               className="text-xs font-medium"
-              style={{ color: enCuenta ? "var(--series-1)" : "var(--text-secondary)" }}
+              style={{ color: enCuenta ? "var(--marca)" : "var(--text-secondary)" }}
               aria-current={enCuenta ? "page" : undefined}
             >
               Mi cuenta
@@ -621,7 +622,7 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
                 <button
                   onClick={() => (setMuestrasListas([]), cambiarVista(VISTA_SUBIR))}
                   className="rounded-md px-4 py-2 text-sm font-medium text-white"
-                  style={{ background: "var(--series-1)" }}
+                  style={{ background: "var(--marca)" }}
                 >
                   Subir mi estado de cuenta
                 </button>
@@ -638,9 +639,9 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
               onClick={() => cambiarVista(tab.id)}
               className="whitespace-nowrap px-4 py-2 text-xs font-medium"
               style={{
-                color: pestanaActiva === tab.id ? "var(--series-1)" : "var(--text-secondary)",
+                color: pestanaActiva === tab.id ? "var(--marca)" : "var(--text-secondary)",
                 borderBottom: `2px solid ${
-                  pestanaActiva === tab.id ? "var(--series-1)" : "transparent"
+                  pestanaActiva === tab.id ? "var(--marca)" : "transparent"
                 }`,
               }}
             >
@@ -733,7 +734,7 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
               <button
                 onClick={() => cambiarVista(VISTA_SUBIR)}
                 className="rounded-md px-4 py-2 text-sm font-medium text-white"
-                style={{ background: "var(--series-1)" }}
+                style={{ background: "var(--marca)" }}
               >
                 Subir movimientos
               </button>

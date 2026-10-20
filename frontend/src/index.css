@@ -24,6 +24,13 @@
 
   --status-good: #0ca30c;
   --status-critical: #d03b3b;
+
+  /* Color de interfaz (botones, enlaces, pestaña activa), separado de --series-1
+   * que es el de las gráficas. En la edición personal son el mismo azul; Ordena
+   * tu Lana usa el de su logo (abajo, [data-edicion="producto"]). */
+  --marca: var(--series-1);
+  --fuente: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --fuente-titulos: var(--fuente);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -71,11 +78,38 @@
   --status-critical: #e66767;
 }
 
+/* Ordena tu Lana (manual de marca v2, 2026-10-20): azul del logo para la
+ * interfaz, tinta para el texto, Inter para todo y League Spartan para el
+ * nombre y los titulares. Las gráficas conservan su paleta (--series-*). El
+ * atributo lo pone index.html al construir (vite.config.ts). */
+:root[data-edicion="producto"] {
+  --marca: #1073ee;
+  --text-primary: #020d21;
+  --fuente: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --fuente-titulos: "League Spartan", var(--fuente);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-edicion="producto"]:not([data-theme="light"]) {
+    --marca: #3d8ff2;
+    --text-primary: #ffffff;
+  }
+}
+:root[data-edicion="producto"][data-theme="dark"] {
+  --marca: #3d8ff2;
+  --text-primary: #ffffff;
+}
+
 body {
   margin: 0;
   background: var(--page-plane);
   color: var(--text-primary);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--fuente);
+}
+
+/* Titulares de la portada con la letra del logo. */
+.titular-marca {
+  font-family: var(--fuente-titulos);
+  letter-spacing: -0.03em;
 }
 
 /* Fondo y borde de cada tarjeta del tablero (gráficas, tablas, paneles). En

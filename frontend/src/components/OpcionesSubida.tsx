@@ -31,7 +31,7 @@ export function OpcionesSubida({ onArchivos }: { onArchivos: (archivos: File[]) 
 
       <div className="grid gap-4 md:grid-cols-2">
         <Opcion
-          color="var(--series-1)"
+          color="var(--marca)"
           icono={<IconoPdf />}
           etiqueta="Más rápido"
           titulo="Estado de cuenta en PDF"
@@ -46,7 +46,7 @@ export function OpcionesSubida({ onArchivos }: { onArchivos: (archivos: File[]) 
                 <span
                   key={b}
                   className="rounded-full px-2.5 py-1 text-xs"
-                  style={{ background: tenue("var(--series-1)"), color: "var(--text-primary)" }}
+                  style={{ background: tenue("var(--marca)"), color: "var(--text-primary)" }}
                 >
                   {b}
                 </span>
@@ -54,7 +54,7 @@ export function OpcionesSubida({ onArchivos }: { onArchivos: (archivos: File[]) 
             </div>
           </div>
           <ZonaArchivos
-            color="var(--series-1)"
+            color="var(--marca)"
             acepta={ACEPTA_PDF}
             texto="Elegir PDF"
             ayuda="o arrástralo aquí · puedes elegir varios"

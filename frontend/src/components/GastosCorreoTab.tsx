@@ -144,7 +144,7 @@ function PanelDia({
   return (
     <section
       className="rounded-md"
-      style={{ background: "var(--surface-1)", border: "1px solid var(--series-1)" }}
+      style={{ background: "var(--surface-1)", border: "1px solid var(--marca)" }}
     >
       <header className="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-4 py-3">
         <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>

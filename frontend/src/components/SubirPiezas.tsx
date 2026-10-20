@@ -26,7 +26,7 @@ export function Boton({
       style={
         secundario
           ? { border: "1px solid var(--border)", color: "var(--text-primary)" }
-          : { background: "var(--series-1)", color: "white" }
+          : { background: "var(--marca)", color: "white" }
       }
     >
       {children}

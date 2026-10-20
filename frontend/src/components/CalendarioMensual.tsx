@@ -297,7 +297,7 @@ function FranjaPromedio({
       className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-md px-3 py-2 text-xs"
       style={{
         background: "var(--surface-1)",
-        border: `1px solid ${mes ? "var(--series-1)" : "var(--border)"}`,
+        border: `1px solid ${mes ? "var(--marca)" : "var(--border)"}`,
       }}
       role="group"
       aria-label={`${mes ? `Mes de ${nombre}` : `Semana del ${rango}`}: promedio diario ${formatoMoneda.format(
@@ -416,9 +416,9 @@ function CeldaDia({
       style={{
         background: calor === null ? "var(--surface-1)" : fondoCalor(calor),
         border: `1px solid ${
-          seleccionado ? "var(--series-1)" : calor === null ? "var(--border)" : bordeCalor(calor)
+          seleccionado ? "var(--marca)" : calor === null ? "var(--border)" : bordeCalor(calor)
         }`,
-        boxShadow: seleccionado ? "0 0 0 2px var(--series-1)" : undefined,
+        boxShadow: seleccionado ? "0 0 0 2px var(--marca)" : undefined,
         color: "var(--text-primary)",
       }}
     >

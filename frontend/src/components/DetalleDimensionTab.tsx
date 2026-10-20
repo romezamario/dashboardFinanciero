@@ -222,7 +222,7 @@ export function DetalleDimensionTab({ transacciones }: DetalleDimensionTabProps)
                 key={campo}
                 onClick={() => setFiltros((a) => ({ ...a, [campo]: undefined }))}
                 className="rounded-full px-3 py-1 text-xs font-medium"
-                style={{ background: "var(--series-1)", color: "#ffffff" }}
+                style={{ background: "var(--marca)", color: "#ffffff" }}
                 title="Quitar este filtro"
               >
                 {ETIQUETAS_FILTRO[campo]}: {filtros[campo]} ×
@@ -232,7 +232,7 @@ export function DetalleDimensionTab({ transacciones }: DetalleDimensionTabProps)
             <button
               onClick={() => setMes(null)}
               className="rounded-full px-3 py-1 text-xs font-medium"
-              style={{ background: "var(--series-1)", color: "#ffffff" }}
+              style={{ background: "var(--marca)", color: "#ffffff" }}
               title="Quitar este filtro"
             >
               Mes: {mes} ×

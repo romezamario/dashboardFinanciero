@@ -295,7 +295,7 @@ export function CapturaManual({ transacciones, onGuardado }: { transacciones: re
                   onClick={() => void deshacer(c.id)}
                   disabled={c.borrando}
                   className="text-xs font-medium underline-offset-2 hover:underline disabled:opacity-50"
-                  style={{ color: "var(--series-1)" }}
+                  style={{ color: "var(--marca)" }}
                 >
                   {c.borrando ? "Quitando…" : "Deshacer"}
                 </button>

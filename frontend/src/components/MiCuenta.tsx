@@ -103,7 +103,7 @@ function Boton({
       onClick={onClick}
       disabled={deshabilitado}
       className="rounded-md px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-      style={{ background: peligro ? "var(--status-critical)" : "var(--series-1)" }}
+      style={{ background: peligro ? "var(--status-critical)" : "var(--marca)" }}
     >
       {children}
     </button>
@@ -173,9 +173,9 @@ function SeccionPerfil({ correo }: { correo: string }) {
             : "—"}
           {perfil?.terminos_version && perfil.terminos_version !== VERSION_TERMINOS && " (hay una versión más nueva)"}
           {" · "}
-          <a href="#terminos" target="_blank" rel="noopener" style={{ color: "var(--series-1)" }}>Términos</a>
+          <a href="#terminos" target="_blank" rel="noopener" style={{ color: "var(--marca)" }}>Términos</a>
           {" · "}
-          <a href="#privacidad" target="_blank" rel="noopener" style={{ color: "var(--series-1)" }}>Privacidad</a>
+          <a href="#privacidad" target="_blank" rel="noopener" style={{ color: "var(--marca)" }}>Privacidad</a>
         </dd>
       </dl>
     </Seccion>
@@ -490,7 +490,7 @@ function SeccionPlan({ correo }: { correo: string }) {
             <div
               key={plan.id}
               className="rounded-lg p-3"
-              style={{ border: `1px solid ${plan.destacado ? "var(--series-1)" : "var(--border)"}` }}
+              style={{ border: `1px solid ${plan.destacado ? "var(--marca)" : "var(--border)"}` }}
             >
               <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                 {plan.nombre}

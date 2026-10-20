@@ -243,6 +243,8 @@ export interface GastoRecurrente {
   comercio: string;
   mesesPresente: number;
   montoMensual: number;
+  /** Suma de sus cargos en la ventana (para el total mensual de recurrentes). */
+  totalVentana: number;
 }
 
 /**
@@ -288,6 +290,7 @@ export function detectarGastosRecurrentes(
       comercio,
       mesesPresente: meses.size,
       montoMensual: total / meses.size,
+      totalVentana: total,
     }))
     .sort((a, b) => b.montoMensual - a.montoMensual);
 }
@@ -479,7 +482,14 @@ export interface Indicadores {
    * null si no hay historial antes del periodo. */
   gastoPromedioReferencia: number | null;
   recurrentes: GastoRecurrente[];
+  /** Promedio mensual de los cargos recurrentes en su ventana (meses con
+   * datos). No es la suma de los `montoMensual`: esos promedian solo los meses
+   * con cargo, y sumarlos daba más que el gasto total (se veía "110% de tu
+   * gasto mensual"). */
   totalRecurrenteMensual: number;
+  /** Qué parte del gasto de esa misma ventana son cargos recurrentes (0-1);
+   * null sin gasto en la ventana. */
+  fraccionRecurrente: number | null;
   /** Meses de gasto promedio del periodo que cubre el saldo al cierre. */
   mesesDeCobertura: number | null;
   saldoAlCierre: number | null;
@@ -515,6 +525,9 @@ export function calcularIndicadores(
   const referencia = sumar(resumenPorMes(transacciones, mesesReferencia));
 
   const recurrentes = detectarGastosRecurrentes(transacciones, ultimoMes);
+  const mesesVentanaRecurrentes = mesesHasta(ultimoMes, VENTANA_RECURRENTES).filter((m) => m >= primerMes);
+  const gastoVentanaRecurrentes = sumar(resumenPorMes(transacciones, mesesVentanaRecurrentes)).gastos;
+  const recurrenteVentana = recurrentes.reduce((s, r) => s + r.totalVentana, 0);
 
   const gastoPromedio = actual.gastos / n;
 
@@ -528,7 +541,8 @@ export function calcularIndicadores(
     gastoPromedio,
     gastoPromedioReferencia: mesesReferencia.length > 0 ? referencia.gastos / mesesReferencia.length : null,
     recurrentes,
-    totalRecurrenteMensual: recurrentes.reduce((s, r) => s + r.montoMensual, 0),
+    totalRecurrenteMensual: recurrenteVentana / Math.max(mesesVentanaRecurrentes.length, 1),
+    fraccionRecurrente: gastoVentanaRecurrentes > 0 ? recurrenteVentana / gastoVentanaRecurrentes : null,
     mesesDeCobertura: saldo !== null && gastoPromedio > 0 ? saldo / gastoPromedio : null,
     saldoAlCierre: saldo,
   };

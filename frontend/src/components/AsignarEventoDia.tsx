@@ -100,7 +100,7 @@ export function AsignarEventoDia({
           onClick={() => aplicar(nombreEvento)}
           disabled={trabajando || ids.length === 0 || !nombreEvento}
           className="rounded-md px-3 py-2 text-xs font-medium text-white disabled:opacity-50"
-          style={{ background: "var(--series-1)" }}
+          style={{ background: "var(--marca)" }}
         >
           {trabajando ? "Guardando…" : `Asignar a ${ids.length} seleccionado(s)`}
         </button>
@@ -122,7 +122,7 @@ export function AsignarEventoDia({
           type="button"
           onClick={() => onCambiarSeleccion(new Set(todoElDia ? [] : idsDelDia))}
           className="text-xs underline"
-          style={{ color: "var(--series-1)" }}
+          style={{ color: "var(--marca)" }}
         >
           {todoElDia ? "Quitar la selección" : "Seleccionar todo el día"}
         </button>

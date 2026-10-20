@@ -114,7 +114,7 @@ export function PanelDiaEstado({
     <ContextoCoincidencia.Provider value={correo ? contextoCoincidencia : null}>
     <section
       className="rounded-md"
-      style={{ background: "var(--surface-1)", border: "1px solid var(--series-1)" }}
+      style={{ background: "var(--surface-1)", border: "1px solid var(--marca)" }}
     >
       <header className="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-4 py-3">
         <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
@@ -249,7 +249,7 @@ function BotonEditar({ id, onEditar }: { id: string; onEditar: (id: string) => v
         onEditar(id);
       }}
       className="text-xs underline"
-      style={{ color: "var(--series-1)" }}
+      style={{ color: "var(--marca)" }}
       title="Cambiar la categoría, el comercio o el evento de este movimiento"
     >
       Editar
@@ -489,7 +489,7 @@ function DescripcionMovimiento({ mov }: { mov: MovimientoDia }) {
       {coincide && (
         <span
           className="shrink-0"
-          style={{ color: "var(--series-1)" }}
+          style={{ color: "var(--marca)" }}
           title="Posible coincidencia en el correo"
           aria-label="Tiene una posible coincidencia en el correo"
         >
@@ -613,7 +613,7 @@ function EditorMovimiento({
             )
           }
           className="rounded-md px-3 py-2 text-xs font-medium text-white disabled:opacity-50"
-          style={{ background: "var(--series-1)" }}
+          style={{ background: "var(--marca)" }}
         >
           {guardando ? "Guardando…" : "Guardar"}
         </button>

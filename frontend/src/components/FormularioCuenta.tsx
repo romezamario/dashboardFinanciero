@@ -1,5 +1,6 @@
 import { useId, type ReactNode } from "react";
-import { NOMBRE_APP } from "../lib/edicion";
+import { EDICION, NOMBRE_APP } from "../lib/edicion";
+import { LogoMarca } from "./Marca";
 
 // Piezas compartidas por las pantallas de cuenta (entrar, registro, recuperar
 // contraseña, contraseña nueva): una tarjeta centrada con el mismo aspecto
@@ -43,7 +44,7 @@ export function PantallaCuenta({
     >
       <form onSubmit={onEnviar ?? ((e) => e.preventDefault())} className="w-full max-w-sm rounded-lg p-6 tarjeta">
         <h1 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
-          {NOMBRE_APP}
+          {EDICION === "producto" ? <LogoMarca halo="var(--surface-1)" /> : NOMBRE_APP}
         </h1>
         <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
           {subtitulo}
@@ -105,7 +106,7 @@ export function BotonEnviar({ cargando, texto, textoCargando }: { cargando: bool
       type="submit"
       disabled={cargando}
       className="mt-4 w-full rounded-md py-2 text-sm font-medium text-white disabled:opacity-60"
-      style={{ background: "var(--series-1)" }}
+      style={{ background: "var(--marca)" }}
     >
       {cargando ? textoCargando : texto}
     </button>
@@ -126,7 +127,7 @@ export function Aviso({ tipo, children }: { tipo: "error" | "exito"; children: R
 }
 
 export function EnlaceCuenta({ href, onClick, children }: { href?: string; onClick?: () => void; children: ReactNode }) {
-  const estilo = { color: "var(--series-1)" };
+  const estilo = { color: "var(--marca)" };
   if (href)
     return (
       <a href={href} className="text-sm font-medium underline-offset-2 hover:underline" style={estilo}>

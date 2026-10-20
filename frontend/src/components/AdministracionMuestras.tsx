@@ -407,7 +407,7 @@ function TarjetaMuestra({
             </p>
           )}
           {muestra.muestra_origen_id && (
-            <p className="text-xs" style={{ color: "var(--series-1)" }}>
+            <p className="text-xs" style={{ color: "var(--marca)" }}>
               Retroalimentación: el cliente probó el lector y dice que todavía falta algo
               {(() => {
                 const origen = todas.find((m) => m.id === muestra.muestra_origen_id);
@@ -694,7 +694,7 @@ function Accion({
       className="rounded-md px-3 py-1.5 text-sm font-medium disabled:opacity-50"
       style={
         principal
-          ? { background: "var(--series-1)", color: "white" }
+          ? { background: "var(--marca)", color: "white" }
           : {
               border: `1px solid ${peligro ? "var(--status-critical)" : "var(--border)"}`,
               color: peligro ? "var(--status-critical)" : "var(--text-secondary)",

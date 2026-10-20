@@ -40,9 +40,9 @@ export function Legal({ documento, onVolver }: { documento: DocumentoLegal; onVo
         </div>
         <p className="mt-10 text-sm">
           {documento === "terminos" ? (
-            <a href="#privacidad" style={{ color: "var(--series-1)" }}>Ver el aviso de privacidad</a>
+            <a href="#privacidad" style={{ color: "var(--marca)" }}>Ver el aviso de privacidad</a>
           ) : (
-            <a href="#terminos" style={{ color: "var(--series-1)" }}>Ver los términos de servicio</a>
+            <a href="#terminos" style={{ color: "var(--marca)" }}>Ver los términos de servicio</a>
           )}
         </p>
       </main>

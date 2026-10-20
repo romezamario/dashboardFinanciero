@@ -186,8 +186,8 @@ function PildoraFiltro({ texto, activa, onClick }: { texto: string; activa: bool
       aria-pressed={activa}
       className="rounded-full px-2.5 py-0.5 text-xs font-medium"
       style={{
-        background: activa ? "var(--series-1)" : "transparent",
-        border: `1px solid ${activa ? "var(--series-1)" : "var(--border)"}`,
+        background: activa ? "var(--marca)" : "transparent",
+        border: `1px solid ${activa ? "var(--marca)" : "var(--border)"}`,
         color: activa ? "#ffffff" : "var(--text-secondary)",
       }}
       title={activa ? "Quitar este filtro" : "Filtrar por esto"}

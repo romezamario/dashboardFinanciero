@@ -32,10 +32,12 @@ function primerNombre(nombre: string | null): string | null {
   return nombre?.trim().split(/\s+/)[0] || null;
 }
 
-const FUENTE = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
-const AZUL = "#2a78d6";
-const AZUL_OSCURO = "#1b4f91";
-const VERDE = "#1f8a5b";
+const FUENTE = "Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+const AZUL = "#1073ee";
+const MARINO = "#04152b";
+const VERDE = "#0ca30c";
+// Logo de la marca sobre la franja marino (frontend/public/marca/, publicado en el sitio).
+const LOGO_SOBRE_MARINO = "https://ordenatulana.com/marca/correo-logo-marino.png";
 const GRIS = "#52514e";
 const GRIS_CLARO = "#76756f";
 
@@ -55,7 +57,7 @@ function recibo(filas: [string, string][]): Bloque {
     .map(
       ([k, v], i) => `<tr>
                       <td style="padding:${i ? 6 : 0}px 0 0;font-size:14px;color:${GRIS_CLARO};">${escapar(k)}</td>
-                      <td align="right" style="padding:${i ? 6 : 0}px 0 0;font-size:14px;font-weight:600;color:#0b0b0b;">${escapar(v)}</td>
+                      <td align="right" style="padding:${i ? 6 : 0}px 0 0;font-size:14px;font-weight:600;color:#020d21;">${escapar(v)}</td>
                     </tr>`
     )
     .join("\n");
@@ -77,17 +79,17 @@ function pasos(titulo: string, lista: [string, string][]): Bloque {
       ([t, d], i) => `<tr>
                   <td width="38" valign="top" style="padding:0 0 12px;">
                     <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-                      <td width="26" height="26" align="center" style="width:26px;height:26px;border-radius:13px;background:#e8f0fb;color:${AZUL_OSCURO};font-size:13px;font-weight:700;">${i + 1}</td>
+                      <td width="26" height="26" align="center" style="width:26px;height:26px;border-radius:13px;background:#e8f0fb;color:${MARINO};font-size:13px;font-weight:700;">${i + 1}</td>
                     </tr></table>
                   </td>
                   <td valign="top" style="padding:2px 0 12px;font-size:14px;line-height:20px;color:${GRIS};">
-                    <strong style="color:#0b0b0b;">${escapar(t)}</strong><br />${escapar(d)}
+                    <strong style="color:#020d21;">${escapar(t)}</strong><br />${escapar(d)}
                   </td>
                 </tr>`
     )
     .join("\n");
   return {
-    html: `<p style="margin:0 0 12px;font-size:15px;font-weight:600;color:#0b0b0b;">${escapar(titulo)}</p>
+    html: `<p style="margin:0 0 12px;font-size:15px;font-weight:600;color:#020d21;">${escapar(titulo)}</p>
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;">
 ${filas}
               </table>`,
@@ -155,21 +157,16 @@ function armar(datos: {
     <meta name="color-scheme" content="light" />
     <title>Ordena tu Lana</title>
   </head>
-  <body style="margin:0;padding:0;background:#f4f6f8;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8;">
+  <body style="margin:0;padding:0;background:#f9f9f7;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f9f9f7;">
       <tr>
         <td align="center" style="padding:32px 16px;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:540px;font-family:${FUENTE};color:#0b0b0b;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:540px;font-family:${FUENTE};color:#020d21;">
             <tr>
-              <td style="background:${AZUL_OSCURO};border-radius:12px 12px 0 0;padding:24px 24px 26px;">
-                <table role="presentation" cellpadding="0" cellspacing="0">
-                  <tr>
-                    <td width="28" height="28" align="center" style="width:28px;height:28px;border-radius:6px;background:#ffffff;color:${AZUL_OSCURO};font-size:14px;font-weight:700;">$</td>
-                    <td style="padding-left:8px;font-size:17px;font-weight:600;color:#ffffff;">Ordena tu Lana</td>
-                  </tr>
-                </table>
+              <td style="background:${MARINO};border-radius:12px 12px 0 0;padding:24px 24px 26px;">
+                <img src="${LOGO_SOBRE_MARINO}" width="133" height="48" alt="Ordena tu Lana" style="display:block;border:0;width:133px;height:48px;font-size:17px;font-weight:700;color:#ffffff;" />
                 <h1 style="margin:18px 0 6px;font-size:24px;line-height:31px;color:#ffffff;">${datos.titulo}</h1>
-                <p style="margin:0;font-size:15px;line-height:22px;color:#d6e4f7;">${datos.subtitulo}</p>
+                <p style="margin:0;font-size:15px;line-height:22px;color:#c9d6ea;">${datos.subtitulo}</p>
               </td>
             </tr>
             <tr>

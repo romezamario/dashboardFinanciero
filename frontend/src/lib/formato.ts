@@ -79,13 +79,19 @@ export const dolaresConSigno = new Intl.NumberFormat("es-MX", {
   maximumFractionDigits: 2,
 });
 
-/** "$1.2 mil" -- pesos en celdas angostas (calendario en teléfono). */
-export const monedaCompacta = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-  notation: "compact",
-  maximumFractionDigits: 1,
-});
+/** "$734", "$1.1k", "$12k" -- pesos en celdas angostas (calendario en
+ * teléfono). Intl con notation "compact" da "$733.6" y "1.1 k$" en es-MX: lo
+ * primero no cabe en la celda y lo segundo se lee raro. */
+export const monedaCompacta = {
+  format(valor: number): string {
+    const signo = valor < 0 ? "-" : "";
+    const abs = Math.abs(valor);
+    if (abs < 999.5) return `${signo}$${Math.round(abs)}`;
+    const miles = abs / 1000;
+    const texto = miles < 9.95 ? String(Math.round(miles * 10) / 10) : String(Math.round(miles));
+    return `${signo}$${texto}k`;
+  },
+};
 
 /** "US$612.34" -- cotizaciones (QQQ/TQQQ). */
 export const dolares = new Intl.NumberFormat("es-MX", {

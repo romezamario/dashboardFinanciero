@@ -14,7 +14,7 @@ export interface SeccionWiki {
   cuerpo: ReactNode;
 }
 
-export const ULTIMA_REVISION = "17 de octubre de 2026";
+export const ULTIMA_REVISION = "20 de octubre de 2026";
 
 export const SECCIONES: SeccionWiki[] = [
   // ------------------------------------------------------------ inicio
@@ -779,7 +779,9 @@ export const SECCIONES: SeccionWiki[] = [
         </Formula>
         <Formula nombre="Gastos recurrentes">
           comercios con cargos en al menos 3 de los 6 meses que terminan en el último mes del periodo,
-          y con cargo en alguno de los 2 últimos. Monto mensual = total ÷ meses con cargo. Solo ve
+          y con cargo en alguno de los 2 últimos. Monto mensual de cada comercio (tabla) = total ÷ meses
+          con cargo; el de la tarjeta = todos sus cargos ÷ meses con datos de esa ventana, y su porcentaje
+          se compara con el gasto de esos mismos meses (antes podía pasar de 100%). Solo ve
           transacciones con comercio, e ignora las que tienen evento (son gastos puntuales).
         </Formula>
         <Formula nombre="Gasto hormiga">cargos de menos de $200 en el periodo: cuántos, cuánto suman y qué parte del gasto son.</Formula>

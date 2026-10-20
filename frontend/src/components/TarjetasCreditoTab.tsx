@@ -168,7 +168,7 @@ export function TarjetasCreditoTab({
               key={campo}
               onClick={() => onCambiarFiltros((a) => ({ ...a, [campo]: undefined }))}
               className="rounded-full px-3 py-1 text-xs font-medium"
-              style={{ background: "var(--series-1)", color: "#ffffff" }}
+              style={{ background: "var(--marca)", color: "#ffffff" }}
               title="Quitar este filtro"
             >
               {ETIQUETAS_FILTRO[campo]}: {filtros[campo]} ×

@@ -279,7 +279,7 @@ export function EditorTransacciones({
                 onClick={seleccionarTodasLasCoincidencias}
                 disabled={coincidencias.length === 0}
                 className="text-xs underline disabled:opacity-50"
-                style={{ color: "var(--series-1)" }}
+                style={{ color: "var(--marca)" }}
               >
                 Seleccionar todas las coincidencias
               </button>
@@ -311,7 +311,7 @@ export function EditorTransacciones({
                     onClick={() => alternarSeleccion(t.id)}
                     className="flex items-start gap-2 rounded-md p-2"
                     style={{
-                      border: `1px solid ${seleccionada ? "var(--series-1)" : "var(--gridline)"}`,
+                      border: `1px solid ${seleccionada ? "var(--marca)" : "var(--gridline)"}`,
                     }}
                   >
                     <input
@@ -486,7 +486,7 @@ export function EditorTransacciones({
               onClick={aplicarCambios}
               disabled={!puedeAplicar}
               className="w-full rounded-md px-4 py-2 text-xs font-medium text-white disabled:opacity-50 sm:w-auto"
-              style={{ background: "var(--series-1)" }}
+              style={{ background: "var(--marca)" }}
             >
               {guardando
                 ? "Aplicando..."

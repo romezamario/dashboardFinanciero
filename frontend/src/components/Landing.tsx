@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ahorroAnual, DIAS_PRUEBA, PLANES, precioPorMes, type Periodo, type Plan } from "../lib/planes";
 import { NOMBRE_APP } from "../lib/edicion";
+import { LogoMarca } from "./Marca";
 
 // Página de inicio pública de FinanzasPersonales (solo en la edición
 // "producto"; la personal sigue entrando directo al Login). Sin enrutador:
@@ -14,7 +15,7 @@ interface Props {
 const PASOS = [
   {
     titulo: "Sube tu estado de cuenta",
-    texto: "El PDF de tu banco o un CSV. Se lee en tu navegador: el archivo nunca sale de tu dispositivo.",
+    texto: "El PDF de tu banco o nuestra plantilla de Excel. Se lee en tu navegador: el archivo nunca sale de tu dispositivo.",
   },
   {
     titulo: "Revisa y categoriza",
@@ -46,7 +47,7 @@ const PREGUNTAS = [
   },
   {
     pregunta: "¿Qué bancos funcionan?",
-    respuesta: "Para empezar, Banamex (cuenta de cheques y tarjetas de crédito) e Invex. Cualquier otro banco entra con un archivo CSV o Excel.",
+    respuesta: "Para empezar, Banamex (cuenta de cheques y tarjetas de crédito) e Invex. Si tu banco aún no está, usa nuestra plantilla de Excel o captura tus movimientos a mano.",
   },
   {
     pregunta: "¿Puedo cancelar cuando quiera?",
@@ -87,28 +88,13 @@ function Contenedor({ children, className = "" }: { children: React.ReactNode; c
   return <div className={`mx-auto w-full max-w-6xl px-4 sm:px-6 ${className}`}>{children}</div>;
 }
 
-function Logo() {
-  return (
-    <span className="flex items-center gap-2 font-semibold">
-      <span
-        aria-hidden
-        className="flex h-7 w-7 items-center justify-center rounded-md text-sm font-bold text-white"
-        style={{ background: "var(--series-1)" }}
-      >
-        $
-      </span>
-      {NOMBRE_APP}
-    </span>
-  );
-}
-
 function BotonPrincipal({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="rounded-lg px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
-      style={{ background: "var(--series-1)" }}
+      className="rounded-lg px-5 py-3 text-[15px] font-semibold text-white transition hover:opacity-90"
+      style={{ background: "var(--marca)" }}
     >
       {children}
     </button>
@@ -120,7 +106,7 @@ function Encabezado({ onEntrar, login, onCerrarLogin }: Props & { login: ReactNo
   return (
     <header style={{ borderBottom: "1px solid var(--border)" }}>
       <Contenedor className="flex h-14 items-center justify-between">
-        <Logo />
+        <LogoMarca />
         <nav className="flex items-center gap-4 text-sm">
           <a href="#precios" className="hidden sm:inline" style={{ color: "var(--text-secondary)" }}>
             Precios
@@ -138,7 +124,7 @@ function Encabezado({ onEntrar, login, onCerrarLogin }: Props & { login: ReactNo
               className="rounded-md px-3 py-1.5 font-medium"
               style={
                 login
-                  ? { border: "1px solid var(--series-1)", color: "var(--series-1)" }
+                  ? { border: "1px solid var(--marca)", color: "var(--marca)" }
                   : { border: "1px solid var(--border)", color: "var(--text-primary)" }
               }
             >
@@ -228,10 +214,10 @@ function Portada({ onEntrar }: Props) {
     <section>
       <Contenedor className="grid items-center gap-10 py-14 md:grid-cols-2 md:py-20">
         <div>
-          <p className="text-sm font-medium" style={{ color: "var(--series-1)" }}>
+          <p className="text-sm font-medium" style={{ color: "var(--marca)" }}>
             Tus finanzas, claras y en pesos
           </p>
-          <h1 className="mt-3 text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
+          <h1 className="titular-marca mt-3 text-4xl font-bold leading-[1.05] sm:text-5xl">
             Descubre a dónde se va tu dinero cada mes
           </h1>
           <p className="mt-4 text-lg" style={{ color: "var(--text-secondary)" }}>
@@ -331,7 +317,7 @@ function VistaPrevia() {
 function Titulo({ etiqueta, titulo, texto }: { etiqueta: string; titulo: string; texto?: string }) {
   return (
     <div className="max-w-2xl">
-      <p className="text-sm font-medium" style={{ color: "var(--series-1)" }}>{etiqueta}</p>
+      <p className="text-sm font-medium" style={{ color: "var(--marca)" }}>{etiqueta}</p>
       <h2 className="mt-2 text-3xl font-bold tracking-tight">{titulo}</h2>
       {texto && <p className="mt-3" style={{ color: "var(--text-secondary)" }}>{texto}</p>}
     </div>
@@ -359,7 +345,7 @@ function ComoFunciona() {
           <li key={paso.titulo}>
             <span
               className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold text-white"
-              style={{ background: "var(--series-1)" }}
+              style={{ background: "var(--marca)" }}
             >
               {i + 1}
             </span>
@@ -458,7 +444,7 @@ function Precios({ onEntrar }: Props) {
               className="rounded-full px-4 py-1.5 font-medium"
               style={
                 periodo === p
-                  ? { background: "var(--series-1)", color: "#fff" }
+                  ? { background: "var(--marca)", color: "#fff" }
                   : { color: "var(--text-secondary)" }
               }
             >
@@ -486,12 +472,12 @@ function TarjetaPlan({ plan, periodo, onEntrar }: { plan: Plan; periodo: Periodo
   return (
     <div
       className="tarjeta relative flex flex-col rounded-2xl p-6"
-      style={plan.destacado ? { borderColor: "var(--series-1)", borderWidth: 2 } : undefined}
+      style={plan.destacado ? { borderColor: "var(--marca)", borderWidth: 2 } : undefined}
     >
       {plan.destacado && (
         <span
           className="absolute -top-3 left-6 rounded-full px-3 py-0.5 text-xs font-semibold text-white"
-          style={{ background: "var(--series-1)" }}
+          style={{ background: "var(--marca)" }}
         >
           Recomendado
         </span>
@@ -514,10 +500,10 @@ function TarjetaPlan({ plan, periodo, onEntrar }: { plan: Plan; periodo: Periodo
       <button
         type="button"
         onClick={onEntrar}
-        className="mt-6 rounded-lg py-2.5 text-sm font-semibold"
+        className="mt-6 rounded-lg py-2.5 text-[15px] font-semibold"
         style={
           plan.destacado
-            ? { background: "var(--series-1)", color: "#fff" }
+            ? { background: "var(--marca)", color: "#fff" }
             : { border: "1px solid var(--border)", color: "var(--text-primary)" }
         }
       >
@@ -575,7 +561,7 @@ function Pie() {
   return (
     <footer style={{ borderTop: "1px solid var(--border)" }}>
       <Contenedor className="flex flex-col gap-2 py-8 text-sm sm:flex-row sm:items-center sm:justify-between">
-        <Logo />
+        <LogoMarca />
         <nav className="flex gap-4" style={{ color: "var(--text-secondary)" }}>
           <a href="#terminos">Términos</a>
           <a href="#privacidad">Aviso de privacidad</a>

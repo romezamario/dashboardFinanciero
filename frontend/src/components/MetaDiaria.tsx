@@ -80,7 +80,7 @@ export function MetaEditable() {
           onClick={abrir}
           disabled={!cargada}
           className="underline disabled:opacity-50"
-          style={{ color: "var(--series-1)" }}
+          style={{ color: "var(--marca)" }}
           title="Cambiar la meta de gasto diario (se guarda)"
         >
           Cambiar
@@ -117,7 +117,7 @@ export function MetaEditable() {
         type="submit"
         disabled={guardando}
         className="rounded-md px-3 py-2 text-xs font-medium text-white disabled:opacity-50"
-        style={{ background: "var(--series-1)" }}
+        style={{ background: "var(--marca)" }}
       >
         {guardando ? "Guardando…" : "Guardar"}
       </button>
@@ -127,7 +127,7 @@ export function MetaEditable() {
           disabled={guardando}
           onClick={() => void aplicar(META_GASTO_DIARIO)}
           className="text-xs underline disabled:opacity-50"
-          style={{ color: "var(--series-1)" }}
+          style={{ color: "var(--marca)" }}
         >
           Restablecer a {formatoMoneda.format(META_GASTO_DIARIO)}
         </button>
