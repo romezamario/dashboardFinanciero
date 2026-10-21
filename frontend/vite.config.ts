@@ -68,6 +68,8 @@ function marcaProducto(edicion: string | undefined): Plugin {
         `<meta name="description" content="${DESCRIPCION_PRODUCTO}" />`,
         // Abre en oscuro; el script de tema de index.html lo ajusta al elegido.
         '<meta name="theme-color" content="#0d0d0d" />',
+        // PNG múltiplo de 48 px: el que Google usa en los resultados de búsqueda.
+        '<link rel="icon" type="image/png" sizes="96x96" href="/marca/favicon-96.png" />',
         '<link rel="apple-touch-icon" href="/marca/apple-touch-icon.png" />',
         '<link rel="manifest" href="/marca/manifest.webmanifest" />',
         '<meta property="og:type" content="website" />',

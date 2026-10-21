@@ -76,6 +76,13 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+      # Buscadores y navegadores piden /favicon.ico y /favicon.svg aunque el HTML
+      # apunte a /marca/: sin esto servían el ícono de Vite (el rayo morado).
+      - name: Íconos de la marca en la raíz
+        if: steps.config.outputs.lista == 'true'
+        working-directory: frontend
+        run: cp dist/marca/favicon.ico dist/favicon.ico && cp dist/marca/favicon.svg dist/favicon.svg
+
       # La Pages Function de /api/cotizaciones solo sirve a la pestaña QQQ,
       # que no existe en esta edición: no se publica.
       - name: Quitar functions/
