@@ -15,6 +15,7 @@ import { eventosOcultosPorDefecto, eventosVisiblesTras } from "../lib/gastosEsta
 import { soloShophunters } from "../lib/shophunters";
 import { EDICION, incluyeFuncion, NOMBRE_APP } from "../lib/edicion";
 import { LogoMarca } from "./Marca";
+import { BotonTema } from "./BotonTema";
 import { PESTANAS_SOLO_DUENO, soyInvitado } from "../lib/accesoCompartido";
 import { obtenerMuestrasPorConfirmar, type MuestraPorConfirmar } from "../lib/muestras";
 import { AvisoMuestraLista } from "./AvisoMuestraLista";
@@ -153,8 +154,6 @@ const VISTA_ADMIN = "administracion";
 // ese mismo alias.
 const PREFIJO_PESTANA_CUENTA = "cuenta:";
 
-type Tema = "light" | "dark";
-const CLAVE_TEMA = "tema";
 // Pestaña abierta, para que al recargar la página se vuelva a la misma
 // (sessionStorage: dura lo que la pestaña del navegador, no entre visitas).
 const CLAVE_PESTANA = "pestana-activa";
@@ -173,17 +172,6 @@ function vistaInicial(): string {
   } catch {
     return PESTANA_RESUMEN;
   }
-}
-
-/** El botón de tema alterna sobre lo que se ve HOY, sin importar si viene
- * del sistema o de una elección previa -- por eso lee `data-theme` (ya
- * aplicado por el script inline de index.html si el usuario había elegido
- * uno) y si no hay ninguno forzado, cae al `prefers-color-scheme` real del
- * navegador en vez de asumir "light". */
-function temaEfectivoInicial(): Tema {
-  const forzado = document.documentElement.getAttribute("data-theme");
-  if (forzado === "light" || forzado === "dark") return forzado;
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 /** `correo`: el del usuario de la sesión (lo muestra Mi cuenta). */
@@ -254,22 +242,6 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
   }
   // Sección elegida dentro del Resumen; se recuerda al cambiar de pestaña.
   const [seccionResumen, setSeccionResumen] = useState<string>(PESTANA_RESUMEN);
-  const [tema, setTema] = useState<Tema>(temaEfectivoInicial);
-
-  function alternarTema() {
-    setTema((anterior) => {
-      const siguiente: Tema = anterior === "dark" ? "light" : "dark";
-      document.documentElement.setAttribute("data-theme", siguiente);
-      try {
-        localStorage.setItem(CLAVE_TEMA, siguiente);
-      } catch {
-        // Navegación privada / almacenamiento bloqueado: el tema cambia igual,
-        // solo no se recuerda para la próxima visita.
-      }
-      return siguiente;
-    });
-  }
-
   /** Tras una edición: con `ids`, solo esas filas más los catálogos (una
    * categoría/evento nuevo, o un documento que cambió de cuenta, viven ahí)
    * en vez de volver a bajar todo el historial; sin `ids`, todo. Nunca lanza:
@@ -531,18 +503,7 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
           >
             {actualizando ? "Actualizando…" : "↻ Actualizar"}
           </button>
-          <button
-            onClick={alternarTema}
-            className="rounded-full px-3 py-1 text-xs font-medium"
-            style={{
-              background: "var(--surface-1)",
-              border: "1px solid var(--border)",
-              color: "var(--text-secondary)",
-            }}
-            title={tema === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-          >
-            {tema === "dark" ? "Modo claro" : "Modo oscuro"}
-          </button>
+          <BotonTema />
           {EDICION === "producto" && (
             <button
               onClick={() => cambiarVista(VISTA_SUBIR)}

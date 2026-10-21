@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { moneda } from "../lib/formato";
 import type { Periodo, Plan } from "../lib/planes";
 import { LLAVE_PUBLICA_MP, suscribirConTarjeta } from "../lib/suscripcion";
+import { temaActual } from "../lib/tema";
 
 let iniciado = false;
 function iniciar() {
@@ -16,11 +17,6 @@ function iniciar() {
   iniciado = true;
 }
 
-function temaOscuro(): boolean {
-  const forzado = document.documentElement.getAttribute("data-theme");
-  if (forzado) return forzado === "dark";
-  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
-}
 
 export default function PagoConTarjeta({
   plan,
@@ -61,7 +57,7 @@ export default function PagoConTarjeta({
   const personalizacion = useMemo(
     () => ({
       paymentMethods: { maxInstallments: 1 },
-      visual: { style: { theme: temaOscuro() ? ("dark" as const) : ("default" as const) } },
+      visual: { style: { theme: temaActual() === "dark" ? ("dark" as const) : ("default" as const) } },
     }),
     []
   );

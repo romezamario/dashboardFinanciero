@@ -66,8 +66,8 @@ function marcaProducto(edicion: string | undefined): Plugin {
       const titulo = 'Ordena tu Lana: descubre a dónde se va tu dinero'
       const cabeza = [
         `<meta name="description" content="${DESCRIPCION_PRODUCTO}" />`,
-        '<meta name="theme-color" content="#f9f9f7" media="(prefers-color-scheme: light)" />',
-        '<meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)" />',
+        // Abre en oscuro; el script de tema de index.html lo ajusta al elegido.
+        '<meta name="theme-color" content="#0d0d0d" />',
         '<link rel="apple-touch-icon" href="/marca/apple-touch-icon.png" />',
         '<link rel="manifest" href="/marca/manifest.webmanifest" />',
         '<meta property="og:type" content="website" />',

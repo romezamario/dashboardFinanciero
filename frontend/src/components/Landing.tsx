@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ahorroAnual, DIAS_PRUEBA, PLANES, precioPorMes, type Periodo, type Plan } from "../lib/planes";
 import { NOMBRE_APP } from "../lib/edicion";
 import { LogoMarca } from "./Marca";
+import { BotonTema } from "./BotonTema";
 
 // Página de inicio pública de FinanzasPersonales (solo en la edición
 // "producto"; la personal sigue entrando directo al Login). Sin enrutador:
@@ -114,6 +115,7 @@ function Encabezado({ onEntrar, login, onCerrarLogin }: Props & { login: ReactNo
           <a href="#preguntas" className="hidden sm:inline" style={{ color: "var(--text-secondary)" }}>
             Preguntas
           </a>
+          <BotonTema compacto />
           <div className="relative">
             <button
               ref={boton}

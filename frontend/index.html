@@ -6,17 +6,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dashboard Financiero</title>
     <script>
-      // Aplica el tema guardado ANTES de pintar, para no ver un parpadeo del
-      // tema equivocado al cargar. Si el usuario nunca forzó uno, no toca
-      // nada -- el CSS sigue el tema del sistema (@media prefers-color-scheme)
-      // por su cuenta, incluso en vivo si el usuario cambia su SO después.
+      // Aplica el tema ANTES de pintar, para no ver un parpadeo del tema
+      // equivocado al cargar (misma regla que temaDeInicio en src/lib/tema.ts):
+      // el que el usuario eligió; si nunca eligió, Ordena tu Lana abre en
+      // oscuro y la edición personal no fuerza nada -- el CSS sigue el tema
+      // del sistema (@media prefers-color-scheme), incluso en vivo.
       (function () {
+        var raiz = document.documentElement;
+        var tema = null;
         try {
-          var guardado = localStorage.getItem("tema");
-          if (guardado === "light" || guardado === "dark") {
-            document.documentElement.setAttribute("data-theme", guardado);
-          }
+          tema = localStorage.getItem("tema");
         } catch (e) {}
+        if (tema !== "light" && tema !== "dark") {
+          tema = raiz.getAttribute("data-edicion") === "producto" ? "dark" : null;
+        }
+        if (!tema) return;
+        raiz.setAttribute("data-theme", tema);
+        var barra = tema === "dark" ? "#0d0d0d" : "#f9f9f7";
+        var metas = document.querySelectorAll('meta[name="theme-color"]');
+        for (var i = 0; i < metas.length; i++) metas[i].setAttribute("content", barra);
       })();
     </script>
   </head>

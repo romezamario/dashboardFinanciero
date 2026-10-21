@@ -62,6 +62,9 @@ in `main.tsx`). `vite.config.ts`'s `marcaProducto` plugin adds `data-edicion`, t
 `frontend/public/marca/` (favicon, 180/192/512 icons, 1200×630 share image, two email logos); emails (`supabase/correos/base.html`, `correosCobro.ts`)
 load the logo from `https://ordenatulana.com/marca/…`, so it only shows once production is published. New UI code: accent = `var(--marca)`, never
 `--series-1` (that one is for data).
+**Dark by default (2026-10-21, user's request)**: the producto edition opens in dark mode unless the visitor chose otherwise
+(`lib/tema.ts` `temaDeInicio`, mirrored in `index.html`'s pre-paint script, which also sets the `theme-color` meta); the toggle is
+`BotonTema` (dashboard header + icon-only in the landing header), saved in `localStorage["tema"]`. Personal edition still follows the system.
 
 **Shared access, personal edition (2026-10-17, user's request: a second user "con las mismas funcionalidades, con excepción de trading y wiki")**:
 the guest signs in with their OWN Supabase Auth user and works on the OWNER's data (read + write). Migration
