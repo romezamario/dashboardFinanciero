@@ -572,7 +572,7 @@ las cuentas y movimientos que crees en pruebas son reales, y las migraciones se 
 Los enlaces de los correos de registro y contraseña llevan a ordenatulana.com (el *Site URL*), no a pruebas.
 
 Sin sesión, Ordena tu Lana abre en su **página de inicio** (qué hace, privacidad, planes Gratis /
-Básico / Pro con el anual primero y preguntas frecuentes); "Entrar" abre el inicio de sesión en una ventana flotante sobre la misma página (`#entrar`)
+Básico / Pro con el mensual primero; el anual muestra su total y debajo lo que equivale al mes y el ahorro y preguntas frecuentes); "Entrar" abre el inicio de sesión en una ventana flotante sobre la misma página (`#entrar`)
 y "Empieza gratis" o cualquier botón de plan, al registro (`#registro`). Tu edición personal sigue entrando
 directo al inicio de sesión.
 

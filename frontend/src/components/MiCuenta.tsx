@@ -10,7 +10,7 @@ import {
 } from "../lib/cuentaUsuario";
 import { descargarTexto, nombreArchivoExportacion, transaccionesACsv } from "../lib/exportarDatos";
 import { hoyIso } from "../lib/fechas";
-import { fechaCorta, moneda } from "../lib/formato";
+import { fechaCorta, moneda, monedaConCentavos } from "../lib/formato";
 import type { Transaccion } from "../lib/types";
 import { ahorroAnual, PLANES, precioPorMes, type Periodo, type Plan } from "../lib/planes";
 import {
@@ -244,7 +244,7 @@ function PagoTerminado({
 function SeccionPlan({ correo }: { correo: string }) {
   const [miPlan, setMiPlan] = useState<MiPlan | null>(null);
   const [suscripciones, setSuscripciones] = useState<Suscripcion[]>([]);
-  const [periodo, setPeriodo] = useState<Periodo>("anual");
+  const [periodo, setPeriodo] = useState<Periodo>("mensual");
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState<string | null>(null);
   const [confirmarCancelar, setConfirmarCancelar] = useState(false);
@@ -471,8 +471,8 @@ function SeccionPlan({ correo }: { correo: string }) {
         </p>
         <Segmentado<Periodo>
           opciones={[
-            { id: "anual", etiqueta: "Anual" },
             { id: "mensual", etiqueta: "Mensual" },
+            { id: "anual", etiqueta: "Anual" },
           ]}
           valor={periodo}
           onCambiar={(p) => {
@@ -499,7 +499,7 @@ function SeccionPlan({ correo }: { correo: string }) {
                 {moneda.format(periodo === "anual" ? plan.precioAnual! : plan.precioMensual)}
                 <span className="text-xs font-normal" style={{ color: "var(--text-muted)" }}>
                   {periodo === "anual"
-                    ? ` al año (${moneda.format(Math.round(precioPorMes(plan, "anual")))} al mes, ahorras ${moneda.format(ahorroAnual(plan))})`
+                    ? ` al año (${monedaConCentavos.format(precioPorMes(plan, "anual"))} al mes, ahorras ${moneda.format(ahorroAnual(plan))})`
                     : " al mes"}
                 </span>
               </p>

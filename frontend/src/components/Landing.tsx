@@ -423,9 +423,9 @@ function pesos(monto: number): string {
 }
 
 function Precios({ onEntrar }: Props) {
-  // El anual va primero a propósito (plan de suscripciones): con la cuota
-  // fija de Mercado Pago, un cobro al año baja la comisión de ~19% a ~5%.
-  const [periodo, setPeriodo] = useState<Periodo>("anual");
+  // Mensual primero y seleccionado (decisión de Mario, 2026-10-22); el anual
+  // va después con su total y, debajo, lo que equivale al mes y el ahorro.
+  const [periodo, setPeriodo] = useState<Periodo>("mensual");
   return (
     <Seccion id="precios">
       <div className="flex flex-col items-start justify-between gap-6 md:flex-row md:items-end">
@@ -436,7 +436,7 @@ function Precios({ onEntrar }: Props) {
           className="inline-flex rounded-full p-1 text-sm"
           style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
         >
-          {(["anual", "mensual"] as const).map((p) => (
+          {(["mensual", "anual"] as const).map((p) => (
             <button
               key={p}
               type="button"
@@ -498,7 +498,7 @@ function TarjetaPlan({ plan, periodo, onEntrar }: { plan: Plan; periodo: Periodo
         {esGratis
           ? "Para siempre"
           : anual
-            ? `Equivale a ${pesos(Math.round(porMes))} al mes · ahorras ${pesos(ahorroAnual(plan))}`
+            ? `Equivale a ${pesos(porMes)} al mes · ahorras ${pesos(ahorroAnual(plan))}`
             : "Se cobra cada mes"}
       </p>
 
