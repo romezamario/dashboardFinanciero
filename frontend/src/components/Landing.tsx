@@ -471,6 +471,9 @@ function Precios({ onEntrar }: Props) {
 function TarjetaPlan({ plan, periodo, onEntrar }: { plan: Plan; periodo: Periodo; onEntrar: () => void }) {
   const esGratis = plan.precioMensual === 0;
   const porMes = precioPorMes(plan, periodo);
+  // El anual se anuncia por su total (299/599): prorrateado salían $24.92 y
+  // $49.92 "al mes", que parecían precios distintos a los del plan.
+  const anual = !esGratis && periodo === "anual" && plan.precioAnual !== null;
   return (
     <div
       className="tarjeta relative flex flex-col rounded-2xl p-6"
@@ -488,14 +491,14 @@ function TarjetaPlan({ plan, periodo, onEntrar }: { plan: Plan; periodo: Periodo
       <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>{plan.descripcion}</p>
 
       <p className="mt-5">
-        <span className="text-4xl font-bold tabular-nums">{pesos(porMes)}</span>
-        <span className="text-sm" style={{ color: "var(--text-secondary)" }}> /mes</span>
+        <span className="text-4xl font-bold tabular-nums">{pesos(anual ? plan.precioAnual! : porMes)}</span>
+        <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{anual ? " /año" : " /mes"}</span>
       </p>
       <p className="mt-1 h-5 text-sm" style={{ color: "var(--text-muted)" }}>
         {esGratis
           ? "Para siempre"
-          : periodo === "anual"
-            ? `${pesos(plan.precioAnual!)} al año · ahorras ${pesos(ahorroAnual(plan))}`
+          : anual
+            ? `Equivale a ${pesos(Math.round(porMes))} al mes · ahorras ${pesos(ahorroAnual(plan))}`
             : "Se cobra cada mes"}
       </p>
 
