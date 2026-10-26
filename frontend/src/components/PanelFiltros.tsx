@@ -184,7 +184,7 @@ function PildoraFiltro({ texto, activa, onClick }: { texto: string; activa: bool
       type="button"
       onClick={onClick}
       aria-pressed={activa}
-      className="rounded-full px-2.5 py-0.5 text-xs font-medium"
+      className="rounded-full px-2.5 py-1.5 text-xs font-medium sm:py-0.5"
       style={{
         background: activa ? "var(--marca)" : "transparent",
         border: `1px solid ${activa ? "var(--marca)" : "var(--border)"}`,
@@ -215,7 +215,7 @@ export function PildoraExclusion({
       type="button"
       onClick={onClick}
       aria-pressed={excluida}
-      className="rounded-full px-2.5 py-0.5 text-xs font-medium"
+      className="rounded-full px-2.5 py-1.5 text-xs font-medium sm:py-0.5"
       style={{
         background: "transparent",
         border: `1px solid ${excluida ? "var(--status-critical)" : "var(--border)"}`,

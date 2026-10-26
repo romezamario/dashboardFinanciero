@@ -163,14 +163,14 @@ export const TransaccionesTabla = memo(function TransaccionesTabla({
           </span>
           <button
             onClick={() => setVisibles((v) => v + FILAS_POR_TANDA)}
-            className="underline"
+            className="py-2 underline sm:py-0"
             style={{ color: "var(--text-secondary)" }}
           >
             Mostrar {entero.format(Math.min(FILAS_POR_TANDA, faltan))} más
           </button>
           <button
             onClick={() => setVisibles(ordenadas.length)}
-            className="underline"
+            className="py-2 underline sm:py-0"
             style={{ color: "var(--text-secondary)" }}
           >
             Mostrar todas

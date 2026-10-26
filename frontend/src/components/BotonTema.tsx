@@ -2,8 +2,15 @@ import { useState } from "react";
 import { cambiarTema, temaActual, type Tema } from "../lib/tema";
 
 /** Alterna modo claro/oscuro. `compacto`: solo el ícono (encabezado de la
- * página de inicio, donde en el teléfono no cabe el texto). */
-export function BotonTema({ compacto = false }: { compacto?: boolean }) {
+ * página de inicio, donde en el teléfono no cabe el texto). `soloIconoEnMovil`:
+ * con texto en escritorio y solo el ícono en pantallas angostas (tablero). */
+export function BotonTema({
+  compacto = false,
+  soloIconoEnMovil = false,
+}: {
+  compacto?: boolean;
+  soloIconoEnMovil?: boolean;
+}) {
   const [tema, setTema] = useState<Tema>(temaActual);
   const siguiente: Tema = tema === "dark" ? "light" : "dark";
   const texto = siguiente === "light" ? "Modo claro" : "Modo oscuro";
@@ -18,7 +25,9 @@ export function BotonTema({ compacto = false }: { compacto?: boolean }) {
       className={
         compacto
           ? "grid h-8 w-8 place-items-center rounded-full"
-          : "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
+          : soloIconoEnMovil
+            ? "inline-flex h-9 w-9 items-center justify-center gap-1.5 rounded-full text-xs font-medium sm:h-auto sm:w-auto sm:px-3 sm:py-1"
+            : "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
       }
       style={{
         background: "var(--surface-1)",
@@ -26,10 +35,10 @@ export function BotonTema({ compacto = false }: { compacto?: boolean }) {
         color: "var(--text-secondary)",
       }}
       title={siguiente === "light" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-      aria-label={compacto ? texto : undefined}
+      aria-label={compacto || soloIconoEnMovil ? texto : undefined}
     >
       <Icono tema={siguiente} />
-      {!compacto && texto}
+      {soloIconoEnMovil ? <span className="hidden sm:inline">{texto}</span> : !compacto && texto}
     </button>
   );
 }

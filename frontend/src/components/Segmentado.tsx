@@ -23,7 +23,7 @@ export function Segmentado<T extends string>({
           onClick={() => onCambiar(o.id)}
           disabled={o.deshabilitada}
           title={o.deshabilitada ? o.tituloDeshabilitada : undefined}
-          className={`rounded ${chico ? "px-2 py-0.5" : "px-3 py-1"} text-xs font-medium disabled:opacity-40`}
+          className={`rounded ${chico ? "px-2 py-1 sm:py-0.5" : "px-3 py-2 sm:py-1"} text-xs font-medium disabled:opacity-40`}
           style={{
             background: valor === o.id ? "var(--surface-1)" : "transparent",
             color: valor === o.id ? "var(--text-primary)" : "var(--text-secondary)",

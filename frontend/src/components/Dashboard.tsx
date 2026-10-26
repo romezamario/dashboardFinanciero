@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   armarTransacciones,
   categoriaDe,
@@ -405,6 +405,19 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
     : PESTANA_RESUMEN;
   const vistaActiva = pestanaActiva === PESTANA_RESUMEN ? seccionActiva : pestanaActiva;
 
+  // En el teléfono la fila de pestañas se desliza de lado: que la pestaña
+  // abierta siempre quede a la vista (p. ej. al volver de "Mi cuenta").
+  const filaPestanas = useRef<HTMLDivElement>(null);
+  const hayDatos = datos !== null;
+  useEffect(() => {
+    const fila = filaPestanas.current;
+    const activa = fila?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!fila || !activa) return;
+    const izquierda = activa.offsetLeft - fila.offsetLeft;
+    if (izquierda < fila.scrollLeft || izquierda + activa.offsetWidth > fila.scrollLeft + fila.clientWidth)
+      fila.scrollTo({ left: Math.max(0, izquierda - 16) });
+  }, [pestanaActiva, hayDatos]);
+
   if (errorCarga) {
     return (
       <CentroDePagina>
@@ -488,11 +501,13 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
         >
           {EDICION === "producto" ? <LogoMarca /> : NOMBRE_APP}
         </h1>
-        <div className="flex items-center gap-2 sm:gap-4">
+        {/* En el teléfono las acciones van en su propia fila, de lado a lado y
+            con altura de dedo (h-9); desde sm quedan como siempre. */}
+        <div className="flex w-full items-center justify-between gap-1 sm:w-auto sm:justify-end sm:gap-4">
           <button
             onClick={() => void actualizar()}
             disabled={actualizando}
-            className="rounded-full px-3 py-1 text-xs font-medium"
+            className="h-9 whitespace-nowrap rounded-full px-3 text-xs font-medium sm:h-auto sm:py-1"
             style={{
               background: "var(--surface-1)",
               border: "1px solid var(--border)",
@@ -503,11 +518,11 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
           >
             {actualizando ? "Actualizando…" : "↻ Actualizar"}
           </button>
-          <BotonTema />
+          <BotonTema soloIconoEnMovil />
           {EDICION === "producto" && (
             <button
               onClick={() => cambiarVista(VISTA_SUBIR)}
-              className="text-xs font-medium"
+              className={`${BOTON_ENCABEZADO} font-medium`}
               style={{ color: enSubir ? "var(--marca)" : "var(--text-secondary)" }}
               aria-current={enSubir ? "page" : undefined}
             >
@@ -518,7 +533,7 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
           {EDICION === "producto" && esAdmin && (
             <button
               onClick={() => cambiarVista(VISTA_ADMIN)}
-              className="text-xs font-medium"
+              className={`${BOTON_ENCABEZADO} font-medium`}
               style={{ color: enAdmin ? "var(--marca)" : "var(--text-secondary)" }}
               aria-current={enAdmin ? "page" : undefined}
             >
@@ -529,7 +544,7 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
           {EDICION === "producto" && (
             <button
               onClick={() => cambiarVista(VISTA_CUENTA)}
-              className="text-xs font-medium"
+              className={`${BOTON_ENCABEZADO} font-medium`}
               style={{ color: enCuenta ? "var(--marca)" : "var(--text-secondary)" }}
               aria-current={enCuenta ? "page" : undefined}
             >
@@ -538,10 +553,11 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
           )}
           <button
             onClick={() => supabase.auth.signOut()}
-            className="text-xs"
+            className={BOTON_ENCABEZADO}
             style={{ color: "var(--text-secondary)" }}
           >
-            Cerrar sesión
+            <span className="sm:hidden">Salir</span>
+            <span className="hidden sm:inline">Cerrar sesión</span>
           </button>
         </div>
       </header>
@@ -591,14 +607,16 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
             />
           ))}
         <div
-          className="flex gap-1 overflow-x-auto"
+          ref={filaPestanas}
+          className="sin-barra flex gap-1 overflow-x-auto"
           style={{ borderBottom: "1px solid var(--border)" }}
         >
           {pestanas.map((tab) => (
             <button
               key={tab.id}
               onClick={() => cambiarVista(tab.id)}
-              className="whitespace-nowrap px-4 py-2 text-xs font-medium"
+              aria-current={pestanaActiva === tab.id ? "page" : undefined}
+              className="whitespace-nowrap px-4 py-3 text-xs font-medium sm:py-2"
               style={{
                 color: pestanaActiva === tab.id ? "var(--marca)" : "var(--text-secondary)",
                 borderBottom: `2px solid ${
@@ -746,6 +764,10 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
     </div>
   );
 }
+
+/** Botón de texto del encabezado: en el teléfono, alto de dedo (h-9) y sin
+ * partirse en dos renglones; en escritorio, igual que antes. */
+const BOTON_ENCABEZADO = "h-9 whitespace-nowrap px-1.5 text-xs sm:h-auto sm:px-0";
 
 function CentroDePagina({ children }: { children: React.ReactNode }) {
   return (

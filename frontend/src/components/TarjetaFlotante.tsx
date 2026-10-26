@@ -55,15 +55,19 @@ export function TarjetaFlotante({
     const alPulsarFuera = (e: MouseEvent) => {
       if (!ref.current?.contains(e.target as Node)) onCerrar();
     };
+    // En el iPhone la ventana cambia de alto al aparecer el teclado o la barra
+    // de Safari; solo un cambio de ancho (girar el teléfono) la cierra.
+    const anchoInicial = window.innerWidth;
+    const alRedimensionar = () => window.innerWidth !== anchoInicial && onCerrar();
     document.addEventListener("keydown", alTeclear);
     document.addEventListener("mousedown", alPulsarFuera);
     window.addEventListener("scroll", onCerrar, true);
-    window.addEventListener("resize", onCerrar);
+    window.addEventListener("resize", alRedimensionar);
     return () => {
       document.removeEventListener("keydown", alTeclear);
       document.removeEventListener("mousedown", alPulsarFuera);
       window.removeEventListener("scroll", onCerrar, true);
-      window.removeEventListener("resize", onCerrar);
+      window.removeEventListener("resize", alRedimensionar);
     };
   }, [fija, onCerrar]);
 
@@ -88,7 +92,7 @@ export function TarjetaFlotante({
           type="button"
           onClick={onCerrar}
           aria-label="Cerrar"
-          className="absolute right-2 top-1.5 px-1 text-base leading-none"
+          className="absolute right-1 top-0.5 px-2 py-1 text-base leading-none"
           style={{ color: "var(--text-muted)" }}
         >
           ×

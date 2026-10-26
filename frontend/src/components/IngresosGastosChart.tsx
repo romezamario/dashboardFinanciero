@@ -108,7 +108,7 @@ export function IngresosGastosChart({
                 key={valor}
                 onClick={() => onCambiarVista(valor)}
                 aria-pressed={vista === valor}
-                className="rounded px-3 py-1 font-medium"
+                className="rounded px-3 py-2 font-medium sm:py-1"
                 style={{
                   background: vista === valor ? "var(--series-1)" : "transparent",
                   color: vista === valor ? "#ffffff" : "var(--text-secondary)",

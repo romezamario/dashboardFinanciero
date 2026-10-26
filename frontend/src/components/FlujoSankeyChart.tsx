@@ -228,7 +228,7 @@ export function FlujoSankeyChart({
                 key={valor}
                 onClick={() => onCambiarVista(valor)}
                 aria-pressed={vistaActual === valor}
-                className="rounded px-3 py-1 font-medium"
+                className="rounded px-3 py-2 font-medium sm:py-1"
                 style={{
                   background: vistaActual === valor ? "var(--series-1)" : "transparent",
                   color: vistaActual === valor ? "#ffffff" : "var(--text-secondary)",

@@ -120,3 +120,32 @@ body {
     border: 1px solid var(--border);
   }
 }
+
+/* Teléfonos (2026-10-26). Safari de iPhone acerca la página al enfocar un
+   campo con letra menor a 16 px y no la regresa; en pantallas angostas los
+   campos usan 16 px (fuera de capa, para ganarle a text-sm/text-xs). En
+   escritorio no cambia nada. */
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* Pantallas táctiles: casillas más fáciles de atinar con el dedo. */
+@media (pointer: coarse) {
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 1.125rem;
+    height: 1.125rem;
+  }
+}
+
+/* Fila de pestañas que se desliza de lado en el teléfono, sin barra visible. */
+.sin-barra {
+  scrollbar-width: none;
+}
+.sin-barra::-webkit-scrollbar {
+  display: none;
+}

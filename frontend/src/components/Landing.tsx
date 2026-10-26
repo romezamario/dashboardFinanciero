@@ -201,7 +201,7 @@ function VentanaEntrar({
         type="button"
         onClick={onCerrar}
         aria-label="Cerrar"
-        className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-md text-lg leading-none"
+        className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-md text-lg leading-none sm:right-3 sm:top-3 sm:h-7 sm:w-7"
         style={{ color: "var(--text-muted)" }}
       >
         ×
@@ -568,8 +568,8 @@ function Pie() {
       <Contenedor className="flex flex-col gap-2 py-8 text-sm sm:flex-row sm:items-center sm:justify-between">
         <LogoMarca />
         <nav className="flex gap-4" style={{ color: "var(--text-secondary)" }}>
-          <a href="#terminos">Términos</a>
-          <a href="#privacidad">Aviso de privacidad</a>
+          <a href="#terminos" className="py-2 sm:py-0">Términos</a>
+          <a href="#privacidad" className="py-2 sm:py-0">Aviso de privacidad</a>
         </nav>
         <p style={{ color: "var(--text-muted)" }}>© {new Date().getFullYear()} {NOMBRE_APP} · Hecho en México</p>
       </Contenedor>

@@ -65,6 +65,14 @@ load the logo from `https://ordenatulana.com/marca/…`, so it only shows once p
 **Dark by default (2026-10-21, user's request)**: the producto edition opens in dark mode unless the visitor chose otherwise
 (`lib/tema.ts` `temaDeInicio`, mirrored in `index.html`'s pre-paint script, which also sets the `theme-color` meta); the toggle is
 `BotonTema` (dashboard header + icon-only in the landing header), saved in `localStorage["tema"]`. Personal edition still follows the system.
+**Phones (2026-10-26, user's request "optimiza la experiencia para dispositivos móviles" without changing desktop)**: audited every
+screen at 390/360 px with mocked Supabase; desktop screenshots at 1280 px were compared pixel by pixel before/after (identical). Rules:
+mobile-only tweaks use base classes + `sm:` to restore the desktop value (e.g. `py-2 sm:py-1`); `index.css` sets inputs/selects to 16 px
+below 640 px (iPhone Safari zooms in on smaller fields) and bigger checkboxes on `pointer: coarse`. The dashboard header puts its actions
+in their own full-width row on phones (theme icon-only, "Salir", h-9 targets); the tab row hides its scrollbar (`.sin-barra`) and scrolls the
+active tab into view. `TarjetaFlotante` only closes on a WIDTH resize (iOS fires resize when the keyboard/toolbar appears). Effects must
+not return a call's value: recent Chromium's `window.scrollTo` returns a Promise, and `useEffect(() => window.scrollTo(0, 0))` blanked
+the Términos/Privacidad pages ("destroy is not a function").
 
 **Shared access, personal edition (2026-10-17, user's request: a second user "con las mismas funcionalidades, con excepción de trading y wiki")**:
 the guest signs in with their OWN Supabase Auth user and works on the OWNER's data (read + write). Migration

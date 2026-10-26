@@ -130,12 +130,12 @@ export function EnlaceCuenta({ href, onClick, children }: { href?: string; onCli
   const estilo = { color: "var(--marca)" };
   if (href)
     return (
-      <a href={href} className="text-sm font-medium underline-offset-2 hover:underline" style={estilo}>
+      <a href={href} className="py-2 text-sm font-medium underline-offset-2 hover:underline sm:py-0" style={estilo}>
         {children}
       </a>
     );
   return (
-    <button type="button" onClick={onClick} className="text-sm font-medium underline-offset-2 hover:underline" style={estilo}>
+    <button type="button" onClick={onClick} className="py-2 text-sm font-medium underline-offset-2 hover:underline sm:py-0" style={estilo}>
       {children}
     </button>
   );

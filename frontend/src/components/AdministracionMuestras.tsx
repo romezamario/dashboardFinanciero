@@ -84,13 +84,13 @@ export function AdministracionMuestras({
             pídele a Claude el lector de ese banco. No lo pegues en issues ni lugares públicos.
           </p>
         </div>
-        <div className="flex items-end gap-2">
-          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>
+        <div className="flex w-full items-end gap-2 sm:w-auto">
+          <label className="min-w-0 flex-1 text-xs sm:flex-none" style={{ color: "var(--text-secondary)" }}>
             Mostrar
             <select
               value={filtro}
               onChange={(e) => setFiltro(e.target.value as Filtro)}
-              className="mt-1 block rounded-md px-2 py-1.5 text-sm"
+              className="mt-1 block w-full rounded-md px-2 py-1.5 text-sm"
               style={estiloEntrada}
             >
               <option value="pendientes">Pendientes ({cuenta("pendientes")})</option>

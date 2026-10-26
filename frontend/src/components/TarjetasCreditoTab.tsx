@@ -167,7 +167,7 @@ export function TarjetasCreditoTab({
             <button
               key={campo}
               onClick={() => onCambiarFiltros((a) => ({ ...a, [campo]: undefined }))}
-              className="rounded-full px-3 py-1 text-xs font-medium"
+              className="rounded-full px-3 py-1.5 text-xs font-medium sm:py-1"
               style={{ background: "var(--marca)", color: "#ffffff" }}
               title="Quitar este filtro"
             >

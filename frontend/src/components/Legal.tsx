@@ -13,7 +13,9 @@ import { VERSION_TERMINOS } from "../lib/cuentaUsuario";
 export type DocumentoLegal = "terminos" | "privacidad";
 
 export function Legal({ documento, onVolver }: { documento: DocumentoLegal; onVolver: () => void }) {
-  useEffect(() => window.scrollTo(0, 0), [documento]);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [documento]);
 
   return (
     <div style={{ background: "var(--page-plane)", minHeight: "100vh", color: "var(--text-primary)" }}>
