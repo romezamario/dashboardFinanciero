@@ -98,9 +98,12 @@ async function letrasDePagina(
   return letras;
 }
 
+/** El PDF está protegido. `incorrecta`: se dio una contraseña y no abrió. */
 export class PdfConContrasena extends Error {
-  constructor() {
-    super("El PDF tiene contraseña.");
+  readonly incorrecta: boolean;
+  constructor(incorrecta: boolean) {
+    super(incorrecta ? "La contraseña del PDF no es correcta." : "El PDF tiene contraseña.");
+    this.incorrecta = incorrecta;
   }
 }
 
@@ -112,10 +115,14 @@ export class PdfIlegible extends Error {
 
 /** Lee el texto de cada página. Si `quiereDetalle(paginas)` dice que sí (el
  * banco imprime filas como imágenes de letras), también las posiciones de
- * líneas y letras-imagen, para traducirlas con glifos.ts. */
+ * líneas y letras-imagen, para traducirlas con glifos.ts.
+ *
+ * `contrasena` abre un PDF protegido: pdf.js lo descifra aquí, en el
+ * navegador. No se guarda ni se manda a ningún lado; solo vive en esta llamada. */
 export async function leerPaginasPdf(
   datos: ArrayBuffer,
-  quiereDetalle: (paginas: Paginas) => boolean = () => false
+  quiereDetalle: (paginas: Paginas) => boolean = () => false,
+  contrasena?: string
 ): Promise<PdfLeido> {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const { default: urlTrabajador } = await import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url");
@@ -124,13 +131,20 @@ export async function leerPaginasPdf(
   // pdf.js se queda con el buffer: se le pasa una copia.
   // Sin OffscreenCanvas, pdf.js entrega las máscaras como bytes (no como
   // bitmap), que es lo que necesita la huella de las letras-imagen.
-  const tarea = pdfjs.getDocument({ data: new Uint8Array(datos.slice(0)), isOffscreenCanvasSupported: false });
+  const tarea = pdfjs.getDocument({
+    data: new Uint8Array(datos.slice(0)),
+    isOffscreenCanvasSupported: false,
+    ...(contrasena !== undefined && { password: contrasena }),
+  });
   let documento;
   try {
     documento = await tarea.promise;
   } catch (error) {
     await tarea.destroy();
-    if (error instanceof Error && error.name === "PasswordException") throw new PdfConContrasena();
+    if (error instanceof Error && error.name === "PasswordException")
+      throw new PdfConContrasena(
+        (error as Error & { code?: number }).code === pdfjs.PasswordResponses.INCORRECT_PASSWORD
+      );
     throw new PdfIlegible(error);
   }
 

@@ -33,6 +33,9 @@ import {
 
 type EstadoArchivo =
   | { fase: "leyendo" }
+  // PDF protegido: se guardan los bytes del archivo (siguen en la computadora)
+  // mientras el cliente escribe la contraseña. La contraseña no se guarda aquí.
+  | { fase: "contrasena"; datos: ArrayBuffer; incorrecta: boolean }
   | { fase: "excel"; archivo: File }
   | { fase: "error"; mensaje: string; detalle?: string }
   | { fase: "listo"; hash: string; resultado: ResultadoImportacion };
@@ -49,6 +52,9 @@ const BANCOS_SOPORTADOS = "Banamex (cuenta de cheques y tarjetas de crédito) e 
 const TAMANO_MAXIMO_ARCHIVO = 20 * 1024 * 1024;
 
 let siguienteId = 1;
+
+const MENSAJE_PDF_ILEGIBLE =
+  "No pudimos abrir este archivo como PDF. Revisa que sea el estado de cuenta que descargaste de tu banco.";
 
 const detalleDeError = (error: unknown): string => {
   const e = error instanceof Error ? (error.cause instanceof Error ? error.cause : error) : null;
@@ -96,27 +102,43 @@ export function SubirEstadoCuenta({
       return;
     }
     setArchivos((lista) => [...lista, { id, nombre: archivo.name, estado: { fase: "leyendo" } }]);
+    let datos: ArrayBuffer;
     try {
-      const datos = await archivo.arrayBuffer();
+      datos = await archivo.arrayBuffer();
+    } catch (error) {
+      actualizar(id, { fase: "error", mensaje: MENSAJE_PDF_ILEGIBLE, detalle: detalleDeError(error) });
+      return;
+    }
+    await leerPdf(id, datos);
+  }
+
+  /** Lee el PDF y deja solo el resultado. `contrasena` (si el PDF la pide) se
+   * usa para abrirlo aquí mismo y se olvida al terminar esta función. */
+  async function leerPdf(id: number, datos: ArrayBuffer, contrasena?: string) {
+    actualizar(id, { fase: "leyendo" });
+    try {
       const [{ paginas, detalles }, hash] = await Promise.all([
-        leerPaginasPdf(datos, (p) => detectarLector(p)?.imagenes !== undefined),
+        leerPaginasPdf(datos, (p) => detectarLector(p)?.imagenes !== undefined, contrasena),
         huellaArchivo(datos),
       ]);
       // Solo el resultado queda en memoria; el texto completo (que puede traer
       // el número de cuenta) se descarta aquí.
       actualizar(id, { fase: "listo", hash, resultado: procesarPaginas(paginas, undefined, detalles) });
     } catch (error) {
+      if (error instanceof PdfConContrasena) {
+        actualizar(id, { fase: "contrasena", datos, incorrecta: error.incorrecta });
+        return;
+      }
       actualizar(id, {
         fase: "error",
-        mensaje:
-          error instanceof PdfConContrasena
-            ? "Este PDF tiene contraseña. Descárgalo de tu banca en línea sin contraseña o quítasela e inténtalo de nuevo."
-            : "No pudimos abrir este archivo como PDF. Revisa que sea el estado de cuenta que descargaste de tu banco.",
+        mensaje: MENSAJE_PDF_ILEGIBLE,
         // Sin datos del archivo: solo el error técnico, para saber qué falló.
-        detalle: error instanceof PdfConContrasena ? undefined : detalleDeError(error),
+        detalle: detalleDeError(error),
       });
     }
   }
+
+  const quitar = (id: number) => setArchivos((lista) => lista.filter((a) => a.id !== id));
 
   return (
     <div className="space-y-4">
@@ -133,6 +155,8 @@ export function SubirEstadoCuenta({
           onGuardado={onGuardado}
           pendientes={pendientes}
           onMuestraAtendida={quitarPendiente}
+          onContrasena={(contrasena) => a.estado.fase === "contrasena" && void leerPdf(a.id, a.estado.datos, contrasena)}
+          onQuitar={() => quitar(a.id)}
         />
       ))}
 
@@ -152,18 +176,94 @@ function Tarjeta({ titulo, children }: { titulo: string; children: ReactNode }) 
   );
 }
 
+/** Pide la contraseña de un PDF protegido. Vive solo en el estado de este
+ * cuadro: no se guarda en el navegador ni se manda a ningún servidor, y se
+ * borra del cuadro en cuanto se usa. */
+function PedirContrasena({
+  incorrecta,
+  onAbrir,
+  onCancelar,
+}: {
+  incorrecta: boolean;
+  onAbrir: (contrasena: string) => void;
+  onCancelar: () => void;
+}) {
+  const [contrasena, setContrasena] = useState("");
+  const [mostrar, setMostrar] = useState(false);
+  const abrir = () => {
+    if (!contrasena) return;
+    const valor = contrasena;
+    setContrasena("");
+    onAbrir(valor);
+  };
+  return (
+    <div>
+      <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+        Este PDF está protegido con contraseña. Escríbela para abrirlo; suele ser la que te indicó tu banco (por ejemplo,
+        parte de tu RFC o de tu número de cliente).
+      </p>
+      <div className="mt-3 flex flex-wrap items-end gap-2">
+        <label className="block min-w-48 flex-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+          Contraseña del PDF
+          <input
+            type={mostrar ? "text" : "password"}
+            value={contrasena}
+            // No es la contraseña de Ordena tu Lana: que el navegador no la ofrezca guardar ni la autocomplete.
+            autoComplete="off"
+            data-lpignore="true"
+            data-1p-ignore
+            spellCheck={false}
+            autoFocus
+            aria-invalid={incorrecta}
+            onChange={(e) => setContrasena(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") abrir();
+            }}
+            className="mt-1 w-full rounded-md px-3 py-2 text-sm"
+            style={estiloEntrada}
+          />
+        </label>
+        <Boton onClick={abrir} deshabilitado={!contrasena}>
+          Abrir PDF
+        </Boton>
+        <Boton onClick={onCancelar} secundario>
+          Cancelar
+        </Boton>
+      </div>
+      <label className="mt-2 inline-flex items-center gap-2 text-xs" style={{ color: "var(--text-secondary)" }}>
+        <input type="checkbox" checked={mostrar} onChange={(e) => setMostrar(e.target.checked)} />
+        Mostrar contraseña
+      </label>
+      {incorrecta && <Nota tipo="error">La contraseña no es correcta. Revísala e inténtalo de nuevo.</Nota>}
+      <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
+        El PDF se abre aquí, en tu dispositivo. Tu contraseña no se guarda ni se envía a ningún lado.
+      </p>
+    </div>
+  );
+}
+
 function TarjetaArchivo({
   archivo,
   onGuardado,
   pendientes,
   onMuestraAtendida,
+  onContrasena,
+  onQuitar,
 }: {
   archivo: Archivo;
   onGuardado: () => void;
   pendientes: readonly MuestraPorConfirmar[];
   onMuestraAtendida: (id: string) => void;
+  onContrasena: (contrasena: string) => void;
+  onQuitar: () => void;
 }) {
   const { estado } = archivo;
+  if (estado.fase === "contrasena")
+    return (
+      <Tarjeta titulo={archivo.nombre}>
+        <PedirContrasena incorrecta={estado.incorrecta} onAbrir={onContrasena} onCancelar={onQuitar} />
+      </Tarjeta>
+    );
   if (estado.fase === "leyendo")
     return (
       <Tarjeta titulo={archivo.nombre}>

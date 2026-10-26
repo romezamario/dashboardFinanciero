@@ -142,7 +142,10 @@ monto + tipo, " (2)" suffix for repeated (página, línea)). `guardar.ts` writes
 `bancos` (same names as the desktop `PARSERS` keys) / `cuentas` (alias: last write wins) / `documentos` (hash = sha256 of the
 file, same as `hash_pdf`, so desktop and browser agree; `ruta_local` null — a file name can carry the customer's name), then
 upsert `transacciones` on `(documento_id, pagina, linea_cruda)` sending only PDF columns (categoría/evento are kept). The raw
-page text (may include the full account number) is dropped once processed. **Unreadable PDFs (user's decision 2026-10-11,
+page text (may include the full account number) is dropped once processed. **Password-protected PDFs (2026-10-26, user's request)**: pdf.js's PasswordException becomes
+`PdfConContrasena(incorrecta)`; the card asks for the password (`PedirContrasena`) and `leerPaginasPdf(..., contrasena)` decrypts
+it in the browser. The password lives only in that input's state and the call (cleared on submit, `autoComplete="off"`, never in
+storage, logs, the DB or any request — checked in Playwright with a pypdf AES-256 PDF: wrong → "no es correcta", right → read). **Unreadable PDFs (user's decision 2026-10-11,
 "Muestra a revisión" over a paid live API call)**: no text → "escaneado" message; unknown bank, no movements, or the customer's
 "¿Faltan movimientos?" → they see `anonimizar.ts` (port of `parsers/_anonimizador.py`, same vocabulary) of every page and can
 send it to `muestras_estados_cuenta` (migration `20261012000000_…`: insert/select/delete own, only `estado='nueva'`, no update;
