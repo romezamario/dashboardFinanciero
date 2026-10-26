@@ -99,6 +99,21 @@ async function letrasDePagina(
 }
 
 /** El PDF está protegido. `incorrecta`: se dio una contraseña y no abrió. */
+type ItemTexto = Awaited<ReturnType<PDFPageProxy["getTextContent"]>>["items"][number];
+
+/** Lo mismo que `pagina.getTextContent().items`, pero leyendo el stream a mano:
+ * getTextContent recorre un ReadableStream con `for await`, y Safari antes de
+ * la versión 26 (iPhone) no sabe iterar streams ("undefined is not a function"). */
+async function textoDePagina(pagina: PDFPageProxy): Promise<ItemTexto[]> {
+  const lector = pagina.streamTextContent().getReader();
+  const items: ItemTexto[] = [];
+  for (;;) {
+    const { done, value } = await lector.read();
+    if (done) return items;
+    items.push(...(value as { items: ItemTexto[] }).items);
+  }
+}
+
 export class PdfConContrasena extends Error {
   readonly incorrecta: boolean;
   constructor(incorrecta: boolean) {
@@ -153,9 +168,8 @@ export async function leerPaginasPdf(
     const lineasConPosicion = [];
     for (let n = 1; n <= documento.numPages; n++) {
       const pagina = await documento.getPage(n);
-      const contenido = await pagina.getTextContent();
       const fragmentos: FragmentoTexto[] = [];
-      for (const item of contenido.items) {
+      for (const item of await textoDePagina(pagina)) {
         if (!("str" in item)) continue;
         fragmentos.push({
           texto: item.str,
