@@ -417,3 +417,49 @@ export function indiceEnX(
       : Math.round((x / anchoTrazo) * (cantidad - 1));
   return Math.min(cantidad - 1, Math.max(0, i));
 }
+
+// ---------------------------------------------------------------- Fibonacci
+
+/** Retrocesos que se trazan (pedido de Mario, 2026-10-29). */
+export const NIVELES_FIBONACCI = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1] as const;
+
+export interface NivelFibonacci {
+  /** 0 … 1 (0.382 = 38.2%). */
+  proporcion: number;
+  valor: number;
+}
+
+export interface RetrocesoFibonacci {
+  /** "alza" si el máximo llegó después del mínimo: el 0% queda en el máximo y
+   * los retrocesos se miden hacia abajo; "baja", al revés. */
+  tendencia: "alza" | "baja";
+  maximo: { fecha: string; precio: number };
+  minimo: { fecha: string; precio: number };
+  niveles: NivelFibonacci[];
+}
+
+/** Retrocesos de Fibonacci entre el máximo y el mínimo (de las velas) de los
+ * puntos recibidos, es decir, del rango visible. */
+export function calcularFibonacci(puntos: Vela[]): RetrocesoFibonacci | null {
+  if (puntos.length < 2) return null;
+  let iMax = 0;
+  let iMin = 0;
+  puntos.forEach((p, i) => {
+    if (p.maximo > puntos[iMax].maximo) iMax = i;
+    if (p.minimo < puntos[iMin].minimo) iMin = i;
+  });
+  const alto = puntos[iMax].maximo;
+  const bajo = puntos[iMin].minimo;
+  if (alto <= bajo) return null;
+  const tendencia = iMax >= iMin ? "alza" : "baja";
+  const niveles = NIVELES_FIBONACCI.map((proporcion) => ({
+    proporcion,
+    valor: tendencia === "alza" ? alto - (alto - bajo) * proporcion : bajo + (alto - bajo) * proporcion,
+  }));
+  return {
+    tendencia,
+    maximo: { fecha: puntos[iMax].fecha, precio: alto },
+    minimo: { fecha: puntos[iMin].fecha, precio: bajo },
+    niveles,
+  };
+}

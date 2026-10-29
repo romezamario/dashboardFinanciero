@@ -14,7 +14,7 @@ export interface SeccionWiki {
   cuerpo: ReactNode;
 }
 
-export const ULTIMA_REVISION = "20 de octubre de 2026";
+export const ULTIMA_REVISION = "29 de octubre de 2026";
 
 export const SECCIONES: SeccionWiki[] = [
   // ------------------------------------------------------------ inicio
@@ -1124,6 +1124,7 @@ export const SECCIONES: SeccionWiki[] = [
           filas={[
             ["Medias móviles", "SMA y EMA de 20, 50 y 200 sesiones (un botón para cada tipo; la EMA va punteada y apagada al abrir; calculadas sobre los 10 años, para que la de 200 exista desde el primer día visible)"],
             ["Bandas de Bollinger", "SMA 20 ± 2 desviaciones estándar"],
+            ["Retrocesos de Fibonacci", "0, 23.6, 38.2, 50, 61.8, 78.6 y 100% entre el máximo y el mínimo de las velas del rango visible (cambian con el zoom); si el máximo llegó después del mínimo el 0% es el máximo, si no, el mínimo. Botón \"Fibonacci\", apagado al abrir"],
             ["RSI", "14 sesiones, suavizado de Wilder"],
             ["Medir un rango", "arrastra sobre la gráfica del precio con el mouse (o uno o dos dedos): muestra las fechas, el cambio y el % de cierre a cierre, en verde si sube y en rojo si baja; al soltar se borra"],
             ["MACD", "EMA 12 − EMA 26, señal EMA 9; va debajo del precio y del volumen, en la misma tarjeta, y el RSI 14 debajo del MACD; cada uno se prende o apaga con su botón (encendidos al abrir) y muestra sus valores actuales en el título y en el eje derecho"],

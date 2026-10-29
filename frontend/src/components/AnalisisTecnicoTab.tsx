@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { detectarPatrones, FAMILIAS, type FamiliaPatron } from "../lib/patrones";
 import {
+  calcularFibonacci,
   calcularNiveles,
   calcularSerieTecnica,
   compararQqqTqqq,
@@ -38,6 +39,7 @@ import {
 } from "../lib/formato";
 import {
   COLOR_RESISTENCIA,
+  COLOR_FIBONACCI,
   COLOR_SMA50,
   COLOR_SUBE,
   GraficaMacd,
@@ -85,7 +87,7 @@ function VistaTecnica() {
   const [simbolo, setSimbolo] = useState<Simbolo>("QQQ");
   const [rango, setRango] = useState<RangoTecnico>("1A");
   const [tipo, setTipo] = useState<"velas" | "linea">("velas");
-  const [capas, setCapas] = useState({ sma: true, ema: false, bollinger: false, niveles: true, macd: true, rsi: true });
+  const [capas, setCapas] = useState({ sma: true, ema: false, bollinger: false, niveles: true, fibonacci: false, macd: true, rsi: true });
   // Patrones chartistas: familias que se dibujan, tarjeta flotante (al pasar el
   // ratón; con un clic queda fija) y el panel con las velas que originan lo elegido.
   const [patronesActivos, setPatronesActivos] = useState<Set<FamiliaPatron>>(new Set());
@@ -142,6 +144,12 @@ function VistaTecnica() {
   // Con la serie completa (últimos ~6 meses), no con el rango visible: así
   // los niveles no cambian al hacer zoom.
   const niveles = useMemo(() => (completos ? calcularNiveles(completos) : []), [completos]);
+  // Fibonacci, al revés que los niveles, sobre el rango visible: entre su
+  // máximo y su mínimo (cambia con el zoom 3M…10A).
+  const fibonacci = useMemo(
+    () => (capas.fibonacci ? calcularFibonacci(visibles) : null),
+    [capas.fibonacci, visibles]
+  );
   const comparativo = useMemo(
     () =>
       series.QQQ && series.TQQQ ? compararQqqTqqq(series.QQQ.velas, series.TQQQ.velas, desde) : null,
@@ -258,6 +266,13 @@ function VistaTecnica() {
               onClick={() => setCapas((c) => ({ ...c, niveles: !c.niveles }))}
             />
             <Interruptor
+              activo={capas.fibonacci}
+              color={COLOR_FIBONACCI}
+              texto="Fibonacci"
+              punteado
+              onClick={() => setCapas((c) => ({ ...c, fibonacci: !c.fibonacci }))}
+            />
+            <Interruptor
               activo={capas.bollinger}
               color="var(--text-muted)"
               texto="Bollinger 20, 2"
@@ -315,6 +330,7 @@ function VistaTecnica() {
           tipo={tipoEfectivo}
           capas={capas}
           niveles={capas.niveles ? niveles : []}
+          fibonacci={fibonacci}
           patrones={patronesDibujados}
           eventosPatron={eventosPatron}
           eventosNivel={eventosNivel}

@@ -391,7 +391,7 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
     identificador común entre las dos fuentes. Los movimientos con coincidencia llevan ✉.
 - **Una pestaña por cada cuenta que no es tarjeta** (p. ej. la de cheques) — la misma vista
   que el Resumen, solo con esa cuenta.
-- **Trading** — tres secciones. *QQQ / TQQQ*: análisis técnico (velas, medias móviles, Bollinger, soportes y resistencias
+- **Trading** — tres secciones. *QQQ / TQQQ*: análisis técnico (velas, medias móviles, Bollinger, retrocesos de Fibonacci (botón, apagado al abrir), soportes y resistencias
   calculados de los últimos 6 meses con las velas que los originan, volumen contra su promedio,
   patrones chartistas —rectángulo, hombro-cabeza-hombro, bandera, taza con asa, murciélago,
   doble techo/piso— con las reglas que cumple cada uno, RSI, MACD, comparación QQQ vs. TQQQ) y un tablero de indicadores macro de EE. UU. (Fed, inflación, empleo, tasas,

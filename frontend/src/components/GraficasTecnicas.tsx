@@ -28,6 +28,7 @@ import {
   SESIONES_NIVELES,
   zonaRsi,
   type NivelTecnico,
+  type RetrocesoFibonacci,
   type PuntoTecnico,
 } from "../lib/tecnico";
 import { elementosDePatrones, type EventosPatron } from "./dibujoPatrones";
@@ -56,6 +57,9 @@ export const COLOR_SMA200 = "var(--series-4)";
 // cada línea lleva su nombre escrito, así que el color nunca va solo.
 export const COLOR_RESISTENCIA = "var(--status-critical)";
 const COLOR_SOPORTE = "var(--status-good)";
+// Fibonacci en gris punteado (fino) para no competir con soportes y medias:
+// cada línea lleva su porcentaje y precio escritos a la izquierda.
+export const COLOR_FIBONACCI = "var(--text-secondary)";
 
 const ANCHO_EJE = 52;
 
@@ -225,6 +229,7 @@ export function GraficaPrecio({
   tipo,
   capas,
   niveles: todosLosNiveles,
+  fibonacci,
   patrones,
   eventosPatron,
   eventosNivel,
@@ -234,6 +239,8 @@ export function GraficaPrecio({
   tipo: "velas" | "linea";
   capas: { sma: boolean; ema: boolean; bollinger: boolean };
   niveles: NivelTecnico[];
+  /** Retrocesos de Fibonacci del rango visible (null = apagados). */
+  fibonacci: RetrocesoFibonacci | null;
   /** Patrones activos a dibujar sobre el precio. */
   patrones: Patron[];
   eventosPatron: EventosPatron;
@@ -265,6 +272,9 @@ export function GraficaPrecio({
       (n) => n.valor >= loPrecio * 0.97 && n.valor <= hiPrecio * 1.03
     );
     for (const n of visibles) valores.push(n.desde, n.hasta);
+    // En línea el dominio sale de los cierres: el 0% y el 100% (máximo y
+    // mínimo de las velas) tienen que caber.
+    if (fibonacci) valores.push(fibonacci.maximo.precio, fibonacci.minimo.precio);
     // Los patrones activos tienen que verse enteros (puntos, zonas, necklines,
     // llaves); su objetivo solo si no está lejísimos (si no, aplastaría la
     // gráfica: queda en la tarjeta del patrón).
@@ -283,7 +293,7 @@ export function GraficaPrecio({
     const [lo, hi] = [Math.min(...valores), Math.max(...valores)];
     const holgura = (hi - lo || 1) * 0.04;
     return { minimo: lo - holgura, maximo: hi + holgura, niveles: visibles };
-  }, [puntos, tipo, capas, todosLosNiveles, patrones]);
+  }, [puntos, tipo, capas, todosLosNiveles, patrones, fibonacci]);
   const aPixel = (v: number) =>
     MARGEN_SUPERIOR_PRECIO + ((maximo - v) / (maximo - minimo)) * (alto - MARGEN_SUPERIOR_PRECIO);
   const posiciones = separarEtiquetas(
@@ -509,6 +519,21 @@ export function GraficaPrecio({
                   strokeOpacity={0.85}
                 />
               ))}
+            {fibonacci?.niveles.map((n) => (
+              <ReferenceLine
+                key={`fib${n.proporcion}`}
+                y={n.valor}
+                stroke={COLOR_FIBONACCI}
+                strokeDasharray="2 3"
+                strokeOpacity={0.9}
+                label={{
+                  position: "insideBottomLeft",
+                  value: `Fib ${decimal1.format(n.proporcion * 100)}% · ${decimal.format(n.valor)}`,
+                  fill: COLOR_FIBONACCI,
+                  fontSize: 10,
+                }}
+              />
+            ))}
             {elementosDePatrones(patrones, eventosPatron, resaltadoId, puntos.length)}
             {rango &&
               [rango.desde, rango.hasta].flatMap((p) => [
@@ -752,7 +777,7 @@ export function GraficaRsi({
               y={70}
               stroke="var(--baseline)"
               strokeDasharray="4 3"
-              label={{ value: "Sobrecompra", position: "insideTopLeft", fill: "var(--text-muted)", fontSize: 10 }}
+              label={{ value: "Sobrecompra", position: "insideBottomLeft", fill: "var(--text-muted)", fontSize: 10 }}
             />
             <ReferenceLine y={50} stroke="var(--gridline)" />
             <ReferenceLine

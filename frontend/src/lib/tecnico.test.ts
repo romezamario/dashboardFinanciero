@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  calcularFibonacci,
   calcularNiveles,
   calcularSerieTecnica,
   indiceEnX,
@@ -113,5 +114,31 @@ describe("indiceEnX", () => {
     expect(indiceEnX(0, 90, 4, "puntos")).toBe(0);
     expect(indiceEnX(40, 90, 4, "puntos")).toBe(1);
     expect(indiceEnX(90, 90, 4, "puntos")).toBe(3);
+  });
+});
+
+describe("calcularFibonacci", () => {
+  it("en alza mide los retrocesos desde el máximo hacia abajo", () => {
+    const f = calcularFibonacci(velas([101, 105, 120, 151]))!;
+    expect(f.tendencia).toBe("alza");
+    expect(f.minimo.precio).toBe(100);
+    expect(f.maximo.precio).toBe(152);
+    expect(f.niveles[0]).toEqual({ proporcion: 0, valor: 152 });
+    expect(f.niveles.find((n) => n.proporcion === 0.5)!.valor).toBe(126);
+    expect(f.niveles[f.niveles.length - 1].valor).toBe(100);
+    expect(f.niveles.find((n) => n.proporcion === 0.618)!.valor).toBeCloseTo(152 - 52 * 0.618);
+  });
+
+  it("en baja mide desde el mínimo hacia arriba", () => {
+    const f = calcularFibonacci(velas([151, 130, 101]))!;
+    expect(f.tendencia).toBe("baja");
+    expect(f.niveles[0].valor).toBe(100);
+    expect(f.niveles[f.niveles.length - 1].valor).toBe(152);
+    expect(f.niveles.find((n) => n.proporcion === 0.382)!.valor).toBeCloseTo(100 + 52 * 0.382);
+  });
+
+  it("sin rango no hay retrocesos", () => {
+    expect(calcularFibonacci(velas([100]))).toBeNull();
+    expect(calcularFibonacci([])).toBeNull();
   });
 });
