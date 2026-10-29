@@ -519,7 +519,9 @@ export function GraficaPrecio({
                   strokeOpacity={0.85}
                 />
               ))}
-            {fibonacci?.niveles.map((n) => (
+            {/* Como el MACD y el RSI (pedido de Mario, 2026-10-29): el precio en
+             * una pastilla sobre el eje derecho; el porcentaje, a la izquierda. */}
+            {fibonacci?.niveles.flatMap((n) => [
               <ReferenceLine
                 key={`fib${n.proporcion}`}
                 y={n.valor}
@@ -528,12 +530,18 @@ export function GraficaPrecio({
                 strokeOpacity={0.9}
                 label={{
                   position: "insideBottomLeft",
-                  value: `Fib ${decimal1.format(n.proporcion * 100)}% · ${decimal.format(n.valor)}`,
+                  value: `Fib ${decimal1.format(n.proporcion * 100)}%`,
                   fill: COLOR_FIBONACCI,
                   fontSize: 10,
                 }}
-              />
-            ))}
+              />,
+              <ReferenceLine
+                key={`fibEje${n.proporcion}`}
+                y={n.valor}
+                stroke="none"
+                label={etiquetaEnEje(n.valor, COLOR_FIBONACCI)}
+              />,
+            ])}
             {elementosDePatrones(patrones, eventosPatron, resaltadoId, puntos.length)}
             {rango &&
               [rango.desde, rango.hasta].flatMap((p) => [

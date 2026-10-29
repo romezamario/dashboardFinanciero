@@ -1042,7 +1042,7 @@ column there). Toggle "Soportes y resistencias", on by default.
 (`capas.fibonacci`, off by default). `calcularFibonacci` (`tecnico.ts`, tested) takes the high/low of the candles of the
 **visible range** (changes with the zoom, unlike the levels): 0/23.6/38.2/50/61.8/78.6/100% (`NIVELES_FIBONACCI`); if the high came
 after the low (alza) 0% = high, else 0% = low. Drawn as thin dotted `ReferenceLine`s in `COLOR_FIBONACCI` (`--text-secondary`)
-with "Fib 38.2% · price" written inside on the left (not in the right label column); 0% and 100% widen the Y domain in line mode.
+with "Fib 38.2%" inside on the left and the price as an `etiquetaEnEje` pill on the right axis (same format as MACD/RSI, user's request); 0% and 100% widen the Y domain in line mode.
 **Volume, levels audit and chart patterns (2026-10-08, user's request; branch `feature/patrones-chartistas`)**:
 all detection lives in `src/lib/patrones/` and **every parameter is in one file, `config.ts`
 (`CONFIG_DETECCION`)** — pivot window (5 each side), ATR period, volume window (20) and threshold (1.5×),
