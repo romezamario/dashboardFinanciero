@@ -1,0 +1,50 @@
+name: Mantener activo Supabase
+
+# El plan gratis de Supabase pausa un proyecto tras ~7 días sin actividad
+# (correo del 2026-11-01 para el proyecto de clientes). Una consulta real a la
+# API de datos cada día cuenta como actividad. Lee `planes`, que es pública
+# (mismas migraciones en los dos proyectos), con la anon key: no toca datos de
+# nadie ni necesita credenciales nuevas.
+on:
+  schedule:
+    - cron: "17 13 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  consultar:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        instancia: [clientes, personal]
+    steps:
+      - name: Consulta a la base
+        env:
+          INSTANCIA: ${{ matrix.instancia }}
+          URL_CLIENTES: ${{ secrets.PRODUCTO_VITE_SUPABASE_URL }}
+          CLAVE_CLIENTES: ${{ secrets.PRODUCTO_VITE_SUPABASE_ANON_KEY }}
+          URL_PERSONAL: ${{ secrets.VITE_SUPABASE_URL }}
+          CLAVE_PERSONAL: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          if [ "$INSTANCIA" = clientes ]; then URL="$URL_CLIENTES"; CLAVE="$CLAVE_CLIENTES"
+          else URL="$URL_PERSONAL"; CLAVE="$CLAVE_PERSONAL"; fi
+          if [ -z "$URL" ] || [ -z "$CLAVE" ]; then
+            echo "::notice::Sin URL/anon key de la instancia $INSTANCIA: no se consulta."
+            exit 0
+          fi
+          # El ref no es secreto (va en la URL del sitio); se muestra para saber
+          # a qué proyecto del panel de Supabase corresponde cada instancia.
+          ref=$(printf '%s' "$URL" | sed -E 's#https?://([^.]+)\..*#\1#')
+          echo "Instancia $INSTANCIA = proyecto ${ref:0:4}…${ref: -4}"
+          for intento in 1 2 3; do
+            codigo=$(curl -sS -o respuesta.json -w '%{http_code}' \
+              "$URL/rest/v1/planes?select=id&limit=1" \
+              -H "apikey: $CLAVE" -H "Authorization: Bearer $CLAVE") || codigo=000
+            if [ "${codigo:0:1}" = 2 ]; then
+              echo "OK (HTTP $codigo): $(head -c 200 respuesta.json)"
+              exit 0
+            fi
+            echo "Intento $intento: HTTP $codigo"; sleep $((intento * 10))
+          done
+          echo "::error::La base de $INSTANCIA no respondió (¿ya está pausada?). Revísala en el panel de Supabase."
+          exit 1

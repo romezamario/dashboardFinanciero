@@ -1448,6 +1448,7 @@ commits:
   deploys only to the Pages preview branch `pruebas` (https://pruebas.ordenatulana.pages.dev); production
   (`--branch=main`, ordenatulana.com) only via `workflow_dispatch` with `destino: produccion`. Same customer
   Supabase for both (migrations still apply on push) — a separate test database is not set up.
+- `.github/workflows/mantener-activo.yml` (2026-11-01, after Supabase's "will be paused" email for the customer project) — daily cron + `workflow_dispatch`; one real PostgREST read of `planes` (public) with each instance's anon key (`PRODUCTO_VITE_SUPABASE_*` and `VITE_SUPABASE_*`), so the free plan never pauses either project for 7 days of inactivity. Logs the masked project ref of each instance.
 - `.github/workflows/deploy.yml` — triggers on `frontend/**`. Builds the frontend and deploys to
   Cloudflare Pages via `wrangler pages deploy`, using secrets `CLOUDFLARE_API_TOKEN`,
   `CLOUDFLARE_ACCOUNT_ID`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`. Assumes the
