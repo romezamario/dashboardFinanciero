@@ -8,7 +8,9 @@ import {
   diasEntre,
   nombreCorto,
   ultimaFechaPorCuenta,
+  type MovimientoDia,
 } from "../lib/gastosEstadoCuenta";
+import { monedaConCentavos } from "../lib/formato";
 import {
   actualizarCategoriaComercioYEvento,
   categoriaDe,
@@ -226,7 +228,12 @@ export function GastosEstadoCuentaTab({
         porque no hayas gastado.
       </p>
 
-      <HerenciaDeEventos heredables={heredables} onActualizado={onActualizado} />
+      <HerenciaDeEventos
+        heredables={heredables}
+        movimientos={movimientos}
+        coincidencias={coincidencias}
+        onActualizado={onActualizado}
+      />
 
       <div
         className="flex flex-col gap-2 rounded-lg p-3 tarjeta"
@@ -338,15 +345,32 @@ export function GastosEstadoCuentaTab({
  */
 function HerenciaDeEventos({
   heredables,
+  movimientos,
+  coincidencias,
   onActualizado,
 }: {
   heredables: Map<string, string[]>;
+  movimientos: MovimientoDia[];
+  coincidencias: Map<string, Coincidencia>;
   onActualizado: (ids?: string[]) => void | Promise<void>;
 }) {
   const [confirmando, setConfirmando] = useState(false);
   const [trabajando, setTrabajando] = useState(false);
   const [mensaje, setMensaje] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
   const total = Array.from(heredables.values()).reduce((suma, ids) => suma + ids.length, 0);
+  // Cada cargo con el aviso que lo empareja, para que se vea de qué día es antes de heredar.
+  const lista = useMemo(() => {
+    const porId = new Map(movimientos.map((m) => [m.id, m]));
+    return Array.from(heredables, ([evento, ids]) =>
+      ids.flatMap((id) => {
+        const mov = porId.get(id);
+        const aviso = coincidencias.get(id)?.gasto;
+        return mov && aviso ? [{ evento, mov, aviso }] : [];
+      })
+    )
+      .flat()
+      .sort((a, b) => b.mov.fecha.localeCompare(a.mov.fecha) || a.mov.id.localeCompare(b.mov.id));
+  }, [heredables, movimientos, coincidencias]);
 
   async function heredarTodos() {
     setTrabajando(true);
@@ -393,6 +417,18 @@ function HerenciaDeEventos({
             ({Array.from(heredables).map(([evento, ids]) => `${evento}: ${ids.length}`).join(" · ")}). Se
             emparejan por monto y fecha (±1 día), así que revisa; los que ya tienen evento no se tocan.
           </p>
+          <ul className="max-h-48 space-y-1 overflow-y-auto">
+            {lista.map(({ evento, mov, aviso }) => (
+              <li key={mov.id}>
+                <span style={{ color: "var(--text-primary)" }}>
+                  {fechaCorta(mov.fecha)} · {mov.descripcion} · {mov.cuenta} ·{" "}
+                  {monedaConCentavos.format(mov.centavos / 100)}
+                </span>{" "}
+                ← correo del {fechaCorta(aviso.fecha)} {aviso.hora} ({aviso.comercio || aviso.establecimiento || "sin comercio"}) ·{" "}
+                <strong>{evento}</strong>
+              </li>
+            ))}
+          </ul>
           {confirmando ? (
             <div className="flex flex-wrap items-center gap-2">
               <span>¿Asignar el evento a {total} movimiento(s)?</span>

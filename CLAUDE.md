@@ -527,7 +527,7 @@ re-uploading a day keeps it). In "Por correo" the day panel has checkboxes + an 
 `GastosRecientesTab` keeps the raw rows and derives the notices with `useMemo`: `GastoCorreo.evento` is resolved by `filaAGastoCorreo(fila, eventos)` from
 `evento_id` against the already-loaded `eventos` catalog (since 2026-10-10; it used to be a nested `eventos(nombre)` per row), so assigning first refreshes the
 catalog (`onActualizado([])`, a brand-new event) and then patches `evento_id`. **Inheritance is manual and never overwrites**: `eventosHeredables` (conciliarCorreo.ts) lists statement
-movements WITHOUT an event whose matched notice HAS one; `HerenciaDeEventos` (GastosEstadoCuentaTab) shows the counts per event and a "Heredar eventos" button with
+movements WITHOUT an event whose matched notice HAS one; `HerenciaDeEventos` (GastosEstadoCuentaTab) shows the counts per event, a list of each charge (date · descripción · cuenta · monto ← correo date/time/comercio · evento; added 2026-11-03, user's question "¿de qué día son estos cargos?") and a "Heredar eventos" button with
 inline confirmation, the match card (`CoincidenciaFlotante`) offers it per movement, and event cells show a muted "↳ evento" hint. Events are hidden by default in this view,
 so inherited cargos stop adding to the day until the event is re-shown (the success message says so). The match is still only a hint (amount + ±1 day), hence the confirmation.
 Covered by `conciliarCorreo.test.ts` (`eventosHeredables`, `filaAGastoCorreo`); the UI was confirmed working by the user in the real dashboard (2026-10-11).
