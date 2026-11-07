@@ -33,10 +33,10 @@ jobs:
             echo "::notice::Sin PRODUCTO_SUPABASE_PROJECT_ID: no se aplican los correos."
           fi
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         if: steps.config.outputs.lista == 'true'
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         if: steps.config.outputs.lista == 'true'
         with:
           node-version: 22
