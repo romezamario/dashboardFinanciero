@@ -9,6 +9,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from typing import TYPE_CHECKING
 
+from app.autocompletar import activar_autocompletado
 from app.hilos import correr_en_hilo
 from transform import sugerencias_ia as ia
 from transform.categorizador import Regla
@@ -184,6 +185,7 @@ class VentanaSugerenciasIA(tk.Toplevel):
         ttk.Label(edicion, text="Comercio:").grid(row=0, column=4, sticky="w")
         self.combo_comercio = ttk.Combobox(edicion, values=comercios, width=24)
         self.combo_comercio.grid(row=0, column=5, padx=(4, 12))
+        self._autocompletado = activar_autocompletado(self.combo_categoria, self.combo_comercio)
         ttk.Button(edicion, text="Aplicar a la fila", command=self._aplicar_edicion).grid(row=0, column=6)
         self.etiqueta_detalle = ttk.Label(edicion, text="", style="Ayuda.TLabel", wraplength=1080)
         self.etiqueta_detalle.grid(row=1, column=0, columnspan=7, sticky="w", pady=(6, 0))

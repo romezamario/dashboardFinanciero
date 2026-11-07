@@ -14,6 +14,7 @@ from app.logica import (
     PREFIJO_RENGLON_MANUAL,
     ErrorDeExtraccion,
     detectar_banco,
+    filtrar_opciones,
     hash_pdf,
     leer_estado_de_cuenta,
     mover_a_procesados_junto_al_pdf,
@@ -168,3 +169,26 @@ class MoverAProcesadosTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FiltrarOpcionesTest(unittest.TestCase):
+    OPCIONES = ["Comida", "Restaurantes", "Café", "Cafetería Ñandú", "Supermercado", "Transporte"]
+
+    def test_contiene_sin_mayusculas_ni_acentos(self):
+        self.assertEqual(filtrar_opciones(self.OPCIONES, "CAFE"), ["Café", "Cafetería Ñandú"])
+        self.assertEqual(filtrar_opciones(self.OPCIONES, "nandu"), ["Cafetería Ñandú"])
+        self.assertEqual(filtrar_opciones(self.OPCIONES, "rant"), ["Restaurantes"])
+
+    def test_primero_las_que_empiezan_con_el_texto(self):
+        self.assertEqual(
+            filtrar_opciones(self.OPCIONES, "r"),
+            ["Restaurantes", "Cafetería Ñandú", "Supermercado", "Transporte"],
+        )
+
+    def test_vacio_o_sin_coincidencias(self):
+        self.assertEqual(filtrar_opciones(self.OPCIONES, "  "), [])
+        self.assertEqual(filtrar_opciones(self.OPCIONES, "xyz"), [])
+
+    def test_limite_y_repetidos(self):
+        self.assertEqual(filtrar_opciones(["Uber", "Uber", "Uber Eats"], "ub", limite=1), ["Uber"])
+        self.assertEqual(filtrar_opciones(["Uber", "Uber", "Uber Eats"], "ub"), ["Uber", "Uber Eats"])
