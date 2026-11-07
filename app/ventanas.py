@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 import pdfplumber
 
+from app.autocompletar import activar_autocompletado
 from app.logica import PREFIJO_RENGLON_MANUAL
 from parsers._anonimizador import anonimizar
 from transform.categorizador import Regla, guardar_reglas, inferir_categoria_comercio
@@ -50,13 +51,14 @@ class VentanaReglas(tk.Toplevel):
         self.entrada_patron.grid(row=0, column=1, sticky="ew", padx=4)
 
         ttk.Label(marco_form, text="Categoría:").grid(row=1, column=0, sticky="w")
-        self.entrada_categoria = ttk.Entry(marco_form)
+        self.entrada_categoria = ttk.Combobox(marco_form, values=self._opciones("categoria"))
         self.entrada_categoria.grid(row=1, column=1, sticky="ew", padx=4)
 
         ttk.Label(marco_form, text="Comercio (opcional):").grid(row=2, column=0, sticky="w")
-        self.entrada_comercio = ttk.Entry(marco_form)
+        self.entrada_comercio = ttk.Combobox(marco_form, values=self._opciones("comercio"))
         self.entrada_comercio.grid(row=2, column=1, sticky="ew", padx=4)
         marco_form.columnconfigure(1, weight=1)
+        self._autocompletado = activar_autocompletado(self.entrada_categoria, self.entrada_comercio)
 
         marco_botones = ttk.Frame(self)
         marco_botones.pack(fill="x", padx=8, pady=4)
@@ -80,6 +82,13 @@ class VentanaReglas(tk.Toplevel):
             marco_botones, text="Guardar y cerrar", command=self._guardar_y_cerrar
         ).pack(side="right")
 
+    def _opciones(self, campo: str) -> list[str]:
+        """Categorías o comercios ya usados (reglas + estado de cuenta cargado),
+        para sugerirlos al escribir."""
+        nombres = {getattr(r, campo) for r in self.reglas}
+        nombres |= {getattr(t, campo) for t in self.master_app.transacciones}
+        return sorted(n for n in nombres if n)
+
     def _refrescar_tabla(self) -> None:
         self.tabla.delete(*self.tabla.get_children())
         for regla in self.reglas:
@@ -100,6 +109,8 @@ class VentanaReglas(tk.Toplevel):
         self.entrada_patron.delete(0, "end")
         self.entrada_categoria.delete(0, "end")
         self.entrada_comercio.delete(0, "end")
+        self.entrada_categoria.configure(values=self._opciones("categoria"))
+        self.entrada_comercio.configure(values=self._opciones("comercio"))
         self._refrescar_tabla()
 
     def _eliminar(self) -> None:
@@ -326,6 +337,7 @@ class VentanaRenglonManual(tk.Toplevel):
         self.combo_comercio.bind(
             "<<ComboboxSelected>>", lambda _e: self._marcar_comercio_editado()
         )
+        self._autocompletado = activar_autocompletado(self.combo_categoria, self.combo_comercio)
 
         marco.columnconfigure(1, weight=1)
 
@@ -677,6 +689,7 @@ class VentanaCategoriaManual(tk.Toplevel):
         ttk.Label(marco, text="Comercio (opcional):").grid(row=2, column=0, sticky="w", pady=3)
         self.combo_comercio = ttk.Combobox(marco, values=comercios, width=40)
         self.combo_comercio.grid(row=2, column=1, sticky="ew", padx=(8, 0))
+        self._autocompletado = activar_autocompletado(self.combo_categoria, self.combo_comercio)
         primero = transacciones[0]
         self.combo_categoria.set(primero.categoria or "")
         self.combo_comercio.set(primero.comercio or "")

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import unicodedata
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -30,6 +31,35 @@ PREFIJO_RENGLON_MANUAL = "(manual) "
 
 # Llave de una categoría puesta a mano: (pagina, linea_cruda), la del upsert.
 LlaveRenglon = tuple[int, str]
+
+
+def normalizar_para_buscar(texto: str) -> str:
+    """Minúsculas, sin acentos y con espacios colapsados: "Café  Ñ" → "cafe n"."""
+    sin_acentos = "".join(
+        c for c in unicodedata.normalize("NFKD", texto) if not unicodedata.combining(c)
+    )
+    return " ".join(sin_acentos.casefold().split())
+
+
+def filtrar_opciones(opciones: list[str], texto: str, limite: int | None = None) -> list[str]:
+    """Opciones que CONTIENEN `texto`, sin importar mayúsculas ni acentos — lo
+    que muestran los combos de categoría/comercio mientras se escribe
+    (`app/autocompletar.py`). Primero las que empiezan con el texto, luego las
+    demás, cada grupo en el orden original; sin repetidos. Texto vacío → ninguna
+    (la lista completa sigue en la flecha del combo)."""
+    buscado = normalizar_para_buscar(texto)
+    if not buscado:
+        return []
+    al_inicio: list[str] = []
+    en_medio: list[str] = []
+    for opcion in dict.fromkeys(opciones):
+        normal = normalizar_para_buscar(opcion)
+        if normal.startswith(buscado):
+            al_inicio.append(opcion)
+        elif buscado in normal:
+            en_medio.append(opcion)
+    resultado = al_inicio + en_medio
+    return resultado if limite is None else resultado[:limite]
 
 
 def hash_pdf(ruta: Path) -> str:

@@ -603,6 +603,15 @@ JSON (the sync ignores that key) and `recuperar_categorias_manuales` restores th
 is reloaded. The table shows them as "✎ <categoría>"; "Volver a la regla" removes the override.
 A typed manual row still opens its full `VentanaRenglonManual` form.
 
+**Suggestions while typing categoría/comercio (2026-11-07, user's report: "no me salen las opciones conforme voy escribiendo")**:
+every categoría/comercio field of the desktop app (`VentanaCategoriaManual`, `VentanaRenglonManual`, `VentanaReglas` — its two
+fields became Comboboxes fed by rules + loaded transactions — and `VentanaSugerenciasIA`) calls `activar_autocompletado`
+(`app/autocompletar.py`): a borderless list under the combo with the options that CONTAIN the typed text, case- and
+accent-insensitive (`filtrar_opciones` in `app/logica.py`, tested; prefix matches first, max 10). Focus stays in the combo;
+↑/↓ move, Enter/Tab/click choose (fires `<<ComboboxSelected>>`), Esc closes only the list; Enter with nothing highlighted keeps
+the dialog's own Enter (Guardar). Options are read from the combo's `values` on each key, so later `configure(values=…)` works;
+the arrow still shows the full list. Checked under Xvfb with Python 3.12 (filter, ↓↓+Enter, Esc, Enter saves); not yet on Windows.
+
 **"Recargar reglas" button (2026-10-04, user's request)**: `App.recargar_reglas` re-reads `reglas_categorizacion.json` (e.g. after Claude or the user edits it outside the app) and, if a statement is loaded, runs `recategorizar()` and reports how many rows changed and the uncategorized count before → after — no restart needed. Refuses while `VentanaReglas` is open (that window works on its own copy and "Guardar y cerrar" would overwrite the reloaded file); an unreadable JSON keeps the previous rules.
 
 **Categorization rule order matters — first match wins** (`categorizar()`): a more specific pattern
