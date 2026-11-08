@@ -74,6 +74,16 @@ active tab into view. `TarjetaFlotante` only closes on a WIDTH resize (iOS fires
 not return a call's value: recent Chromium's `window.scrollTo` returns a Promise, and `useEffect(() => window.scrollTo(0, 0))` blanked
 the Términos/Privacidad pages ("destroy is not a function").
 
+**Home page with categories, personal edition (2026-11-08, Mario: "evolucionar el dashboard financiero a un dashboard
+personal")**: after login `App` shows `Inicio.tsx` ("Mi dashboard", one card per `ESPACIOS` entry in `lib/espacios.ts`):
+Finanzas (= the whole existing `Dashboard`), Viajes and Pendientes (`disponible: false`, "Próximamente" placeholders —
+build them as new espacios). No router: the hash picks the espacio (`espacioDeHash`: `#finanzas`, `#viajes`,
+`#pendientes`; `#wiki-…` counts as finanzas; anything else = inicio), so Back works. `Dashboard` gets `onIrAInicio`
+(header "← Inicio", title "Finanzas", also on its loading/error screens) and, when leaving the Wiki, rewrites the hash to
+`#finanzas` instead of clearing it. Once opened, the Dashboard stays mounted (`hidden`) while on the home page, so
+tab/filters/data survive. Producto edition unchanged (straight to `Dashboard`, no `onIrAInicio`). Tested in
+`espacios.test.ts`; checked in the browser with a mocked Supabase (desktop, 375 px, dark/light).
+
 **Shared access, personal edition (2026-10-17, user's request: a second user "con las mismas funcionalidades, con excepción de trading y wiki")**:
 the guest signs in with their OWN Supabase Auth user and works on the OWNER's data (read + write). Migration
 `20261017170000_acceso_compartido.sql`: table `accesos_compartidos (correo_invitado, correo_dueno)` (no API access) and

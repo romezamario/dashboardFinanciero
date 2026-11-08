@@ -334,7 +334,12 @@ aparece un aviso con **Reintentar** sin perder lo que tenías filtrado. Las pest
 de inicio se descargan la primera vez que las abres; si el sitio se actualizó mientras lo tenías
 abierto, la página se recarga sola una vez.
 
-**Qué muestra** — una pestaña por tema; cada pestaña recuerda sus propios filtros al cambiar de
+**Página de inicio** — al entrar se ve "Mi dashboard", con una tarjeta por categoría: **Finanzas**
+(todo lo que se describe abajo), **Viajes** y **Pendientes** (estas dos dicen "Próximamente"; se
+irán construyendo). Dentro de Finanzas, "← Inicio" regresa (el botón Atrás del navegador también).
+Solo en la edición personal; la de clientes entra directo al tablero.
+
+**Qué muestra Finanzas** — una pestaña por tema; cada pestaña recuerda sus propios filtros al cambiar de
 una a otra. Botón de modo claro/oscuro arriba a la derecha.
 
 - **Resumen** — la vista principal:

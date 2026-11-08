@@ -175,7 +175,15 @@ function vistaInicial(): string {
 }
 
 /** `correo`: el del usuario de la sesión (lo muestra Mi cuenta). */
-export function Dashboard({ correo = "" }: { correo?: string } = {}) {
+export function Dashboard({
+  correo = "",
+  onIrAInicio,
+}: {
+  correo?: string;
+  /** Edición personal: el tablero es el espacio "Finanzas" de la página de
+   * inicio; con esto el encabezado muestra "← Inicio". */
+  onIrAInicio?: () => void;
+} = {}) {
   const [datos, setDatos] = useState<DatosTransacciones | null>(null);
   // Error de la carga inicial (sin datos no hay tablero que mostrar) vs. de
   // una recarga tras editar: esa se avisa arriba sin desmontar la vista, para
@@ -234,7 +242,12 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
     // quita, o recargar desde otra pestaña volvería a abrir la wiki.
     if (id !== PESTANA_WIKI && window.location.hash.startsWith("#wiki-")) {
       try {
-        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+        // Con página de inicio, el ancla vuelve a ser la de Finanzas.
+        window.history.replaceState(
+          null,
+          "",
+          window.location.pathname + window.location.search + (onIrAInicio ? "#finanzas" : "")
+        );
       } catch {
         // Sin replaceState el ancla se queda; no es grave.
       }
@@ -420,7 +433,7 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
 
   if (errorCarga) {
     return (
-      <CentroDePagina>
+      <CentroDePagina onIrAInicio={onIrAInicio}>
         <p className="text-sm" style={{ color: "var(--status-critical)" }}>
           No se pudieron cargar las transacciones: {errorCarga}
         </p>
@@ -430,7 +443,7 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
 
   if (!datos) {
     return (
-      <CentroDePagina>
+      <CentroDePagina onIrAInicio={onIrAInicio}>
         <p className="text-sm" style={{ color: "var(--text-secondary)" }}>Cargando…</p>
       </CentroDePagina>
     );
@@ -495,12 +508,28 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
         className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 sm:px-6 sm:py-4"
         style={{ borderBottom: "1px solid var(--border)" }}
       >
-        <h1
-          className="text-base font-semibold"
-          style={{ color: "var(--text-primary)" }}
-        >
-          {EDICION === "producto" ? <LogoMarca /> : NOMBRE_APP}
-        </h1>
+        <div className="flex items-center gap-3">
+          {onIrAInicio && (
+            <button
+              onClick={onIrAInicio}
+              className="h-9 whitespace-nowrap rounded-full px-3 text-xs font-medium sm:h-auto sm:py-1"
+              style={{
+                background: "var(--surface-1)",
+                border: "1px solid var(--border)",
+                color: "var(--text-secondary)",
+              }}
+              title="Volver a la página de inicio"
+            >
+              ← Inicio
+            </button>
+          )}
+          <h1
+            className="text-base font-semibold"
+            style={{ color: "var(--text-primary)" }}
+          >
+            {EDICION === "producto" ? <LogoMarca /> : onIrAInicio ? "Finanzas" : NOMBRE_APP}
+          </h1>
+        </div>
         {/* En el teléfono las acciones van en su propia fila, de lado a lado y
             con altura de dedo (h-9); desde sm quedan como siempre. */}
         <div className="flex w-full items-center justify-between gap-1 sm:w-auto sm:justify-end sm:gap-4">
@@ -769,13 +798,28 @@ export function Dashboard({ correo = "" }: { correo?: string } = {}) {
  * partirse en dos renglones; en escritorio, igual que antes. */
 const BOTON_ENCABEZADO = "h-9 whitespace-nowrap px-1.5 text-xs sm:h-auto sm:px-0";
 
-function CentroDePagina({ children }: { children: React.ReactNode }) {
+function CentroDePagina({
+  children,
+  onIrAInicio,
+}: {
+  children: React.ReactNode;
+  onIrAInicio?: () => void;
+}) {
   return (
     <div
-      className="flex min-h-screen items-center justify-center"
+      className="flex min-h-screen flex-col items-center justify-center gap-4"
       style={{ background: "var(--page-plane)" }}
     >
       {children}
+      {onIrAInicio && (
+        <button
+          onClick={onIrAInicio}
+          className="rounded-full px-3 py-1 text-xs font-medium"
+          style={{ border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+        >
+          ← Inicio
+        </button>
+      )}
     </div>
   );
 }

@@ -8,6 +8,8 @@ import { NuevaContrasena, RecuperarContrasena } from "./components/RecuperarCont
 import { Legal } from "./components/Legal";
 import { EDICION } from "./lib/edicion";
 import { mensajeVerificacionFallida, rutaDeHash, type RutaPublica } from "./lib/cuentaUsuario";
+import { espacioDeHash, hashDeEspacio, type Espacio } from "./lib/espacios";
+import { Inicio } from "./components/Inicio";
 
 // Dashboard (y todo lo que arrastra: Recharts, indicadores.ts, cada gráfica)
 // es la mayor parte del bundle -- separarlo del de Login hace que la
@@ -39,6 +41,11 @@ export default function App() {
   // apunta al sitio y aquí se canjea el token por la sesión.
   const [verificando, setVerificando] = useState(VERIFICACION_INICIAL !== null);
   const [mensajeEntrar, setMensajeEntrar] = useState<string | null>(ENLACE_INICIAL.error);
+  // Edición personal: página de inicio con categorías; el tablero de siempre
+  // es el espacio "finanzas". Una vez abierto se queda montado (oculto) al
+  // volver al inicio, para no perder pestaña, filtros ni datos cargados.
+  const [espacio, setEspacio] = useState<Espacio>(() => espacioDeHash(window.location.hash));
+  const [finanzasAbierto, setFinanzasAbierto] = useState(espacio === "finanzas");
 
   useEffect(() => {
     if (!VERIFICACION_INICIAL) return;
@@ -58,7 +65,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const alCambiarHash = () => setRuta(rutaDeHash(window.location.hash));
+    const alCambiarHash = () => {
+      setRuta(rutaDeHash(window.location.hash));
+      const nuevo = espacioDeHash(window.location.hash);
+      setEspacio(nuevo);
+      if (nuevo === "finanzas") setFinanzasAbierto(true);
+    };
     window.addEventListener("hashchange", alCambiarHash);
     return () => window.removeEventListener("hashchange", alCambiarHash);
   }, []);
@@ -113,6 +125,24 @@ export default function App() {
           );
       }
     }
+  }
+
+  if (EDICION === "personal") {
+    const abrir = (destino: Espacio) => {
+      window.location.hash = hashDeEspacio(destino);
+    };
+    return (
+      <>
+        {espacio !== "finanzas" && <Inicio onAbrir={abrir} />}
+        {finanzasAbierto && (
+          <div hidden={espacio !== "finanzas"}>
+            <Suspense fallback={<Cargando texto="Cargando…" />}>
+              <Dashboard correo={session?.user.email ?? ""} onIrAInicio={() => abrir("inicio")} />
+            </Suspense>
+          </div>
+        )}
+      </>
+    );
   }
 
   return (
