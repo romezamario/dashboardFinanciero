@@ -81,6 +81,27 @@ jobs:
           CF_CUENTA: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash .github/scripts/preparar-dashboard-personal.sh
 
+      # Los secretos de Trading no se pueden leer del proyecto viejo por la API:
+      # si están como secretos de GitHub (mismo nombre), se cargan al nuevo.
+      - name: Secretos de Trading en dashboard-personal
+        if: steps.personal.outcome == 'success'
+        continue-on-error: true
+        working-directory: frontend
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GITHUB_TOKEN_AGENTE: ${{ secrets.GITHUB_TOKEN_AGENTE }}
+          ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
+          ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
+        run: |
+          for nombre in GITHUB_TOKEN_AGENTE ALPACA_API_KEY_ID ALPACA_API_SECRET_KEY; do
+            if [ -n "${!nombre}" ]; then
+              printf '%s' "${!nombre}" | npx --yes wrangler@4 pages secret put "$nombre" --project-name=dashboard-personal >/dev/null && echo "✓ $nombre"
+            else
+              echo "::notice::Falta el secreto de GitHub $nombre (Trading no lo tendrá en dashboard-personal)."
+            fi
+          done
+
       - name: Deploy a dashboard-personal
         if: steps.personal.outcome == 'success'
         uses: cloudflare/wrangler-action@v4
