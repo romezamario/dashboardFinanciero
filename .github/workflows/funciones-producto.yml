@@ -47,7 +47,7 @@ jobs:
       - uses: supabase/setup-cli@v3
         if: steps.config.outputs.lista == 'true'
         with:
-          version: latest
+          version: 2.122.1 # 3.x: db push apunta a la base local por default; subir con cuidado
 
       # Solo los secretos que existen; sin MP_ACCESS_TOKEN las funciones
       # responden "Los pagos todavía no están configurados".
