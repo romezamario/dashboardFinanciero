@@ -39,8 +39,10 @@ resumen "Dominio del proyecto nuevo: https://${dominio}"
 apps=$(cf GET "/access/apps")
 [[ $(jq -r '.success' <<<"$apps") == "true" ]] \
   || falla "El token no puede leer las aplicaciones de Access (necesita 'Access: Apps and Policies — Edit'): $(jq -c '.errors' <<<"$apps")"
-app=$(jq -c --arg v "$VIEJO" '[.result[] | select((.domain // "") | contains($v))][0]' <<<"$apps")
-[[ $app != null ]] || falla "No encontré la aplicación de Access del dashboard (${VIEJO})."
+echo "Aplicaciones de Access visibles: $(jq -r '.result | length' <<<"$apps")"
+jq -r '.result[] | "  - \(.name) | \(.domain // "") | \([(.destinations // [])[] | .uri // empty] | join(","))"' <<<"$apps"
+app=$(jq -c --arg v "$VIEJO" '[.result[] | select(([.domain // "", .name // "", ((.self_hosted_domains // [])[]), ((.destinations // [])[] | .uri // "")] | join(" ")) | contains($v))][0]' <<<"$apps")
+[[ $app != null ]] || falla "No encontré la aplicación de Access del dashboard (${VIEJO}); el token quizá no tiene permiso de Access."
 id_app=$(jq -r '.id' <<<"$app")
 if jq -e --arg d "$dominio" '[(.self_hosted_domains // [])[], ((.destinations // [])[] | .uri // empty)] | index($d)' <<<"$app" >/dev/null; then
   echo "La aplicación de Access ya cubre ${dominio}."
