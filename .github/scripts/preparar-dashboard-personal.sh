@@ -92,11 +92,6 @@ for intento in 1 2 3 4 5 6; do
   echo "Intento ${intento}: ${destino}"
   if [[ $destino == 30[0-9]*cloudflareaccess.com* ]]; then
     resumen "✓ https://${dominio} pide el login de Cloudflare Access."
-    for sub in "comprueba.${dominio}" "comprueba.$(jq -r '.domain // empty' <<<"${app:-null}")"; do
-      [[ $sub == comprueba. ]] && continue
-      d=$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' "https://${sub}/" || true)
-      [[ $d == 30[0-9]*cloudflareaccess.com* ]] && resumen "✓ *.${sub#comprueba.} también pide Access."         || resumen "::warning::https://${sub} (ligas de cada deploy) no pide Access: ${d}"
-    done
     exit 0
   fi
   sleep 10

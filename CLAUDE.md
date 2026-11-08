@@ -1517,6 +1517,13 @@ commits:
   (`--branch=main`, ordenatulana.com) only via `workflow_dispatch` with `destino: produccion`. Same customer
   Supabase for both (migrations still apply on push) — a separate test database is not set up.
 - `.github/workflows/mantener-activo.yml` (2026-11-01, after Supabase's "will be paused" email for the customer project) — daily cron + `workflow_dispatch`; one real PostgREST read of `planes` (public) with each instance's anon key (`PRODUCTO_VITE_SUPABASE_*` and `VITE_SUPABASE_*`), so the free plan never pauses either project for 7 days of inactivity. Logs the masked project ref of each instance.
+- **New link (2026-11-08, Mario: "que ya no sea dashboard financiero")**: `deploy.yml` also deploys to the Pages project
+  `dashboard-personal` → https://dashboard-personal-8uu.pages.dev, ONLY after `.github/scripts/preparar-dashboard-personal.sh`
+  creates it if missing, adds it and the wildcards `*.dashboard-personal-8uu.pages.dev` / `*.dashboard-financiero-c5z.pages.dev`
+  to the Access app (the token has "Access: Apps and Policies — Edit" since that day; before, every per-deploy URL
+  `<hash>.<project>.pages.dev` answered 200 WITHOUT Access), and checks the domain redirects to Access. Trading's Pages
+  secrets can't be read by API: the workflow loads `GITHUB_TOKEN_AGENTE`/`ALPACA_API_KEY_ID`/`ALPACA_API_SECRET_KEY` into the
+  new project from GitHub secrets of the same name when they exist. The old project keeps deploying until it's deleted.
 - `.github/workflows/deploy.yml` — triggers on `frontend/**`. Builds the frontend and deploys to
   Cloudflare Pages via `wrangler pages deploy`, using secrets `CLOUDFLARE_API_TOKEN`,
   `CLOUDFLARE_ACCOUNT_ID`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`. Assumes the
