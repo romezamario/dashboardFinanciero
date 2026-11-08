@@ -392,8 +392,9 @@ export function Dashboard({
       id: PREFIJO_PESTANA_CUENTA + cuenta,
       etiqueta: cuenta,
     })),
-    // Solo en la edición personal (ver lib/edicion.ts).
-    ...(incluyeFuncion(EDICION, "tecnico") ? [{ id: PESTANA_TECNICO, etiqueta: "Trading" }] : []),
+    // Solo en la edición personal (ver lib/edicion.ts). Con página de inicio
+    // (onIrAInicio), Trading es su propio espacio (src/espacios/trading).
+    ...(incluyeFuncion(EDICION, "tecnico") && !onIrAInicio ? [{ id: PESTANA_TECNICO, etiqueta: "Trading" }] : []),
     ...(incluyeFuncion(EDICION, "wiki") ? [{ id: PESTANA_WIKI, etiqueta: "Wiki" }] : []),
   ].filter((p) => esDueno || !PESTANAS_SOLO_DUENO.has(p.id));
 

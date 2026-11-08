@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState, type ComponentType, type LazyExoticComponent } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { ENLACE_INICIAL, supabase, VERIFICACION_INICIAL } from "./lib/supabase";
 import { Login } from "./components/Login";
@@ -8,8 +8,9 @@ import { NuevaContrasena, RecuperarContrasena } from "./components/RecuperarCont
 import { Legal } from "./components/Legal";
 import { EDICION } from "./lib/edicion";
 import { mensajeVerificacionFallida, rutaDeHash, type RutaPublica } from "./lib/cuentaUsuario";
-import { espacioDeHash, hashDeEspacio, type Espacio } from "./lib/espacios";
+import { buscarEspacio, ESPACIOS, espacioDeHash, hashDeEspacio, type Espacio, type PropsEspacio } from "./lib/espacios";
 import { Inicio } from "./components/Inicio";
+import { LimiteDeError } from "./components/LimiteDeError";
 
 // Dashboard (y todo lo que arrastra: Recharts, indicadores.ts, cada gráfica)
 // es la mayor parte del bundle -- separarlo del de Login hace que la
@@ -18,8 +19,12 @@ import { Inicio } from "./components/Inicio";
 const Dashboard = lazy(() =>
   import("./components/Dashboard").then((m) => ({ default: m.Dashboard }))
 );
-// Espacio Salud (solo edición personal): su propio chunk.
-const Salud = lazy(() => import("./components/Salud").then((m) => ({ default: m.Salud })));
+// Vistas de los subproyectos (src/espacios/<id>/), cada una en su propio
+// chunk: se declaran una vez aquí (no en el render) para que React no las
+// vuelva a montar.
+const VISTAS_DE_ESPACIOS = new Map<string, LazyExoticComponent<ComponentType<PropsEspacio>>>(
+  ESPACIOS.flatMap((e) => (e.cargar ? [[e.id, lazy(e.cargar)] as const] : []))
+);
 
 let verificacion: ReturnType<typeof supabase.auth.verifyOtp> | null = null;
 
@@ -130,16 +135,19 @@ export default function App() {
   }
 
   if (EDICION === "personal") {
+    const VistaEspacio = VISTAS_DE_ESPACIOS.get(espacio);
     const abrir = (destino: Espacio) => {
       window.location.hash = hashDeEspacio(destino);
     };
     return (
       <>
-        {espacio !== "finanzas" && espacio !== "salud" && <Inicio onAbrir={abrir} />}
-        {espacio === "salud" && (
-          <Suspense fallback={<Cargando texto="Cargando…" />}>
-            <Salud onIrAInicio={() => abrir("inicio")} />
-          </Suspense>
+        {espacio === "inicio" && <Inicio onAbrir={abrir} />}
+        {VistaEspacio && (
+          <LimiteDeError key={espacio} nombre={buscarEspacio(espacio)?.nombre ?? espacio}>
+            <Suspense fallback={<Cargando texto="Cargando…" />}>
+              <VistaEspacio onIrAInicio={() => abrir("inicio")} />
+            </Suspense>
+          </LimiteDeError>
         )}
         {finanzasAbierto && (
           <div hidden={espacio !== "finanzas"}>

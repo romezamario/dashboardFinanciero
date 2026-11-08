@@ -334,13 +334,15 @@ aparece un aviso con **Reintentar** sin perder lo que tenías filtrado. Las pest
 de inicio se descargan la primera vez que las abres; si el sitio se actualizó mientras lo tenías
 abierto, la página se recarga sola una vez.
 
-**Página de inicio** — al entrar se ve "Mi dashboard", con una tarjeta por categoría: **Finanzas**
-(todo lo que se describe abajo), **Salud** (datos del anillo Oura; por ahora solo dice si ya hay
-datos), **Viajes** y **Pendientes** (estas dos dicen "Próximamente"; se irán construyendo). Cada
-categoría que no es Finanzas guarda sus datos en su propio esquema de Supabase (`salud`, …), con
-sus migraciones en `supabase/espacios/<categoría>/migraciones/`; solo se aplican a la instancia
-personal. Dentro de Finanzas, "← Inicio" regresa (el botón Atrás del navegador también).
-Solo en la edición personal; la de clientes entra directo al tablero.
+**Página de inicio** — al entrar se ve "Mi dashboard", con una tarjeta por espacio: **Finanzas**
+(todo lo que se describe abajo), **Trading** (la antigua pestaña Trading: QQQ/TQQQ, Macro EE.UU. y el
+agente), **Salud** (datos del anillo Oura; por ahora solo dice si ya hay datos), y en "Próximamente"
+**Viajes** y **Pendientes**. Trading, Salud y Viajes son subproyectos que se trabajan aparte y publican
+aquí: cada uno vive en `frontend/src/espacios/<espacio>/` (ver "Subproyectos" en CLAUDE.md). Los que
+guardan datos usan su propio esquema de Supabase (`salud`, …), con sus migraciones en
+`supabase/espacios/<espacio>/migraciones/`; solo se aplican a la instancia personal. Dentro de cada
+espacio, "← Inicio" regresa (el botón Atrás del navegador también). Los invitados del acceso
+compartido no ven Trading. Solo en la edición personal; la de clientes entra directo al tablero.
 
 **Qué muestra Finanzas** — una pestaña por tema; cada pestaña recuerda sus propios filtros al cambiar de
 una a otra. Botón de modo claro/oscuro arriba a la derecha.
@@ -399,7 +401,7 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
     identificador común entre las dos fuentes. Los movimientos con coincidencia llevan ✉.
 - **Una pestaña por cada cuenta que no es tarjeta** (p. ej. la de cheques) — la misma vista
   que el Resumen, solo con esa cuenta.
-- **Trading** — tres secciones. *QQQ / TQQQ*: análisis técnico (velas, medias móviles, Bollinger, retrocesos de Fibonacci (botón, apagado al abrir), soportes y resistencias
+- **Trading** (ahora es su propio espacio en la página de inicio, ya no una pestaña de Finanzas) — tres secciones. *QQQ / TQQQ*: análisis técnico (velas, medias móviles, Bollinger, retrocesos de Fibonacci (botón, apagado al abrir), soportes y resistencias
   calculados de los últimos 6 meses con las velas que los originan, volumen contra su promedio,
   patrones chartistas —rectángulo, hombro-cabeza-hombro, bandera, taza con asa, murciélago,
   doble techo/piso— con las reglas que cumple cada uno, RSI, MACD, comparación QQQ vs. TQQQ) y un tablero de indicadores macro de EE. UU. (Fed, inflación, empleo, tasas,

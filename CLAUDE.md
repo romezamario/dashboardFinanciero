@@ -102,6 +102,30 @@ fuente, datos jsonb)` (flexible until real data shapes the dashboards), `oura_an
 decoded events, body only as sha256), `oura_sincronizaciones`. `components/Salud.tsx` shows only whether data exists
 (empty state; PGRST106 = schema not exposed yet → "falta aplicar su migración"). Uploader from the laptop: not built yet.
 
+**Subprojects publish as espacios (2026-11-08, Mario: Trading automatizado, OURA and Viajes "son otros proyectos que
+estarán trabajándose en paralelo, pero publicarán en la misma página")**: each subproject owns ONE folder,
+`frontend/src/espacios/<id>/`, and nothing else in the shell has to change to add it. Contract:
+- `espacio.ts` — default export `ManifiestoEspacio` (`lib/espacios.ts`): `id` (= folder name = hash `#<id>`, lowercase
+  `[a-z][a-z0-9-]*`, not `finanzas`/`inicio`), `nombre`, `descripcion` (one line), `orden` (Finanzas 0, Trading 10, Salud 20,
+  Viajes 30, Pendientes 40 — leave gaps), `icono` (SVG path `d` strings, 24×24 box, 1.75 stroke, no fill), `soloDueno`
+  (hidden for shared-access guests), `cargar: () => import("./Vista")`. Keep it light (no heavy imports): `lib/espacios.ts`
+  loads every manifest eagerly with `import.meta.glob("../espacios/*/espacio.ts")`; the view is its own lazy chunk. No
+  `cargar` = card under "Próximamente" and its hash opens the home page. Invalid/duplicate ids are skipped with a warning.
+- `Vista.tsx` — default export, receives `PropsEspacio` (`onIrAInicio`), draws its whole page; use `components/MarcoEspacio`
+  for the common header ("← Inicio", title, theme, sign out) + `main`. `App` wraps it in `LimiteDeError` (an error in one
+  subproject never blanks another) and `Suspense`.
+- Everything else of the subproject (components, `lib` helpers, tests `*.test.ts`) goes INSIDE its folder; reuse shared
+  pieces (`formato.ts`, `.tarjeta`, `--marca`/`--series-*` tokens, `Segmentado`, `IndicadoresUI`) but don't edit them for one
+  subproject. Data: its own Supabase schema under `supabase/espacios/<id>/migraciones/` (see "Each espacio is a separate app
+  in Supabase" above); Pages Functions under `frontend/functions/api/<id>/…` (`/api` is behind the owner-only middleware).
+- Shared files a subproject must NOT need to touch: `App.tsx`, `Inicio.tsx`, `lib/espacios.ts`, `Dashboard.tsx`. If one
+  needs a change there, it's a shell change: make it on its own.
+- Producto edition never shows espacios (it goes straight to `Dashboard`).
+Current state: `trading/` (Vista = `MarcoEspacio` + the existing `components/AnalisisTecnicoTab.tsx`, `soloDueno`; the Trading
+tab was REMOVED from Finanzas when `onIrAInicio` is set — i.e. always in personal; its components/lib files still live in
+`components/`/`lib/` and can move into the folder later), `salud/` (manifest only; view still `components/Salud.tsx` + `lib/salud.ts`),
+`viajes/` and `pendientes/` (placeholders). Tested in `lib/espacios.test.ts` (ordering, invalid ids, every folder registers, hash rules).
+
 **Shared access, personal edition (2026-10-17, user's request: a second user "con las mismas funcionalidades, con excepción de trading y wiki")**:
 the guest signs in with their OWN Supabase Auth user and works on the OWNER's data (read + write). Migration
 `20261017170000_acceso_compartido.sql`: table `accesos_compartidos (correo_invitado, correo_dueno)` (no API access) and

@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { soyInvitado } from "../lib/accesoCompartido";
 import { ESPACIOS, type DefinicionEspacio, type Espacio } from "../lib/espacios";
 import { fechaLarga } from "../lib/formato";
 import { BotonTema } from "./BotonTema";
@@ -11,31 +13,10 @@ function saludo(hora: number): string {
 
 
 /** Íconos de línea (24×24, trazo = color del texto) en lugar de emojis: se
- * ven igual en todos los sistemas y respetan el tema claro/oscuro. */
-const TRAZOS: Record<string, React.ReactNode> = {
-  finanzas: (
-    <>
-      <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H18a2 2 0 0 1 2 2v1" />
-      <path d="M3 7.5V17a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-3" />
-      <path d="M20 10h-4a2 2 0 0 0 0 4h4a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1Z" />
-    </>
-  ),
-  salud: <path d="M3 12h4l2-5 4 10 2-5h6" />,
-  viajes: (
-    <>
-      <circle cx="12" cy="12" r="9" />
-      <path d="m15.5 8.5-2 5-5 2 2-5 5-2Z" />
-    </>
-  ),
-  pendientes: (
-    <>
-      <rect x="4" y="4" width="16" height="16" rx="3" />
-      <path d="m8.5 12 2.5 2.5 4.5-5" />
-    </>
-  ),
-};
-
-function Icono({ id }: { id: string }) {
+ * ven igual en todos los sistemas y respetan el tema claro/oscuro. Cada
+ * espacio trae sus trazos en su manifiesto. */
+function Icono({ trazos }: { trazos?: readonly string[] }) {
+  const lista = trazos && trazos.length > 0 ? trazos : ["M7 4h10a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3Z"];
   return (
     <svg
       viewBox="0 0 24 24"
@@ -48,7 +29,9 @@ function Icono({ id }: { id: string }) {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      {TRAZOS[id] ?? <rect x="4" y="4" width="16" height="16" rx="3" />}
+      {lista.map((d) => (
+        <path key={d} d={d} />
+      ))}
     </svg>
   );
 }
@@ -74,7 +57,7 @@ function TarjetaEspacio({ espacio, onAbrir }: { espacio: DefinicionEspacio; onAb
           color: "var(--marca)",
         }}
       >
-        <Icono id={espacio.id} />
+        <Icono trazos={espacio.icono} />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-[15px] font-semibold" style={{ color: "var(--text-primary)" }}>
@@ -99,7 +82,7 @@ function FilaProximamente({ espacio }: { espacio: DefinicionEspacio }) {
   return (
     <li className="flex items-center gap-3 px-4 py-3">
       <span className="flex size-8 shrink-0 items-center justify-center rounded-md" style={{ color: "var(--text-muted)", border: "1px solid var(--border)" }}>
-        <Icono id={espacio.id} />
+        <Icono trazos={espacio.icono} />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
@@ -125,8 +108,19 @@ function Titulo({ children }: { children: React.ReactNode }) {
  * tarjetas y, aparte, una lista discreta de los que vienen. */
 export function Inicio({ onAbrir }: { onAbrir: (espacio: Espacio) => void }) {
   const ahora = new Date();
-  const disponibles = ESPACIOS.filter((e) => e.disponible);
-  const proximos = ESPACIOS.filter((e) => !e.disponible);
+  // Acceso compartido: los espacios "solo dueño" (Trading) no se muestran a un
+  // invitado; mientras no se sabe, tampoco.
+  const [esDueno, setEsDueno] = useState(false);
+  useEffect(() => {
+    let vigente = true;
+    void soyInvitado().then((invitado) => vigente && setEsDueno(!invitado));
+    return () => {
+      vigente = false;
+    };
+  }, []);
+  const visibles = ESPACIOS.filter((e) => esDueno || !e.soloDueno);
+  const disponibles = visibles.filter((e) => e.disponible);
+  const proximos = visibles.filter((e) => !e.disponible);
 
   return (
     <div style={{ background: "var(--page-plane)", minHeight: "100vh" }}>
