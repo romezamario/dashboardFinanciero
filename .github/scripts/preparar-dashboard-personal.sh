@@ -46,18 +46,27 @@ if [[ $app == null ]]; then
   # El token no tiene permiso de Access (ve 0 aplicaciones): el dominio se
   # agrega a mano en Zero Trust y aquí solo se comprueba (paso 4).
   resumen "::warning::El token no ve aplicaciones de Access; agrega ${dominio} a la aplicación del dashboard en Zero Trust."
-elif id_app=$(jq -r '.id' <<<"$app") && jq -e --arg d "$dominio" '[(.self_hosted_domains // [])[], ((.destinations // [])[] | .uri // empty)] | index($d)' <<<"$app" >/dev/null; then
-  echo "La aplicación de Access ya cubre ${dominio}."
 else
-  cuerpo=$(jq -c --arg d "$dominio" '
-    {name, domain, type, session_duration, allowed_idps, auto_redirect_to_identity,
-     app_launcher_visible, policies: [(.policies // [])[] | {id, precedence}],
-     self_hosted_domains: (((.self_hosted_domains // [.domain]) + [$d]) | unique),
-     destinations: (((.destinations // [{type: "public", uri: .domain}]) + [{type: "public", uri: $d}]) | unique)}
-    | with_entries(select(.value != null))' <<<"$app")
-  r=$(cf PUT "/access/apps/${id_app}" "$cuerpo")
-  [[ $(jq -r '.success' <<<"$r") == "true" ]] || falla "No se pudo agregar ${dominio} a Access: $(jq -c '.errors' <<<"$r")"
-  resumen "Agregué ${dominio} a la aplicación de Access del dashboard."
+  # Cada deploy también queda en <hash>.<proyecto>.pages.dev (y las ramas en
+  # <rama>.<proyecto>…): sin el comodín esas ligas quedaban SIN Access.
+  id_app=$(jq -r '.id' <<<"$app")
+  dominio_viejo=$(jq -r '.domain' <<<"$app")
+  requeridos=$(jq -nc --arg n "$dominio" --arg v "$dominio_viejo" '[$v, "*." + $v, $n, "*." + $n]')
+  actuales=$(jq -c '[(.self_hosted_domains // [])[], ((.destinations // [])[] | .uri // empty), .domain] | unique' <<<"$app")
+  faltan=$(jq -nc --argjson r "$requeridos" --argjson a "$actuales" '$r - $a')
+  if [[ $faltan == "[]" ]]; then
+    echo "La aplicación de Access ya cubre ${dominio} y los comodines."
+  else
+    cuerpo=$(jq -c --argjson f "$faltan" '
+      {name, domain, type, session_duration, allowed_idps, auto_redirect_to_identity,
+       app_launcher_visible, policies: [(.policies // [])[] | {id, precedence}],
+       self_hosted_domains: (((.self_hosted_domains // [.domain]) + $f) | unique),
+       destinations: (((.destinations // [{type: "public", uri: .domain}]) + [$f[] | {type: "public", uri: .}]) | unique)}
+      | with_entries(select(.value != null))' <<<"$app")
+    r=$(cf PUT "/access/apps/${id_app}" "$cuerpo")
+    [[ $(jq -r '.success' <<<"$r") == "true" ]] || falla "No se pudo actualizar Access: $(jq -c '.errors' <<<"$r")"
+    resumen "Agregué a Access: $(jq -r 'join(", ")' <<<"$faltan")"
+  fi
 fi
 
 # 3. Variables de las Functions (Trading): se copian las de texto; los secretos
@@ -83,6 +92,11 @@ for intento in 1 2 3 4 5 6; do
   echo "Intento ${intento}: ${destino}"
   if [[ $destino == 30[0-9]*cloudflareaccess.com* ]]; then
     resumen "✓ https://${dominio} pide el login de Cloudflare Access."
+    for sub in "comprueba.${dominio}" "comprueba.$(jq -r '.domain // empty' <<<"${app:-null}")"; do
+      [[ $sub == comprueba. ]] && continue
+      d=$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' "https://${sub}/" || true)
+      [[ $d == 30[0-9]*cloudflareaccess.com* ]] && resumen "✓ *.${sub#comprueba.} también pide Access."         || resumen "::warning::https://${sub} (ligas de cada deploy) no pide Access: ${d}"
+    done
     exit 0
   fi
   sleep 10
