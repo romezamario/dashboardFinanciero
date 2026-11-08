@@ -18,6 +18,8 @@ import { Inicio } from "./components/Inicio";
 const Dashboard = lazy(() =>
   import("./components/Dashboard").then((m) => ({ default: m.Dashboard }))
 );
+// Espacio Salud (solo edición personal): su propio chunk.
+const Salud = lazy(() => import("./components/Salud").then((m) => ({ default: m.Salud })));
 
 let verificacion: ReturnType<typeof supabase.auth.verifyOtp> | null = null;
 
@@ -133,7 +135,12 @@ export default function App() {
     };
     return (
       <>
-        {espacio !== "finanzas" && <Inicio onAbrir={abrir} />}
+        {espacio !== "finanzas" && espacio !== "salud" && <Inicio onAbrir={abrir} />}
+        {espacio === "salud" && (
+          <Suspense fallback={<Cargando texto="Cargando…" />}>
+            <Salud onIrAInicio={() => abrir("inicio")} />
+          </Suspense>
+        )}
         {finanzasAbierto && (
           <div hidden={espacio !== "finanzas"}>
             <Suspense fallback={<Cargando texto="Cargando…" />}>

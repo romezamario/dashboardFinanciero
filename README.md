@@ -335,8 +335,11 @@ de inicio se descargan la primera vez que las abres; si el sitio se actualizó m
 abierto, la página se recarga sola una vez.
 
 **Página de inicio** — al entrar se ve "Mi dashboard", con una tarjeta por categoría: **Finanzas**
-(todo lo que se describe abajo), **Viajes** y **Pendientes** (estas dos dicen "Próximamente"; se
-irán construyendo). Dentro de Finanzas, "← Inicio" regresa (el botón Atrás del navegador también).
+(todo lo que se describe abajo), **Salud** (datos del anillo Oura; por ahora solo dice si ya hay
+datos), **Viajes** y **Pendientes** (estas dos dicen "Próximamente"; se irán construyendo). Cada
+categoría que no es Finanzas guarda sus datos en su propio esquema de Supabase (`salud`, …), con
+sus migraciones en `supabase/espacios/<categoría>/migraciones/`; solo se aplican a la instancia
+personal. Dentro de Finanzas, "← Inicio" regresa (el botón Atrás del navegador también).
 Solo en la edición personal; la de clientes entra directo al tablero.
 
 **Qué muestra Finanzas** — una pestaña por tema; cada pestaña recuerda sus propios filtros al cambiar de

@@ -4,7 +4,7 @@
 // hash de la URL decide cuál se ve, así el botón Atrás funciona. Solo edición
 // personal: la de clientes entra directo al tablero de finanzas.
 
-export type Espacio = "inicio" | "finanzas" | "viajes" | "pendientes";
+export type Espacio = "inicio" | "finanzas" | "salud" | "viajes" | "pendientes";
 
 export interface DefinicionEspacio {
   id: Exclude<Espacio, "inicio">;
@@ -21,6 +21,15 @@ export const ESPACIOS: readonly DefinicionEspacio[] = [
     nombre: "Finanzas",
     descripcion: "Estados de cuenta, gastos recientes, tarjetas, eventos y trading.",
     icono: "💰",
+    disponible: true,
+  },
+  {
+    // Datos en el esquema `salud` de Supabase (supabase/espacios/salud), no en
+    // `public`: cada espacio vive aparte.
+    id: "salud",
+    nombre: "Salud",
+    descripcion: "Sueño, ritmo cardiaco, HRV y actividad del anillo Oura.",
+    icono: "💍",
     disponible: true,
   },
   {

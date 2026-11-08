@@ -84,6 +84,24 @@ build them as new espacios). No router: the hash picks the espacio (`espacioDeHa
 tab/filters/data survive. Producto edition unchanged (straight to `Dashboard`, no `onIrAInicio`). Tested in
 `espacios.test.ts`; checked in the browser with a mocked Supabase (desktop, 375 px, dark/light).
 
+**Each espacio is a separate app in Supabase (2026-11-08, Mario: "dentro de supabase vivirán varias aplicaciones
+dependiendo de la categoría del dashboard personal")**: Finanzas stays in `public` with `supabase/migrations/` (applied to
+BOTH instances). Every other espacio gets its own Postgres schema named like the espacio and its own folder
+`supabase/espacios/<espacio>/migraciones/AAAAMMDDHHMMSS_nombre.sql`, applied ONLY to the personal instance by
+`supabase/espacios/aplicar.sh` (step "Migraciones de espacios" of `db-migrate.yml`'s personal job; `migrate-producto` never
+sees them, so nothing reaches Ordena tu Lana). The script uses the Management API SQL endpoint, records applied files in
+`control_espacios.migraciones` (not exposed), runs each new file in one transaction with its record (write migrations
+WITHOUT begin/commit), then adds the espacio schemas to PostgREST's `db_schema` (GET/PATCH `/v1/projects/{ref}/postgrest`,
+never removing existing ones). Frontend: `supabase.schema("<espacio>").from(...)`; code per espacio in `lib/<espacio>.ts` +
+`components/<Espacio>.tsx` (lazy in `App`). Rules for espacio tables: explicit `grant` to authenticated/service_role, RLS on,
+policies `user_id = (select auth.uid())`, FK to `auth.users on delete cascade`; personal data like health uses `auth.uid()`,
+NOT `usuario_efectivo()` (guests of the shared access don't see it). Checked: `aplicar.sh` dry-run against a fake curl/jq.
+**Salud (first espacio, 2026-11-08)**: Oura ring data read on the laptop with `oura.exe` (open_health, built in the private
+repo `romezamario/oura`; local folder `C:\Users\le_po\Downloads\OURA`). Schema `salud`: `resumen_diario (user_id, fecha,
+fuente, datos jsonb)` (flexible until real data shapes the dashboards), `oura_anillos`, `oura_eventos` (mirror of oura.db's
+decoded events, body only as sha256), `oura_sincronizaciones`. `components/Salud.tsx` shows only whether data exists
+(empty state; PGRST106 = schema not exposed yet → "falta aplicar su migración"). Uploader from the laptop: not built yet.
+
 **Shared access, personal edition (2026-10-17, user's request: a second user "con las mismas funcionalidades, con excepción de trading y wiki")**:
 the guest signs in with their OWN Supabase Auth user and works on the OWNER's data (read + write). Migration
 `20261017170000_acceso_compartido.sql`: table `accesos_compartidos (correo_invitado, correo_dueno)` (no API access) and

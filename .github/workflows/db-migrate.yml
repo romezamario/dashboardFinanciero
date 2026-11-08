@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - "supabase/migrations/**"
+      - "supabase/espacios/**"
       - ".github/workflows/db-migrate.yml"
   workflow_dispatch: {}
 
@@ -59,6 +60,16 @@ jobs:
             exit 1
           fi
           echo "Invitados guardados: $(printf '%s' "$valores" | grep -o '(' | wc -l)"
+
+      # Espacios del dashboard personal (Salud, y luego Viajes, Pendientes...):
+      # cada uno en su propio esquema, con sus migraciones en
+      # supabase/espacios/<espacio>/migraciones. Solo la instancia personal:
+      # migrate-producto no las ve, así nunca llegan a Ordena tu Lana.
+      - name: Migraciones de espacios (solo personal)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROYECTO: ${{ secrets.SUPABASE_PROJECT_ID }}
+        run: bash supabase/espacios/aplicar.sh
 
   # Instancia de clientes (FinanzasPersonales): otro proyecto de Supabase, las
   # mismas migraciones. Mientras no existan sus secretos, se salta sin fallar.
