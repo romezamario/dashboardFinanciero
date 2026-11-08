@@ -42,9 +42,11 @@ apps=$(cf GET "/access/apps")
 echo "Aplicaciones de Access visibles: $(jq -r '.result | length' <<<"$apps")"
 jq -r '.result[] | "  - \(.name) | \(.domain // "") | \([(.destinations // [])[] | .uri // empty] | join(","))"' <<<"$apps"
 app=$(jq -c --arg v "$VIEJO" '[.result[] | select(([.domain // "", .name // "", ((.self_hosted_domains // [])[]), ((.destinations // [])[] | .uri // "")] | join(" ")) | contains($v))][0]' <<<"$apps")
-[[ $app != null ]] || falla "No encontré la aplicación de Access del dashboard (${VIEJO}); el token quizá no tiene permiso de Access."
-id_app=$(jq -r '.id' <<<"$app")
-if jq -e --arg d "$dominio" '[(.self_hosted_domains // [])[], ((.destinations // [])[] | .uri // empty)] | index($d)' <<<"$app" >/dev/null; then
+if [[ $app == null ]]; then
+  # El token no tiene permiso de Access (ve 0 aplicaciones): el dominio se
+  # agrega a mano en Zero Trust y aquí solo se comprueba (paso 4).
+  resumen "::warning::El token no ve aplicaciones de Access; agrega ${dominio} a la aplicación del dashboard en Zero Trust."
+elif id_app=$(jq -r '.id' <<<"$app") && jq -e --arg d "$dominio" '[(.self_hosted_domains // [])[], ((.destinations // [])[] | .uri // empty)] | index($d)' <<<"$app" >/dev/null; then
   echo "La aplicación de Access ya cubre ${dominio}."
 else
   cuerpo=$(jq -c --arg d "$dominio" '

@@ -8,6 +8,7 @@ on:
     paths:
       - "frontend/**"
       - ".github/workflows/deploy.yml"
+      - ".github/scripts/preparar-dashboard-personal.sh"
   # Para refrescar /macro.json (indicadores de FRED) aunque no cambie el
   # código: de lunes a viernes, después de los reportes de las 8:30 ET y al
   # cierre del mercado.
