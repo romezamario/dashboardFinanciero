@@ -154,3 +154,6 @@ export const porcentajePequeno = new Intl.NumberFormat("es-MX", {
   style: "percent",
   maximumSignificantDigits: 2,
 });
+
+/** "domingo, 8 de noviembre" (página de inicio). */
+export const fechaLarga = new Intl.DateTimeFormat("es-MX", { weekday: "long", day: "numeric", month: "long" });
