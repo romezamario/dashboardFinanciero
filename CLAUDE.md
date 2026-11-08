@@ -1203,6 +1203,13 @@ CSS custom properties for the palette live in `src/index.css`, keyed by role (`-
 `[data-theme]` override — same pattern artifacts use. If you add a chart, re-run the dataviz
 skill's procedure (form → color → validate) rather than picking colors by eye.
 
+**401 with a stale token (2026-11-08, Supabase logs showed documentos/eventos/categorias/transacciones + `soy_invitado` all 401 at once)**:
+with only the anon key those tables answer 200 (RLS → 0 rows), so a 401 there means a USER token the server rejects — supabase-js
+only refreshes when the BROWSER clock says it expired (laptop resuming, skewed clock, rotated key). `lib/reintentoSesion.ts`
+(`crearFetchConReintento`, tested) is the client's `global.fetch`: a 401 on `/rest/v1/` or `/functions/v1/` with a user Bearer →
+one shared `refreshSession()` → the call is repeated once with the new token; refresh refused → local `signOut` (login shows);
+network error while refreshing → the 401 is returned as is.
+
 **Data loading & writes (reworked 2026-10-08 for latency)**: `Dashboard` holds
 `DatosTransacciones` = the raw `transacciones` rows (foreign keys only:
 `categoria_id`/`evento_id`/`documento_id`) **plus** `Catalogos` (categorias, eventos, documentos

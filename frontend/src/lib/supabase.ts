@@ -1,6 +1,7 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { leerEnlaceDeAuth, leerVerificacion, urlSinVerificacion } from "./cuentaUsuario";
 import { leerRegresoDePago, urlSinRegresoDePago } from "./regresoPago";
+import { crearFetchConReintento } from "./reintentoSesion";
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -33,4 +34,21 @@ export const REGRESO_DE_PAGO =
 if (REGRESO_DE_PAGO)
   window.history.replaceState(null, "", urlSinRegresoDePago(window.location.href));
 
-export const supabase = createClient(url, anonKey);
+/** Ante un 401 con token de usuario, renueva la sesión y repite la llamada una
+ * vez; si la sesión ya no sirve, la cierra (se ve el login). Ver reintentoSesion.ts. */
+const fetchConReintento = crearFetchConReintento(
+  (input, init) => fetch(input, init),
+  async () => {
+    const { data, error } = await supabase.auth.refreshSession();
+    if (error) {
+      if (isAuthRetryableFetchError(error)) throw error;
+      return null;
+    }
+    return data.session?.access_token ?? null;
+  },
+  () => {
+    void supabase.auth.signOut({ scope: "local" });
+  }
+);
+
+export const supabase = createClient(url, anonKey, { global: { fetch: fetchConReintento } });
