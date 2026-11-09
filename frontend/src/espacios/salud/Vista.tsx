@@ -24,6 +24,7 @@ import {
   Tendencia,
   Vacio,
 } from "./GraficasSalud";
+import { LeerAnillo } from "./LeerAnillo";
 
 const PERIODOS = [
   { dias: 7, texto: "7 días" },
@@ -80,6 +81,14 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
         )
       }
     >
+        <details className="tarjeta rounded-lg p-4">
+          <summary className="cursor-pointer text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+            Leer anillo desde este dispositivo (prueba con Bluefy)
+          </summary>
+          <div className="mt-3">
+            <LeerAnillo />
+          </div>
+        </details>
         {error ? (
           <section className="tarjeta rounded-lg p-5">
             <p className="text-sm" style={{ color: "var(--text-primary)" }}>
