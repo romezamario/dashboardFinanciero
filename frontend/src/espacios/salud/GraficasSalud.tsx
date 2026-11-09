@@ -11,6 +11,7 @@ import {
   ComposedChart,
   Line,
   LineChart,
+  ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
   Scatter,
@@ -27,9 +28,13 @@ import {
   celdasHR,
   cruceSuenoGasto,
   desviacionTemperatura,
+  extremoNoche,
   fasesPorNoche,
   horarioSueno,
+  haceCuanto,
   minutosDormido,
+  nivelBateria,
+  promedio,
   relojDesde18,
   segmentosHipnograma,
   serieNoche,
@@ -37,6 +42,7 @@ import {
   tendencia,
   type DiaSalud,
   type Fase,
+  type LecturaBateria,
   type Tarjeta,
 } from "./salud";
 import { desplazarMes, semanasDelMes, tituloMes } from "../../lib/gastosCorreo";
@@ -168,6 +174,70 @@ export function TarjetasHoy({ dias }: { dias: readonly DiaSalud[] }) {
   );
 }
 
+// ------------------------------------------------- batería del anillo
+
+/** Amarillo de estado "warning" de la paleta de referencia (dataviz); siempre
+ * con texto oscuro encima. No hay token compartido de warning en index.css y
+ * un subproyecto no lo edita. */
+const AMARILLO_AVISO = "#fab219";
+
+export function TarjetaBateria({ lecturas }: { lecturas: readonly LecturaBateria[] | null }) {
+  if (lecturas === null) return <Vacio>Cargando batería…</Vacio>;
+  const ultima = lecturas.at(-1);
+  if (!ultima) return <Vacio>Sin lecturas de batería en las últimas 48 h. La laptop la lee cada hora.</Vacio>;
+  const nivel = nivelBateria(ultima.pct);
+  const datos = lecturas.map((l) => ({ t: new Date(l.en).getTime() / 1000, pct: l.pct }));
+  return (
+    <div className="flex flex-wrap items-center gap-4">
+      <div>
+        <p className="text-3xl font-semibold tabular-nums" style={{ color: "var(--text-primary)" }}>
+          {ultima.pct}%
+          {ultima.cargando && (
+            <span className="ml-2 text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+              ⚡ cargando
+            </span>
+          )}
+        </p>
+        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+          Leída {haceCuanto(ultima.en)} {ultima.origen === "navegador" ? "desde el navegador" : "por la laptop"}
+        </p>
+        {nivel !== "ok" && (
+          <p
+            className="mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium"
+            role="status"
+            style={
+              nivel === "critica"
+                ? { background: "var(--status-critical)", color: "#fff" }
+                : { background: AMARILLO_AVISO, color: "#0b0b0b" }
+            }
+          >
+            {nivel === "critica" ? "⚠ Batería crítica: cárgalo ya" : "⚠ Batería baja: cárgalo pronto"}
+          </p>
+        )}
+      </div>
+      {datos.length >= 2 && (
+        <div className="h-20 min-w-48 flex-1">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={datos} margin={{ top: 4, right: 8, bottom: 0, left: -24 }}>
+              <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} tickFormatter={horaDe} tick={EJE} axisLine={false} tickLine={false} />
+              <YAxis domain={[0, 100]} ticks={[0, 50, 100]} tick={EJE} axisLine={false} tickLine={false} />
+              <ReferenceLine y={20} stroke="var(--baseline)" strokeDasharray="4 4" />
+              <Tooltip
+                content={({ active, payload }) =>
+                  active && payload?.length ? (
+                    <Caja titulo={horaDe((payload[0].payload as { t: number }).t)} lineas={[`${payload[0].value}%`]} />
+                  ) : null
+                }
+              />
+              <Line dataKey="pct" stroke="var(--series-1)" strokeWidth={2} dot={false} isAnimationActive={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ------------------------------------------------------- 2. hipnograma
 
 export function Hipnograma({ dia }: { dia: DiaSalud | undefined }) {
@@ -237,18 +307,48 @@ export function SenalesNoche({ dia }: { dia: DiaSalud | undefined }) {
   const hrv = useMemo(() => serieNoche(dia?.noche, "hrv"), [dia]);
   if (!hr.length && !hrv.length) return <Vacio>No hay ritmo cardiaco ni HRV de esta noche.</Vacio>;
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      <MiniLinea titulo="Ritmo cardiaco (lpm)" datos={hr} color="var(--series-2)" unidad="lpm" />
-      <MiniLinea titulo="HRV (ms)" datos={hrv} color="var(--series-1)" unidad="ms" />
+    <div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <MiniLinea titulo="Ritmo cardiaco (lpm)" datos={hr} color="var(--series-2)" unidad="lpm" extremo="min" />
+        <MiniLinea titulo="HRV (ms)" datos={hrv} color="var(--series-1)" unidad="ms" extremo="max" />
+      </div>
+      <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
+        Mínimo y máximo sostenidos: cada lectura (cada ~5 min) se compara con sus vecinas, así un solo valor atípico del
+        sensor no cuenta.
+      </p>
     </div>
   );
 }
 
-function MiniLinea({ titulo, datos, color, unidad }: { titulo: string; datos: { t: number; valor: number }[]; color: string; unidad: string }) {
+function MiniLinea({
+  titulo,
+  datos,
+  color,
+  unidad,
+  extremo,
+}: {
+  titulo: string;
+  datos: { t: number; valor: number }[];
+  color: string;
+  unidad: string;
+  extremo: "min" | "max";
+}) {
+  const punto = useMemo(() => extremoNoche(datos, extremo), [datos, extremo]);
+  const media = promedio(datos.map((d) => d.valor));
+  const etiqueta = punto ? `${extremo === "min" ? "Mín" : "Máx"} ${Math.round(punto.valor)} ${unidad} · ${horaDe(punto.t)}` : null;
   return (
     <div>
       <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
         {titulo}
+        {punto && (
+          <>
+            {" · "}
+            <strong style={{ color: "var(--text-primary)" }}>
+              {extremo === "min" ? "mín" : "máx"} {Math.round(punto.valor)}
+            </strong>
+          </>
+        )}
+        {media !== null && <span style={{ color: "var(--text-muted)" }}> · promedio {Math.round(media)}</span>}
       </p>
       {datos.length ? (
         <div className="mt-1 h-40">
@@ -265,6 +365,20 @@ function MiniLinea({ titulo, datos, color, unidad }: { titulo: string; datos: { 
                 }
               />
               <Line dataKey="valor" stroke={color} strokeWidth={2} dot={false} isAnimationActive={false} />
+              {punto && (
+                <ReferenceLine
+                  y={punto.valor}
+                  stroke="var(--baseline)"
+                  strokeDasharray="4 4"
+                  label={{
+                    value: etiqueta ?? "",
+                    position: extremo === "min" ? "insideBottomRight" : "insideTopRight",
+                    fill: "var(--text-primary)",
+                    fontSize: 11,
+                  }}
+                />
+              )}
+              {punto && <ReferenceDot x={punto.t} y={punto.valor} r={5} fill={color} stroke="var(--surface-1)" strokeWidth={2} />}
             </LineChart>
           </ResponsiveContainer>
         </div>

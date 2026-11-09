@@ -12,6 +12,7 @@ import {
   type EstadoFuncion,
   type Firmware,
 } from "./anilloBle";
+import { guardarBateriaNavegador } from "./salud";
 
 // La clave solo se guarda en ESTE navegador, y solo si la persona lo pide.
 const LLAVE_LOCAL = "salud.claveAnillo";
@@ -35,7 +36,7 @@ const modo = (e: EstadoFuncion | null) => (e === null ? "sin respuesta" : e.modo
 
 /** Prueba de concepto: leer el anillo desde este dispositivo con Web
  * Bluetooth (en iPhone, con el navegador Bluefy). Solo lectura. */
-export function LeerAnillo() {
+export function LeerAnillo({ onBateria }: { onBateria?: (b: Bateria) => void }) {
   const [clave, setClave] = useState(claveGuardada);
   const [recordar, setRecordar] = useState(() => claveGuardada() !== "");
   const [ocupado, setOcupado] = useState(false);
@@ -90,6 +91,15 @@ export function LeerAnillo() {
       const hrDiurno = await estado(0x02);
       const spo2 = await estado(0x04);
       setLectura({ nombre: con.nombre, firmware: fw, bateria, hrDiurno, spo2 });
+      if (bateria) {
+        try {
+          await guardarBateriaNavegador(bateria.porcentaje, bateria.cargando);
+          onBateria?.(bateria);
+          anotar("Batería guardada en tu dashboard.");
+        } catch {
+          anotar("No se pudo guardar la batería en Supabase (la lectura sí se hizo).");
+        }
+      }
       anotar("Lectura terminada.");
     } catch (e) {
       const mensaje = e instanceof Error ? e.message : String(e);

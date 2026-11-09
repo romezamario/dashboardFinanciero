@@ -108,10 +108,68 @@ export async function obtenerUltimaSubida(): Promise<string | null> {
     .schema("salud")
     .from("oura_sincronizaciones")
     .select("subida_en")
+    .eq("origen", "laptop")
     .order("subida_en", { ascending: false })
     .limit(1);
   if (error) throw error;
   return (data?.[0] as { subida_en?: string } | undefined)?.subida_en ?? null;
+}
+
+// ------------------------------------------------------------ batería
+
+export interface LecturaBateria {
+  pct: number;
+  /** ISO. */
+  en: string;
+  cargando: boolean | null;
+  origen: "laptop" | "navegador";
+}
+
+/** Lecturas de batería de las últimas 48 h (cada lectura horaria de la laptop
+ * y cada prueba desde el navegador), de la más antigua a la más reciente. */
+export async function obtenerBateria(ahora = new Date()): Promise<LecturaBateria[]> {
+  const desde = new Date(ahora.getTime() - 48 * 3600 * 1000).toISOString();
+  const { data, error } = await supabase
+    .schema("salud")
+    .from("oura_sincronizaciones")
+    .select("bateria_pct, bateria_leida_en, cargando, origen")
+    .not("bateria_pct", "is", null)
+    .gte("bateria_leida_en", desde)
+    .order("bateria_leida_en", { ascending: true })
+    .limit(500);
+  if (error) throw error;
+  return ((data ?? []) as { bateria_pct: number; bateria_leida_en: string; cargando: boolean | null; origen: LecturaBateria["origen"] }[]).map(
+    (f) => ({ pct: f.bateria_pct, en: f.bateria_leida_en, cargando: f.cargando, origen: f.origen })
+  );
+}
+
+/** Guarda una lectura de batería hecha desde este navegador (prueba de Bluefy). */
+export async function guardarBateriaNavegador(pct: number, cargando: boolean): Promise<void> {
+  const { error } = await supabase.schema("salud").from("oura_sincronizaciones").insert({
+    origen: "navegador",
+    eventos_enviados: 0,
+    bateria_pct: pct,
+    bateria_leida_en: new Date().toISOString(),
+    cargando,
+  });
+  if (error) throw error;
+}
+
+export type NivelBateria = "ok" | "baja" | "critica";
+
+/** < 10% crítica (rojo), < 20% baja (amarillo). */
+export function nivelBateria(pct: number): NivelBateria {
+  return pct < 10 ? "critica" : pct < 20 ? "baja" : "ok";
+}
+
+/** "hace 20 min", "hace 3 h", "hace 2 días". */
+export function haceCuanto(iso: string, ahora = new Date()): string {
+  const min = Math.max(0, Math.round((ahora.getTime() - new Date(iso).getTime()) / 60000));
+  if (min < 1) return "hace un momento";
+  if (min < 60) return `hace ${min} min`;
+  const h = Math.round(min / 60);
+  if (h < 48) return `hace ${h} h`;
+  return `hace ${Math.round(h / 24)} días`;
 }
 
 /** Gasto por día (avisos de compra por correo, `public.gastos_correo`) en el
@@ -261,6 +319,31 @@ export function serieNoche(n: Noche | undefined, clave: "hr" | "hrv"): { t: numb
   return (n?.series_t?.[clave] ?? [])
     .filter((p) => Array.isArray(p) && num(p[0]) !== null && num(p[1]) !== null)
     .map(([t, valor]) => ({ t, valor }));
+}
+
+export interface Extremo {
+  t: number;
+  valor: number;
+}
+
+/** Mínimo (HR) o máximo (HRV) SOSTENIDO de la noche: se busca sobre la mediana
+ * de cada lectura con sus vecinas (ventana de 3, ~15 min con lecturas cada
+ * 5 min), así un solo valor atípico —un artefacto del sensor— no se vuelve el
+ * extremo. Se reporta esa mediana y la hora de la lectura central. Con menos
+ * de 3 lecturas, el valor tal cual. */
+export function extremoNoche(datos: readonly { t: number; valor: number }[], tipo: "min" | "max"): Extremo | null {
+  if (!datos.length) return null;
+  const mediana3 = (i: number) => {
+    const v = [datos[i - 1]?.valor, datos[i].valor, datos[i + 1]?.valor]
+      .filter((x): x is number => x !== undefined)
+      .sort((a, b) => a - b);
+    // En las orillas solo hay 2 lecturas: se toma la menos extrema, para que
+    // un pico al principio o al final tampoco cuente.
+    if (v.length === 2) return tipo === "max" ? v[0] : v[1];
+    return v.length === 3 ? v[1] : v[0];
+  };
+  const suaves = datos.map((p, i) => ({ t: p.t, valor: datos.length >= 3 ? mediana3(i) : p.valor }));
+  return suaves.reduce((mejor, p) => ((tipo === "min" ? p.valor < mejor.valor : p.valor > mejor.valor) ? p : mejor));
 }
 
 // ------------------------------------------------- 4. fases por noche

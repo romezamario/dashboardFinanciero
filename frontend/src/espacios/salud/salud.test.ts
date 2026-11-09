@@ -6,9 +6,12 @@ import {
   celdasHR,
   cruceSuenoGasto,
   desviacionTemperatura,
+  extremoNoche,
   fasesPorNoche,
   filaADia,
+  haceCuanto,
   horarioSueno,
+  nivelBateria,
   mensajeErrorSalud,
   minutosDormido,
   relojDesde18,
@@ -96,6 +99,37 @@ describe("serieNoche", () => {
       { t: 20, valor: 72 },
     ]);
     expect(serieNoche(undefined, "hrv")).toEqual([]);
+  });
+});
+
+describe("batería", () => {
+  it("niveles", () => {
+    expect(nivelBateria(9)).toBe("critica");
+    expect(nivelBateria(10)).toBe("baja");
+    expect(nivelBateria(19)).toBe("baja");
+    expect(nivelBateria(20)).toBe("ok");
+  });
+  it("hace cuánto", () => {
+    const ahora = new Date("2026-11-09T15:00:00Z");
+    expect(haceCuanto("2026-11-09T14:59:50Z", ahora)).toBe("hace un momento");
+    expect(haceCuanto("2026-11-09T14:40:00Z", ahora)).toBe("hace 20 min");
+    expect(haceCuanto("2026-11-09T12:00:00Z", ahora)).toBe("hace 3 h");
+    expect(haceCuanto("2026-11-06T15:00:00Z", ahora)).toBe("hace 3 días");
+  });
+});
+
+describe("extremoNoche", () => {
+  const serie = (v: number[]) => v.map((valor, i) => ({ t: i * 300, valor }));
+  it("mínimo sostenido de HR: ignora un solo valor atípico", () => {
+    // 40 es un pico aislado; el mínimo sostenido es 57 (t=1500).
+    expect(extremoNoche(serie([70, 65, 40, 66, 60, 57, 57, 58, 71]), "min")).toEqual({ t: 1500, valor: 57 });
+  });
+  it("máximo sostenido de HRV", () => {
+    expect(extremoNoche(serie([30, 200, 31, 45, 50, 48, 35]), "max")).toEqual({ t: 1200, valor: 48 });
+  });
+  it("pocas lecturas o ninguna", () => {
+    expect(extremoNoche(serie([80, 70]), "min")).toEqual({ t: 300, valor: 70 });
+    expect(extremoNoche([], "max")).toBeNull();
   });
 });
 

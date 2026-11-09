@@ -345,12 +345,21 @@ espacio, "← Inicio" regresa (el botón Atrás del navegador también). Los inv
 compartido no ven Trading. Solo en la edición personal; la de clientes entra directo al tablero.
 
 **Qué muestra Salud** — lo que sube la laptop con `py colector\subir_oura.py` (repo `romezamario/oura`).
-Cada gráfica sin datos todavía dice qué le falta, no se oculta.
+Cada gráfica sin datos todavía dice qué le falta, no se oculta. La laptop lee el anillo cada hora
+(tarea programada de Windows, ver el README de `romezamario/oura`).
 
+- **Batería del anillo**: el último % con la hora de lectura ("hace 20 min") y si estaba cargando,
+  aviso "Batería baja" (amarillo, < 20%) o "Batería crítica" (rojo, < 10%) y la línea de las últimas
+  48 h. La lee la laptop en cada lectura y también la prueba de Bluefy.
+- **Leer anillo desde este dispositivo** (prueba con Bluefy en iPhone): se conecta, se autentica con
+  la clave del anillo (guardada solo en ese navegador) y lee batería, firmware y si el HR diurno y el
+  SpO2 están encendidos.
 - **Hoy**: sueño, eficiencia, HR en reposo, HRV, temperatura, cuánto faltó dormir y pasos, cada uno
   con ▲/▼ contra tu promedio de los 7 días anteriores (verde = mejor, rojo = peor).
 - **Fases de sueño** de una noche (despierto / REM / ligero / profundo a lo largo de la noche, con el
-  % de cada una) y **ritmo cardiaco y HRV** durante esa noche. Por defecto la última; el
+  % de cada una) y **ritmo cardiaco y HRV** durante esa noche, con el mínimo de HR y el máximo de
+  HRV marcados (punto, línea punteada y hora; "sostenido": un solo valor atípico no cuenta) y el
+  promedio de la noche. Por defecto la última; el
   **calendario de sueño** (color por eficiencia) cambia la noche.
 - Con el selector **7 / 30 / 90 días**: **sueño por noche** (fases apiladas, meta de 8 h) y **deuda
   de sueño acumulada**; **HRV** y **HR en reposo** con la banda de tu rango normal (30 días, desde 3

@@ -3,9 +3,11 @@ import {
   mensajeErrorSalud,
   obtenerDiasSalud,
   obtenerGastoPorDia,
+  obtenerBateria,
   obtenerUltimaSubida,
   ultimosDias,
   type DiaSalud,
+  type LecturaBateria,
 } from "./salud";
 import { MarcoEspacio } from "../../components/MarcoEspacio";
 import type { PropsEspacio } from "../../lib/espacios";
@@ -19,6 +21,7 @@ import {
   HorarioSueno,
   Panel,
   SenalesNoche,
+  TarjetaBateria,
   TarjetasHoy,
   Temperatura,
   Tendencia,
@@ -45,9 +48,13 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
   const [periodo, setPeriodo] = useState<number>(30);
   const [noche, setNoche] = useState<string | null>(null);
   const [gasto, setGasto] = useState<Map<string, number> | null>(null);
+  const [bateria, setBateria] = useState<LecturaBateria[] | null>(null);
 
   useEffect(() => {
     let vigente = true;
+    obtenerBateria()
+      .then((b) => vigente && setBateria(b))
+      .catch(() => vigente && setBateria([]));
     Promise.all([obtenerDiasSalud(), obtenerUltimaSubida()])
       .then(([d, s]) => {
         if (!vigente) return;
@@ -81,12 +88,22 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
         )
       }
     >
+        <Panel titulo="Batería del anillo (últimas 48 h)">
+          <TarjetaBateria lecturas={bateria} />
+        </Panel>
         <details className="tarjeta rounded-lg p-4">
           <summary className="cursor-pointer text-sm font-medium" style={{ color: "var(--text-primary)" }}>
             Leer anillo desde este dispositivo (prueba con Bluefy)
           </summary>
           <div className="mt-3">
-            <LeerAnillo />
+            <LeerAnillo
+              onBateria={(b) =>
+                setBateria((previas) => [
+                  ...(previas ?? []),
+                  { pct: b.porcentaje, en: new Date().toISOString(), cargando: b.cargando, origen: "navegador" },
+                ])
+              }
+            />
           </div>
         </details>
         {error ? (
