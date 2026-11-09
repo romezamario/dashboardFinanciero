@@ -336,13 +336,28 @@ abierto, la página se recarga sola una vez.
 
 **Página de inicio** — al entrar se ve "Mi dashboard", con una tarjeta por espacio: **Finanzas**
 (todo lo que se describe abajo), **Trading** (la antigua pestaña Trading: QQQ/TQQQ, Macro EE.UU. y el
-agente), **Salud** (datos del anillo Oura; por ahora solo dice si ya hay datos), y en "Próximamente"
+agente), **Salud** (datos del anillo Oura, ver abajo), y en "Próximamente"
 **Viajes** y **Pendientes**. Trading, Salud y Viajes son subproyectos que se trabajan aparte y publican
 aquí: cada uno vive en `frontend/src/espacios/<espacio>/` (ver "Subproyectos" en CLAUDE.md). Los que
 guardan datos usan su propio esquema de Supabase (`salud`, …), con sus migraciones en
 `supabase/espacios/<espacio>/migraciones/`; solo se aplican a la instancia personal. Dentro de cada
 espacio, "← Inicio" regresa (el botón Atrás del navegador también). Los invitados del acceso
 compartido no ven Trading. Solo en la edición personal; la de clientes entra directo al tablero.
+
+**Qué muestra Salud** — lo que sube la laptop con `py colector\subir_oura.py` (repo `romezamario/oura`).
+Cada gráfica sin datos todavía dice qué le falta, no se oculta.
+
+- **Hoy**: sueño, eficiencia, HR en reposo, HRV, temperatura, cuánto faltó dormir y pasos, cada uno
+  con ▲/▼ contra tu promedio de los 7 días anteriores (verde = mejor, rojo = peor).
+- **Fases de sueño** de una noche (despierto / REM / ligero / profundo a lo largo de la noche, con el
+  % de cada una) y **ritmo cardiaco y HRV** durante esa noche. Por defecto la última; el
+  **calendario de sueño** (color por eficiencia) cambia la noche.
+- Con el selector **7 / 30 / 90 días**: **sueño por noche** (fases apiladas, meta de 8 h) y **deuda
+  de sueño acumulada**; **HRV** y **HR en reposo** con la banda de tu rango normal (30 días, desde 3
+  noches); **temperatura** como diferencia contra tu línea base; **horario de sueño** (de dormir a
+  despertar); **actividad** (pasos y calorías activas); **ritmo cardiaco del día** por hora con mapa
+  de calor día × hora (últimos 14 días); y **Salud × Finanzas** (horas dormidas contra el gasto del día
+  según los avisos de compra por correo).
 
 **Qué muestra Finanzas** — una pestaña por tema; cada pestaña recuerda sus propios filtros al cambiar de
 una a otra. Botón de modo claro/oscuro arriba a la derecha.

@@ -99,8 +99,21 @@ NOT `usuario_efectivo()` (guests of the shared access don't see it). Checked: `a
 **Salud (first espacio, 2026-11-08)**: Oura ring data read on the laptop with `oura.exe` (open_health, built in the private
 repo `romezamario/oura`; local folder `C:\Users\le_po\Downloads\OURA`). Schema `salud`: `resumen_diario (user_id, fecha,
 fuente, datos jsonb)` (flexible until real data shapes the dashboards), `oura_anillos`, `oura_eventos` (mirror of oura.db's
-decoded events, body only as sha256), `oura_sincronizaciones`. `components/Salud.tsx` shows only whether data exists
-(empty state; PGRST106 = schema not exposed yet → "falta aplicar su migración"). Uploader from the laptop: not built yet.
+decoded events, body only as sha256), `oura_sincronizaciones`. Uploader: `colector/subir_oura.py` in that repo
+(`resumen_diario.datos` = `{noche, deuda_sueno, actividad, hr_horas}` per day, from `oura.exe dashboard` /api/summary +
+/api/hourly-hr; days without real data are not uploaded).
+**Salud charts (2026-11-09, Mario: "desarrolla todas las gráficas")**: everything in `src/espacios/salud/` — `salud.ts`
+(read + pure functions, tested in `salud.test.ts`), `GraficasSalud.tsx` (drawing), `Vista.tsx` (`MarcoEspacio` page).
+Today cards (vs. mean of the 7 previous days with data), hypnogram (stage codes 1 deep, 2 light, 3 REM, 4 awake, as in
+open_health; cells spread evenly start→end), night HR/HRV (`series_t`), sleep calendar (own grid with `semanasDelMes`, color by
+efficiency; NOT `CalendarioMensual`, which is money/meta-diaria specific), and with a 7/30/90 selector: stacked phases + 8 h goal
++ cumulative debt, HRV/RHR with a normal band (mean ± 1 sd of the previous 30 days, ≥ 3 nights), temperature deviation vs. that
+baseline, sleep schedule (range bars, minutes since 18:00), activity (steps, active kcal), HR by hour + day×hour heatmap
+(last 14 days), Salud × Finanzas scatter (hours slept vs. `gastos_correo` sum per day). Stage palette validated with the
+dataviz script (light+dark): deep `--series-1`, light `--series-3`, REM `--series-4`, awake `--text-muted`; never
+pink next to green (fails CVD in dark). Every chart has an explicit empty state. Checked in the in-app browser against a
+local harness with mocked Supabase (real data: 1 night; synthetic 30 days): renders, no horizontal overflow at 390 px.
+Screenshots could not be captured (pane did not render while hidden).
 
 **Subprojects publish as espacios (2026-11-08, Mario: Trading automatizado, OURA and Viajes "son otros proyectos que
 estarán trabajándose en paralelo, pero publicarán en la misma página")**: each subproject owns ONE folder,
