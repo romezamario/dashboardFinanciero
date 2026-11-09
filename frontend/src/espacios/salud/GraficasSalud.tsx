@@ -29,10 +29,12 @@ import {
   cruceSuenoGasto,
   desviacionTemperatura,
   extremoNoche,
+  extremoPuntual,
   fasesPorNoche,
   horarioSueno,
   haceCuanto,
   minutosDormido,
+  mismoExtremo,
   nivelBateria,
   promedio,
   relojDesde18,
@@ -313,8 +315,9 @@ export function SenalesNoche({ dia }: { dia: DiaSalud | undefined }) {
         <MiniLinea titulo="HRV (ms)" datos={hrv} color="var(--series-1)" unidad="ms" extremo="max" />
       </div>
       <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
-        Mínimo y máximo sostenidos: cada lectura (cada ~5 min) se compara con sus vecinas, así un solo valor atípico del
-        sensor no cuenta.
+        <strong>Sostenido</strong> (punto lleno y línea punteada): cada lectura (cada ~5 min) se compara con sus vecinas,
+        así un solo valor atípico del sensor no cuenta. <strong>Puntual</strong> (punto hueco): la lectura más extrema tal
+        cual, aunque sea una sola. Si coinciden, se ve una sola marca.
       </p>
     </div>
   );
@@ -334,8 +337,23 @@ function MiniLinea({
   extremo: "min" | "max";
 }) {
   const punto = useMemo(() => extremoNoche(datos, extremo), [datos, extremo]);
+  const crudo = useMemo(() => extremoPuntual(datos, extremo), [datos, extremo]);
+  const iguales = mismoExtremo(punto, crudo);
   const media = promedio(datos.map((d) => d.valor));
-  const etiqueta = punto ? `${extremo === "min" ? "Mín" : "Máx"} ${Math.round(punto.valor)} ${unidad} · ${horaDe(punto.t)}` : null;
+  const nombre = extremo === "min" ? "Mín" : "Máx";
+  const etiqueta = punto
+    ? `${nombre} ${Math.round(punto.valor)}${iguales ? ` ${unidad}` : " sostenido"} · ${horaDe(punto.t)}`
+    : null;
+  const etiquetaCruda = crudo && !iguales ? `${Math.round(crudo.valor)} puntual · ${horaDe(crudo.t)}` : null;
+  // Etiquetas sin encimarse y siempre dentro de la gráfica: la del sostenido
+  // a la derecha, del lado de la curva; la del puntual a la izquierda, del otro
+  // lado de su altura (debajo del mínimo / encima del máximo).
+  // Holgura en el eje para que quepa la etiqueta del puntual.
+  const valores = datos.map((d) => d.valor);
+  const lo = Math.min(...valores);
+  const hi = Math.max(...valores);
+  const holgura = Math.max(2, (hi - lo) * 0.18);
+  const dominio: [number, number] = extremo === "min" ? [Math.floor(lo - holgura), Math.ceil(hi)] : [Math.floor(lo), Math.ceil(hi + holgura)];
   return (
     <div>
       <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
@@ -345,9 +363,11 @@ function MiniLinea({
             {" · "}
             <strong style={{ color: "var(--text-primary)" }}>
               {extremo === "min" ? "mín" : "máx"} {Math.round(punto.valor)}
+              {!iguales && " sostenido"}
             </strong>
           </>
         )}
+        {crudo && !iguales && <span style={{ color: "var(--text-secondary)" }}> · {Math.round(crudo.valor)} puntual</span>}
         {media !== null && <span style={{ color: "var(--text-muted)" }}> · promedio {Math.round(media)}</span>}
       </p>
       {datos.length ? (
@@ -356,7 +376,7 @@ function MiniLinea({
             <LineChart data={datos} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
               <CartesianGrid vertical={false} stroke="var(--gridline)" />
               <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} tickFormatter={horaDe} tick={EJE} axisLine={false} tickLine={false} />
-              <YAxis domain={["auto", "auto"]} tick={EJE} axisLine={false} tickLine={false} />
+              <YAxis domain={dominio} allowDataOverflow={false} tick={EJE} axisLine={false} tickLine={false} />
               <Tooltip
                 content={({ active, payload }) =>
                   active && payload?.length ? (
@@ -372,12 +392,27 @@ function MiniLinea({
                   strokeDasharray="4 4"
                   label={{
                     value: etiqueta ?? "",
-                    position: extremo === "min" ? "insideBottomRight" : "insideTopRight",
+                    // Del sostenido hacia el lado de la curva (arriba para el
+                    // mínimo, abajo para el máximo): el puntual queda del otro.
+                    position: extremo === "min" ? "insideTopRight" : "insideBottomRight",
                     fill: "var(--text-primary)",
                     fontSize: 11,
                   }}
                 />
               )}
+              {crudo && !iguales && (
+                <ReferenceLine
+                  y={crudo.valor}
+                  stroke="none"
+                  label={{
+                    value: etiquetaCruda ?? "",
+                    position: extremo === "min" ? "insideBottomLeft" : "insideTopLeft",
+                    fill: "var(--text-secondary)",
+                    fontSize: 11,
+                  }}
+                />
+              )}
+              {crudo && !iguales && <ReferenceDot x={crudo.t} y={crudo.valor} r={4} fill="var(--surface-1)" stroke={color} strokeWidth={2} />}
               {punto && <ReferenceDot x={punto.t} y={punto.valor} r={5} fill={color} stroke="var(--surface-1)" strokeWidth={2} />}
             </LineChart>
           </ResponsiveContainer>

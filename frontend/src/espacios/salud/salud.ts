@@ -346,6 +346,18 @@ export function extremoNoche(datos: readonly { t: number; valor: number }[], tip
   return suaves.reduce((mejor, p) => ((tipo === "min" ? p.valor < mejor.valor : p.valor > mejor.valor) ? p : mejor));
 }
 
+/** El valor puntual (crudo) más bajo/alto de la noche, tal cual lo midió el
+ * anillo, aunque sea una sola lectura. */
+export function extremoPuntual(datos: readonly { t: number; valor: number }[], tipo: "min" | "max"): Extremo | null {
+  if (!datos.length) return null;
+  return datos.reduce((mejor, p) => ((tipo === "min" ? p.valor < mejor.valor : p.valor > mejor.valor) ? p : mejor), datos[0]);
+}
+
+/** ¿Sostenido y puntual son la misma marca (mismo valor redondeado y hora)? */
+export function mismoExtremo(a: Extremo | null, b: Extremo | null): boolean {
+  return !!a && !!b && a.t === b.t && Math.round(a.valor) === Math.round(b.valor);
+}
+
 // ------------------------------------------------- 4. fases por noche
 
 export interface FasesNoche {

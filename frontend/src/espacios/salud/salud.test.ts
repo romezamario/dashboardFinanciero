@@ -7,6 +7,7 @@ import {
   cruceSuenoGasto,
   desviacionTemperatura,
   extremoNoche,
+  extremoPuntual,
   fasesPorNoche,
   filaADia,
   haceCuanto,
@@ -14,6 +15,7 @@ import {
   nivelBateria,
   mensajeErrorSalud,
   minutosDormido,
+  mismoExtremo,
   relojDesde18,
   segmentosHipnograma,
   serieNoche,
@@ -130,6 +132,16 @@ describe("extremoNoche", () => {
   it("pocas lecturas o ninguna", () => {
     expect(extremoNoche(serie([80, 70]), "min")).toEqual({ t: 300, valor: 70 });
     expect(extremoNoche([], "max")).toBeNull();
+  });
+  it("puntual = el valor crudo, aunque sea un solo pico", () => {
+    const hr = serie([70, 65, 40, 66, 60, 57, 57, 58, 71]);
+    expect(extremoPuntual(hr, "min")).toEqual({ t: 600, valor: 40 });
+    expect(mismoExtremo(extremoNoche(hr, "min"), extremoPuntual(hr, "min"))).toBe(false);
+    const parejo = serie([60, 55, 50, 55, 60]);
+    expect(mismoExtremo(extremoNoche(parejo, "min"), extremoPuntual(parejo, "min"))).toBe(false);
+    const meseta = serie([60, 50, 50, 50, 60]);
+    expect(mismoExtremo(extremoNoche(meseta, "min"), extremoPuntual(meseta, "min"))).toBe(true);
+    expect(extremoPuntual([], "max")).toBeNull();
   });
 });
 
