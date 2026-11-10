@@ -4,7 +4,6 @@ vi.mock("../../lib/supabase", () => ({ supabase: {} }));
 
 import {
   celdasHR,
-  cruceSuenoGasto,
   desviacionTemperatura,
   extremoNoche,
   extremoPuntual,
@@ -19,7 +18,6 @@ import {
   relojDesde18,
   segmentosHipnograma,
   serieNoche,
-  sumarPorFecha,
   tarjetasHoy,
   tendencia,
   ultimosDias,
@@ -197,17 +195,6 @@ describe("celdasHR y cruce", () => {
   it("celdas día × hora", () => {
     expect(celdasHR([dia("2026-11-08", {}, { hrHoras: [{ hora: 16, mediana: 87 }] })])).toEqual([
       { fecha: "2026-11-08", hora: 16, mediana: 87 },
-    ]);
-  });
-  it("gasto por día y cruce con horas dormidas", () => {
-    const gasto = sumarPorFecha([
-      { fecha: "2026-11-09", monto: 100 },
-      { fecha: "2026-11-09", monto: 50.5 },
-    ]);
-    expect(gasto.get("2026-11-09")).toBe(150.5);
-    expect(cruceSuenoGasto([dia("2026-11-09", { metrics: { asleep_min: 450 } }), dia("2026-11-10", { metrics: { asleep_min: 300 } })], gasto)).toEqual([
-      { fecha: "2026-11-09", horas: 7.5, gasto: 150.5 },
-      { fecha: "2026-11-10", horas: 5, gasto: 0 },
     ]);
   });
 });

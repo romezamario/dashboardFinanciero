@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   mensajeErrorSalud,
   obtenerDiasSalud,
-  obtenerGastoPorDia,
   obtenerBateria,
   obtenerUltimaSubida,
   ultimosDias,
@@ -14,7 +13,6 @@ import type { PropsEspacio } from "../../lib/espacios";
 import {
   ActividadDiaria,
   CalendarioSueno,
-  CruceSuenoGasto,
   FasesPorNoche,
   HRDelDia,
   Hipnograma,
@@ -47,7 +45,6 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
   const [intento, setIntento] = useState(0);
   const [periodo, setPeriodo] = useState<number>(30);
   const [noche, setNoche] = useState<string | null>(null);
-  const [gasto, setGasto] = useState<Map<string, number> | null>(null);
   const [bateria, setBateria] = useState<LecturaBateria[] | null>(null);
 
   useEffect(() => {
@@ -60,11 +57,6 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
         if (!vigente) return;
         setDias(d);
         setUltimaSubida(s);
-        if (d.length) {
-          obtenerGastoPorDia(d[0].fecha, d.at(-1)!.fecha)
-            .then((g) => vigente && setGasto(g))
-            .catch(() => vigente && setGasto(new Map()));
-        }
       })
       .catch((e) => vigente && setError(mensajeErrorSalud(e)));
     return () => {
@@ -199,13 +191,6 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
 
             <Panel titulo="Ritmo cardiaco a lo largo del día">
               <HRDelDia dias={enPeriodo} />
-            </Panel>
-
-            <Panel
-              titulo="Salud × Finanzas: horas dormidas vs. gasto del día"
-              nota="Gasto = avisos de compra por correo (Gastos recientes) de ese día."
-            >
-              <CruceSuenoGasto dias={enPeriodo} gasto={gasto} />
             </Panel>
           </>
         )}

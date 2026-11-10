@@ -14,19 +14,15 @@ import {
   ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
-  Scatter,
-  ScatterChart,
   Tooltip,
   XAxis,
   YAxis,
-  ZAxis,
 } from "recharts";
 import {
   COLOR_FASE,
   NOMBRE_FASE,
   ORDEN_FASES,
   celdasHR,
-  cruceSuenoGasto,
   desviacionTemperatura,
   extremoNoche,
   extremoPuntual,
@@ -48,7 +44,6 @@ import {
   type Tarjeta,
 } from "./salud";
 import { desplazarMes, semanasDelMes, tituloMes } from "../../lib/gastosCorreo";
-import { moneda } from "../../lib/formato";
 
 const EJE = { fill: "var(--text-muted)", fontSize: 12 };
 const fechaCorta = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}`;
@@ -844,35 +839,6 @@ export function HRDelDia({ dias }: { dias: readonly DiaSalud[] }) {
           </tbody>
         </table>
       </div>
-    </div>
-  );
-}
-
-// ------------------------------------- 11. cruce Salud × Finanzas
-
-export function CruceSuenoGasto({ dias, gasto }: { dias: readonly DiaSalud[]; gasto: ReadonlyMap<string, number> | null }) {
-  const puntos = useMemo(() => (gasto ? cruceSuenoGasto(dias, gasto) : []), [dias, gasto]);
-  if (!gasto) return <Vacio>Cargando gastos…</Vacio>;
-  if (puntos.length < 2)
-    return <Vacio>Se necesitan al menos 2 noches para cruzar sueño y gasto ({puntos.length} hasta hoy).</Vacio>;
-  return (
-    <div className="h-56">
-      <ResponsiveContainer width="100%" height="100%">
-        <ScatterChart margin={{ top: 4, right: 8, bottom: 8, left: 0 }}>
-          <CartesianGrid stroke="var(--gridline)" />
-          <XAxis dataKey="horas" type="number" name="Horas dormidas" domain={["auto", "auto"]} tickFormatter={(h) => `${Number(h).toFixed(1)} h`} tick={EJE} axisLine={false} tickLine={false} />
-          <YAxis dataKey="gasto" type="number" name="Gasto" tickFormatter={(v) => moneda.format(v).replace(/\.00$/, "")} tick={EJE} axisLine={false} tickLine={false} width={72} />
-          <ZAxis range={[64, 64]} />
-          <Tooltip
-            content={({ active, payload }) => {
-              if (!active || !payload?.length) return null;
-              const p = payload[0].payload as (typeof puntos)[number];
-              return <Caja titulo={fechaCorta(p.fecha)} lineas={[`Dormiste ${p.horas} h`, `Gastaste ${moneda.format(p.gasto)}`]} />;
-            }}
-          />
-          <Scatter data={puntos} fill="var(--series-1)" stroke="var(--surface-1)" strokeWidth={2} isAnimationActive={false} />
-        </ScatterChart>
-      </ResponsiveContainer>
     </div>
   );
 }

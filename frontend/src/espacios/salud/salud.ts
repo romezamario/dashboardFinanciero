@@ -172,25 +172,6 @@ export function haceCuanto(iso: string, ahora = new Date()): string {
   return `hace ${Math.round(h / 24)} días`;
 }
 
-/** Gasto por día (avisos de compra por correo, `public.gastos_correo`) en el
- * rango dado, para el cruce Salud × Finanzas. */
-export async function obtenerGastoPorDia(desde: string, hasta: string): Promise<Map<string, number>> {
-  const { data, error } = await supabase
-    .from("gastos_correo")
-    .select("fecha, monto")
-    .gte("fecha", desde)
-    .lte("fecha", hasta)
-    .limit(10000);
-  if (error) throw error;
-  return sumarPorFecha((data ?? []) as { fecha: string; monto: number }[]);
-}
-
-export function sumarPorFecha(filas: readonly { fecha: string; monto: number }[]): Map<string, number> {
-  const total = new Map<string, number>();
-  for (const { fecha, monto } of filas) total.set(fecha, (total.get(fecha) ?? 0) + Number(monto || 0));
-  return total;
-}
-
 /** Mensaje para la persona según el error de Supabase. PGRST106 = el esquema
  * no está expuesto en la API (la migración del espacio aún no corre). */
 export function mensajeErrorSalud(error: { code?: string; message?: string } | null | undefined): string {
@@ -472,17 +453,4 @@ export function celdasHR(dias: readonly DiaSalud[]): CeldaHR[] {
       .filter((h) => num(h.mediana) !== null && num(h.hora) !== null)
       .map((h) => ({ fecha: d.fecha, hora: h.hora, mediana: h.mediana }))
   );
-}
-
-// ------------------------------------------- 11. cruce Salud × Finanzas
-
-export function cruceSuenoGasto(
-  dias: readonly DiaSalud[],
-  gasto: ReadonlyMap<string, number>
-): { fecha: string; horas: number; gasto: number }[] {
-  return dias.flatMap((d) => {
-    const min = minutosDormido(d.noche);
-    if (min === null) return [];
-    return [{ fecha: d.fecha, horas: Math.round((min / 60) * 10) / 10, gasto: gasto.get(d.fecha) ?? 0 }];
-  });
 }

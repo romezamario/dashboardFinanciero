@@ -364,9 +364,8 @@ Cada gráfica sin datos todavía dice qué le falta, no se oculta. La laptop lee
 - Con el selector **7 / 30 / 90 días**: **sueño por noche** (fases apiladas, meta de 8 h) y **deuda
   de sueño acumulada**; **HRV** y **HR en reposo** con la banda de tu rango normal (30 días, desde 3
   noches); **temperatura** como diferencia contra tu línea base; **horario de sueño** (de dormir a
-  despertar); **actividad** (pasos y calorías activas); **ritmo cardiaco del día** por hora con mapa
-  de calor día × hora (últimos 14 días); y **Salud × Finanzas** (horas dormidas contra el gasto del día
-  según los avisos de compra por correo).
+  despertar); **actividad** (pasos y calorías activas); y **ritmo cardiaco del día** por hora con mapa
+  de calor día × hora (últimos 14 días).
 
 **Qué muestra Finanzas** — una pestaña por tema; cada pestaña recuerda sus propios filtros al cambiar de
 una a otra. Botón de modo claro/oscuro arriba a la derecha.
