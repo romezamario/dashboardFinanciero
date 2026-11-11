@@ -367,7 +367,7 @@ function MiniLinea({
             <LineChart data={datos} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
               <CartesianGrid vertical={false} stroke="var(--gridline)" />
               <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} tickFormatter={horaDe} tick={EJE} axisLine={false} tickLine={false} />
-              <YAxis domain={eje.dominio} ticks={eje.marcas} tick={EJE} axisLine={false} tickLine={false} />
+              <YAxis domain={eje.dominio} ticks={eje.marcas} interval={0} tick={EJE} axisLine={false} tickLine={false} />
               <Tooltip
                 content={({ active, payload }) =>
                   active && payload?.length ? (
