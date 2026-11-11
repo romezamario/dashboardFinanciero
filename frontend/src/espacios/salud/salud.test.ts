@@ -5,6 +5,7 @@ vi.mock("../../lib/supabase", () => ({ supabase: {} }));
 import {
   celdasHR,
   desviacionTemperatura,
+  ejeRedondo,
   extremoNoche,
   extremoPuntual,
   fasesPorNoche,
@@ -99,6 +100,15 @@ describe("serieNoche", () => {
       { t: 20, valor: 72 },
     ]);
     expect(serieNoche(undefined, "hrv")).toEqual([]);
+  });
+});
+
+describe("ejeRedondo", () => {
+  it("pasos redondos que cubren los datos", () => {
+    expect(ejeRedondo([31, 50, 94])).toEqual({ dominio: [20, 100], marcas: [20, 40, 60, 80, 100] });
+    expect(ejeRedondo([55, 73])).toEqual({ dominio: [50, 75], marcas: [50, 55, 60, 65, 70, 75] });
+    expect(ejeRedondo([60, 60])).toEqual({ dominio: [59, 61], marcas: [59, 60, 61] });
+    expect(ejeRedondo([])).toEqual({ dominio: [0, 1], marcas: [0, 1] });
   });
 });
 

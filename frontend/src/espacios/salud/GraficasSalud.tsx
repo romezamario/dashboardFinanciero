@@ -24,6 +24,7 @@ import {
   ORDEN_FASES,
   celdasHR,
   desviacionTemperatura,
+  ejeRedondo,
   extremoNoche,
   extremoPuntual,
   fasesPorNoche,
@@ -339,16 +340,11 @@ function MiniLinea({
   const etiqueta = punto
     ? `${nombre} ${Math.round(punto.valor)}${iguales ? ` ${unidad}` : " sostenido"} · ${horaDe(punto.t)}`
     : null;
-  const etiquetaCruda = crudo && !iguales ? `${Math.round(crudo.valor)} puntual · ${horaDe(crudo.t)}` : null;
-  // Etiquetas sin encimarse y siempre dentro de la gráfica: la del sostenido
-  // a la derecha, del lado de la curva; la del puntual a la izquierda, del otro
-  // lado de su altura (debajo del mínimo / encima del máximo).
-  // Holgura en el eje para que quepa la etiqueta del puntual.
-  const valores = datos.map((d) => d.valor);
-  const lo = Math.min(...valores);
-  const hi = Math.max(...valores);
-  const holgura = Math.max(2, (hi - lo) * 0.18);
-  const dominio: [number, number] = extremo === "min" ? [Math.floor(lo - holgura), Math.ceil(hi)] : [Math.floor(lo), Math.ceil(hi + holgura)];
+  const etiquetaCruda = crudo && !iguales ? `${Math.round(crudo.valor)} ${unidad} puntual · ${horaDe(crudo.t)}` : null;
+  // Las etiquetas van en una leyenda DEBAJO de la gráfica, no dentro: en un
+  // teléfono no hay espacio para texto sobre la curva sin encimarse (Mario,
+  // 2026-11-11, captura en mobile). Dentro solo quedan las marcas.
+  const eje = ejeRedondo(datos.map((d) => d.valor));
   return (
     <div>
       <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
@@ -371,7 +367,7 @@ function MiniLinea({
             <LineChart data={datos} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
               <CartesianGrid vertical={false} stroke="var(--gridline)" />
               <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} tickFormatter={horaDe} tick={EJE} axisLine={false} tickLine={false} />
-              <YAxis domain={dominio} allowDataOverflow={false} tick={EJE} axisLine={false} tickLine={false} />
+              <YAxis domain={eje.dominio} ticks={eje.marcas} tick={EJE} axisLine={false} tickLine={false} />
               <Tooltip
                 content={({ active, payload }) =>
                   active && payload?.length ? (
@@ -380,33 +376,7 @@ function MiniLinea({
                 }
               />
               <Line dataKey="valor" stroke={color} strokeWidth={2} dot={false} isAnimationActive={false} />
-              {punto && (
-                <ReferenceLine
-                  y={punto.valor}
-                  stroke="var(--baseline)"
-                  strokeDasharray="4 4"
-                  label={{
-                    value: etiqueta ?? "",
-                    // Del sostenido hacia el lado de la curva (arriba para el
-                    // mínimo, abajo para el máximo): el puntual queda del otro.
-                    position: extremo === "min" ? "insideTopRight" : "insideBottomRight",
-                    fill: "var(--text-primary)",
-                    fontSize: 11,
-                  }}
-                />
-              )}
-              {crudo && !iguales && (
-                <ReferenceLine
-                  y={crudo.valor}
-                  stroke="none"
-                  label={{
-                    value: etiquetaCruda ?? "",
-                    position: extremo === "min" ? "insideBottomLeft" : "insideTopLeft",
-                    fill: "var(--text-secondary)",
-                    fontSize: 11,
-                  }}
-                />
-              )}
+              {punto && <ReferenceLine y={punto.valor} stroke="var(--baseline)" strokeDasharray="4 4" />}
               {crudo && !iguales && <ReferenceDot x={crudo.t} y={crudo.valor} r={4} fill="var(--surface-1)" stroke={color} strokeWidth={2} />}
               {punto && <ReferenceDot x={punto.t} y={punto.valor} r={5} fill={color} stroke="var(--surface-1)" strokeWidth={2} />}
             </LineChart>
@@ -414,6 +384,25 @@ function MiniLinea({
         </div>
       ) : (
         <Vacio>Sin datos.</Vacio>
+      )}
+      {punto && (
+        <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+          <li className="flex items-center gap-1.5">
+            <svg width="22" height="10" aria-hidden="true">
+              <line x1="0" y1="5" x2="22" y2="5" stroke="var(--baseline)" strokeDasharray="4 3" />
+              <circle cx="11" cy="5" r="4" fill={color} stroke="var(--surface-1)" strokeWidth="1.5" />
+            </svg>
+            <span style={{ color: "var(--text-primary)" }}>{etiqueta}</span>
+          </li>
+          {etiquetaCruda && (
+            <li className="flex items-center gap-1.5">
+              <svg width="12" height="10" aria-hidden="true">
+                <circle cx="6" cy="5" r="3.5" fill="var(--surface-1)" stroke={color} strokeWidth="2" />
+              </svg>
+              {etiquetaCruda}
+            </li>
+          )}
+        </ul>
       )}
     </div>
   );

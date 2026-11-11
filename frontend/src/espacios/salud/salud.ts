@@ -334,6 +334,25 @@ export function extremoPuntual(datos: readonly { t: number; valor: number }[], t
   return datos.reduce((mejor, p) => ((tipo === "min" ? p.valor < mejor.valor : p.valor > mejor.valor) ? p : mejor), datos[0]);
 }
 
+/** Eje Y con marcas a pasos redondos (1, 2, 5, 10, 20, 25, 50…) que cubren
+ * los datos, unas 4 divisiones: evita marcas como 31, 51, 71, 106. */
+export function ejeRedondo(valores: readonly number[]): { dominio: [number, number]; marcas: number[] } {
+  if (!valores.length) return { dominio: [0, 1], marcas: [0, 1] };
+  const lo = Math.min(...valores);
+  const hi = Math.max(...valores);
+  const pasos = [1, 2, 5, 10, 20, 25, 50, 100, 200, 500];
+  const paso = pasos.find((p) => (hi - lo) / p <= 4) ?? 1000;
+  // Un paso más de margen si el dato toca la orilla, para que el punto del
+  // mínimo/máximo no quede cortado contra el borde de la gráfica.
+  let desde = Math.floor(lo / paso) * paso;
+  if (lo - desde < paso * 0.1) desde -= paso;
+  let hasta = Math.max(desde + paso, Math.ceil(hi / paso) * paso);
+  if (hasta - hi < paso * 0.1) hasta += paso;
+  const marcas: number[] = [];
+  for (let v = desde; v <= hasta + 1e-9; v += paso) marcas.push(v);
+  return { dominio: [desde, hasta], marcas };
+}
+
 /** ¿Sostenido y puntual son la misma marca (mismo valor redondeado y hora)? */
 export function mismoExtremo(a: Extremo | null, b: Extremo | null): boolean {
   return !!a && !!b && a.t === b.t && Math.round(a.valor) === Math.round(b.valor);
