@@ -346,9 +346,40 @@ export function compararQqqTqqq(
 
 const cache = new Map<Simbolo, { cuando: number; serie: SerieCotizaciones }>();
 const VIGENCIA_MS = 5 * 60 * 1000;
+const PREFIJO_GUARDADA = "cotizaciones:";
+
+/** Última serie descargada de cada símbolo, guardada en este navegador
+ * (localStorage). La pestaña la pinta al instante mientras pide la nueva:
+ * la descarga (Pages Function → Yahoo, 10 años × 2 símbolos) tarda segundos.
+ * Sin almacenamiento (ventana privada) o con datos corruptos, devuelve {}. */
+export function cotizacionesGuardadas(simbolos: readonly Simbolo[]): Partial<Record<Simbolo, SerieCotizaciones>> {
+  const salida: Partial<Record<Simbolo, SerieCotizaciones>> = {};
+  for (const simbolo of simbolos) {
+    try {
+      const texto = localStorage.getItem(PREFIJO_GUARDADA + simbolo);
+      if (!texto) continue;
+      const serie = JSON.parse(texto) as SerieCotizaciones;
+      if (serie?.simbolo === simbolo && Array.isArray(serie.velas) && serie.velas.length) {
+        salida[simbolo] = serie;
+      }
+    } catch {
+      // ignorar: se descarga de nuevo
+    }
+  }
+  return salida;
+}
+
+function guardarCotizaciones(serie: SerieCotizaciones): void {
+  try {
+    localStorage.setItem(PREFIJO_GUARDADA + serie.simbolo, JSON.stringify(serie));
+  } catch {
+    // cuota llena o almacenamiento bloqueado: solo se pierde el arranque rápido
+  }
+}
 
 /** Trae las velas de /api/cotizaciones (Pages Function). Cache en memoria de
- * 5 min para que ir y volver de la pestaña no repita la descarga. */
+ * 5 min para que ir y volver de la pestaña no repita la descarga, y copia en
+ * localStorage para arrancar rápido la próxima vez (`cotizacionesGuardadas`). */
 export async function obtenerCotizaciones(
   simbolo: Simbolo,
   forzar = false
@@ -363,6 +394,7 @@ export async function obtenerCotizaciones(
     throw new Error(cuerpo?.error ?? `Error ${respuesta.status} al traer ${simbolo}`);
   }
   cache.set(simbolo, { cuando: Date.now(), serie: cuerpo });
+  guardarCotizaciones(cuerpo);
   return cuerpo;
 }
 

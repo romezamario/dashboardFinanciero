@@ -5,6 +5,7 @@ import {
   calcularNiveles,
   calcularSerieTecnica,
   compararQqqTqqq,
+  cotizacionesGuardadas,
   extremos52Semanas,
   inicioRango,
   nombreFecha,
@@ -81,7 +82,11 @@ export function AnalisisTecnicoTab() {
 }
 
 function VistaTecnica() {
-  const [series, setSeries] = useState<Partial<Record<Simbolo, SerieCotizaciones>>>({});
+  // Arranca con la última descarga guardada en este navegador (si hay), para
+  // no esperar a Yahoo; el efecto de abajo la reemplaza al llegar la nueva.
+  const [series, setSeries] = useState<Partial<Record<Simbolo, SerieCotizaciones>>>(() =>
+    cotizacionesGuardadas(SIMBOLOS)
+  );
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(true);
   const [simbolo, setSimbolo] = useState<Simbolo>("QQQ");

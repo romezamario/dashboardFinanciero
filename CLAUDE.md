@@ -1095,7 +1095,7 @@ same domain → behind the same Cloudflare Access, no CORS problem) that proxies
 public, unofficial chart endpoint — no API key; whitelisted to `SIMBOLOS_PERMITIDOS` so it isn't an
 open proxy. The upstream fetch uses `cf: { cacheTtl: 300, cacheEverything: true }` (2026-10-08) so
 Cloudflare's edge cache serves repeat requests for 5 minutes instead of hitting Yahoo every time
-(public data, same for everyone; ignored in `npm run dev`). For it to deploy, `deploy.yml` runs `wrangler pages deploy dist` with
+(public data, same for everyone; ignored in `npm run dev`). **Faster open (2026-11-12, Mario: "la opción de trading tarda unos segundos en cargar")**: the seconds were the two 10-year Yahoo downloads behind `/api/cotizaciones` (the indicators/patterns take ~35 ms, the chunk ~30 KB gzip). The Function now also keeps the processed JSON in `caches.default` for 5 min (per data center; skipped where it doesn't exist), and `obtenerCotizaciones` saves each series in `localStorage` (`cotizaciones:<símbolo>`); `VistaTecnica` starts from `cotizacionesGuardadas` so a returning visit paints the last data at once while "Actualizando…" fetches the new one (tested in `cotizacionesGuardadas.test.ts`). For it to deploy, `deploy.yml` runs `wrangler pages deploy dist` with
 `workingDirectory: frontend` (wrangler picks up `functions/` from its cwd); in `npm run dev`,
 `vite.config.ts` mounts the same handler as middleware. If Yahoo ever changes/blocks it, only this
 tab shows an error. Indicators are pure functions in `src/lib/tecnico.ts` (SMA and EMA 20/50/200 — one toggle per type, SMA on and EMA off by default, user's request 2026-10-16 —, Bollinger

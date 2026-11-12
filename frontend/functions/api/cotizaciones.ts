@@ -99,14 +99,57 @@ export async function obtenerSerie(simbolo: Simbolo): Promise<SerieCotizaciones>
   };
 }
 
-export async function onRequestGet({ request }: { request: Request }): Promise<Response> {
+/** Caché de Cloudflare (Cache API, por centro de datos) para la respuesta ya
+ * procesada: la descarga de Yahoo (10 años) es lo lento de la pestaña, y
+ * `cf.cacheTtl` del fetch no siempre aplica en *.pages.dev. Fuera de
+ * Cloudflare (`npm run dev`) no existe `caches.default` y se omite. */
+interface CacheCloudflare {
+  match(clave: Request): Promise<Response | undefined>;
+  put(clave: Request, respuesta: Response): Promise<void>;
+}
+
+function cacheDeCloudflare(): CacheCloudflare | null {
+  const almacen = (globalThis as { caches?: { default?: CacheCloudflare } }).caches;
+  return almacen?.default ?? null;
+}
+
+const CACHE_NAVEGADOR = `private, max-age=${SEGUNDOS_EN_CACHE}`;
+
+export async function onRequestGet({
+  request,
+  waitUntil,
+}: {
+  request: Request;
+  waitUntil?: (promesa: Promise<unknown>) => void;
+}): Promise<Response> {
   const simbolo = new URL(request.url).searchParams.get("simbolo")?.toUpperCase() ?? "";
   if (!(SIMBOLOS_PERMITIDOS as readonly string[]).includes(simbolo)) {
     return Response.json({ error: `Símbolo no permitido: ${simbolo}` }, { status: 400 });
   }
+  const cache = cacheDeCloudflare();
+  // Clave normalizada (mismo origen, solo el símbolo): datos públicos, iguales para todos.
+  const clave = new Request(new URL(`/api/cotizaciones?simbolo=${simbolo}`, request.url).toString());
+  try {
+    const guardada = await cache?.match(clave);
+    if (guardada) {
+      return new Response(guardada.body, {
+        headers: { "Content-Type": "application/json", "Cache-Control": CACHE_NAVEGADOR },
+      });
+    }
+  } catch {
+    // caché no disponible: se descarga
+  }
   try {
     const serie = await obtenerSerie(simbolo as Simbolo);
-    return Response.json(serie, { headers: { "Cache-Control": `private, max-age=${SEGUNDOS_EN_CACHE}` } });
+    if (cache) {
+      const paraCache = Response.json(serie, {
+        headers: { "Cache-Control": `public, max-age=${SEGUNDOS_EN_CACHE}` },
+      });
+      const guardar = cache.put(clave, paraCache).catch(() => undefined);
+      if (waitUntil) waitUntil(guardar);
+      else await guardar;
+    }
+    return Response.json(serie, { headers: { "Cache-Control": CACHE_NAVEGADOR } });
   } catch (e) {
     return Response.json(
       { error: e instanceof Error ? e.message : String(e) },
