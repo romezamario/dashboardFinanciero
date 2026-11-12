@@ -36,11 +36,21 @@ function Icono({ trazos }: { trazos?: readonly string[] }) {
   );
 }
 
+/** Pide el código de la vista antes del clic (al pasar el ratón, enfocar o
+ * tocar): el clic ya no espera la descarga del chunk. `import()` repetido no
+ * vuelve a descargar. */
+function precargar(espacio: DefinicionEspacio) {
+  void espacio.cargar?.().catch(() => undefined);
+}
+
 function TarjetaEspacio({ espacio, onAbrir }: { espacio: DefinicionEspacio; onAbrir: () => void }) {
   return (
     <button
       type="button"
       onClick={onAbrir}
+      onPointerEnter={() => precargar(espacio)}
+      onFocus={() => precargar(espacio)}
+      onTouchStart={() => precargar(espacio)}
       className="group flex h-full w-full items-start gap-4 rounded-xl p-5 text-left transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2"
       style={{
         background: "var(--surface-1)",

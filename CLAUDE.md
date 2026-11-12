@@ -160,7 +160,7 @@ it, so what a guest creates belongs to the owner. **Write new policies on those 
 `auth.uid()`.** The table is empty in every instance; only `db-migrate.yml`'s personal job fills it from the secret
 `CORREOS_INVITADOS` (via the Management API SQL endpoint; the repo is public, so guest emails never go in it). The
 frontend hides Trading and Wiki when RPC `soy_invitado()` is true (`lib/accesoCompartido.ts`; hidden until known, an
-RPC error counts as owner); `functions/api/_middleware.ts` (all of `/api` is Trading) returns 403 unless the
+RPC error counts as owner; since 2026-11-12 the answer is asked once per user per browser tab — Inicio and Dashboard share it — and cached in `localStorage["soy_invitado:<uid>"]`, so the home page shows the Trading card at once and the RPC only refreshes it; Mario's report: the Trading card took seconds to appear. Home cards also preload their view chunk on hover/focus/touch); `functions/api/_middleware.ts` (all of `/api` is Trading) returns 403 unless the
 `Cf-Access-Authenticated-User-Email` is in the Pages env `CORREOS_TRADING` (default `romezamario@gmail.com`; no header =
 not blocked). Not hidden: the Wiki's text ships in the JS bundle, and `/macro.json` (public FRED data) is a static file.
 Manual setup (README "Acceso compartido"): the secret, a Supabase Auth invite, and the email in the Cloudflare Access policy.
