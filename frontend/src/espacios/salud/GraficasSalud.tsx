@@ -179,14 +179,44 @@ export function TarjetasHoy({ dias }: { dias: readonly DiaSalud[] }) {
  * un subproyecto no lo edita. */
 const AMARILLO_AVISO = "#fab219";
 
+/** Color del relleno de la pila según el nivel (el texto y el aviso dicen lo
+ * mismo, nunca solo el color). */
+const COLOR_NIVEL = { ok: "var(--status-good)", baja: AMARILLO_AVISO, critica: "var(--status-critical)" } as const;
+
+/** Pila horizontal que se vacía con el nivel (Mario, 2026-11-13: "déjala como
+ * una batería que se va vaciando, en lugar de una gráfica de línea"). */
+function Pila({ pct, cargando }: { pct: number; cargando: boolean }) {
+  const nivel = nivelBateria(pct);
+  const lleno = Math.max(0, Math.min(100, pct));
+  // Cuerpo 112×52 con 4 px de margen interior; el borne va a la derecha.
+  const anchoUtil = 104;
+  const relleno = Math.max(lleno > 0 ? 3 : 0, (anchoUtil * lleno) / 100);
+  return (
+    <svg width="128" height="56" viewBox="0 0 128 56" role="img" aria-label={`Batería al ${pct}%${cargando ? ", cargando" : ""}`}>
+      <rect x="2" y="2" width="112" height="52" rx="9" fill="var(--page-plane)" stroke="var(--text-secondary)" strokeWidth="2.5" />
+      <rect x="116" y="18" width="8" height="20" rx="3" fill="var(--text-secondary)" />
+      <rect x="8" y="8" width={relleno} height="40" rx="5" fill={COLOR_NIVEL[nivel]} style={{ transition: "width 0.4s ease" }} />
+      {cargando && (
+        <path
+          d="M64 10 L48 31 H59 L54 46 L72 24 H61 Z"
+          fill="var(--text-primary)"
+          stroke="var(--page-plane)"
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+        />
+      )}
+    </svg>
+  );
+}
+
 export function TarjetaBateria({ lecturas }: { lecturas: readonly LecturaBateria[] | null }) {
   if (lecturas === null) return <Vacio>Cargando batería…</Vacio>;
   const ultima = lecturas.at(-1);
   if (!ultima) return <Vacio>Sin lecturas de batería en las últimas 48 h. La laptop la lee cada hora.</Vacio>;
   const nivel = nivelBateria(ultima.pct);
-  const datos = lecturas.map((l) => ({ t: new Date(l.en).getTime() / 1000, pct: l.pct }));
   return (
     <div className="flex flex-wrap items-center gap-4">
+      <Pila pct={ultima.pct} cargando={!!ultima.cargando} />
       <div>
         <p className="text-3xl font-semibold tabular-nums" style={{ color: "var(--text-primary)" }}>
           {ultima.pct}%
@@ -213,25 +243,6 @@ export function TarjetaBateria({ lecturas }: { lecturas: readonly LecturaBateria
           </p>
         )}
       </div>
-      {datos.length >= 2 && (
-        <div className="h-20 min-w-48 flex-1">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={datos} margin={{ top: 4, right: 8, bottom: 0, left: -24 }}>
-              <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} tickFormatter={horaDe} tick={EJE} axisLine={false} tickLine={false} />
-              <YAxis domain={[0, 100]} ticks={[0, 50, 100]} tick={EJE} axisLine={false} tickLine={false} />
-              <ReferenceLine y={20} stroke="var(--baseline)" strokeDasharray="4 4" />
-              <Tooltip
-                content={({ active, payload }) =>
-                  active && payload?.length ? (
-                    <Caja titulo={horaDe((payload[0].payload as { t: number }).t)} lineas={[`${payload[0].value}%`]} />
-                  ) : null
-                }
-              />
-              <Line dataKey="pct" stroke="var(--series-1)" strokeWidth={2} dot={false} isAnimationActive={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
     </div>
   );
 }

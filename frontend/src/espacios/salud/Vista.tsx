@@ -80,7 +80,7 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
         )
       }
     >
-        <Panel titulo="Batería del anillo (últimas 48 h)">
+        <Panel titulo="Batería del anillo">
           <TarjetaBateria lecturas={bateria} />
         </Panel>
         <details className="tarjeta rounded-lg p-4">
