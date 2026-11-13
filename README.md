@@ -346,7 +346,10 @@ compartido no ven Trading. Solo en la edición personal; la de clientes entra di
 
 **Qué muestra Salud** — lo que sube la laptop con `py colector\subir_oura.py` (repo `romezamario/oura`).
 Cada gráfica sin datos todavía dice qué le falta, no se oculta. La laptop lee el anillo cada hora
-(tarea programada de Windows, ver el README de `romezamario/oura`).
+(tarea programada de Windows, ver el README de `romezamario/oura`). Los indicadores están en pestañas:
+**Hoy** (recuperación, tarjetas del día y batería), **Noche** (calendario y la noche elegida), **Sueño**,
+**Corazón y estrés**, **Temperatura y respiración** y **Actividad**; el selector 7/30/90 días aparece en
+las pestañas con tendencias.
 
 - **Batería del anillo**: el último % con la hora de lectura ("hace 20 min") y si estaba cargando,
   aviso "Batería baja" (amarillo, < 25%) o "Batería crítica" (rojo, < 10%), dibujada como una pila

@@ -140,6 +140,11 @@ motion ≥ 600 s), and scores the rest against YOUR daytime-at-rest normal (medi
 sd floors 4 bpm / 0.15 ln ms): score = mean of z(HR) and −z(ln RMSSD); ≥ 0.75 estrés, ≤ −0.75 recuperación. `EstresDelDia`
 draws minutes per state, the day's bars (orange stress / blue recovery / muted normal) and a 7-day split. Own calculation, not
 Oura's Daytime stress; thresholds are a first guess to tune with Mario's feedback.
+**Salud tabs (2026-11-13, Mario: "el dashboard se está haciendo muy grande… clasificaciones de indicadores por pestaña")**: `Vista.tsx`
+shows a `Segmentado` (horizontal scroll on phones) with Hoy (recuperación, today cards, battery) · Noche (sleep calendar → that
+night's hypnogram, blocks, night HR/HRV) · Sueño (phases per night + debt, schedule/consistency) · Corazón y estrés (daytime stress,
+HRV/RHR trends, HR by hour) · Temperatura y respiración (temp vs. baseline, 24 h temp, SpO2, breathing) · Actividad. The 7/30/90
+selector only shows on trend tabs; the chosen tab is kept in `sessionStorage["salud:pestana"]`. New Salud panels go in one of these tabs.
 
 **Subprojects publish as espacios (2026-11-08, Mario: Trading automatizado, OURA and Viajes "son otros proyectos que
 estarán trabajándose en paralelo, pero publicarán en la misma página")**: each subproject owns ONE folder,
