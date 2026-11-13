@@ -349,7 +349,7 @@ function MiniLinea({
   const media = promedio(datos.map((d) => d.valor));
   const nombre = extremo === "min" ? "Mín" : "Máx";
   const etiqueta = punto
-    ? `${nombre} ${Math.round(punto.valor)}${iguales ? ` ${unidad}` : " sostenido"} · ${horaDe(punto.t)}`
+    ? `${nombre} ${Math.round(punto.valor)} ${unidad}${iguales ? "" : " sostenido"} · ${horaDe(punto.t)}`
     : null;
   const etiquetaCruda = crudo && !iguales ? `${Math.round(crudo.valor)} ${unidad} puntual · ${horaDe(crudo.t)}` : null;
   // Las etiquetas van en una leyenda DEBAJO de la gráfica, no dentro: en un
@@ -388,7 +388,12 @@ function MiniLinea({
               />
               <Line dataKey="valor" stroke={color} strokeWidth={2} dot={false} isAnimationActive={false} />
               {punto && <ReferenceLine y={punto.valor} stroke="var(--baseline)" strokeDasharray="4 4" />}
-              {crudo && !iguales && <ReferenceDot x={crudo.t} y={crudo.valor} r={4} fill="var(--surface-1)" stroke={color} strokeWidth={2} />}
+              {/* A la misma hora que el sostenido, el punto hueco quedaría
+                  encimado detrás del lleno: solo se ve el lleno y la leyenda
+                  sigue dando los dos valores. */}
+              {crudo && !iguales && crudo.t !== punto?.t && (
+                <ReferenceDot x={crudo.t} y={crudo.valor} r={4} fill="var(--surface-1)" stroke={color} strokeWidth={2} />
+              )}
               {punto && <ReferenceDot x={punto.t} y={punto.valor} r={5} fill={color} stroke="var(--surface-1)" strokeWidth={2} />}
             </LineChart>
           </ResponsiveContainer>
