@@ -349,11 +349,18 @@ Cada gráfica sin datos todavía dice qué le falta, no se oculta. La laptop lee
 (tarea programada de Windows, ver el README de `romezamario/oura`).
 
 - **Batería del anillo**: el último % con la hora de lectura ("hace 20 min") y si estaba cargando,
-  aviso "Batería baja" (amarillo, < 20%) o "Batería crítica" (rojo, < 10%) y la línea de las últimas
-  48 h. La lee la laptop en cada lectura y también la prueba de Bluefy.
+  aviso "Batería baja" (amarillo, < 25%) o "Batería crítica" (rojo, < 10%), dibujada como una pila
+  que se vacía. Bajo 25% y bajo 10% la laptop además muestra una notificación de Windows.
+- **Recuperación de hoy**: semáforo propio (Listo / Moderado / Descansa, 0–100) que compara la HRV, la
+  FC en reposo, la temperatura y la respiración de la última noche contra tu promedio de los 30 días
+  anteriores (desde 3 noches) y lo que dormiste contra 8 h; muestra cada factor y el puntaje de sueño.
 - **Leer anillo desde este dispositivo** (prueba con Bluefy en iPhone): se conecta, se autentica con
   la clave del anillo (guardada solo en ese navegador) y lee batería, firmware y si el HR diurno y el
   SpO2 están encendidos.
+- **Sueño de ese día en bloques**: la noche y las siestas (o una noche partida) en una franja de
+  18:00 a 18:00. El hipnograma también dice cuántas veces despertaste, en cuánto te dormiste y cuánto
+  estuviste despierto después de dormirte. En el calendario, una noche sin datos dice «🔋 apagado»
+  si el anillo se quedó sin batería, o «sin datos».
 - **Hoy**: sueño, eficiencia, HR en reposo, HRV, temperatura, cuánto faltó dormir y pasos, cada uno
   con ▲/▼ contra tu promedio de los 7 días anteriores (verde = mejor, rojo = peor).
 - **Fases de sueño** de una noche (despierto / REM / ligero / profundo a lo largo de la noche, con el
@@ -363,8 +370,11 @@ Cada gráfica sin datos todavía dice qué le falta, no se oculta. La laptop lee
   **calendario de sueño** (color por eficiencia) cambia la noche.
 - Con el selector **7 / 30 / 90 días**: **sueño por noche** (fases apiladas, meta de 8 h) y **deuda
   de sueño acumulada**; **HRV** y **HR en reposo** con la banda de tu rango normal (30 días, desde 3
-  noches); **temperatura** como diferencia contra tu línea base; **horario de sueño** (de dormir a
-  despertar); **actividad** (pasos y calorías activas); y **ritmo cardiaco del día** por hora con mapa
+  noches); **SpO2** y **respiración** por noche con la misma banda; **temperatura** como diferencia
+  contra tu línea base; **horario de sueño** (de dormir a despertar) con su **constancia** (hora
+  promedio ± minutos; muy constante ≤ 30 min, irregular > 60); **temperatura de la piel a lo largo del
+  día** (curva de 24 h de un día contra tu normal a cada hora, con aviso si una hora sube ≥ 0.8 °C);
+  **actividad** (pasos y calorías activas); y **ritmo cardiaco del día** por hora con mapa
   de calor día × hora (últimos 14 días).
 
 **Qué muestra Finanzas** — una pestaña por tema; cada pestaña recuerda sus propios filtros al cambiar de
