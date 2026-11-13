@@ -103,6 +103,17 @@ export interface Apagon {
   horas: number;
 }
 
+/** 15 min de latidos buenos del anillo (colector, `estres_ventanas`): FC
+ * mediana, RMSSD y movimiento. indicadores.ts decide si fue estrés. */
+export interface VentanaEstres {
+  inicio: number;
+  lpm: number;
+  rmssd: number;
+  latidos?: number;
+  met?: number | null;
+  mov_s?: number;
+}
+
 export interface DiaSalud {
   fecha: string;
   noche?: Noche;
@@ -112,6 +123,7 @@ export interface DiaSalud {
   periodos?: PeriodoSueno[];
   tempHoras?: HoraTemp[];
   apagones?: Apagon[];
+  estresVentanas?: VentanaEstres[];
 }
 
 // --------------------------------------------------------------- lectura
@@ -126,6 +138,7 @@ interface FilaResumen {
     periodos?: PeriodoSueno[];
     temp_horas?: HoraTemp[];
     apagones?: Apagon[];
+    estres_ventanas?: VentanaEstres[];
   } | null;
 }
 
@@ -140,6 +153,7 @@ export function filaADia({ fecha, datos }: FilaResumen): DiaSalud {
     periodos: d.periodos,
     tempHoras: d.temp_horas,
     apagones: d.apagones,
+    estresVentanas: d.estres_ventanas,
   };
 }
 

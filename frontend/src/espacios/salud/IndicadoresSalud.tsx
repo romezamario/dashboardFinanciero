@@ -1,12 +1,18 @@
 // Dibujo de los indicadores nuevos de Salud (2026-11-13). Cálculos en
 // indicadores.ts. Mismas piezas y colores por rol que GraficasSalud.tsx.
 import { useMemo, useState } from "react";
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Caja, Leyenda, Vacio } from "./GraficasSalud";
 import { AMARILLO_AVISO, EJE, fechaCorta, horaDe, horasMin } from "./formatoSalud";
 import {
   constanciaHorario,
   diasConTemperatura,
+  estresDiurno,
+  MINIMO_VENTANAS_BASE,
+  UMBRAL_ESTRES,
+  ventanasEnReposo,
+  type DiaEstres,
+  type EstadoVentana,
   horaFueraDeLoNormal,
   minutosPeriodo,
   periodosDelDia,
@@ -243,6 +249,151 @@ export function TemperaturaDelDia({ dias }: { dias: readonly DiaSalud[] }) {
         {alta
           ? `⚠ A las ${alta.hora}:00 estuviste ${((alta.valor as number) - (alta.normal as number)).toFixed(1)} °C arriba de tu normal para esa hora. Si te sientes mal, puede ser fiebre.`
           : "La piel se enfría de día y se calienta al dormir; la línea punteada es tu promedio a cada hora en los otros días."}
+      </p>
+    </div>
+  );
+}
+
+// --------------------------------------------------- estrés diurno
+
+const ESTADOS: Record<EstadoVentana, { texto: string; color: string }> = {
+  estres: { texto: "Estrés", color: "var(--series-2)" },
+  recuperacion: { texto: "Recuperación", color: "var(--series-1)" },
+  normal: { texto: "Normal", color: "var(--text-muted)" },
+  movimiento: { texto: "En movimiento", color: "var(--gridline)" },
+};
+const TOPE_PUNTAJE = 3;
+const horaLocal = (unix: number) => {
+  const d = new Date(unix * 1000);
+  return d.getHours() + d.getMinutes() / 60;
+};
+const duracion = (min: number) => (min < 60 ? `${min} min` : horasMin(min));
+
+function BarraDia({ dia }: { dia: DiaEstres }) {
+  const reposo = dia.minutos.estres + dia.minutos.normal + dia.minutos.recuperacion;
+  if (!reposo) return null;
+  const tramos: EstadoVentana[] = ["estres", "normal", "recuperacion"];
+  return (
+    <div className="flex h-2.5 w-full overflow-hidden rounded-full" style={{ background: "var(--gridline)" }} aria-hidden>
+      {tramos.map((e) => (
+        <span key={e} style={{ width: `${(dia.minutos[e] / reposo) * 100}%`, background: ESTADOS[e].color }} />
+      ))}
+    </div>
+  );
+}
+
+export function EstresDelDia({ dias }: { dias: readonly DiaSalud[] }) {
+  const porDia = useMemo(() => estresDiurno(dias).reverse(), [dias]);
+  const [elegida, setElegida] = useState<string | null>(null);
+  const reposo = useMemo(() => (porDia.length ? 0 : ventanasEnReposo(dias)), [dias, porDia]);
+  if (!porDia.length) {
+    return (
+      <Vacio>
+        {reposo
+          ? `Juntando tu normal de día: ${reposo} de ${MINIMO_VENTANAS_BASE} ratos de 15 min en reposo con el anillo puesto.`
+          : "Aún no hay datos de estrés: aparecerán con la próxima lectura de la laptop."}
+      </Vacio>
+    );
+  }
+  const dia = porDia.find((d) => d.fecha === elegida) ?? porDia[0];
+  const puntos = dia.puntos
+    .filter((p) => p.puntaje !== null)
+    .map((p) => ({ ...p, hora: horaLocal(p.inicio), valor: Math.max(-TOPE_PUNTAJE, Math.min(TOPE_PUNTAJE, p.puntaje as number)) }));
+  const m = dia.minutos;
+  return (
+    <div>
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label="Día">
+        {porDia.slice(0, 7).map((d) => (
+          <button
+            key={d.fecha}
+            onClick={() => setElegida(d.fecha)}
+            aria-pressed={d.fecha === dia.fecha}
+            className="rounded-full px-2.5 py-0.5 text-xs"
+            style={{
+              border: "1px solid var(--border)",
+              background: d.fecha === dia.fecha ? "var(--marca)" : "var(--surface-1)",
+              color: d.fecha === dia.fecha ? "#fff" : "var(--text-secondary)",
+            }}
+          >
+            {fechaCorta(d.fecha)}
+          </button>
+        ))}
+      </div>
+      <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+        <strong style={{ color: ESTADOS.estres.color }}>{duracion(m.estres)} de estrés</strong> ·{" "}
+        <strong style={{ color: ESTADOS.recuperacion.color }}>{duracion(m.recuperacion)} de recuperación</strong> · {duracion(m.normal)} normal
+        {m.movimiento ? ` · ${duracion(m.movimiento)} en movimiento (no se juzga)` : ""}
+      </p>
+      <div className="mt-2">
+        <Leyenda items={(["estres", "normal", "recuperacion"] as const).map((e) => ({ color: ESTADOS[e].color, texto: ESTADOS[e].texto }))} />
+      </div>
+      <div className="mt-2 h-48">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={puntos} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
+            <CartesianGrid vertical={false} stroke="var(--gridline)" />
+            <XAxis
+              type="number"
+              dataKey="hora"
+              domain={[0, 24]}
+              ticks={[0, 3, 6, 9, 12, 15, 18, 21, 24]}
+              tickFormatter={(h: number) => `${h}h`}
+              tick={EJE}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              domain={[-TOPE_PUNTAJE, TOPE_PUNTAJE]}
+              ticks={[-2, 0, 2]}
+              tickFormatter={(v: number) => (v > 0 ? "estrés" : v < 0 ? "calma" : "normal")}
+              tick={EJE}
+              axisLine={false}
+              tickLine={false}
+              width={52}
+            />
+            <ReferenceLine y={0} stroke="var(--baseline)" />
+            <ReferenceLine y={UMBRAL_ESTRES} stroke="var(--baseline)" strokeDasharray="3 3" />
+            <ReferenceLine y={-UMBRAL_ESTRES} stroke="var(--baseline)" strokeDasharray="3 3" />
+            <Tooltip
+              cursor={{ fill: "var(--gridline)", opacity: 0.4 }}
+              content={({ active, payload }) => {
+                if (!active || !payload?.length) return null;
+                const p = payload[0].payload as (typeof puntos)[number];
+                return (
+                  <Caja
+                    titulo={`${horaDe(p.inicio)} · ${ESTADOS[p.estado].texto}`}
+                    lineas={[
+                      `FC ${Math.round(p.lpm)} lpm (tu normal ${dia.normal.lpm})`,
+                      `HRV ${Math.round(p.rmssd)} ms (tu normal ${dia.normal.rmssd})`,
+                    ]}
+                  />
+                );
+              }}
+            />
+            <Bar dataKey="valor" barSize={5} isAnimationActive={false}>
+              {puntos.map((p) => (
+                <Cell key={p.inicio} fill={ESTADOS[p.estado].color} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      {porDia.length > 1 && (
+        <ul className="mt-3 space-y-1.5">
+          {porDia.slice(0, 7).map((d) => (
+            <li key={d.fecha} className="grid grid-cols-[3rem_1fr] items-center gap-2 text-xs sm:grid-cols-[3rem_1fr_17rem]" style={{ color: "var(--text-secondary)" }}>
+              <span>{fechaCorta(d.fecha)}</span>
+              <BarraDia dia={d} />
+              <span className="col-start-2 sm:col-start-auto">
+                {duracion(d.minutos.estres)} estrés · {duracion(d.minutos.recuperacion)} recuperación
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
+        Cálculo propio, no el estrés de Oura: cada 15 min en reposo se compara tu FC y tu HRV de día con tu normal (mediana de 14 días:{" "}
+        {dia.normal.lpm} lpm, {dia.normal.rmssd} ms). FC arriba con HRV abajo = estrés; al revés = recuperación. Al caminar o hacer
+        ejercicio no se juzga, y solo cuenta el tiempo con buena lectura del anillo.
       </p>
     </div>
   );

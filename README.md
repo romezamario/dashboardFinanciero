@@ -372,7 +372,10 @@ Cada gráfica sin datos todavía dice qué le falta, no se oculta. La laptop lee
   de sueño acumulada**; **HRV** y **HR en reposo** con la banda de tu rango normal (30 días, desde 3
   noches); **SpO2** y **respiración** por noche con la misma banda; **temperatura** como diferencia
   contra tu línea base; **horario de sueño** (de dormir a despertar) con su **constancia** (hora
-  promedio ± minutos; muy constante ≤ 30 min, irregular > 60); **temperatura de la piel a lo largo del
+  promedio ± minutos; muy constante ≤ 30 min, irregular > 60); **estrés durante el día** (cada 15 min
+  despierto y en reposo, tu FC y tu HRV contra tu normal de día de los últimos 14 días: FC arriba y HRV
+  abajo = estrés, al revés = recuperación; al moverte no se juzga; minutos de cada uno por día y la curva
+  del día; cálculo propio, no el de Oura); **temperatura de la piel a lo largo del
   día** (curva de 24 h de un día contra tu normal a cada hora, con aviso si una hora sube ≥ 0.8 °C);
   **actividad** (pasos y calorías activas); y **ritmo cardiaco del día** por hora con mapa
   de calor día × hora (últimos 14 días).

@@ -25,7 +25,7 @@ import {
   Tendencia,
   Vacio,
 } from "./GraficasSalud";
-import { BloquesSueno, ConstanciaHorario, TarjetaRecuperacion, TemperaturaDelDia } from "./IndicadoresSalud";
+import { BloquesSueno, ConstanciaHorario, EstresDelDia, TarjetaRecuperacion, TemperaturaDelDia } from "./IndicadoresSalud";
 
 const PERIODOS = [
   { dias: 7, texto: "7 días" },
@@ -191,6 +191,10 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
                 </div>
               </Panel>
             </div>
+
+            <Panel titulo="Estrés durante el día">
+              <EstresDelDia dias={dias} />
+            </Panel>
 
             <Panel titulo="Temperatura de la piel a lo largo del día">
               <TemperaturaDelDia dias={dias} />

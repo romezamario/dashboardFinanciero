@@ -133,6 +133,13 @@ formatters in `formatoSalud.ts`: "Recuperación de hoy" (own traffic light: HRV/
 ≥ 3 nights, + sleep vs. 8 h; NOT Oura's Readiness), sleep blocks/naps of the chosen day, awakenings/latency/WASO in the hypnogram,
 SpO2 and breathing trends, schedule consistency, 24 h skin temperature vs. your hourly normal, calendar marks "🔋 apagado" /
 "sin datos". Battery "baja" is now < 25%. `real_steps` stays OFF: this oura.exe doesn't use those events for steps yet.
+**Daytime stress (2026-11-13, Mario: "¿Puedes hacer cálculos de estrés?")**: the collector adds per day `estres_ventanas` (15-min
+windows with ≥ 30 quality-1 beats of `green_ibi_quality_event`: median HR, RMSSD of consecutive beats changing ≤ 20%, mean MET,
+motion seconds). `estresDiurno` (indicadores.ts) drops windows inside any sleep period, skips moving ones (MET ≥ 1.6; no MET →
+motion ≥ 600 s), and scores the rest against YOUR daytime-at-rest normal (median of the 14 days up to that day, ≥ 30 windows;
+sd floors 4 bpm / 0.15 ln ms): score = mean of z(HR) and −z(ln RMSSD); ≥ 0.75 estrés, ≤ −0.75 recuperación. `EstresDelDia`
+draws minutes per state, the day's bars (orange stress / blue recovery / muted normal) and a 7-day split. Own calculation, not
+Oura's Daytime stress; thresholds are a first guess to tune with Mario's feedback.
 
 **Subprojects publish as espacios (2026-11-08, Mario: Trading automatizado, OURA and Viajes "son otros proyectos que
 estarán trabajándose en paralelo, pero publicarán en la misma página")**: each subproject owns ONE folder,

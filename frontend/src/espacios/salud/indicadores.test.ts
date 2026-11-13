@@ -6,6 +6,7 @@ import {
   constanciaHorario,
   diasConTemperatura,
   estadoNoche,
+  estresDiurno,
   horaFueraDeLoNormal,
   minutosPeriodo,
   periodosDelDia,
@@ -13,8 +14,9 @@ import {
   recuperacion,
   siestasDelDia,
   temperaturaDelDia,
+  ventanasEnReposo,
 } from "./indicadores";
-import type { DiaSalud, Noche } from "./salud";
+import type { DiaSalud, Noche, VentanaEstres } from "./salud";
 
 const dia = (fecha: string, noche?: Noche, extra: Partial<DiaSalud> = {}): DiaSalud => ({ fecha, noche, ...extra });
 const normal = (fecha: string, cambios: Partial<Noche> = {}) =>
@@ -130,5 +132,51 @@ describe("temperatura del día", () => {
 
   it("lista los días con temperatura, del más reciente", () => {
     expect(diasConTemperatura(dias)).toEqual(["2026-11-12", "2026-11-11", "2026-11-10"]);
+  });
+});
+
+describe("estrés diurno", () => {
+  // Días 10 a 12 con 12 ventanas en reposo cada uno: FC 80 y RMSSD 40 (con algo de ruido).
+  const base = Date.UTC(2026, 10, 10, 15) / 1000;
+  const ventanas = (dia: number, extra: Partial<VentanaEstres>[] = []) =>
+    Array.from({ length: 12 }, (_, i) => ({
+      inicio: base + dia * 86400 + i * 900,
+      lpm: 80 + (i % 3) - 1,
+      rmssd: 40 + (i % 3) * 2 - 2,
+      met: 1.2,
+      ...(extra[i] ?? {}),
+    }));
+
+  it("sin 30 ventanas de base no hay estrés", () => {
+    expect(estresDiurno([dia("2026-11-10", undefined, { estresVentanas: ventanas(0) })])).toEqual([]);
+    expect(ventanasEnReposo([dia("2026-11-10", undefined, { estresVentanas: ventanas(0) })])).toBe(12);
+  });
+
+  it("FC alta y HRV baja = estrés; al revés = recuperación; con movimiento no se juzga", () => {
+    const hoy = ventanas(2, [{ lpm: 95, rmssd: 22 }, { lpm: 68, rmssd: 60 }, { lpm: 110, rmssd: 20, met: 3 }]);
+    const r = estresDiurno([
+      dia("2026-11-10", undefined, { estresVentanas: ventanas(0) }),
+      dia("2026-11-11", undefined, { estresVentanas: ventanas(1) }),
+      dia("2026-11-12", undefined, { estresVentanas: hoy }),
+    ]);
+    expect(r.map((d) => d.fecha)).toEqual(["2026-11-12"]);
+    const [d] = r;
+    expect(d.puntos[0].estado).toBe("estres");
+    expect(d.puntos[1].estado).toBe("recuperacion");
+    expect(d.puntos[2]).toMatchObject({ estado: "movimiento", puntaje: null });
+    expect(d.minutos).toEqual({ estres: 15, recuperacion: 15, movimiento: 15, normal: 135 });
+    expect(d.normal.lpm).toBe(80);
+    expect(d.normal.ventanas).toBe(35);
+  });
+
+  it("las ventanas dentro de un periodo de sueño no cuentan", () => {
+    const v = ventanas(0);
+    const r = ventanasEnReposo([
+      dia("2026-11-10", undefined, {
+        estresVentanas: v,
+        periodos: [{ inicio: v[0].inicio, fin: v[3].inicio, principal: false }],
+      }),
+    ]);
+    expect(r).toBe(9);
   });
 });

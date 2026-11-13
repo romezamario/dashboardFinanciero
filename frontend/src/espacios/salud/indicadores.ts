@@ -10,6 +10,7 @@ import {
   restarDias,
   type DiaSalud,
   type PeriodoSueno,
+  type VentanaEstres,
 } from "./salud";
 
 // ------------------------------------------------ noches sin datos
@@ -275,4 +276,121 @@ export function temperaturaDelDia(dias: readonly DiaSalud[], fecha: string): Pun
 export function horaFueraDeLoNormal(puntos: readonly PuntoTempDia[]): PuntoTempDia | null {
   const fuera = puntos.filter((p) => p.valor !== null && p.normal !== null && p.valor - p.normal >= 0.8);
   return fuera.length ? fuera.reduce((a, b) => ((b.valor as number) - (b.normal as number) > (a.valor as number) - (a.normal as number) ? b : a)) : null;
+}
+
+// ------------------------------------------------ estrés diurno
+
+export type EstadoVentana = "estres" | "normal" | "recuperacion" | "movimiento";
+
+export interface PuntoEstres {
+  inicio: number;
+  estado: EstadoVentana;
+  /** + = más estrés que tu normal (FC arriba y HRV abajo); null si te movías. */
+  puntaje: number | null;
+  lpm: number;
+  rmssd: number;
+}
+
+export interface DiaEstres {
+  fecha: string;
+  puntos: PuntoEstres[];
+  /** Minutos por estado (cada ventana vale 15). */
+  minutos: Record<EstadoVentana, number>;
+  /** Tu normal de día en reposo con la que se comparó. */
+  normal: { lpm: number; rmssd: number; ventanas: number };
+}
+
+export const MINUTOS_VENTANA = 15;
+/** MET promedio de la ventana desde el que cuenta como movimiento (caminar ≈ 2.5–3). */
+export const MET_MOVIMIENTO = 1.6;
+/** Sin MET: segundos con movimiento (de 900) desde los que cuenta como movimiento. */
+const MOVIMIENTO_SIN_MET_S = 600;
+/** Ventanas en reposo mínimas para tener "tu normal". */
+export const MINIMO_VENTANAS_BASE = 30;
+/** Días hacia atrás (incluido el día) para tu normal. */
+const DIAS_BASE_ESTRES = 14;
+/** Puntaje (promedio de los dos z) desde el que es estrés / recuperación. */
+export const UMBRAL_ESTRES = 0.75;
+// Desviaciones mínimas: con pocos días la dispersión sale demasiado chica.
+const SD_MINIMA_LPM = 4;
+const SD_MINIMA_LN_RMSSD = 0.15;
+
+const mediana = (v: readonly number[]) => {
+  const o = [...v].sort((a, b) => a - b);
+  const m = Math.floor(o.length / 2);
+  return o.length % 2 ? o[m] : (o[m - 1] + o[m]) / 2;
+};
+
+const enMovimiento = (v: VentanaEstres) =>
+  num(v.met) !== null ? (v.met as number) >= MET_MOVIMIENTO : (v.mov_s ?? 0) >= MOVIMIENTO_SIN_MET_S;
+
+/** Ventanas despierto: se quitan las que caen dentro de cualquier periodo de
+ * sueño (noche o siesta) de cualquier día. */
+function ventanasDespierto(dias: readonly DiaSalud[]): Map<string, VentanaEstres[]> {
+  const sueno = dias.flatMap((d) => periodosDelDia(d)).filter((p) => num(p.inicio) !== null && num(p.fin) !== null) as {
+    inicio: number;
+    fin: number;
+  }[];
+  const fin = MINUTOS_VENTANA * 60;
+  const porDia = new Map<string, VentanaEstres[]>();
+  for (const d of dias) {
+    const despierto = (d.estresVentanas ?? []).filter(
+      (v) => num(v.lpm) !== null && num(v.rmssd) !== null && v.rmssd > 0 && !sueno.some((p) => v.inicio < p.fin && v.inicio + fin > p.inicio),
+    );
+    if (despierto.length) porDia.set(d.fecha, despierto);
+  }
+  return porDia;
+}
+
+/** Estrés diurno de cada día con ventanas: cada 15 min en reposo se compara
+ * tu FC y tu HRV (RMSSD) contra TU normal de día en reposo (mediana de los 14
+ * días hasta ese día, ≥ 30 ventanas). FC arriba y HRV abajo = estrés; al revés
+ * = recuperación. Con movimiento (MET ≥ 1.6) no se juzga: el ejercicio también
+ * sube la FC. Es un cálculo propio, no el "Daytime stress" de Oura. */
+export function estresDiurno(dias: readonly DiaSalud[]): DiaEstres[] {
+  const porDia = ventanasDespierto(dias);
+  const fechas = [...porDia.keys()].sort();
+  const salida: DiaEstres[] = [];
+  for (const fecha of fechas) {
+    const desde = restarDias(fecha, DIAS_BASE_ESTRES - 1);
+    const reposo = fechas
+      .filter((f) => f >= desde && f <= fecha)
+      .flatMap((f) => porDia.get(f) ?? [])
+      .filter((v) => !enMovimiento(v));
+    if (reposo.length < MINIMO_VENTANAS_BASE) continue;
+    const lpm = reposo.map((v) => v.lpm);
+    const ln = reposo.map((v) => Math.log(v.rmssd));
+    const mLpm = mediana(lpm);
+    const mLn = mediana(ln);
+    const sdLpm = Math.max(desviacionEstandar(lpm) ?? 0, SD_MINIMA_LPM);
+    const sdLn = Math.max(desviacionEstandar(ln) ?? 0, SD_MINIMA_LN_RMSSD);
+    const minutos: Record<EstadoVentana, number> = { estres: 0, normal: 0, recuperacion: 0, movimiento: 0 };
+    const puntos = [...(porDia.get(fecha) ?? [])]
+      .sort((a, b) => a.inicio - b.inicio)
+      .map((v): PuntoEstres => {
+        let estado: EstadoVentana = "movimiento";
+        let puntaje: number | null = null;
+        if (!enMovimiento(v)) {
+          puntaje = Math.round((((v.lpm - mLpm) / sdLpm - (Math.log(v.rmssd) - mLn) / sdLn) / 2) * 100) / 100;
+          estado = puntaje >= UMBRAL_ESTRES ? "estres" : puntaje <= -UMBRAL_ESTRES ? "recuperacion" : "normal";
+        }
+        minutos[estado] += MINUTOS_VENTANA;
+        return { inicio: v.inicio, estado, puntaje, lpm: v.lpm, rmssd: v.rmssd };
+      });
+    salida.push({
+      fecha,
+      puntos,
+      minutos,
+      normal: { lpm: Math.round(mLpm), rmssd: Math.round(Math.exp(mLn)), ventanas: reposo.length },
+    });
+  }
+  return salida;
+}
+
+/** Cuántas ventanas despierto y en reposo hay (para decir cuánto falta para
+ * tener tu normal). */
+export function ventanasEnReposo(dias: readonly DiaSalud[]): number {
+  let n = 0;
+  for (const v of ventanasDespierto(dias).values()) n += v.filter((x) => !enMovimiento(x)).length;
+  return n;
 }
