@@ -126,7 +126,7 @@ export interface LecturaBateria {
 }
 
 /** Lecturas de batería de las últimas 48 h (cada lectura horaria de la laptop
- * y cada prueba desde el navegador), de la más antigua a la más reciente. */
+ * y las pruebas que se hicieron desde el navegador), de la más antigua a la más reciente. */
 export async function obtenerBateria(ahora = new Date()): Promise<LecturaBateria[]> {
   const desde = new Date(ahora.getTime() - 48 * 3600 * 1000).toISOString();
   const { data, error } = await supabase
@@ -141,18 +141,6 @@ export async function obtenerBateria(ahora = new Date()): Promise<LecturaBateria
   return ((data ?? []) as { bateria_pct: number; bateria_leida_en: string; cargando: boolean | null; origen: LecturaBateria["origen"] }[]).map(
     (f) => ({ pct: f.bateria_pct, en: f.bateria_leida_en, cargando: f.cargando, origen: f.origen })
   );
-}
-
-/** Guarda una lectura de batería hecha desde este navegador (prueba de Bluefy). */
-export async function guardarBateriaNavegador(pct: number, cargando: boolean): Promise<void> {
-  const { error } = await supabase.schema("salud").from("oura_sincronizaciones").insert({
-    origen: "navegador",
-    eventos_enviados: 0,
-    bateria_pct: pct,
-    bateria_leida_en: new Date().toISOString(),
-    cargando,
-  });
-  if (error) throw error;
 }
 
 export type NivelBateria = "ok" | "baja" | "critica";
