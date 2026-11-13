@@ -40,7 +40,14 @@ export interface Noche {
   wake_pct?: number | null;
   efficiency?: number | null;
   stages?: number[] | null;
-  metrics?: { asleep_min?: number | null; awakenings?: number | null } | null;
+  metrics?: {
+    asleep_min?: number | null;
+    awakenings?: number | null;
+    /** Minutos para quedarte dormido. */
+    sol_min?: number | null;
+    /** Minutos despierto después de dormirte. */
+    waso_min?: number | null;
+  } | null;
   sleep_score?: { score?: number | null } | null;
   series_t?: { hr?: [number, number][]; hrv?: [number, number][] } | null;
 }
@@ -69,24 +76,71 @@ export interface HoraHR {
   latidos?: number | null;
 }
 
+/** Un periodo de sueño que terminó ese día (noche, siesta o bloque de una
+ * noche partida). Lo arma el colector a partir de las noches de oura.exe. */
+export interface PeriodoSueno {
+  inicio?: number | null;
+  fin?: number | null;
+  start?: string | null;
+  end?: string | null;
+  en_cama_h?: number | null;
+  dormido_min?: number | null;
+  eficiencia?: number | null;
+  principal?: boolean;
+}
+
+/** Temperatura de la piel de una hora del día (mediana, solo con el anillo puesto). */
+export interface HoraTemp {
+  hora: number;
+  mediana: number;
+  n?: number;
+}
+
+/** Tramo en que el anillo estuvo apagado (sin batería), unix s. */
+export interface Apagon {
+  inicio: number;
+  fin: number;
+  horas: number;
+}
+
 export interface DiaSalud {
   fecha: string;
   noche?: Noche;
   deuda?: DeudaSueno;
   actividad?: Actividad;
   hrHoras?: HoraHR[];
+  periodos?: PeriodoSueno[];
+  tempHoras?: HoraTemp[];
+  apagones?: Apagon[];
 }
 
 // --------------------------------------------------------------- lectura
 
 interface FilaResumen {
   fecha: string;
-  datos: { noche?: Noche; deuda_sueno?: DeudaSueno; actividad?: Actividad; hr_horas?: HoraHR[] } | null;
+  datos: {
+    noche?: Noche;
+    deuda_sueno?: DeudaSueno;
+    actividad?: Actividad;
+    hr_horas?: HoraHR[];
+    periodos?: PeriodoSueno[];
+    temp_horas?: HoraTemp[];
+    apagones?: Apagon[];
+  } | null;
 }
 
 export function filaADia({ fecha, datos }: FilaResumen): DiaSalud {
   const d = datos ?? {};
-  return { fecha, noche: d.noche, deuda: d.deuda_sueno, actividad: d.actividad, hrHoras: d.hr_horas };
+  return {
+    fecha,
+    noche: d.noche,
+    deuda: d.deuda_sueno,
+    actividad: d.actividad,
+    hrHoras: d.hr_horas,
+    periodos: d.periodos,
+    tempHoras: d.temp_horas,
+    apagones: d.apagones,
+  };
 }
 
 /** Todos los días (fuente 'oura'), del más antiguo al más reciente. Son pocas
@@ -145,9 +199,11 @@ export async function obtenerBateria(ahora = new Date()): Promise<LecturaBateria
 
 export type NivelBateria = "ok" | "baja" | "critica";
 
-/** < 10% crítica (rojo), < 20% baja (amarillo). */
+/** < 10% crítica (rojo), < 25% baja (amarillo). El 25% es el mismo umbral del
+ * aviso de Windows del colector (Mario, 2026-11-13: con SpO2 y HR diurno el
+ * anillo gasta ~1.3% por hora; de 25% quedan ~19 h, menos de una noche y un día). */
 export function nivelBateria(pct: number): NivelBateria {
-  return pct < 10 ? "critica" : pct < 20 ? "baja" : "ok";
+  return pct < 10 ? "critica" : pct < 25 ? "baja" : "ok";
 }
 
 /** "hace 20 min", "hace 3 h", "hace 2 días". */
@@ -171,13 +227,13 @@ export function mensajeErrorSalud(error: { code?: string; message?: string } | n
 
 // ----------------------------------------------------------- utilidades
 
-const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+export const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
 export function promedio(valores: readonly number[]): number | null {
   return valores.length ? valores.reduce((a, b) => a + b, 0) / valores.length : null;
 }
 
-function desviacionEstandar(valores: readonly number[]): number | null {
+export function desviacionEstandar(valores: readonly number[]): number | null {
   const m = promedio(valores);
   if (m === null || valores.length < 2) return null;
   return Math.sqrt(valores.reduce((a, v) => a + (v - m) ** 2, 0) / (valores.length - 1));

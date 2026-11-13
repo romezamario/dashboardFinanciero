@@ -124,6 +124,16 @@ repo); the old Bluefy test inserted 'navegador' rows (still shown as "desde el n
 with text (< 20% `#fab219` + dark text — no shared warning token and a subproject must not edit index.css; < 10%
 `--status-critical`), drawn as a battery icon that empties with the level (green / yellow / red, bolt when charging; replaced the 48 h line on 2026-11-13, Mario: "déjala como una batería que se va vaciando"). (3) The Bluefy (Web Bluetooth) proof of concept — `anilloBle.ts`, `LeerAnillo.tsx` and its collapsible section — was removed on 2026-11-13 (Mario: "quita esta sección" / "quita también el código"); it lives in git history (commit before 2026-11-13 20:47 UTC) if it is ever wanted back.
 
+**Salud indicators (2026-11-13, Mario approved the whole proposal: "Todos")**: the collector (oura repo, `colector/oura_local.py`)
+now adds per day `periodos` (every sleep period ending that day; `noche` = the LONGEST — before, a nap could overwrite the main
+night), `temp_horas` (hourly median skin temp from `temp_event`, 30–38.5 °C only) and `apagones` (ring off/no battery, from
+`time_sync` gaps), shows a Windows toast below 25% and 10% battery and re-enables SpO2/daytime HR when `feature_modes.json` says
+they're off. Front: pure functions in `espacios/salud/indicadores.ts` (tested), drawing in `IndicadoresSalud.tsx`, shared
+formatters in `formatoSalud.ts`: "Recuperación de hoy" (own traffic light: HRV/RHR/temp/breath vs. mean of the previous 30 days,
+≥ 3 nights, + sleep vs. 8 h; NOT Oura's Readiness), sleep blocks/naps of the chosen day, awakenings/latency/WASO in the hypnogram,
+SpO2 and breathing trends, schedule consistency, 24 h skin temperature vs. your hourly normal, calendar marks "🔋 apagado" /
+"sin datos". Battery "baja" is now < 25%. `real_steps` stays OFF: this oura.exe doesn't use those events for steps yet.
+
 **Subprojects publish as espacios (2026-11-08, Mario: Trading automatizado, OURA and Viajes "son otros proyectos que
 estarán trabajándose en paralelo, pero publicarán en la misma página")**: each subproject owns ONE folder,
 `frontend/src/espacios/<id>/`, and nothing else in the shell has to change to add it. Contract:

@@ -45,12 +45,9 @@ import {
   type Tarjeta,
 } from "./salud";
 import { desplazarMes, semanasDelMes, tituloMes } from "../../lib/gastosCorreo";
+import { estadoNoche } from "./indicadores";
+import { AMARILLO_AVISO, EJE, fechaCorta, horaDe, horasMin } from "./formatoSalud";
 
-const EJE = { fill: "var(--text-muted)", fontSize: 12 };
-const fechaCorta = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}`;
-const horaDe = (unix: number) =>
-  new Date(unix * 1000).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", hour12: false });
-const horasMin = (min: number) => `${Math.floor(min / 60)} h ${String(Math.round(min % 60)).padStart(2, "0")} min`;
 /** Marcas de eje cada 2 h (en minutos) que cubren el máximo. */
 const marcasHoras = (max: number) => Array.from({ length: Math.max(2, Math.ceil(max / 120) + 1) }, (_, i) => i * 120);
 const ejeHoras = (m: number) => `${Math.round(m / 60)} h`;
@@ -87,7 +84,7 @@ export function Vacio({ children }: { children: ReactNode }) {
   );
 }
 
-function Leyenda({ items }: { items: { color: string; texto: string }[] }) {
+export function Leyenda({ items }: { items: { color: string; texto: string }[] }) {
   return (
     <div className="flex flex-wrap gap-3 text-xs" style={{ color: "var(--text-secondary)" }}>
       {items.map((i) => (
@@ -100,7 +97,7 @@ function Leyenda({ items }: { items: { color: string; texto: string }[] }) {
   );
 }
 
-function Caja({ titulo, lineas }: { titulo: string; lineas: (string | null)[] }) {
+export function Caja({ titulo, lineas }: { titulo: string; lineas: (string | null)[] }) {
   return (
     <div
       className="rounded-lg px-3 py-2 text-xs"
@@ -174,10 +171,6 @@ export function TarjetasHoy({ dias }: { dias: readonly DiaSalud[] }) {
 
 // ------------------------------------------------- batería del anillo
 
-/** Amarillo de estado "warning" de la paleta de referencia (dataviz); siempre
- * con texto oscuro encima. No hay token compartido de warning en index.css y
- * un subproyecto no lo edita. */
-const AMARILLO_AVISO = "#fab219";
 
 /** Color del relleno de la pila según el nivel (el texto y el aviso dicen lo
  * mismo, nunca solo el color). */
@@ -304,6 +297,13 @@ export function Hipnograma({ dia }: { dia: DiaSalud | undefined }) {
         ))}
         {n.efficiency != null && <span>· Eficiencia {Math.round(n.efficiency)}%</span>}
         {minutosDormido(n) != null && <span>· Dormido {horasMin(minutosDormido(n)!)}</span>}
+        {n.metrics?.awakenings != null && (
+          <span>
+            · {n.metrics.awakenings} {n.metrics.awakenings === 1 ? "despertar" : "despertares"}
+          </span>
+        )}
+        {n.metrics?.sol_min != null && <span>· Te dormiste en {Math.round(n.metrics.sol_min)} min</span>}
+        {n.metrics?.waso_min != null && <span>· Despierto después de dormirte: {Math.round(n.metrics.waso_min)} min</span>}
       </div>
     </div>
   );
@@ -504,12 +504,14 @@ export function Tendencia({
   color,
   unidad,
   vacio,
+  decimales = 0,
 }: {
   dias: readonly DiaSalud[];
   leer: (d: DiaSalud) => number | null;
   color: string;
   unidad: string;
   vacio: string;
+  decimales?: number;
 }) {
   const datos = useMemo(
     () => tendencia(dias, leer).map((p) => ({ ...p, banda: p.bajo !== null && p.alto !== null ? [p.bajo, p.alto] : null })),
@@ -534,8 +536,8 @@ export function Tendencia({
                   <Caja
                     titulo={fechaCorta(p.fecha)}
                     lineas={[
-                      p.valor === null ? "Sin dato" : `${Math.round(p.valor)} ${unidad}`,
-                      p.base === null ? null : `Tu normal: ${Math.round(p.base)} ${unidad}`,
+                      p.valor === null ? "Sin dato" : `${p.valor.toFixed(decimales)} ${unidad}`,
+                      p.base === null ? null : `Tu normal: ${p.base.toFixed(decimales)} ${unidad}`,
                     ]}
                   />
                 );
@@ -662,6 +664,8 @@ export function CalendarioSueno({
   const ultimoMes = (seleccion ?? dias.at(-1)?.fecha ?? new Date().toISOString().slice(0, 10)).slice(0, 7);
   const [mes, setMes] = useState(ultimoMes);
   const primero = dias[0]?.fecha.slice(0, 7) ?? mes;
+  const primerDia = dias[0]?.fecha ?? "";
+  const ultimoDia = dias.at(-1)?.fecha ?? "";
   if (!dias.some((d) => d.noche)) return <Vacio>El calendario se llena con cada noche que registre el anillo.</Vacio>;
   return (
     <div>
@@ -687,6 +691,9 @@ export function CalendarioSueno({
           const ef = d?.noche?.efficiency;
           const min = minutosDormido(d?.noche);
           if (!fecha) return <span key={`h${i}`} />;
+          // Noche sin datos dentro del rango que ya registra el anillo: se dice
+          // por qué falta (anillo apagado = sin batería) en vez de dejarla vacía.
+          const hueco = !d?.noche && fecha >= primerDia && fecha <= ultimoDia ? estadoNoche(d) : null;
           return (
             <button
               key={fecha}
@@ -699,9 +706,22 @@ export function CalendarioSueno({
                 color: "var(--text-primary)",
                 cursor: d?.noche ? "pointer" : "default",
               }}
-              title={d?.noche ? `${fecha}: ${min != null ? horasMin(min) : "—"} dormido, eficiencia ${ef ?? "—"}%` : fecha}
+              title={
+                d?.noche
+                  ? `${fecha}: ${min != null ? horasMin(min) : "—"} dormido, eficiencia ${ef ?? "—"}%`
+                  : hueco === "sin-bateria"
+                    ? `${fecha}: sin datos, el anillo estuvo apagado (sin batería)`
+                    : hueco
+                      ? `${fecha}: sin datos de sueño`
+                      : fecha
+              }
             >
               <span style={{ color: "var(--text-muted)" }}>{Number(fecha.slice(8))}</span>
+              {hueco && (
+                <span className="mt-auto leading-tight" style={{ color: hueco === "sin-bateria" ? "var(--status-critical)" : "var(--text-muted)" }}>
+                  {hueco === "sin-bateria" ? "🔋 apagado" : "sin datos"}
+                </span>
+              )}
               {min != null && <span className="mt-auto font-medium tabular-nums">{(min / 60).toFixed(1)} h</span>}
               {ef != null && <span className="hidden tabular-nums sm:inline" style={{ color: "var(--text-secondary)" }}>{Math.round(ef)}%</span>}
             </button>
@@ -709,7 +729,8 @@ export function CalendarioSueno({
         })}
       </div>
       <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
-        Color por eficiencia (rojo = baja, verde = alta). Toca una noche para ver sus fases arriba.
+        Color por eficiencia (rojo = baja, verde = alta). Toca una noche para ver sus fases arriba. «🔋 apagado»: el
+        anillo se quedó sin batería esa noche.
       </p>
     </div>
   );

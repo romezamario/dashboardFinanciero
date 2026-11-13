@@ -116,8 +116,8 @@ describe("batería", () => {
   it("niveles", () => {
     expect(nivelBateria(9)).toBe("critica");
     expect(nivelBateria(10)).toBe("baja");
-    expect(nivelBateria(19)).toBe("baja");
-    expect(nivelBateria(20)).toBe("ok");
+    expect(nivelBateria(24)).toBe("baja");
+    expect(nivelBateria(25)).toBe("ok");
   });
   it("hace cuánto", () => {
     const ahora = new Date("2026-11-09T15:00:00Z");

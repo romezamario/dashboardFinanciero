@@ -25,6 +25,7 @@ import {
   Tendencia,
   Vacio,
 } from "./GraficasSalud";
+import { BloquesSueno, ConstanciaHorario, TarjetaRecuperacion, TemperaturaDelDia } from "./IndicadoresSalud";
 
 const PERIODOS = [
   { dias: 7, texto: "7 días" },
@@ -34,6 +35,8 @@ const PERIODOS = [
 
 const leerHRV = (d: DiaSalud) => d.noche?.hrv_ms ?? null;
 const leerRHR = (d: DiaSalud) => d.noche?.rhr ?? null;
+const leerSpO2 = (d: DiaSalud) => d.noche?.spo2_mean ?? null;
+const leerRespiracion = (d: DiaSalud) => d.noche?.breath_rate ?? null;
 
 /** Espacio Salud del dashboard personal: datos del anillo Oura que sube el
  * colector de la laptop (esquema `salud` de Supabase). */
@@ -109,6 +112,10 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
           </Vacio>
         ) : (
           <>
+            <Panel titulo="Recuperación de hoy">
+              <TarjetaRecuperacion dias={dias} />
+            </Panel>
+
             <TarjetasHoy dias={dias} />
 
             <Panel
@@ -116,6 +123,10 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
               nota="Fases calculadas por open_health a partir de las señales del anillo."
             >
               <Hipnograma dia={nocheElegida} />
+            </Panel>
+
+            <Panel titulo="Sueño de ese día en bloques (noche y siestas)">
+              <BloquesSueno dia={nocheElegida} />
             </Panel>
 
             <Panel titulo="Ritmo cardiaco y HRV durante esa noche">
@@ -161,19 +172,35 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
+              <Panel titulo="Oxígeno en sangre (SpO2) por noche (%)" nota="Normal: 95–100%. Bajadas repetidas de noche pueden indicar pausas al respirar.">
+                <Tendencia dias={enPeriodo} leer={leerSpO2} color="var(--series-1)" unidad="%" vacio="Aún no hay SpO2 nocturno." />
+              </Panel>
+              <Panel titulo="Respiración por noche (resp/min)" nota="Suele subir uno o dos días antes de enfermarte.">
+                <Tendencia dias={enPeriodo} leer={leerRespiracion} color="var(--series-2)" unidad="resp/min" vacio="Aún no hay frecuencia respiratoria." decimales={1} />
+              </Panel>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
               <Panel titulo="Temperatura de la piel vs. tu línea base (°C)">
                 <Temperatura dias={enPeriodo} />
               </Panel>
               <Panel titulo="Horario de sueño (hora de dormir → despertar)">
-                <HorarioSueno dias={enPeriodo} />
+                <ConstanciaHorario dias={enPeriodo} />
+                <div className="mt-2">
+                  <HorarioSueno dias={enPeriodo} />
+                </div>
               </Panel>
             </div>
+
+            <Panel titulo="Temperatura de la piel a lo largo del día">
+              <TemperaturaDelDia dias={dias} />
+            </Panel>
 
             <Panel titulo="Actividad por día" nota="Pasos y calorías los calcula open_health con el movimiento del anillo.">
               <ActividadDiaria dias={enPeriodo} />
             </Panel>
 
-            <Panel titulo="Ritmo cardiaco a lo largo del día">
+            <Panel titulo="Ritmo cardiaco a lo largo del día" nota="Incluye las lecturas de día (HR diurno) y de noche.">
               <HRDelDia dias={enPeriodo} />
             </Panel>
           </>
