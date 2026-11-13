@@ -120,7 +120,7 @@ extreme; drawn as `ReferenceDot` + dashed `ReferenceLine` with a direct label, a
 (2) Ring battery: migration `20261109150000_bateria_anillo.sql` adds `bateria_pct`, `bateria_leida_en`, `cargando` to
 `oura_anillos` and `oura_sincronizaciones` (+ `origen` 'laptop'|'navegador'; "Última subida" counts only 'laptop'). The
 uploader reads it with `oura.exe info` after each hourly sync (Windows scheduled task "Oura - lectura cada hora" in the oura
-repo); the Bluefy test (`LeerAnillo`) inserts an 'navegador' row. `TarjetaBateria`: last %, "hace X", charging, warning badge
+repo); the Bluefy test (`LeerAnillo`) inserts a 'navegador' row (its collapsible section was removed from the Salud page on 2026-11-13, Mario: "quita esta sección"; `LeerAnillo.tsx`/`anilloBle.ts` stay in the folder, unused, to bring it back). `TarjetaBateria`: last %, "hace X", charging, warning badge
 with text (< 20% `#fab219` + dark text — no shared warning token and a subproject must not edit index.css; < 10%
 `--status-critical`), drawn as a battery icon that empties with the level (green / yellow / red, bolt when charging; replaced the 48 h line on 2026-11-13, Mario: "déjala como una batería que se va vaciando"). (3) Bluefy proof of concept: `anilloBle.ts` (Web Bluetooth + auth: AES-128/ECB of the
 15-byte nonce done as AES-CBC with zero IV in Web Crypto, verified against a node:crypto vector) and `LeerAnillo.tsx`; the
