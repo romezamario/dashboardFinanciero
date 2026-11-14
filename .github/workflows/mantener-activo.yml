@@ -1,13 +1,17 @@
 name: Mantener activo Supabase
 
-# El plan gratis de Supabase pausa un proyecto tras ~7 días sin actividad
-# (correo del 2026-11-01 para el proyecto de clientes). Una consulta real a la
-# API de datos cada día cuenta como actividad. Lee `planes`, que es pública
-# (mismas migraciones en los dos proyectos), con la anon key: no toca datos de
-# nadie ni necesita credenciales nuevas.
+# El plan gratis de Supabase pausa un proyecto que no tiene "suficiente
+# actividad de usuarios en la base" durante una semana; su guía dice que
+# "típicamente unas cuantas consultas a la base cada día" bastan.
+# Historia: 2026-11-01 llegó el aviso para el proyecto de clientes y se agregó
+# UNA lectura diaria de `planes` por la API; el 2026-11-08 llegó otro aviso con
+# esa tarea corriendo bien todos los días, así que una al día no alcanzaba.
+# Ahora: cada 4 horas (6 veces al día) y en cada corrida varias consultas por la
+# API de datos (anon key) más una consulta SQL directa a la base por la API de
+# administración (access token). Solo lee; no toca datos de nadie.
 on:
   schedule:
-    - cron: "17 13 * * *"
+    - cron: "17 */4 * * *"
   workflow_dispatch: {}
 
 jobs:
@@ -18,33 +22,60 @@ jobs:
       matrix:
         instancia: [clientes, personal]
     steps:
-      - name: Consulta a la base
+      - name: Consultas a la base
         env:
           INSTANCIA: ${{ matrix.instancia }}
           URL_CLIENTES: ${{ secrets.PRODUCTO_VITE_SUPABASE_URL }}
           CLAVE_CLIENTES: ${{ secrets.PRODUCTO_VITE_SUPABASE_ANON_KEY }}
+          REF_CLIENTES: ${{ secrets.PRODUCTO_SUPABASE_PROJECT_ID }}
+          TOKEN_CLIENTES: ${{ secrets.PRODUCTO_SUPABASE_ACCESS_TOKEN || secrets.SUPABASE_ACCESS_TOKEN }}
           URL_PERSONAL: ${{ secrets.VITE_SUPABASE_URL }}
           CLAVE_PERSONAL: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          REF_PERSONAL: ${{ secrets.SUPABASE_PROJECT_ID }}
+          TOKEN_PERSONAL: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          if [ "$INSTANCIA" = clientes ]; then URL="$URL_CLIENTES"; CLAVE="$CLAVE_CLIENTES"
-          else URL="$URL_PERSONAL"; CLAVE="$CLAVE_PERSONAL"; fi
+          if [ "$INSTANCIA" = clientes ]; then
+            URL="$URL_CLIENTES"; CLAVE="$CLAVE_CLIENTES"; REF="$REF_CLIENTES"; TOKEN="$TOKEN_CLIENTES"
+          else
+            URL="$URL_PERSONAL"; CLAVE="$CLAVE_PERSONAL"; REF="$REF_PERSONAL"; TOKEN="$TOKEN_PERSONAL"
+          fi
           if [ -z "$URL" ] || [ -z "$CLAVE" ]; then
             echo "::notice::Sin URL/anon key de la instancia $INSTANCIA: no se consulta."
             exit 0
           fi
-          # El ref no es secreto (va en la URL del sitio); se muestra para saber
-          # a qué proyecto del panel de Supabase corresponde cada instancia.
           ref=$(printf '%s' "$URL" | sed -E 's#https?://([^.]+)\..*#\1#')
           echo "Instancia $INSTANCIA = proyecto ${ref:0:4}…${ref: -4}"
-          for intento in 1 2 3; do
-            codigo=$(curl -sS -o respuesta.json -w '%{http_code}' \
-              "$URL/rest/v1/planes?select=id&limit=1" \
-              -H "apikey: $CLAVE" -H "Authorization: Bearer $CLAVE") || codigo=000
-            if [ "${codigo:0:1}" = 2 ]; then
-              echo "OK (HTTP $codigo): $(head -c 200 respuesta.json)"
-              exit 0
-            fi
-            echo "Intento $intento: HTTP $codigo"; sleep $((intento * 10))
+
+          # 1) API de datos: varias lecturas (las tablas con RLS devuelven 0
+          #    filas a anon, pero la consulta sí corre en Postgres).
+          bien=0
+          for tabla in planes bancos categorias transacciones; do
+            for intento in 1 2 3; do
+              codigo=$(curl -sS -o respuesta.json -w '%{http_code}' \
+                "$URL/rest/v1/$tabla?select=*&limit=1" \
+                -H "apikey: $CLAVE" -H "Authorization: Bearer $CLAVE") || codigo=000
+              [ "${codigo:0:1}" = 2 ] && break
+              sleep $((intento * 5))
+            done
+            echo "API de datos /$tabla: HTTP $codigo"
+            [ "${codigo:0:1}" = 2 ] && bien=$((bien + 1))
           done
-          echo "::error::La base de $INSTANCIA no respondió (¿ya está pausada?). Revísala en el panel de Supabase."
-          exit 1
+
+          # 2) SQL directo a la base por la API de administración.
+          if [ -n "$TOKEN" ] && [ -n "$REF" ]; then
+            codigo=$(curl -sS -o sql.json -w '%{http_code}' -X POST \
+              "https://api.supabase.com/v1/projects/$REF/database/query" \
+              -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+              --data '{"query":"select count(*) as planes from public.planes; select now();"}') || codigo=000
+            echo "SQL directo: HTTP $codigo $(head -c 200 sql.json)"
+            if [ "${codigo:0:1}" = 2 ]; then bien=$((bien + 1)); else
+              echo "::warning::La consulta SQL directa a $INSTANCIA falló (HTTP $codigo)."; fi
+          else
+            echo "::notice::Sin access token / project id de $INSTANCIA: se omite el SQL directo."
+          fi
+
+          if [ "$bien" -eq 0 ]; then
+            echo "::error::La base de $INSTANCIA no respondió (¿ya está pausada?). Revísala en el panel de Supabase."
+            exit 1
+          fi
+          echo "Consultas correctas: $bien"
