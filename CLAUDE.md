@@ -151,6 +151,26 @@ shows a `Segmentado` (horizontal scroll on phones) with Hoy (recuperación, toda
 night's hypnogram, blocks, night HR/HRV) · Sueño (phases per night + debt, schedule/consistency) · Corazón y estrés (daytime stress,
 HRV/RHR trends, HR by hour) · Temperatura y respiración (temp vs. baseline, 24 h temp, SpO2, breathing) · Actividad. The 7/30/90
 selector only shows on trend tabs; the chosen tab is kept in `sessionStorage["salud:pestana"]`. New Salud panels go in one of these tabs.
+**Semana, Relaciones, Viajes and the collector notice (2026-11-14, Mario approved: aviso "solo si el colector está desactualizado",
+colector que se actualiza solo, resumen semanal, relaciones, vista de viaje)**: three more tabs (Hoy · **Semana** · Noche · … ·
+Actividad · **Relaciones** · **Viajes**), no 7/30/90 selector on them. Pure logic + tests: `colector.ts`, `semanal.ts`,
+`relaciones.ts`, `viajes.ts` (`semanal.test.ts`); drawing in `SemanaViajesRelaciones.tsx`. Migration
+`20261114170000_version_colector_y_viajes.sql`: `oura_sincronizaciones` gets `version_colector`, `colector_commit`,
+`colector_al_dia`, `actualizacion_error`, `utc_offset_min` (sent by the oura repo's collector v2, which now updates itself from
+`main` via `colector/actualizar_colector.py`), and table `salud.viajes (lugar, desde, hasta null = ongoing, utc_offset_min)`.
+(1) `AvisoColector` above the tabs ONLY when the last laptop upload has `version_colector` < `VERSION_COLECTOR_ESPERADA`
+(colector.ts; null = v1) or `colector_al_dia = false` — never for hours without data. **Bump `VERSION_COLECTOR_ESPERADA` together
+with `VERSION_COLECTOR` in the oura repo when a panel needs a new collector field.** (2) Semana: Monday–Sunday, default = the week
+ending today on Sundays, else last week (‹ › to browse); per-day averages of sleep, bedtime, HRV, RHR, recuperación score,
+daytime stress % (stress minutes / judged resting minutes, days with ≥ 2 h judged) vs. the previous week, ≥ 3 days each;
+"igual" below `UMBRAL_CAMBIO` (15 min, 30 min, 3 ms, 2 lpm, 5 pts, 5 pts); bedtime is never graded. Hoy shows "Ver resumen"
+on Sundays and Mondays. (3) Relaciones: 4 scatters (stress day D → sleep/HRV of the night ending D+1, bedtime → HRV, sleep →
+next-day stress) with Pearson r, a dashed least-squares line and a sentence comparing the top vs. bottom half of x ON THE TREND
+LINE (median split with many 0% ties gave a sentence with the opposite sign of r); ≥ 5 pairs, "pocos días" under 14; optional
+"Quitar días de viaje". (4) Viajes: manual trips + days the laptop was in a zone ≠ CDMX (UTC−6, `UTC_OFFSET_CASA`) offered as
+"¿Fue un viaje?"; per trip a before (14 days) / during / after (3 days) table and a sleep-bars + HRV-line chart with the trip
+shaded. Known caveat: bedtimes come from oura.exe in the laptop's CURRENT zone, so after a zone change older nights shift too
+(noted under the table). Checked in Playwright with mocked Supabase (1280 light / 390 dark, no overflow, marking a trip).
 
 **Subprojects publish as espacios (2026-11-08, Mario: Trading automatizado, OURA and Viajes "son otros proyectos que
 estarán trabajándose en paralelo, pero publicarán en la misma página")**: each subproject owns ONE folder,

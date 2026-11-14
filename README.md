@@ -348,8 +348,21 @@ compartido no ven Trading. Solo en la edición personal; la de clientes entra di
 Cada gráfica sin datos todavía dice qué le falta, no se oculta. La laptop lee el anillo cada hora
 (tarea programada de Windows, ver el README de `romezamario/oura`). Los indicadores están en pestañas:
 **Hoy** (recuperación, tarjetas del día y batería), **Noche** (calendario y la noche elegida), **Sueño**,
-**Corazón y estrés**, **Temperatura y respiración** y **Actividad**; el selector 7/30/90 días aparece en
-las pestañas con tendencias.
+**Corazón y estrés**, **Temperatura y respiración**, **Actividad**, **Semana**, **Relaciones** y
+**Viajes**; el selector 7/30/90 días aparece en las pestañas con tendencias.
+
+- **Aviso del colector**: solo si la laptop sube con una versión del colector más vieja que la que
+  necesita el dashboard, o si no pudo actualizarse sola desde el repo (el colector se actualiza solo
+  en cada lectura horaria).
+- **Semana**: cada domingo se cierra la semana (lunes a domingo) y se compara contra la anterior:
+  sueño, hora de dormir, HRV, FC en reposo, recuperación y estrés de día, con lo que mejoró y lo que
+  empeoró. Los domingos y lunes, "Hoy" tiene un botón "Ver resumen".
+- **Relaciones**: cada punto es un día; estrés del día contra el sueño y la HRV de esa noche, hora de
+  dormir contra HRV y sueño contra el estrés del día siguiente, con la tendencia y una frase (son
+  asociaciones, no causas). Se pueden quitar los días de viaje.
+- **Viajes**: marca un viaje (lugar, salida, regreso, zona horaria) y compara sueño, hora de dormir,
+  HRV, FC en reposo, recuperación y estrés de los 14 días antes, durante y los 3 días al regresar. Si
+  la laptop estuvo en otra zona horaria, lo propone solo ("¿Fue un viaje?").
 
 - **Batería del anillo**: el último % con la hora de lectura ("hace 20 min") y si estaba cargando,
   aviso "Batería baja" (amarillo, < 25%) o "Batería crítica" (rojo, < 10%), dibujada como una pila

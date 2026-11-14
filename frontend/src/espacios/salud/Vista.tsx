@@ -27,6 +27,11 @@ import {
   Vacio,
 } from "./GraficasSalud";
 import { BloquesSueno, ConstanciaHorario, EstresDelDia, TarjetaRecuperacion, TemperaturaDelDia } from "./IndicadoresSalud";
+import { estresDiurno } from "./indicadores";
+import { obtenerEstadoColector, obtenerZonas, zonaPorDia, type EstadoColector, type LecturaZona } from "./colector";
+import { fechasDeViaje, obtenerViajes, type Viaje } from "./viajes";
+import { AvisoColector, AvisoResumenListo, RelacionesSalud, ResumenSemanal, VistaViajes } from "./SemanaViajesRelaciones";
+import { hoyIso } from "../../lib/fechas";
 
 const PERIODOS = [
   { dias: 7, texto: "7 días" },
@@ -34,14 +39,17 @@ const PERIODOS = [
   { dias: 90, texto: "90 días" },
 ] as const;
 
-type Pestana = "hoy" | "sueno-noche" | "sueno" | "corazon" | "temperatura" | "actividad";
+type Pestana = "hoy" | "semana" | "sueno-noche" | "sueno" | "corazon" | "temperatura" | "actividad" | "relaciones" | "viajes";
 const PESTANAS: { id: Pestana; etiqueta: string }[] = [
   { id: "hoy", etiqueta: "Hoy" },
+  { id: "semana", etiqueta: "Semana" },
   { id: "sueno-noche", etiqueta: "Noche" },
   { id: "sueno", etiqueta: "Sueño" },
   { id: "corazon", etiqueta: "Corazón y estrés" },
   { id: "temperatura", etiqueta: "Temperatura y respiración" },
   { id: "actividad", etiqueta: "Actividad" },
+  { id: "relaciones", etiqueta: "Relaciones" },
+  { id: "viajes", etiqueta: "Viajes" },
 ];
 const CLAVE_PESTANA = "salud:pestana";
 function pestanaGuardada(): Pestana {
@@ -70,6 +78,12 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
   const [noche, setNoche] = useState<string | null>(null);
   const [bateria, setBateria] = useState<LecturaBateria[] | null>(null);
   const [pestana, setPestana] = useState<Pestana>(pestanaGuardada);
+  const [estadoColector, setEstadoColector] = useState<EstadoColector | null>(null);
+  const [viajes, setViajes] = useState<Viaje[] | null>(null);
+  const [errorViajes, setErrorViajes] = useState<string | null>(null);
+  const [zonas, setZonas] = useState<LecturaZona[]>([]);
+  const [intentoViajes, setIntentoViajes] = useState(0);
+  const hoy = hoyIso();
   const cambiarPestana = (p: Pestana) => {
     setPestana(p);
     try {
@@ -96,6 +110,36 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
     };
   }, [intento]);
 
+  useEffect(() => {
+    let vigente = true;
+    obtenerEstadoColector().then((e) => vigente && setEstadoColector(e));
+    // Sin la migración de zonas aún aplicada, simplemente no hay días detectados.
+    obtenerZonas()
+      .then((z) => vigente && setZonas(z))
+      .catch(() => vigente && setZonas([]));
+    return () => {
+      vigente = false;
+    };
+  }, [intento]);
+
+  useEffect(() => {
+    let vigente = true;
+    obtenerViajes()
+      .then((v) => {
+        if (!vigente) return;
+        setViajes(v);
+        setErrorViajes(null);
+      })
+      .catch((e) => vigente && setErrorViajes(`No se pudieron leer los viajes: ${mensajeErrorSalud(e)}`));
+    return () => {
+      vigente = false;
+    };
+  }, [intentoViajes]);
+
+  const estres = useMemo(() => (dias ? estresDiurno(dias) : []), [dias]);
+  const zonasDia = useMemo(() => zonaPorDia(zonas), [zonas]);
+  const diasViaje = useMemo(() => fechasDeViaje(viajes ?? [], hoy), [viajes, hoy]);
+
   const enPeriodo = useMemo(() => (dias ? ultimosDias(dias, periodo) : []), [dias, periodo]);
   const conNoche = useMemo(() => (dias ?? []).filter((d) => d.noche), [dias]);
   const nocheElegida = conNoche.find((d) => d.fecha === noche) ?? conNoche.at(-1);
@@ -112,6 +156,7 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
         )
       }
     >
+        <AvisoColector estado={estadoColector} />
         {error ? (
           <section className="tarjeta rounded-lg p-5">
             <p className="text-sm" style={{ color: "var(--text-primary)" }}>
@@ -143,7 +188,7 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
               <Segmentado opciones={PESTANAS} valor={pestana} onCambiar={cambiarPestana} />
             </div>
 
-            {pestana !== "hoy" && pestana !== "sueno-noche" && (
+            {pestana !== "hoy" && pestana !== "sueno-noche" && pestana !== "semana" && pestana !== "relaciones" && pestana !== "viajes" && (
               <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Periodo de las tendencias">
                 <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
                   Tendencias:
@@ -168,6 +213,7 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
 
             {pestana === "hoy" && (
               <>
+                <AvisoResumenListo hoy={hoy} onVer={() => cambiarPestana("semana")} />
                 <Panel titulo="Recuperación de hoy">
                   <TarjetaRecuperacion dias={dias} />
                 </Panel>
@@ -176,6 +222,28 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
                   <TarjetaBateria lecturas={bateria} />
                 </Panel>
               </>
+            )}
+
+            {pestana === "semana" && (
+              <Panel titulo="Resumen semanal: sueño, recuperación y estrés" nota="Cada domingo se cierra la semana (lunes a domingo) y se compara contra la anterior.">
+                <ResumenSemanal dias={dias} estres={estres} hoy={hoy} />
+              </Panel>
+            )}
+
+            {pestana === "relaciones" && <RelacionesSalud dias={dias} estres={estres} diasViaje={diasViaje} />}
+
+            {pestana === "viajes" && (
+              <Panel titulo="Vista de viaje" nota="Marca tus viajes para ver cómo te afectan el cambio de horario y el viaje: antes, durante y al regresar.">
+                <VistaViajes
+                  dias={dias}
+                  estres={estres}
+                  viajes={viajes}
+                  zonas={zonasDia}
+                  hoy={hoy}
+                  error={errorViajes}
+                  onCambio={() => setIntentoViajes((n) => n + 1)}
+                />
+              </Panel>
             )}
 
             {pestana === "sueno-noche" && (
