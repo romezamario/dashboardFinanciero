@@ -27,7 +27,7 @@ describe("edicion", () => {
   });
 
   it("nombre de la app por edición", () => {
-    expect(nombreApp("personal")).toBe("Dashboard Financiero");
+    expect(nombreApp("personal")).toBe("Mi dashboard");
     expect(nombreApp("producto")).toBe("Ordena tu Lana");
   });
 });

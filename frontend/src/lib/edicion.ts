@@ -26,7 +26,7 @@ export function incluyeFuncion(edicion: Edicion, funcion: FuncionPersonal): bool
 }
 
 export function nombreApp(edicion: Edicion): string {
-  return edicion === "producto" ? "Ordena tu Lana" : "Dashboard Financiero";
+  return edicion === "producto" ? "Ordena tu Lana" : "Mi dashboard";
 }
 
 export const EDICION: Edicion = edicionDe(import.meta.env.VITE_EDICION);

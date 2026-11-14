@@ -86,7 +86,7 @@ function marcaProducto(edicion: string | undefined): Plugin {
       return html
         .replace('<html lang="es">', '<html lang="es" data-edicion="producto">')
         .replace('href="/favicon.svg"', 'href="/marca/favicon.svg"')
-        .replace('<title>Dashboard Financiero</title>', `<title>${titulo}</title>\n    ${cabeza}`)
+        .replace('<title>Mi dashboard</title>', `<title>${titulo}</title>\n    ${cabeza}`)
     },
   }
 }
