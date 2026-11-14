@@ -98,8 +98,10 @@ policies `user_id = (select auth.uid())`, FK to `auth.users on delete cascade`; 
 NOT `usuario_efectivo()` (guests of the shared access don't see it). Checked: `aplicar.sh` dry-run against a fake curl/jq.
 **Salud (first espacio, 2026-11-08)**: Oura ring data read on the laptop with `oura.exe` (open_health, built in the private
 repo `romezamario/oura`; local folder `C:\Users\le_po\Downloads\OURA`). Schema `salud`: `resumen_diario (user_id, fecha,
-fuente, datos jsonb)` (flexible until real data shapes the dashboards), `oura_anillos`, `oura_eventos` (mirror of oura.db's
-decoded events, body only as sha256), `oura_sincronizaciones`. Uploader: `colector/subir_oura.py` in that repo
+fuente, datos jsonb)` (flexible until real data shapes the dashboards), `oura_anillos`, `oura_sincronizaciones` (`oura_eventos`, a mirror of every decoded event, was DROPPED on
+2026-11-14 by `20261114160000_quitar_oura_eventos.sql`: ~31k rows/day nobody read, would fill the 500 MB free plan shared
+with Finanzas; events stay only in the laptop's oura.db — never upload raw events again, compute on the laptop into
+`resumen_diario`). Uploader: `colector/subir_oura.py` in that repo
 (`resumen_diario.datos` = `{noche, deuda_sueno, actividad, hr_horas}` per day, from `oura.exe dashboard` /api/summary +
 /api/hourly-hr; days without real data are not uploaded).
 **Salud charts (2026-11-09, Mario: "desarrolla todas las gráficas")**: everything in `src/espacios/salud/` — `salud.ts`
