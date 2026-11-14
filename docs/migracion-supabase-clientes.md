@@ -1,7 +1,10 @@
 # Migración del Supabase de Ordena tu Lana a la cuenta tecnologia@ordenatulana.com
 
-Estado: **plan, sin ejecutar** (2026-11-14). Nada de esto se corre hasta que Mario diga "adelante" y elija
-el camino (A o B, abajo).
+Estado: **HECHO el 2026-11-14 por la opción A** (Mario la eligió). El proyecto de clientes está en la
+organización "Ordena tu Lana" de la cuenta tecnologia@ordenatulana.com; la cuenta personal de Mario ya no es
+miembro. Verificación final (23:24 UTC): 18/18 en "Verificar instancia de clientes" con el token nuevo, y
+"Mantener activo", "Funciones de cobro" y "Migrar base de datos" en verde. El dashboard personal no se movió.
+La opción B queda solo como referencia.
 
 **Objetivo (Mario, 2026-11-14)**: que Ordena tu Lana quede completamente separado de lo personal de Mario
 en Supabase: el proyecto de clientes (hoy `finanzas-personales`, en la cuenta personal de Mario) pasa a

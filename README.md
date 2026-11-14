@@ -621,7 +621,7 @@ pasos, que son manuales y se hacen una vez:
 | `PRODUCTO_SUPABASE_DB_PASSWORD` | Contraseña de su base |
 | `PRODUCTO_VITE_SUPABASE_URL` | Su URL |
 | `PRODUCTO_VITE_SUPABASE_ANON_KEY` | Su `anon key` (nunca el `service_role`) |
-| `PRODUCTO_SUPABASE_ACCESS_TOKEN` | Opcional: *access token* de la cuenta/organización dueña del proyecto nuevo, si `SUPABASE_ACCESS_TOKEN` no tiene acceso a él ("does not have the necessary privileges") |
+| `PRODUCTO_SUPABASE_ACCESS_TOKEN` | Desde el 2026-11-14, el *access token* de la cuenta de la empresa (tecnologia@ordenatulana.com), dueña del proyecto de clientes. Antes era opcional: *access token* de la cuenta/organización dueña del proyecto nuevo, si `SUPABASE_ACCESS_TOKEN` no tiene acceso a él ("does not have the necessary privileges") |
 | `PRODUCTO_SUPABASE_ORGANIZACION` | Opcional: id de la organización de Supabase que debe tener el proyecto (lo revisa **Verificar instancia de clientes**). Migración a la cuenta tecnologia@ordenatulana.com: [docs/migracion-supabase-clientes.md](docs/migracion-supabase-clientes.md) |
 
 4. Corre a mano **Migrar base de datos** y **Deploy Ordena tu Lana** desde la pestaña Actions
