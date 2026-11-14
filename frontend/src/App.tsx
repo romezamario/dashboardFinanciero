@@ -11,19 +11,23 @@ import { mensajeVerificacionFallida, rutaDeHash, type RutaPublica } from "./lib/
 import { buscarEspacio, ESPACIOS, espacioDeHash, hashDeEspacio, type Espacio, type PropsEspacio } from "./lib/espacios";
 import { Inicio } from "./components/Inicio";
 import { LimiteDeError } from "./components/LimiteDeError";
+import { cargarConRecarga } from "./lib/cargarConRecarga";
 
 // Dashboard (y todo lo que arrastra: Recharts, indicadores.ts, cada gráfica)
 // es la mayor parte del bundle -- separarlo del de Login hace que la
 // pantalla de login no tenga que esperar a que se descargue/parsee ese
 // código, que no usa hasta después de iniciar sesión.
 const Dashboard = lazy(() =>
-  import("./components/Dashboard").then((m) => ({ default: m.Dashboard }))
+  cargarConRecarga(() => import("./components/Dashboard")).then((m) => ({ default: m.Dashboard }))
 );
 // Vistas de los subproyectos (src/espacios/<id>/), cada una en su propio
 // chunk: se declaran una vez aquí (no en el render) para que React no las
 // vuelva a montar.
 const VISTAS_DE_ESPACIOS = new Map<string, LazyExoticComponent<ComponentType<PropsEspacio>>>(
-  ESPACIOS.flatMap((e) => (e.cargar ? [[e.id, lazy(e.cargar)] as const] : []))
+  ESPACIOS.flatMap((e) => {
+    const cargar = e.cargar;
+    return cargar ? [[e.id, lazy(() => cargarConRecarga(cargar))] as const] : [];
+  })
 );
 
 let verificacion: ReturnType<typeof supabase.auth.verifyOtp> | null = null;

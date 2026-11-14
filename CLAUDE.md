@@ -1329,7 +1329,7 @@ goes in the URL and hundreds of UUIDs exceeded the server's URL limit; `porLotes
 `LOTES_EN_PARALELO` = 4 batches at a time. Tabs other than Resumen/per-account are `React.lazy`
 (own chunks, downloaded when first opened; `cargarPestana` reloads the page ONCE if a chunk fails
 to load — after a deploy Cloudflare no longer serves the previous version's files, so a dashboard
-left open would otherwise break on the next tab click; checked by 404-ing a chunk in Playwright)
+left open would otherwise break on the next tab click; checked by 404-ing a chunk in Playwright) — since 2026-11-14 that helper is `lib/cargarConRecarga.ts` (tested) and `App` also wraps the Dashboard chunk and EVERY espacio view with it (Mario's iPhone showed "Cross-origin script load denied by CORS" opening Salud after a deploy: Cloudflare Access redirects the missing chunk to its login domain); any new lazy chunk must go through it
 and Recharts is its own `recharts` chunk
 (`manualChunks` in `vite.config.ts`) so it stays cached across deploys. Number/date formatters
 live once in `src/lib/formato.ts` (`moneda`, `monedaConCentavos`, `monedaCompacta`, `dolares`,

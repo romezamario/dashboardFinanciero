@@ -29,40 +29,15 @@ import { LimiteDeError } from "./LimiteDeError";
 import { Segmentado } from "./Segmentado";
 import { ProveedorMetaDiaria } from "./MetaDiaria";
 import { useGastosCorreo } from "../hooks/useGastosCorreo";
+import { cargarConRecarga } from "../lib/cargarConRecarga";
 
 // Cada pestaña que no es la de inicio se baja al abrirla por primera vez:
 // el análisis técnico/macro, el calendario de gastos, eventos y tarjetas
 // juntos eran la mayor parte del bundle y casi nunca se usan al entrar.
 //
-// Si el tablero quedó abierto durante un deploy, el archivo de la pestaña de
-// la versión anterior ya no existe (Cloudflare solo sirve la última): en vez
-// de romper la vista, se recarga la página UNA vez para tomar la nueva.
-const CLAVE_RECARGA_POR_VERSION = "recargado-por-version-nueva";
-
-function cargarPestana<T>(importar: () => Promise<T>): Promise<T> {
-  return importar().then(
-    (modulo) => {
-      try {
-        sessionStorage.removeItem(CLAVE_RECARGA_POR_VERSION);
-      } catch {
-        // sin sessionStorage no hay nada que limpiar
-      }
-      return modulo;
-    },
-    (error: unknown) => {
-      try {
-        if (!sessionStorage.getItem(CLAVE_RECARGA_POR_VERSION)) {
-          sessionStorage.setItem(CLAVE_RECARGA_POR_VERSION, "1");
-          window.location.reload();
-          return new Promise<T>(() => {});
-        }
-      } catch {
-        // sin sessionStorage no se puede evitar un ciclo de recargas: falla
-      }
-      throw error;
-    }
-  );
-}
+// Si el tablero quedó abierto durante un deploy, cargarConRecarga recarga la
+// página una vez (ver lib/cargarConRecarga.ts).
+const cargarPestana = cargarConRecarga;
 const AnalisisTecnicoTab = lazy(() =>
   cargarPestana(() => import("./AnalisisTecnicoTab")).then((m) => ({ default: m.AnalisisTecnicoTab }))
 );
