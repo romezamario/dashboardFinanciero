@@ -191,6 +191,12 @@ export function recuperacion(dias: readonly DiaSalud[], fecha?: string): Recuper
   };
 }
 
+/** La noche no trae ninguna señal del semáforo (HRV, FC, temperatura,
+ * respiración): el lector no las midió esa vez y no hay con qué comparar. */
+export function nocheSinSenales(dia: DiaSalud | undefined): boolean {
+  return !!dia?.noche && FACTORES.every((f) => f.leer(dia) === null);
+}
+
 /** Puntaje de sueño de oura.exe (0–100) de la noche, si lo calculó. */
 export function puntajeSueno(dia: DiaSalud | undefined): number | null {
   return num(dia?.noche?.sleep_score?.score);

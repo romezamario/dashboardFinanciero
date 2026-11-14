@@ -133,6 +133,10 @@ formatters in `formatoSalud.ts`: "Recuperación de hoy" (own traffic light: HRV/
 ≥ 3 nights, + sleep vs. 8 h; NOT Oura's Readiness), sleep blocks/naps of the chosen day, awakenings/latency/WASO in the hypnogram,
 SpO2 and breathing trends, schedule consistency, 24 h skin temperature vs. your hourly normal, calendar marks "🔋 apagado" /
 "sin datos". Battery "baja" is now < 25%. `real_steps` stays OFF: this oura.exe doesn't use those events for steps yet.
+**Twin nights (2026-11-14, Mario: "ahora no carga esto")**: oura.exe often reports one sleep as two overlapping windows and only
+one carries HRV/RHR/temp; the collector picked the longer (vitals-less) one and "Recuperación de hoy" vanished. Fixed in the
+collector (oura repo, `_sin_duplicados`; see its CLAUDE.md, which also says how to deploy the collector to the laptop — a push
+does NOT update it). Front: `nocheSinSenales` makes the empty state say the last night has no signals instead of "faltan noches".
 **Daytime stress (2026-11-13, Mario: "¿Puedes hacer cálculos de estrés?")**: the collector adds per day `estres_ventanas` (15-min
 windows with ≥ 30 quality-1 beats of `green_ibi_quality_event`: median HR, RMSSD of consecutive beats changing ≤ 20%, mean MET,
 motion seconds). `estresDiurno` (indicadores.ts) drops windows inside any sleep period, skips moving ones (MET ≥ 1.6; no MET →

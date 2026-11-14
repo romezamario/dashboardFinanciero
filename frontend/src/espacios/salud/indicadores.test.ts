@@ -9,6 +9,7 @@ import {
   estresDiurno,
   horaFueraDeLoNormal,
   minutosPeriodo,
+  nocheSinSenales,
   periodosDelDia,
   puntajeSueno,
   recuperacion,
@@ -60,6 +61,15 @@ describe("recuperacion", () => {
   it("sin noches suficientes de base no hay semáforo", () => {
     expect(recuperacion([normal("2026-11-10"), normal("2026-11-11")])).toBeNull();
     expect(recuperacion([])).toBeNull();
+  });
+
+  it("última noche sin HRV/FC/temperatura (gemela de oura.exe sin signos): sin semáforo y se dice por qué", () => {
+    const sinSenales = normal("2026-11-14", { hrv_ms: null, rhr: null, skin_temp: null, breath_rate: null });
+    const dias = [...base, normal("2026-11-12"), sinSenales];
+    expect(recuperacion(dias)).toBeNull();
+    expect(nocheSinSenales(sinSenales)).toBe(true);
+    expect(nocheSinSenales(normal("2026-11-12"))).toBe(false);
+    expect(nocheSinSenales(undefined)).toBe(false);
   });
 
   it("igual a tu normal con 8 h: listo", () => {

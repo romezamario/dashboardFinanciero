@@ -15,6 +15,7 @@ import {
   type EstadoVentana,
   horaFueraDeLoNormal,
   minutosPeriodo,
+  nocheSinSenales,
   periodosDelDia,
   puntajeSueno,
   recuperacion,
@@ -38,6 +39,13 @@ export function TarjetaRecuperacion({ dias }: { dias: readonly DiaSalud[] }) {
   const r = useMemo(() => recuperacion(dias), [dias]);
   const ultima = dias.filter((d) => d.noche).at(-1);
   const sueno = puntajeSueno(ultima);
+  if (!r && nocheSinSenales(ultima))
+    return (
+      <Vacio>
+        Tu última noche ({fechaCorta(ultima!.fecha)}) no trae HRV, FC en reposo ni temperatura, así que no hay con qué armar el
+        semáforo. Aparecerá con la próxima noche que sí los tenga.
+      </Vacio>
+    );
   if (!r)
     return (
       <Vacio>
