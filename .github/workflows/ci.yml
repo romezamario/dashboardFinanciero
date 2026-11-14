@@ -15,6 +15,7 @@ on:
       - "tests/**"
       - "requirements.txt"
       - "supabase/**"
+      - "scripts/**"
       - ".github/workflows/ci.yml"
   pull_request:
     paths:
@@ -26,6 +27,7 @@ on:
       - "tests/**"
       - "requirements.txt"
       - "supabase/**"
+      - "scripts/**"
       - ".github/workflows/ci.yml"
 
 jobs:
@@ -56,6 +58,10 @@ jobs:
       - name: Typecheck de las Edge Functions
         working-directory: supabase/functions
         run: npx -y deno check */index.ts
+      # Script de verificación de la migración de Supabase (docs/migracion-supabase-clientes.md).
+      - name: Pruebas del verificador de la instancia de clientes
+        working-directory: .
+        run: node --test scripts/migracion-clientes/verificar.test.mjs
 
   python:
     runs-on: ubuntu-24.04

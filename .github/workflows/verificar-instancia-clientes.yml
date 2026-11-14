@@ -1,0 +1,42 @@
+name: Verificar instancia de clientes (Supabase)
+
+# Revisa que el proyecto de Supabase de Ordena tu Lana esté completo y sano:
+# token con acceso, organización, RLS, migraciones, Edge Functions y sus
+# secretos, configuración de Auth (sitio, SMTP, plantillas), API pública y
+# que ordenatulana.com apunte a ese proyecto. Solo lee. Se corre a mano antes
+# y después de la migración a la cuenta tecnologia@ordenatulana.com
+# (docs/migracion-supabase-clientes.md). Con "comparar con el proyecto
+# anterior" (opción B) además compara datos y usuarios tabla por tabla.
+on:
+  workflow_dispatch:
+    inputs:
+      comparar:
+        description: "¿Comparar con el proyecto anterior? (solo si se copió a un proyecto nuevo)"
+        type: boolean
+        default: false
+      sitios:
+        description: "Sitios que deben apuntar a este proyecto (separados por coma)"
+        type: string
+        default: "https://ordenatulana.com,https://pruebas.ordenatulana.pages.dev"
+
+jobs:
+  verificar:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Verificar
+        env:
+          TOKEN: ${{ secrets.PRODUCTO_SUPABASE_ACCESS_TOKEN || secrets.SUPABASE_ACCESS_TOKEN }}
+          REF: ${{ secrets.PRODUCTO_SUPABASE_PROJECT_ID }}
+          URL: ${{ secrets.PRODUCTO_VITE_SUPABASE_URL }}
+          ANON_KEY: ${{ secrets.PRODUCTO_VITE_SUPABASE_ANON_KEY }}
+          ORGANIZACION_ESPERADA: ${{ secrets.PRODUCTO_SUPABASE_ORGANIZACION }}
+          REF_ORIGEN: ${{ inputs.comparar && secrets.ANTERIOR_PRODUCTO_SUPABASE_PROJECT_ID || '' }}
+          TOKEN_ORIGEN: ${{ inputs.comparar && secrets.ANTERIOR_PRODUCTO_SUPABASE_ACCESS_TOKEN || '' }}
+          SITIOS: ${{ inputs.sitios }}
+        run: node scripts/migracion-clientes/verificar.mjs
