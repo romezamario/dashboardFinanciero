@@ -41,7 +41,7 @@ jobs:
             echo "::notice::Sin PRODUCTO_SUPABASE_PROJECT_ID: no se despliegan las funciones de cobro."
           fi
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         if: steps.config.outputs.lista == 'true'
 
       - uses: supabase/setup-cli@v3
