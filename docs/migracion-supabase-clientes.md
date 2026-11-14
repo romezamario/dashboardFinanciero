@@ -34,14 +34,17 @@ ningún caso.
 
 ## 2. Los dos caminos
 
-### Opción A (recomendada): cambiar de dueño el proyecto, sin copiar nada
+### Opción A (recomendada): transferir solo el proyecto de clientes, sin copiar nada
 
-Supabase deja que un proyecto cambie de organización/dueño sin moverlo: se invita a la cuenta
-`tecnologia@` como **Owner** de la organización que tiene `finanzas-personales` y después la cuenta
-personal de Mario sale de esa organización. Variante: crear una organización nueva desde `tecnologia@` y
-**transferir** el proyecto ahí (requisitos de Supabase: ser Owner de la organización de origen y al menos
-miembro de la de destino; sin integración de GitHub ni log drains; en plan gratis, el destino no puede
-pasar de 2 proyectos gratis por persona Owner/Admin).
+Supabase deja **transferir** un proyecto a otra organización sin moverlo de servidor. La organización
+actual de `finanzas-personales` también tiene el dashboard personal de Mario (confirmado por Mario,
+2026-11-14), así que **no** se cambia de dueño la organización entera: `tecnologia@` crea su propia
+organización `Ordena tu Lana`, invita a la cuenta personal de Mario como miembro, Mario transfiere solo el
+proyecto de clientes y al final su cuenta personal sale de la organización nueva. El dashboard personal
+se queda donde está, sin tocarse. Requisitos de Supabase: ser Owner de la organización de origen y al
+menos miembro de la de destino; el proyecto sin integración de GitHub de Supabase ni log drains; en plan
+gratis, nadie que sea Owner/Admin del destino puede pasar de 2 proyectos gratis (tecnologia@ tendrá 1, y
+Mario como *Developer* no cuenta).
 
 - **Para el cliente no cambia nada**: misma ref, misma URL, mismas llaves, mismos usuarios, contraseñas y
   sesiones, mismo webhook de Mercado Pago. Cero tiempo fuera.
@@ -108,39 +111,47 @@ Hazlo en una **ventana de incógnito** para no mezclarla con tu cuenta personal.
 6. Recomendado: activa la verificación en dos pasos: arriba a la derecha toca el ícono de tu cuenta →
    **Account preferences** → **Security** → **Add new app** (con Google Authenticator o similar).
 
-### A3. Saber en qué cuenta está hoy el proyecto (Mario, 1 min)
-
-1. En tu ventana normal (cuenta personal) abre https://supabase.com/dashboard/projects
-2. Busca el proyecto **finanzas-personales**. Toca el nombre de su organización (arriba a la izquierda,
-   junto al logo de Supabase).
-3. Dime el nombre de la organización y si ahí hay **otros proyectos** además de finanzas-personales.
-   - Si solo está finanzas-personales → seguimos con A4 (cambiar de dueño la organización completa).
-   - Si convive con tu proyecto personal → usamos la variante de transferencia (A4-bis).
-
-### A4. Hacer dueña a la cuenta tecnologia@ (Mario, 5 min)
+### A3. Revisar que el proyecto se pueda transferir (Mario, 1 min)
 
 En tu ventana normal (cuenta personal):
 
-1. Con la organización del proyecto abierta, toca **Team** en el menú de la izquierda (o "Settings" →
-   "Team").
-2. Toca **Invite members** (o "Invite").
-3. Escribe `tecnologia@ordenatulana.com`, elige el rol **Owner** y toca **Invite**.
-4. Abre tu Gmail: llega la invitación de Supabase. Copia el enlace y ábrelo en la **ventana de incógnito**
-   (donde estás con tecnologia@). Toca **Join organization** / **Accept**.
-5. En la ventana de incógnito ve a la organización → **Settings** → **General** y cámbiale el nombre a
-   `Ordena tu Lana`. Toca **Save**.
-6. Misma organización → **Billing** → "Billing email" (o "Email recipient") → pon
-   `tecnologia@ordenatulana.com` → **Save**.
-7. Abre el proyecto → **Project Settings** (engrane) → **General** → "Project name" → `ordena-tu-lana` →
-   **Save**. (Solo es el nombre visible; la URL no cambia.)
-8. Copia de la barra de direcciones el identificador de la organización: es lo que va después de
-   `/dashboard/org/` (algo como `abcdefghijklmnopqrst`). Mándamelo o guárdalo para el paso A5.
+1. Abre https://supabase.com/dashboard/projects y entra a **finanzas-personales**.
+2. Toca **Project Settings** (engrane, abajo a la izquierda) → **Integrations**.
+3. Si en "GitHub Integration" dice que hay un repositorio conectado, toca **Disconnect** (nuestros
+   workflows no la usan; despliegan con el token). Si no hay nada conectado, no hagas nada.
+4. En **Project Settings** → **Log Drains**: debe estar vacío (no usamos ninguno).
 
-**A4-bis (si la organización también tiene tu proyecto personal)**: en vez de 1–4, en la ventana de
-incógnito (tecnologia@) entra a la organización `Ordena tu Lana` → Team → Invite members → tu correo
-personal con rol **Developer** → acéptala desde tu cuenta personal. Luego, en tu cuenta personal: proyecto
-finanzas-personales → **Project Settings** → **General** → hasta abajo **Transfer project** → elige `Ordena
-tu Lana` → **Transfer**. Puede tardar 1–2 min. Sigue con 5–8.
+### A4. Transferir el proyecto de clientes a la organización de la empresa (Mario, 8 min)
+
+En la **ventana de incógnito** (cuenta tecnologia@):
+
+1. Abre https://supabase.com/dashboard/organizations y entra a la organización **Ordena tu Lana** (la del
+   paso A2.5; si no la creaste, toca **New organization**: nombre `Ordena tu Lana`, tipo **Company**,
+   plan **Free**, **Create organization**).
+2. Toca **Team** en el menú de la izquierda (o "Settings" → "Team").
+3. Toca **Invite members** (o "Invite"). Escribe tu correo personal de Supabase, elige el rol
+   **Developer** y toca **Invite**.
+
+En tu **ventana normal** (cuenta personal):
+
+4. Abre tu Gmail: llega la invitación de Supabase. Ábrela y toca **Join organization** / **Accept**.
+5. Abre https://supabase.com/dashboard/projects → **finanzas-personales** → **Project Settings** →
+   **General**.
+6. Baja hasta **Transfer project** y toca **Transfer project**.
+7. En la lista elige **Ordena tu Lana** y toca **Transfer**. Espera 1–2 min hasta que termine (el sitio
+   sigue funcionando; Supabase solo menciona una pausa de 1–2 min al pasar de plan de pago a gratis, que
+   no es nuestro caso).
+8. Revisa: en https://supabase.com/dashboard/projects tu proyecto **personal** debe seguir en su
+   organización de siempre, y finanzas-personales ya no.
+
+De vuelta en la **ventana de incógnito** (tecnologia@):
+
+9. Abre el proyecto → **Project Settings** → **General** → "Project name" → `ordena-tu-lana` → **Save**.
+   (Solo es el nombre visible; la URL no cambia.)
+10. Organización Ordena tu Lana → **Billing** → "Billing email" (o "Email recipient") →
+    `tecnologia@ordenatulana.com` → **Save**.
+11. Copia de la barra de direcciones el identificador de la organización: es lo que va después de
+    `/dashboard/org/` (algo como `abcdefghijklmnopqrst`). Mándamelo o guárdalo para el paso A5.
 
 ### A5. Token nuevo para GitHub (Mario, 4 min)
 
@@ -157,7 +168,7 @@ En tu ventana normal:
 5. Busca **PRODUCTO_SUPABASE_ACCESS_TOKEN**, toca el lápiz (✏️ "Update"), pega el token y toca **Update
    secret**. (Si no existe, toca **New repository secret**, con ese nombre.)
 6. Toca **New repository secret**. Name: `PRODUCTO_SUPABASE_ORGANIZACION`. Secret: el identificador de la
-   organización del paso A4.8. Toca **Add secret**.
+   organización del paso A4.11. Toca **Add secret**.
 
 ### A6. Verificar con la cuenta nueva (Claude)
 
@@ -172,12 +183,14 @@ En tu ventana normal:
 1. En tu ventana normal (cuenta personal) abre la organización `Ordena tu Lana` → **Team**.
 2. En tu fila toca **⋯** → **Leave team** (o desde la ventana de tecnologia@: tu fila → **Remove
    member**). Confirma.
-3. Abre https://supabase.com/dashboard/account/tokens en tu cuenta personal y **borra** el token viejo que
-   usaba `PRODUCTO_SUPABASE_ACCESS_TOKEN` (si era un token aparte del personal).
+3. **No borres** tu token personal de Supabase: `SUPABASE_ACCESS_TOKEN` lo sigue usando el dashboard
+   personal (migraciones, espacios, "Mantener activo"). Solo si tenías un token aparte creado para
+   Ordena tu Lana, bórralo en https://supabase.com/dashboard/account/tokens (antes pregúntame cuál es).
 4. Avísame: vuelvo a correr la verificación (sección 5) y el "Mantener activo".
 
-**Reversa de A**: hasta A7 no hay nada que revertir (los dos dueños funcionan). Después de A7, si algo
-fallara, tecnologia@ te vuelve a invitar. El proyecto, los datos y los clientes nunca se tocan.
+**Reversa de A**: la transferencia se puede deshacer igual que se hizo (transferir de vuelta a tu
+organización personal mientras sigas siendo miembro de la nueva); después de A7, tecnologia@ te vuelve a
+invitar primero. El proyecto, los datos y los clientes nunca se tocan, y el dashboard personal no se mueve.
 
 ---
 
