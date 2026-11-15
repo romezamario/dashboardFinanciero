@@ -40,6 +40,14 @@ upsert key, so re-syncing would duplicate every affected row unless stale rows a
 
 ## Architecture
 
+**Ordena tu Lana moved to its own repo (2026-11-15, Mario: "separar también los repositorios de github")**: the customer
+product now lives in the PRIVATE repo `ordena-tu-lana/ordenatulana` (GitHub org `ordena-tu-lana`, clean history). Its workflows
+(deploy-producto, funciones-producto, correos-producto, verificar-instancia-clientes, the `migrate-producto` job and the customer half
+of mantener-activo) were REMOVED from this repo, and the `PRODUCTO_*` secrets deleted here: this repo can no longer touch the customer
+instance. The producto-edition code still in `frontend/` (landing, Mercado Pago, Administración, `VITE_EDICION`) is now dead weight
+here and can be removed. From now on the two codebases diverge: a fix wanted in both (incl. `supabase/migrations/`) is copied by hand.
+Sections below about the producto edition, phases 1–3 and its workflows describe history; the live version is in the new repo's CLAUDE.md.
+
 **Two editions, one codebase (2026-10-11, user's decision — plan de suscripciones)**: the personal
 dashboard (this file's subject) and **FinanzasPersonales**, the paid product for customers, are built
 from the same `frontend/` and the same `supabase/migrations/`, but deployed to **separate** Supabase

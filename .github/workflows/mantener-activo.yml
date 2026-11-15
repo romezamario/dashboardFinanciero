@@ -1,5 +1,8 @@
 name: Mantener activo Supabase
 
+# La base de clientes (Ordena tu Lana) se mantiene activa desde su propio repo,
+# ordena-tu-lana/ordenatulana, desde 2026-11-15.
+
 # El plan gratis de Supabase pausa un proyecto que no tiene "suficiente
 # actividad de usuarios en la base" durante una semana; su guía dice que
 # "típicamente unas cuantas consultas a la base cada día" bastan.
@@ -20,25 +23,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        instancia: [clientes, personal]
+        instancia: [personal]
     steps:
       - name: Consultas a la base
         env:
           INSTANCIA: ${{ matrix.instancia }}
-          URL_CLIENTES: ${{ secrets.PRODUCTO_VITE_SUPABASE_URL }}
-          CLAVE_CLIENTES: ${{ secrets.PRODUCTO_VITE_SUPABASE_ANON_KEY }}
-          REF_CLIENTES: ${{ secrets.PRODUCTO_SUPABASE_PROJECT_ID }}
-          TOKEN_CLIENTES: ${{ secrets.PRODUCTO_SUPABASE_ACCESS_TOKEN || secrets.SUPABASE_ACCESS_TOKEN }}
           URL_PERSONAL: ${{ secrets.VITE_SUPABASE_URL }}
           CLAVE_PERSONAL: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           REF_PERSONAL: ${{ secrets.SUPABASE_PROJECT_ID }}
           TOKEN_PERSONAL: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          if [ "$INSTANCIA" = clientes ]; then
-            URL="$URL_CLIENTES"; CLAVE="$CLAVE_CLIENTES"; REF="$REF_CLIENTES"; TOKEN="$TOKEN_CLIENTES"
-          else
-            URL="$URL_PERSONAL"; CLAVE="$CLAVE_PERSONAL"; REF="$REF_PERSONAL"; TOKEN="$TOKEN_PERSONAL"
-          fi
+          URL="$URL_PERSONAL"; CLAVE="$CLAVE_PERSONAL"; REF="$REF_PERSONAL"; TOKEN="$TOKEN_PERSONAL"
           if [ -z "$URL" ] || [ -z "$CLAVE" ]; then
             echo "::notice::Sin URL/anon key de la instancia $INSTANCIA: no se consulta."
             exit 0
