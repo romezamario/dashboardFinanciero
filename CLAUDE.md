@@ -180,6 +180,16 @@ LINE (median split with many 0% ties gave a sentence with the opposite sign of r
 shaded. Known caveat: bedtimes come from oura.exe in the laptop's CURRENT zone, so after a zone change older nights shift too
 (noted under the table). Checked in Playwright with mocked Supabase (1280 light / 390 dark, no overflow, marking a trip).
 
+**Exercise sessions (2026-11-15, Mario: "¿puedes detectar cuando hago ejercicio?")**: the oura collector v4
+(`oura_local.sesiones_ejercicio`) adds per day `ejercicio`: sessions of ≥ 10 min with MET ≥ 3 (gaps ≤ 3 min joined), each with
+`inicio`/`fin` unix, `hora` + `utc_offset_min` of THAT moment, duration, MET avg/max, moderate (3–6) and vigorous (≥ 6) minutes,
+`intensidad`, `kcal` and, when the ring got ≥ 20 good beats, `lpm_mediana`/`lpm_max` (p95). Own heuristic, not Oura's model: it
+doesn't know the sport and a brisk 10-min walk counts. Front: `ejercicio.ts` (tested, `ejercicio.test.ts`) + `EjercicioSalud.tsx`,
+first panel of the Actividad tab (7/30/90): sessions, total time, minutes/week vs. the WHO 150 (vigorous ×2), active kcal,
+stacked moderate (`--series-1`) / vigorous (`--series-2`) minutes per day and the session list (times shown in each session's own
+zone). `VERSION_COLECTOR_ESPERADA` = 4. A new collector version uploads the whole history once (oura repo, `subida_completa.json`).
+Checked in Playwright with synthetic sessions (1100 light / 390 dark, no overflow).
+
 **Subprojects publish as espacios (2026-11-08, Mario: Trading automatizado, OURA and Viajes "son otros proyectos que
 estarán trabajándose en paralelo, pero publicarán en la misma página")**: each subproject owns ONE folder,
 `frontend/src/espacios/<id>/`, and nothing else in the shell has to change to add it. Contract:

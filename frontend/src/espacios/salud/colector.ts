@@ -9,7 +9,7 @@ import { num } from "./salud";
  * VERSION_COLECTOR de colector/subir_oura.py cuando una gráfica nueva dependa
  * de un dato nuevo del colector: si la laptop quedó atrás, Salud lo avisa
  * (así se habría visto el primer día que el panel de estrés quedó vacío). */
-export const VERSION_COLECTOR_ESPERADA = 2;
+export const VERSION_COLECTOR_ESPERADA = 4;
 
 /** Ciudad de México: UTC−6 todo el año (sin horario de verano desde 2022). */
 export const UTC_OFFSET_CASA = -360;

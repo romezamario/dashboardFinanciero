@@ -114,6 +114,25 @@ export interface VentanaEstres {
   mov_s?: number;
 }
 
+/** Un rato de ejercicio que detectó el colector (`ejercicio`, colector v4):
+ * minutos seguidos con MET ≥ 3. Hora y zona son las de ese momento. */
+export interface SesionEjercicio {
+  inicio: number;
+  fin: number;
+  hora?: string;
+  utc_offset_min?: number;
+  duracion_min: number;
+  met_prom: number;
+  met_max?: number;
+  min_moderados: number;
+  min_vigorosos: number;
+  intensidad: "moderada" | "vigorosa";
+  kcal?: number;
+  lpm_mediana?: number;
+  lpm_max?: number;
+  latidos?: number;
+}
+
 export interface DiaSalud {
   fecha: string;
   noche?: Noche;
@@ -124,6 +143,7 @@ export interface DiaSalud {
   tempHoras?: HoraTemp[];
   apagones?: Apagon[];
   estresVentanas?: VentanaEstres[];
+  ejercicio?: SesionEjercicio[];
 }
 
 // --------------------------------------------------------------- lectura
@@ -139,6 +159,7 @@ interface FilaResumen {
     temp_horas?: HoraTemp[];
     apagones?: Apagon[];
     estres_ventanas?: VentanaEstres[];
+    ejercicio?: SesionEjercicio[];
   } | null;
 }
 
@@ -154,6 +175,7 @@ export function filaADia({ fecha, datos }: FilaResumen): DiaSalud {
     tempHoras: d.temp_horas,
     apagones: d.apagones,
     estresVentanas: d.estres_ventanas,
+    ejercicio: Array.isArray(d.ejercicio) ? d.ejercicio : undefined,
   };
 }
 

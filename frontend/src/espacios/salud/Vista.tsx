@@ -28,6 +28,7 @@ import {
 } from "./GraficasSalud";
 import { BloquesSueno, ConstanciaHorario, EstresDelDia, TarjetaRecuperacion, TemperaturaDelDia } from "./IndicadoresSalud";
 import { estresDiurno } from "./indicadores";
+import { EjercicioSalud } from "./EjercicioSalud";
 import { obtenerEstadoColector, obtenerZonas, zonaPorDia, type EstadoColector, type LecturaZona } from "./colector";
 import { fechasDeViaje, obtenerViajes, type Viaje } from "./viajes";
 import { AvisoColector, AvisoResumenListo, RelacionesSalud, ResumenSemanal, VistaViajes } from "./SemanaViajesRelaciones";
@@ -319,9 +320,17 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
             )}
 
             {pestana === "actividad" && (
-              <Panel titulo="Actividad por día" nota="Pasos y calorías los calcula open_health con el movimiento del anillo.">
-                <ActividadDiaria dias={enPeriodo} />
-              </Panel>
+              <>
+                <Panel
+                  titulo="Sesiones de ejercicio"
+                  nota="Detectadas por el colector: 10 min o más seguidos con 3 MET o más (caminar rápido cuenta como moderado). No distingue qué deporte fue; la FC puede faltar si el anillo no leyó buenos latidos en movimiento."
+                >
+                  <EjercicioSalud dias={enPeriodo} />
+                </Panel>
+                <Panel titulo="Actividad por día" nota="Pasos y calorías los calcula open_health con el movimiento del anillo.">
+                  <ActividadDiaria dias={enPeriodo} />
+                </Panel>
+              </>
             )}
           </>
         )}
