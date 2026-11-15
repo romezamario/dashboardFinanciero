@@ -632,8 +632,7 @@ export function VistaViajes({
               </div>
               <GraficaViaje dias={dias} viaje={viaje} hasta={efecto.hasta} />
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                Las horas de dormir están en el reloj de la laptop: si la laptop cambió de zona, también las noches de antes pueden verse en la hora
-                del destino.
+                Cada noche se muestra en la zona en que estabas esa noche (la anota la laptop en cada cambio de zona).
               </p>
             </section>
           )}

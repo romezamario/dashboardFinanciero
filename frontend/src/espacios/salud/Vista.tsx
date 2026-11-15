@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   mensajeErrorSalud,
+  obtenerDiaCompleto,
   obtenerDiasSalud,
   obtenerBateria,
   obtenerUltimaSubida,
@@ -63,6 +64,10 @@ function pestanaGuardada(): Pestana {
   return "hoy";
 }
 
+/** Horas sin subida de la laptop desde las que "Última subida" lleva ⚠ (la
+ * misma ventana del aviso de Windows del colector). */
+const HORAS_SUBIDA_VIEJA = 6;
+
 const leerHRV = (d: DiaSalud) => d.noche?.hrv_ms ?? null;
 const leerRHR = (d: DiaSalud) => d.noche?.rhr ?? null;
 const leerSpO2 = (d: DiaSalud) => d.noche?.spo2_mean ?? null;
@@ -73,11 +78,15 @@ const leerRespiracion = (d: DiaSalud) => d.noche?.breath_rate ?? null;
 export default function Salud({ onIrAInicio }: PropsEspacio) {
   const [dias, setDias] = useState<DiaSalud[] | null>(null);
   const [ultimaSubida, setUltimaSubida] = useState<string | null>(null);
+  const [subidaVieja, setSubidaVieja] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [intento, setIntento] = useState(0);
   const [periodo, setPeriodo] = useState<number>(30);
   const [noche, setNoche] = useState<string | null>(null);
-  const [bateria, setBateria] = useState<LecturaBateria[] | null>(null);
+  // undefined = cargando, null = nunca se ha leído.
+  const [bateria, setBateria] = useState<LecturaBateria | null | undefined>(undefined);
+  // Noches viejas llegan sin hipnograma ni FC (vista ligera): se piden al abrirlas.
+  const [completas, setCompletas] = useState<Record<string, DiaSalud | null>>({});
   const [pestana, setPestana] = useState<Pestana>(pestanaGuardada);
   const [estadoColector, setEstadoColector] = useState<EstadoColector | null>(null);
   const [viajes, setViajes] = useState<Viaje[] | null>(null);
@@ -98,12 +107,13 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
     let vigente = true;
     obtenerBateria()
       .then((b) => vigente && setBateria(b))
-      .catch(() => vigente && setBateria([]));
+      .catch(() => vigente && setBateria(null));
     Promise.all([obtenerDiasSalud(), obtenerUltimaSubida()])
       .then(([d, s]) => {
         if (!vigente) return;
         setDias(d);
         setUltimaSubida(s);
+        setSubidaVieja(!!s && Date.now() - new Date(s).getTime() > HORAS_SUBIDA_VIEJA * 3600 * 1000);
       })
       .catch((e) => vigente && setError(mensajeErrorSalud(e)));
     return () => {
@@ -143,7 +153,20 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
 
   const enPeriodo = useMemo(() => (dias ? ultimosDias(dias, periodo) : []), [dias, periodo]);
   const conNoche = useMemo(() => (dias ?? []).filter((d) => d.noche), [dias]);
-  const nocheElegida = conNoche.find((d) => d.fecha === noche) ?? conNoche.at(-1);
+  const nocheLigera = conNoche.find((d) => d.fecha === noche) ?? conNoche.at(-1);
+  const fechaLigera = nocheLigera?.ligero ? nocheLigera.fecha : null;
+  useEffect(() => {
+    if (!fechaLigera || fechaLigera in completas) return;
+    let vigente = true;
+    obtenerDiaCompleto(fechaLigera)
+      .then((d) => vigente && setCompletas((c) => ({ ...c, [fechaLigera]: d })))
+      .catch(() => vigente && setCompletas((c) => ({ ...c, [fechaLigera]: null })));
+    return () => {
+      vigente = false;
+    };
+  }, [fechaLigera, completas]);
+  const nocheElegida = (fechaLigera && completas[fechaLigera]) || nocheLigera;
+  const cargandoDetalle = !!fechaLigera && !(fechaLigera in completas);
 
   return (
     <MarcoEspacio
@@ -151,8 +174,16 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
       onIrAInicio={onIrAInicio}
       acciones={
         ultimaSubida && (
-          <span className="hidden text-xs lg:inline" style={{ color: "var(--text-muted)" }}>
-            Última subida: {new Date(ultimaSubida).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}
+          // También en teléfonos (auditoría A4): es la única pista de que la
+          // laptop dejó de subir. Sin franja de aviso: solo ⚠ si pasan 6 h.
+          <span
+            className="text-xs"
+            style={{ color: subidaVieja ? "var(--text-primary)" : "var(--text-muted)" }}
+            title={subidaVieja ? "La laptop lleva más de 6 h sin subir datos del anillo." : undefined}
+          >
+            {subidaVieja && "⚠ "}
+            <span className="hidden sm:inline">Última subida: </span>
+            {new Date(ultimaSubida).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}
           </span>
         )
       }
@@ -220,7 +251,7 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
                 </Panel>
                 <TarjetasHoy dias={dias} />
                 <Panel titulo="Batería del anillo">
-                  <TarjetaBateria lecturas={bateria} />
+                  <TarjetaBateria ultima={bateria} />
                 </Panel>
               </>
             )}
@@ -256,13 +287,17 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
                   titulo={`Fases de sueño · noche que terminó el ${nocheElegida ? nocheElegida.fecha.split("-").reverse().join("/") : "—"}`}
                   nota="Fases calculadas por open_health a partir de las señales del anillo."
                 >
-                  <Hipnograma dia={nocheElegida} />
+                  {cargandoDetalle ? (
+                    <Vacio>Cargando el detalle de esa noche…</Vacio>
+                  ) : (
+                    <Hipnograma dia={nocheElegida} />
+                  )}
                 </Panel>
                 <Panel titulo="Sueño de ese día en bloques (noche y siestas)">
                   <BloquesSueno dia={nocheElegida} />
                 </Panel>
                 <Panel titulo="Ritmo cardiaco y HRV durante esa noche">
-                  <SenalesNoche dia={nocheElegida} />
+                  {cargandoDetalle ? <Vacio>Cargando el detalle de esa noche…</Vacio> : <SenalesNoche dia={nocheElegida} />}
                 </Panel>
               </>
             )}
@@ -284,7 +319,7 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
             {pestana === "corazon" && (
               <>
                 <Panel titulo="Estrés durante el día">
-                  <EstresDelDia dias={dias} />
+                  <EstresDelDia dias={dias} estres={estres} />
                 </Panel>
                 <div className="grid gap-4 lg:grid-cols-2">
                   <Panel titulo="HRV por noche (ms)">

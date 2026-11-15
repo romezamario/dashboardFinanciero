@@ -13,7 +13,6 @@ import {
   periodosDelDia,
   puntajeSueno,
   recuperacion,
-  siestasDelDia,
   temperaturaDelDia,
   ventanasEnReposo,
 } from "./indicadores";
@@ -41,7 +40,7 @@ describe("periodos", () => {
       ],
     });
     expect(periodosDelDia(d).map((p) => p.inicio)).toEqual([1000, 36000]);
-    expect(siestasDelDia(d)).toBe(1);
+    expect(periodosDelDia(d).filter((p) => !p.principal)).toHaveLength(1);
     expect(minutosPeriodo(periodosDelDia(d)[0])).toBe(170);
     expect(minutosPeriodo(periodosDelDia(d)[1])).toBe(120);
   });
@@ -50,7 +49,7 @@ describe("periodos", () => {
     const d = dia("2026-11-10", { start_unix: 1, end_unix: 2, in_bed_h: 7, metrics: { asleep_min: 400 } });
     expect(periodosDelDia(d)).toHaveLength(1);
     expect(periodosDelDia(d)[0].principal).toBe(true);
-    expect(siestasDelDia(d)).toBe(0);
+    expect(periodosDelDia(d).filter((p) => !p.principal)).toHaveLength(0);
     expect(periodosDelDia(dia("2026-11-10"))).toEqual([]);
   });
 });
@@ -188,5 +187,17 @@ describe("estrés diurno", () => {
       }),
     ]);
     expect(r).toBe(9);
+  });
+
+  it("una noche que empieza el día anterior y termina al siguiente también quita ventanas", () => {
+    const v = ventanas(0);
+    const r = ventanasEnReposo([
+      dia("2026-11-10", undefined, { estresVentanas: v }),
+      // Termina el 11 (está en los periodos del 11) pero empieza el 10.
+      dia("2026-11-11", undefined, { periodos: [{ inicio: v[10].inicio, fin: v[10].inicio + 8 * 3600, principal: true }] }),
+      // Un periodo de días después no toca las ventanas del 10.
+      dia("2026-11-14", undefined, { periodos: [{ inicio: v[0].inicio, fin: v[11].inicio, principal: true }] }),
+    ]);
+    expect(r).toBe(10);
   });
 });

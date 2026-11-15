@@ -3,11 +3,10 @@
 import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Caja, Leyenda, Vacio } from "./GraficasSalud";
-import { AMARILLO_AVISO, EJE, fechaCorta, horaDe, horasMin } from "./formatoSalud";
+import { AMARILLO_AVISO, EJE, fechaCorta, horaDe, horaDecimal, horasMin } from "./formatoSalud";
 import {
   constanciaHorario,
   diasConTemperatura,
-  estresDiurno,
   MINIMO_VENTANAS_BASE,
   UMBRAL_ESTRES,
   ventanasEnReposo,
@@ -108,9 +107,12 @@ export function TarjetaRecuperacion({ dias }: { dias: readonly DiaSalud[] }) {
 export function BloquesSueno({ dia }: { dia: DiaSalud | undefined }) {
   const periodos = useMemo(() => periodosDelDia(dia), [dia]);
   if (!dia || !periodos.length) return <Vacio>No hay sueño registrado para este día.</Vacio>;
-  // Inicio de la franja: 18:00 local del día anterior a `fecha`.
+  // Inicio de la franja: 18:00 del día anterior a `fecha`, en la zona en que
+  // estabas ese día (o la del navegador si el colector no la anotó).
   const [a, m, d] = dia.fecha.split("-").map(Number);
-  const desde = new Date(a, m - 1, d - 1, 18).getTime() / 1000;
+  const zona = dia.utcOffset;
+  const desde =
+    zona == null ? new Date(a, m - 1, d - 1, 18).getTime() / 1000 : Date.UTC(a, m - 1, d - 1, 18) / 1000 - zona * 60;
   const total = 24 * 3600;
   const enFranja = (t: number) => Math.min(100, Math.max(0, ((t - desde) / total) * 100));
   const totalMin = periodos.reduce((s, p) => s + (minutosPeriodo(p) ?? 0), 0);
@@ -123,7 +125,7 @@ export function BloquesSueno({ dia }: { dia: DiaSalud | undefined }) {
             <div
               key={p.inicio}
               className="absolute top-1 bottom-1 rounded"
-              title={`${p.principal ? "Noche" : "Siesta / bloque"}: ${p.start ?? horaDe(p.inicio)}–${p.end ?? horaDe(p.fin)}`}
+              title={`${p.principal ? "Noche" : "Siesta / bloque"}: ${p.start ?? horaDe(p.inicio, zona)}–${p.end ?? horaDe(p.fin, zona)}`}
               style={{
                 left: `${enFranja(p.inicio)}%`,
                 width: `max(3px, ${enFranja(p.fin) - enFranja(p.inicio)}%)`,
@@ -147,7 +149,7 @@ export function BloquesSueno({ dia }: { dia: DiaSalud | undefined }) {
           return (
             <li key={`${p.inicio}`}>
               <strong style={{ color: "var(--text-primary)" }}>{p.principal ? "Noche" : "Siesta / bloque"}</strong>{" "}
-              {p.start ?? (p.inicio != null ? horaDe(p.inicio) : "—")}–{p.end ?? (p.fin != null ? horaDe(p.fin) : "—")}
+              {p.start ?? (p.inicio != null ? horaDe(p.inicio, zona) : "—")}–{p.end ?? (p.fin != null ? horaDe(p.fin, zona) : "—")}
               {min != null && ` · ${horasMin(min)}`}
               {p.eficiencia != null && ` · eficiencia ${Math.round(p.eficiencia)}%`}
             </li>
@@ -271,10 +273,6 @@ const ESTADOS: Record<EstadoVentana, { texto: string; color: string }> = {
   movimiento: { texto: "En movimiento", color: "var(--gridline)" },
 };
 const TOPE_PUNTAJE = 3;
-const horaLocal = (unix: number) => {
-  const d = new Date(unix * 1000);
-  return d.getHours() + d.getMinutes() / 60;
-};
 const duracion = (min: number) => (min < 60 ? `${min} min` : horasMin(min));
 
 function BarraDia({ dia }: { dia: DiaEstres }) {
@@ -290,8 +288,9 @@ function BarraDia({ dia }: { dia: DiaEstres }) {
   );
 }
 
-export function EstresDelDia({ dias }: { dias: readonly DiaSalud[] }) {
-  const porDia = useMemo(() => estresDiurno(dias).reverse(), [dias]);
+/** `estres` = estresDiurno(dias), ya calculado en la Vista (no se repite). */
+export function EstresDelDia({ dias, estres }: { dias: readonly DiaSalud[]; estres: readonly DiaEstres[] }) {
+  const porDia = useMemo(() => [...estres].reverse(), [estres]);
   const [elegida, setElegida] = useState<string | null>(null);
   const reposo = useMemo(() => (porDia.length ? 0 : ventanasEnReposo(dias)), [dias, porDia]);
   if (!porDia.length) {
@@ -304,9 +303,10 @@ export function EstresDelDia({ dias }: { dias: readonly DiaSalud[] }) {
     );
   }
   const dia = porDia.find((d) => d.fecha === elegida) ?? porDia[0];
+  const zona = dias.find((d) => d.fecha === dia.fecha)?.utcOffset;
   const puntos = dia.puntos
     .filter((p) => p.puntaje !== null)
-    .map((p) => ({ ...p, hora: horaLocal(p.inicio), valor: Math.max(-TOPE_PUNTAJE, Math.min(TOPE_PUNTAJE, p.puntaje as number)) }));
+    .map((p) => ({ ...p, hora: horaDecimal(p.inicio, zona), valor: Math.max(-TOPE_PUNTAJE, Math.min(TOPE_PUNTAJE, p.puntaje as number)) }));
   const m = dia.minutos;
   return (
     <div>
@@ -368,7 +368,7 @@ export function EstresDelDia({ dias }: { dias: readonly DiaSalud[] }) {
                 const p = payload[0].payload as (typeof puntos)[number];
                 return (
                   <Caja
-                    titulo={`${horaDe(p.inicio)} · ${ESTADOS[p.estado].texto}`}
+                    titulo={`${horaDe(p.inicio, zona)} · ${ESTADOS[p.estado].texto}`}
                     lineas={[
                       `FC ${Math.round(p.lpm)} lpm (tu normal ${dia.normal.lpm})`,
                       `HRV ${Math.round(p.rmssd)} ms (tu normal ${dia.normal.rmssd})`,

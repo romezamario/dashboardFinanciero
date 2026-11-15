@@ -145,8 +145,8 @@ SpO2 and breathing trends, schedule consistency, 24 h skin temperature vs. your 
 "sin datos". Battery "baja" is now < 25%. `real_steps` stays OFF: this oura.exe doesn't use those events for steps yet.
 **Twin nights (2026-11-14, Mario: "ahora no carga esto")**: oura.exe often reports one sleep as two overlapping windows and only
 one carries HRV/RHR/temp; the collector picked the longer (vitals-less) one and "Recuperación de hoy" vanished. Fixed in the
-collector (oura repo, `_sin_duplicados`; see its CLAUDE.md, which also says how to deploy the collector to the laptop — a push
-does NOT update it). Front: `nocheSinSenales` makes the empty state say the last night has no signals instead of "faltan noches".
+collector (oura repo, `_sin_duplicados`; see its CLAUDE.md — since 2026-11-14 the laptop pulls new collector versions from that
+repo's `main` by itself). Front: `nocheSinSenales` makes the empty state say the last night has no signals instead of "faltan noches".
 **Daytime stress (2026-11-13, Mario: "¿Puedes hacer cálculos de estrés?")**: the collector adds per day `estres_ventanas` (15-min
 windows with ≥ 30 quality-1 beats of `green_ibi_quality_event`: median HR, RMSSD of consecutive beats changing ≤ 20%, mean MET,
 motion seconds). `estresDiurno` (indicadores.ts) drops windows inside any sleep period, skips moving ones (MET ≥ 1.6; no MET →
@@ -177,8 +177,20 @@ next-day stress) with Pearson r, a dashed least-squares line and a sentence comp
 LINE (median split with many 0% ties gave a sentence with the opposite sign of r); ≥ 5 pairs, "pocos días" under 14; optional
 "Quitar días de viaje". (4) Viajes: manual trips + days the laptop was in a zone ≠ CDMX (UTC−6, `UTC_OFFSET_CASA`) offered as
 "¿Fue un viaje?"; per trip a before (14 days) / during / after (3 days) table and a sleep-bars + HRV-line chart with the trip
-shaded. Known caveat: bedtimes come from oura.exe in the laptop's CURRENT zone, so after a zone change older nights shift too
-(noted under the table). Checked in Playwright with mocked Supabase (1280 light / 390 dark, no overflow, marking a trip).
+shaded. Bedtimes used to come in the laptop's CURRENT zone (older nights shifted after a zone change); fixed by the audit below. Checked in Playwright with mocked Supabase (1280 light / 390 dark, no overflow, marking a trip).
+
+**Salud audit fixes (2026-11-14/15, Mario: "implementa todas las mejoras")**: (A2) every day carries `utcOffset` (`datos.utc_offset_min`,
+sent by collector v3, which also re-dates nights/hours with the zone the laptop had at that moment — oura repo `zonas.py`), and
+`horaDe(unix, offset)` / `horaDecimal` (formatoSalud.ts, tested) print unix times in THAT zone, not the browser's (hypnogram, night HR/HRV,
+sleep blocks and their 18:00 band, stress chart); no offset = browser zone. `VERSION_COLECTOR_ESPERADA` ≥ 3 (4 since the exercise sessions). (M1/M2) `obtenerDiasSalud`
+pages with `obtenerTodasLasPaginas` (no more 1,000-row cap): the last `DIAS_COMPLETOS` = 120 days full from `resumen_diario`, older ones
+from the view `salud.resumen_ligero` (`20261115120000_resumen_ligero.sql`, `security_invoker`, drops `noche.stages`/`series_t`, marked
+`ligero`); opening an old night fetches its full row (`obtenerDiaCompleto`, "Cargando el detalle…"); if the view is missing it falls back
+to the full table. (M7) `ventanasDespierto` only checks sleep periods of the same and adjacent days, and `EstresDelDia` receives the
+Vista's memoized `estres` instead of recomputing it. (A4) "Última subida" also shows on phones, with ⚠ after 6 h (`HORAS_SUBIDA_VIEJA`;
+still no banner for hours without data). (B1/B3) battery = only the latest laptop reading (`obtenerBateria` → one row; `origen` 'navegador'
+gone from the UI). (B4) `siestasDelDia` removed. (M9) the manifest is `soloDueno`. (M4) `supabase/tests/correr.sh` also applies
+`supabase/espacios/*/migraciones/*.sql` and runs `aislamiento_salud.sql` (another user and anon see nothing in `salud.*`, incl. the view).
 
 **Exercise sessions (2026-11-15, Mario: "¿puedes detectar cuando hago ejercicio?")**: the oura collector v4
 (`oura_local.sesiones_ejercicio`) adds per day `ejercicio`: sessions of ≥ 10 min with MET ≥ 3 (gaps ≤ 3 min joined), each with
@@ -211,7 +223,7 @@ estarán trabajándose en paralelo, pero publicarán en la misma página")**: ea
 - Producto edition never shows espacios (it goes straight to `Dashboard`).
 Current state: `trading/` (Vista = `MarcoEspacio` + the existing `components/AnalisisTecnicoTab.tsx`, `soloDueno`; the Trading
 tab was REMOVED from Finanzas when `onIrAInicio` is set — i.e. always in personal; its components/lib files still live in
-`components/`/`lib/` and can move into the folder later), `salud/` (manifest only; view still `components/Salud.tsx` + `lib/salud.ts`),
+`components/`/`lib/` and can move into the folder later), `salud/` (everything in the folder: `Vista.tsx`, `salud.ts`, charts and indicators),
 `viajes/` and `pendientes/` (placeholders). Tested in `lib/espacios.test.ts` (ordering, invalid ids, every folder registers, hash rules).
 
 **Shared access, personal edition (2026-10-17, user's request: a second user "con las mismas funcionalidades, con excepción de trading y wiki")**:

@@ -12,3 +12,9 @@ for migracion in migrations/*.sql; do
   psql -v ON_ERROR_STOP=1 -q -d "$BASE" -f "$migracion"
 done
 psql -v ON_ERROR_STOP=1 -q -d "$BASE" -f tests/aislamiento.sql
+# Espacios del dashboard personal (aplicar.sh las aplica solo a la instancia
+# personal): cada uno en su esquema, en orden de nombre de archivo.
+for migracion in espacios/*/migraciones/*.sql; do
+  psql -v ON_ERROR_STOP=1 -q -d "$BASE" -f "$migracion"
+done
+psql -v ON_ERROR_STOP=1 -q -d "$BASE" -f tests/aislamiento_salud.sql

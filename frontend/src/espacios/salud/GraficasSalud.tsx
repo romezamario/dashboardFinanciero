@@ -47,6 +47,7 @@ import {
 import { desplazarMes, semanasDelMes, tituloMes } from "../../lib/gastosCorreo";
 import { estadoNoche } from "./indicadores";
 import { AMARILLO_AVISO, EJE, fechaCorta, horaDe, horasMin } from "./formatoSalud";
+import { hoyIso } from "../../lib/fechas";
 
 /** Marcas de eje cada 2 h (en minutos) que cubren el máximo. */
 const marcasHoras = (max: number) => Array.from({ length: Math.max(2, Math.ceil(max / 120) + 1) }, (_, i) => i * 120);
@@ -202,10 +203,10 @@ function Pila({ pct, cargando }: { pct: number; cargando: boolean }) {
   );
 }
 
-export function TarjetaBateria({ lecturas }: { lecturas: readonly LecturaBateria[] | null }) {
-  if (lecturas === null) return <Vacio>Cargando batería…</Vacio>;
-  const ultima = lecturas.at(-1);
-  if (!ultima) return <Vacio>Sin lecturas de batería en las últimas 48 h. La laptop la lee cada hora.</Vacio>;
+/** `ultima`: undefined = cargando, null = nunca se ha leído. */
+export function TarjetaBateria({ ultima }: { ultima: LecturaBateria | null | undefined }) {
+  if (ultima === undefined) return <Vacio>Cargando batería…</Vacio>;
+  if (!ultima) return <Vacio>Aún no hay lecturas de batería. La laptop la lee cada hora.</Vacio>;
   const nivel = nivelBateria(ultima.pct);
   return (
     <div className="flex flex-wrap items-center gap-4">
@@ -220,7 +221,7 @@ export function TarjetaBateria({ lecturas }: { lecturas: readonly LecturaBateria
           )}
         </p>
         <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-          Leída {haceCuanto(ultima.en)} {ultima.origen === "navegador" ? "desde el navegador" : "por la laptop"}
+          Leída {haceCuanto(ultima.en)} por la laptop
         </p>
         {nivel !== "ok" && (
           <p
@@ -245,6 +246,7 @@ export function TarjetaBateria({ lecturas }: { lecturas: readonly LecturaBateria
 export function Hipnograma({ dia }: { dia: DiaSalud | undefined }) {
   const tramos = useMemo(() => segmentosHipnograma(dia?.noche), [dia]);
   const n = dia?.noche;
+  const zona = dia?.utcOffset;
   if (!n || !tramos.length) return <Vacio>No hay fases de sueño para esta noche.</Vacio>;
   const ini = tramos[0].inicio;
   const total = tramos.at(-1)!.fin - ini;
@@ -259,8 +261,8 @@ export function Hipnograma({ dia }: { dia: DiaSalud | undefined }) {
       <div className="flex text-[11px]" style={{ color: "var(--text-muted)" }}>
         <div className="w-20 shrink-0" />
         <div className="flex flex-1 justify-between">
-          <span>{n.start ?? horaDe(ini)}</span>
-          <span>{n.end ?? horaDe(ini + total)}</span>
+          <span>{n.start ?? horaDe(ini, zona)}</span>
+          <span>{n.end ?? horaDe(ini + total, zona)}</span>
         </div>
       </div>
       <div className="mt-1 space-y-1" role="img" aria-label={`Fases de sueño de ${n.start} a ${n.end}`}>
@@ -275,7 +277,7 @@ export function Hipnograma({ dia }: { dia: DiaSalud | undefined }) {
                 .map((t) => (
                   <div
                     key={t.inicio}
-                    title={`${NOMBRE_FASE[t.fase]}: ${horaDe(t.inicio)}–${horaDe(t.fin)} (${Math.round((t.fin - t.inicio) / 60)} min)`}
+                    title={`${NOMBRE_FASE[t.fase]}: ${horaDe(t.inicio, zona)}–${horaDe(t.fin, zona)} (${Math.round((t.fin - t.inicio) / 60)} min)`}
                     className="absolute top-0 h-full rounded-sm"
                     style={{
                       left: `${((t.inicio - ini) / total) * 100}%`,
@@ -318,8 +320,8 @@ export function SenalesNoche({ dia }: { dia: DiaSalud | undefined }) {
   return (
     <div>
       <div className="grid gap-4 md:grid-cols-2">
-        <MiniLinea titulo="Ritmo cardiaco (lpm)" datos={hr} color="var(--series-2)" unidad="lpm" extremo="min" />
-        <MiniLinea titulo="HRV (ms)" datos={hrv} color="var(--series-1)" unidad="ms" extremo="max" />
+        <MiniLinea titulo="Ritmo cardiaco (lpm)" datos={hr} color="var(--series-2)" unidad="lpm" extremo="min" zona={dia?.utcOffset} />
+        <MiniLinea titulo="HRV (ms)" datos={hrv} color="var(--series-1)" unidad="ms" extremo="max" zona={dia?.utcOffset} />
       </div>
       <p className="mt-2 text-xs" style={{ color: "var(--text-muted)" }}>
         <strong>Sostenido</strong> (punto lleno y línea punteada): cada lectura (cada ~5 min) se compara con sus vecinas,
@@ -336,22 +338,26 @@ function MiniLinea({
   color,
   unidad,
   extremo,
+  zona,
 }: {
   titulo: string;
   datos: { t: number; valor: number }[];
   color: string;
   unidad: string;
   extremo: "min" | "max";
+  /** Minutos vs. UTC de ese día (DiaSalud.utcOffset). */
+  zona?: number;
 }) {
+  const hora = (t: number) => horaDe(t, zona);
   const punto = useMemo(() => extremoNoche(datos, extremo), [datos, extremo]);
   const crudo = useMemo(() => extremoPuntual(datos, extremo), [datos, extremo]);
   const iguales = mismoExtremo(punto, crudo);
   const media = promedio(datos.map((d) => d.valor));
   const nombre = extremo === "min" ? "Mín" : "Máx";
   const etiqueta = punto
-    ? `${nombre} ${Math.round(punto.valor)} ${unidad}${iguales ? "" : " sostenido"} · ${horaDe(punto.t)}`
+    ? `${nombre} ${Math.round(punto.valor)} ${unidad}${iguales ? "" : " sostenido"} · ${hora(punto.t)}`
     : null;
-  const etiquetaCruda = crudo && !iguales ? `${Math.round(crudo.valor)} ${unidad} puntual · ${horaDe(crudo.t)}` : null;
+  const etiquetaCruda = crudo && !iguales ? `${Math.round(crudo.valor)} ${unidad} puntual · ${hora(crudo.t)}` : null;
   // Las etiquetas van en una leyenda DEBAJO de la gráfica, no dentro: en un
   // teléfono no hay espacio para texto sobre la curva sin encimarse (Mario,
   // 2026-11-11, captura en mobile). Dentro solo quedan las marcas.
@@ -377,12 +383,12 @@ function MiniLinea({
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={datos} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
               <CartesianGrid vertical={false} stroke="var(--gridline)" />
-              <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} tickFormatter={horaDe} tick={EJE} axisLine={false} tickLine={false} />
+              <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} tickFormatter={hora} tick={EJE} axisLine={false} tickLine={false} />
               <YAxis domain={eje.dominio} ticks={eje.marcas} interval={0} tick={EJE} axisLine={false} tickLine={false} />
               <Tooltip
                 content={({ active, payload }) =>
                   active && payload?.length ? (
-                    <Caja titulo={horaDe((payload[0].payload as { t: number }).t)} lineas={[`${payload[0].value} ${unidad}`]} />
+                    <Caja titulo={hora((payload[0].payload as { t: number }).t)} lineas={[`${payload[0].value} ${unidad}`]} />
                   ) : null
                 }
               />
@@ -661,7 +667,7 @@ export function CalendarioSueno({
   onSeleccionar: (fecha: string) => void;
 }) {
   const porFecha = useMemo(() => new Map(dias.map((d) => [d.fecha, d])), [dias]);
-  const ultimoMes = (seleccion ?? dias.at(-1)?.fecha ?? new Date().toISOString().slice(0, 10)).slice(0, 7);
+  const ultimoMes = (seleccion ?? dias.at(-1)?.fecha ?? hoyIso()).slice(0, 7);
   const [mes, setMes] = useState(ultimoMes);
   const primero = dias[0]?.fecha.slice(0, 7) ?? mes;
   const primerDia = dias[0]?.fecha ?? "";

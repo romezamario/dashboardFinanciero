@@ -3,6 +3,8 @@
 // en el esquema `salud` de Supabase, aparte de Finanzas (`public`); ver
 // supabase/espacios/salud. Aquí: lectura + funciones puras de las gráficas.
 import { supabase } from "../../lib/supabase";
+import { obtenerTodasLasPaginas } from "../../lib/queries";
+import { hoyIso } from "../../lib/fechas";
 
 // ------------------------------------------------------------------ tipos
 
@@ -144,6 +146,13 @@ export interface DiaSalud {
   apagones?: Apagon[];
   estresVentanas?: VentanaEstres[];
   ejercicio?: SesionEjercicio[];
+  /** Minutos vs. UTC en que estabas ese día (lo anota el colector v3; CDMX =
+   * -360). Las horas unix de ese día se muestran con esta zona, no con la
+   * del navegador. Sin dato: la del navegador. */
+  utcOffset?: number;
+  /** true = llegó de `resumen_ligero`: sin `noche.stages` ni `noche.series_t`
+   * (ver obtenerDiaCompleto). */
+  ligero?: boolean;
 }
 
 // --------------------------------------------------------------- lectura
@@ -160,6 +169,7 @@ interface FilaResumen {
     apagones?: Apagon[];
     estres_ventanas?: VentanaEstres[];
     ejercicio?: SesionEjercicio[];
+    utc_offset_min?: number;
   } | null;
 }
 
@@ -176,21 +186,56 @@ export function filaADia({ fecha, datos }: FilaResumen): DiaSalud {
     apagones: d.apagones,
     estresVentanas: d.estres_ventanas,
     ejercicio: Array.isArray(d.ejercicio) ? d.ejercicio : undefined,
+    utcOffset: num(d.utc_offset_min) ?? undefined,
   };
 }
 
-/** Todos los días (fuente 'oura'), del más antiguo al más reciente. Son pocas
- * filas (una por día), así que basta con una página grande. */
-export async function obtenerDiasSalud(): Promise<DiaSalud[]> {
+/** Días que se bajan completos (con hipnograma y FC/HRV de la noche). Los más
+ * viejos llegan de la vista `resumen_ligero`, sin esas dos series, que solo se
+ * dibujan para la noche que eliges (auditoría 2026-11-14, M2). */
+export const DIAS_COMPLETOS = 120;
+
+function leerResumen(vista: "resumen_diario" | "resumen_ligero", lado: "antes" | "desde", fecha: string) {
+  // Paginado (PostgREST corta en 1,000 filas, auditoría M1); fecha es llave
+  // total con la fuente fija (RLS deja solo las filas propias).
+  return obtenerTodasLasPaginas<FilaResumen>((desde, hasta, contar) => {
+    const q = supabase
+      .schema("salud")
+      .from(vista)
+      .select("fecha, datos", contar ? { count: "estimated" } : undefined)
+      .eq("fuente", "oura");
+    return (lado === "antes" ? q.lt("fecha", fecha) : q.gte("fecha", fecha))
+      .order("fecha", { ascending: true })
+      .range(desde, hasta);
+  });
+}
+
+/** Todos los días (fuente 'oura'), del más antiguo al más reciente: los
+ * últimos DIAS_COMPLETOS completos y los anteriores ligeros. Si la vista
+ * ligera aún no existe (su migración no ha corrido), todo completo. */
+export async function obtenerDiasSalud(hoy = hoyIso()): Promise<DiaSalud[]> {
+  const corte = restarDias(hoy, DIAS_COMPLETOS);
+  const [viejos, recientes] = await Promise.all([
+    leerResumen("resumen_ligero", "antes", corte)
+      .then((filas) => filas.map((f) => ({ ...filaADia(f), ligero: true })))
+      .catch(() => leerResumen("resumen_diario", "antes", corte).then((filas) => filas.map(filaADia))),
+    leerResumen("resumen_diario", "desde", corte).then((filas) => filas.map(filaADia)),
+  ]);
+  return [...viejos, ...recientes];
+}
+
+/** La fila completa de un día (para el hipnograma y la FC de una noche vieja). */
+export async function obtenerDiaCompleto(fecha: string): Promise<DiaSalud | null> {
   const { data, error } = await supabase
     .schema("salud")
     .from("resumen_diario")
     .select("fecha, datos")
     .eq("fuente", "oura")
-    .order("fecha", { ascending: true })
-    .limit(5000);
+    .eq("fecha", fecha)
+    .limit(1);
   if (error) throw error;
-  return ((data ?? []) as FilaResumen[]).map(filaADia);
+  const fila = (data?.[0] ?? null) as FilaResumen | null;
+  return fila ? filaADia(fila) : null;
 }
 
 export async function obtenerUltimaSubida(): Promise<string | null> {
@@ -212,25 +257,22 @@ export interface LecturaBateria {
   /** ISO. */
   en: string;
   cargando: boolean | null;
-  origen: "laptop" | "navegador";
 }
 
-/** Lecturas de batería de las últimas 48 h (cada lectura horaria de la laptop
- * y las pruebas que se hicieron desde el navegador), de la más antigua a la más reciente. */
-export async function obtenerBateria(ahora = new Date()): Promise<LecturaBateria[]> {
-  const desde = new Date(ahora.getTime() - 48 * 3600 * 1000).toISOString();
+/** La última lectura de batería de la laptop (la tarjeta solo muestra esa;
+ * antes se bajaban 48 h para una gráfica que ya no existe). null = ninguna. */
+export async function obtenerBateria(): Promise<LecturaBateria | null> {
   const { data, error } = await supabase
     .schema("salud")
     .from("oura_sincronizaciones")
-    .select("bateria_pct, bateria_leida_en, cargando, origen")
+    .select("bateria_pct, bateria_leida_en, cargando")
+    .eq("origen", "laptop")
     .not("bateria_pct", "is", null)
-    .gte("bateria_leida_en", desde)
-    .order("bateria_leida_en", { ascending: true })
-    .limit(500);
+    .order("bateria_leida_en", { ascending: false })
+    .limit(1);
   if (error) throw error;
-  return ((data ?? []) as { bateria_pct: number; bateria_leida_en: string; cargando: boolean | null; origen: LecturaBateria["origen"] }[]).map(
-    (f) => ({ pct: f.bateria_pct, en: f.bateria_leida_en, cargando: f.cargando, origen: f.origen })
-  );
+  const f = data?.[0] as { bateria_pct: number; bateria_leida_en: string; cargando: boolean | null } | undefined;
+  return f ? { pct: f.bateria_pct, en: f.bateria_leida_en, cargando: f.cargando } : null;
 }
 
 export type NivelBateria = "ok" | "baja" | "critica";

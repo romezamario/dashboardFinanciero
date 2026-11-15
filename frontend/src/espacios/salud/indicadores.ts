@@ -54,11 +54,6 @@ export function minutosPeriodo(p: PeriodoSueno): number | null {
   return cama === null ? null : Math.round(cama * 60);
 }
 
-/** Cuántos periodos además del principal (siestas o bloques sueltos). */
-export function siestasDelDia(dia: DiaSalud | undefined): number {
-  return periodosDelDia(dia).filter((p) => !p.principal).length;
-}
-
 // ------------------------------------------- semáforo de recuperación
 
 export type NivelRecuperacion = "listo" | "moderado" | "descansa";
@@ -330,17 +325,25 @@ const mediana = (v: readonly number[]) => {
 const enMovimiento = (v: VentanaEstres) =>
   num(v.met) !== null ? (v.met as number) >= MET_MOVIMIENTO : (v.mov_s ?? 0) >= MOVIMIENTO_SIN_MET_S;
 
-/** Ventanas despierto: se quitan las que caen dentro de cualquier periodo de
- * sueño (noche o siesta) de cualquier día. */
+/** Ventanas despierto: se quitan las que caen dentro de un periodo de sueño
+ * (noche o siesta). Solo se revisan los periodos del mismo día y de los días
+ * vecinos (una noche que empieza el día D termina el D+1): antes se revisaban
+ * todos los periodos de la historia contra cada ventana (auditoría M7). */
 function ventanasDespierto(dias: readonly DiaSalud[]): Map<string, VentanaEstres[]> {
-  const sueno = dias.flatMap((d) => periodosDelDia(d)).filter((p) => num(p.inicio) !== null && num(p.fin) !== null) as {
-    inicio: number;
-    fin: number;
-  }[];
+  const suenoPorDia = new Map<string, { inicio: number; fin: number }[]>();
+  for (const d of dias) {
+    const periodos = periodosDelDia(d).filter((p) => num(p.inicio) !== null && num(p.fin) !== null) as {
+      inicio: number;
+      fin: number;
+    }[];
+    if (periodos.length) suenoPorDia.set(d.fecha, periodos);
+  }
   const fin = MINUTOS_VENTANA * 60;
   const porDia = new Map<string, VentanaEstres[]>();
   for (const d of dias) {
-    const despierto = (d.estresVentanas ?? []).filter(
+    if (!d.estresVentanas?.length) continue;
+    const sueno = [restarDias(d.fecha, 1), d.fecha, restarDias(d.fecha, -1)].flatMap((f) => suenoPorDia.get(f) ?? []);
+    const despierto = d.estresVentanas.filter(
       (v) => num(v.lpm) !== null && num(v.rmssd) !== null && v.rmssd > 0 && !sueno.some((p) => v.inicio < p.fin && v.inicio + fin > p.inicio),
     );
     if (despierto.length) porDia.set(d.fecha, despierto);
