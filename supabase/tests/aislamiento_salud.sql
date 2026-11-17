@@ -15,6 +15,7 @@ insert into salud.resumen_diario (fecha, fuente, datos)
 insert into salud.oura_anillos (serial) values ('anillo-a');
 insert into salud.oura_sincronizaciones (serial, bateria_pct) values ('anillo-a', 80);
 insert into salud.viajes (lugar, desde) values ('Las Vegas', '2026-11-09');
+insert into salud.ejercicio_etiquetas (inicio, fin, fecha, tipo) values (1000, 2000, '2026-11-10', 'correr');
 
 do $$
 begin
@@ -37,7 +38,7 @@ declare
 begin
   select (select count(*) from salud.resumen_diario) + (select count(*) from salud.resumen_ligero)
        + (select count(*) from salud.oura_anillos) + (select count(*) from salud.oura_sincronizaciones)
-       + (select count(*) from salud.viajes)
+       + (select count(*) from salud.viajes) + (select count(*) from salud.ejercicio_etiquetas)
     into n;
   if n <> 0 then raise exception 'FALLO: B ve % filas de salud de A', n; end if;
   update salud.resumen_diario set datos = '{}';
@@ -46,6 +47,9 @@ begin
   delete from salud.viajes;
   get diagnostics n = row_count;
   if n <> 0 then raise exception 'FALLO: B borró los viajes de A'; end if;
+  update salud.ejercicio_etiquetas set tipo = 'nadar';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'FALLO: B cambió la etiqueta de ejercicio de A'; end if;
 end $$;
 do $$
 begin

@@ -358,9 +358,9 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
               <>
                 <Panel
                   titulo="Sesiones de ejercicio"
-                  nota="Detectadas por el colector: 10 min o más seguidos con 3 MET o más (caminar rápido cuenta como moderado). No distingue qué deporte fue; la FC puede faltar si el anillo no leyó buenos latidos en movimiento."
+                  nota="Detectadas por el colector: 10 min o más seguidos con 3 MET o más (caminar rápido cuenta como moderado). El tipo es una sugerencia hasta que lo confirmas; la FC puede faltar si el anillo no leyó buenos latidos en movimiento."
                 >
-                  <EjercicioSalud dias={enPeriodo} />
+                  <EjercicioSalud dias={enPeriodo} historia={dias ?? undefined} />
                 </Panel>
                 <Panel titulo="Actividad por día" nota="Pasos y calorías los calcula open_health con el movimiento del anillo.">
                   <ActividadDiaria dias={enPeriodo} />

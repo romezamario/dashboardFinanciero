@@ -201,6 +201,17 @@ first panel of the Actividad tab (7/30/90): sessions, total time, minutes/week v
 stacked moderate (`--series-1`) / vigorous (`--series-2`) minutes per day and the session list (times shown in each session's own
 zone). `VERSION_COLECTOR_ESPERADA` = 4. A new collector version uploads the whole history once (oura repo, `subida_completa.json`).
 Checked in Playwright with synthetic sessions (1100 light / 390 dark, no overflow).
+**Exercise by day + activity type (2026-11-17, Mario: "muéstrame la actividad agrupada por día y permite que agregue alguna descripción
+como caminata, correr, nadar… después se clasifiquen automáticamente y yo solo confirme")**: the session list is now one row per local day
+(the `fecha` the collector gave it; "Ver sesiones" expands). Table `salud.ejercicio_etiquetas` (`20261117040000_ejercicio_etiquetas.sql`:
+`inicio`/`fin` unix + `fecha`, `tipo` free text `^[a-z_]{2,30}$`, `estado` sugerida|confirmada, `origen` dashboard|colector, `confianza`;
+unique `(user_id, inicio)`, RLS own rows, in `aislamiento_salud.sql`). A label matches a session by `inicio` or, if the collector moved it,
+by ≥ 50 % overlap (`etiquetaDeSesion`); saving deletes the stale row. Unconfirmed sessions show a SUGGESTION computed in the browser
+(`sugerirTipo`, ejercicio.ts, tested), never saved until confirmed: rules (`MET_CORRER` 6, or FC ≥ 135 with MET ≥ 4.5 → correr, else
+caminata) until there are `MINIMO_EJEMPLOS` = 3 confirmed sessions in the loaded history, then the majority of the 3 nearest confirmed ones
+(MET/1.5, lpm/15). A collector-written `estado = 'sugerida'` row (not written yet) is shown as the suggestion. Types `TIPOS_ACTIVIDAD`
+incl. `no_ejercicio`, which removes the session from the summary tiles and chart (`sinDescartadas`). Per day: "Confirmar las N
+sugerencias" and "Todo el día como…"; per session: "Sí, <tipo>" / "Otra…". No collector change. Checked in Playwright with mocked Supabase (390 dark).
 
 **Subprojects publish as espacios (2026-11-08, Mario: Trading automatizado, OURA and Viajes "son otros proyectos que
 estarán trabajándose en paralelo, pero publicarán en la misma página")**: each subproject owns ONE folder,
