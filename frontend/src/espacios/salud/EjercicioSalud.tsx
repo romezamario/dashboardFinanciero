@@ -207,7 +207,7 @@ export function EjercicioSalud({ dias, historia = dias }: { dias: readonly DiaSa
   }, []);
   const ejemplos = useMemo(() => ejemplosConfirmados(historia, etiquetas), [historia, etiquetas]);
   const contables = useMemo(() => sinDescartadas(dias, etiquetas), [dias, etiquetas]);
-  const resumen = useMemo(() => resumenEjercicio(contables), [contables]);
+  const resumen = useMemo(() => resumenEjercicio(contables, etiquetas), [contables, etiquetas]);
   const porDia = useMemo(() => minutosPorDia(contables), [contables]);
   const porDiaEtiquetado = useMemo(() => diasConEjercicio(dias, etiquetas, ejemplos), [dias, etiquetas, ejemplos]);
   const confirmar = useCallback(async (lista: SesionEtiquetada[], tipo?: string) => {
@@ -244,7 +244,11 @@ export function EjercicioSalud({ dias, historia = dias }: { dias: readonly DiaSa
   return (
     <div>
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-        <Dato etiqueta="Sesiones" valor={String(resumen.sesiones)} />
+        <Dato
+          etiqueta="Entrenos"
+          valor={String(resumen.entrenos)}
+          detalle={`+ ${resumen.sesiones - resumen.entrenos} de caminata o actividad`}
+        />
         <Dato etiqueta="Tiempo total" valor={duracion(resumen.minutos)} />
         <Dato
           etiqueta="Por semana vs. meta OMS"

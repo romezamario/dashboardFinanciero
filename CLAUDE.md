@@ -213,7 +213,12 @@ caminata) until there are `MINIMO_EJEMPLOS` = 3 confirmed sessions in the loaded
 incl. `no_ejercicio`, which removes the session from the summary tiles and chart (`sinDescartadas`). Per day: "Confirmar las N
 sugerencias" and "Todo el día como…"; per session: "Sí, <tipo>" / "Otra…". No collector change. Checked in Playwright with mocked Supabase (390 dark).
 
-**Own scores 0–100 (2026-11-19, Mario: idea 3 "puntuaciones propias de sueño, recuperación y actividad")**: `puntuaciones.ts`
+**Entreno vs. caminata (2026-11-19, validated with Mario's real data: a ~30-min run on Nov 11 morning, lots of walking Nov 12/14)**:
+collector v5 joins pauses ≤ 10 min (the run had a 4-min pause and came out split; walks came out in 6–8 pieces) and sends
+`clase` "entreno" | "actividad" per session (≥ 10 vigorous minutes that are ≥ 30 % of the active ones). `esEntreno` (ejercicio.ts,
+same rule as fallback for older rows) feeds `sugerirTipo` (entreno → correr) and `resumenEjercicio(dias, etiquetas)`.entrenos: a
+confirmed type wins (caminata/no_ejercicio = not entreno). The first tile is "Entrenos" with "+ N de caminata o actividad";
+walks still count toward the WHO minutes. `VERSION_COLECTOR_ESPERADA` = 5. (2026-11-19, Mario: idea 3 "puntuaciones propias de sueño, recuperación y actividad")**: `puntuaciones.ts`
 (tested, `puntuaciones.test.ts`) computes in the browser, no collector change: `puntuacionSueno` (duration vs `META_SUENO_MIN` 480 30%,
 efficiency 15%, deep vs 90 min 12.5%, REM vs 100 min 12.5% — minutes = in-bed × pct —, latency `sol_min` 7.5%, WASO 7.5%, bedtime vs
 YOUR median of the previous 14 nights 15%) and `puntuacionActividad` (steps vs `META_PASOS` 8,000 30%, active kcal vs your 30-day median

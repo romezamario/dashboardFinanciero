@@ -129,6 +129,8 @@ export interface SesionEjercicio {
   min_moderados: number;
   min_vigorosos: number;
   intensidad: "moderada" | "vigorosa";
+  /** Colector v5: "entreno" (esfuerzo vigoroso sostenido) o "actividad" (p. ej. caminar mucho). */
+  clase?: "entreno" | "actividad";
   kcal?: number;
   lpm_mediana?: number;
   lpm_max?: number;
