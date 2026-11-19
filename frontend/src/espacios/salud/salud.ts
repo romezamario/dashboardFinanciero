@@ -146,6 +146,9 @@ export interface DiaSalud {
   apagones?: Apagon[];
   estresVentanas?: VentanaEstres[];
   ejercicio?: SesionEjercicio[];
+  /** Eventos que guardó el anillo en cada hora local (24 números; colector v5).
+   * 0 fuera de un apagón = hueco de datos (panel "Colector"). */
+  eventosHoras?: number[];
   /** Minutos vs. UTC en que estabas ese día (lo anota el colector v3; CDMX =
    * -360). Las horas unix de ese día se muestran con esta zona, no con la
    * del navegador. Sin dato: la del navegador. */
@@ -169,6 +172,7 @@ interface FilaResumen {
     apagones?: Apagon[];
     estres_ventanas?: VentanaEstres[];
     ejercicio?: SesionEjercicio[];
+    eventos_horas?: number[];
     utc_offset_min?: number;
   } | null;
 }
@@ -186,6 +190,7 @@ export function filaADia({ fecha, datos }: FilaResumen): DiaSalud {
     apagones: d.apagones,
     estresVentanas: d.estres_ventanas,
     ejercicio: Array.isArray(d.ejercicio) ? d.ejercicio : undefined,
+    eventosHoras: Array.isArray(d.eventos_horas) && d.eventos_horas.length === 24 ? d.eventos_horas : undefined,
     utcOffset: num(d.utc_offset_min) ?? undefined,
   };
 }
@@ -238,14 +243,16 @@ export async function obtenerDiaCompleto(fecha: string): Promise<DiaSalud | null
   return fila ? filaADia(fila) : null;
 }
 
+/** La última lectura BUENA de la laptop. Desde el colector v5 también se
+ * anotan las corridas que fallan (`resultado` ≠ 'ok'); las filas viejas no
+ * tienen `resultado` y todas fueron buenas. Sin esa columna aún, sin filtro. */
 export async function obtenerUltimaSubida(): Promise<string | null> {
-  const { data, error } = await supabase
-    .schema("salud")
-    .from("oura_sincronizaciones")
-    .select("subida_en")
-    .eq("origen", "laptop")
-    .order("subida_en", { ascending: false })
-    .limit(1);
+  const consulta = (soloBuenas: boolean) => {
+    const q = supabase.schema("salud").from("oura_sincronizaciones").select("subida_en").eq("origen", "laptop");
+    return (soloBuenas ? q.or("resultado.is.null,resultado.eq.ok") : q).order("subida_en", { ascending: false }).limit(1);
+  };
+  let { data, error } = await consulta(true);
+  if (error) ({ data, error } = await consulta(false));
   if (error) throw error;
   return (data?.[0] as { subida_en?: string } | undefined)?.subida_en ?? null;
 }

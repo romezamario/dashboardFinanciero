@@ -13,7 +13,7 @@ set request.jwt.claim.sub = '5a5a5a5a-0000-0000-0000-000000000001';
 insert into salud.resumen_diario (fecha, fuente, datos)
   values ('2026-11-10', 'oura', '{"noche": {"hrv_ms": 50, "stages": [1, 2, 3], "series_t": {"hr": [[1, 60]]}}}');
 insert into salud.oura_anillos (serial) values ('anillo-a');
-insert into salud.oura_sincronizaciones (serial, bateria_pct) values ('anillo-a', 80);
+insert into salud.oura_sincronizaciones (serial, bateria_pct, resultado, mensaje) values ('anillo-a', 80, 'sin_anillo', 'No se encontró el anillo');
 insert into salud.viajes (lugar, desde) values ('Las Vegas', '2026-11-09');
 insert into salud.ejercicio_etiquetas (inicio, fin, fecha, tipo) values (1000, 2000, '2026-11-10', 'correr');
 

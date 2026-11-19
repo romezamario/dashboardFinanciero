@@ -30,6 +30,7 @@ import {
 import { BloquesSueno, ConstanciaHorario, EstresDelDia, TarjetaRecuperacion, TemperaturaDelDia } from "./IndicadoresSalud";
 import { estresDiurno } from "./indicadores";
 import { EjercicioSalud } from "./EjercicioSalud";
+import { PanelColector } from "./PanelColector";
 import { obtenerEstadoColector, obtenerZonas, zonaPorDia, type EstadoColector, type LecturaZona } from "./colector";
 import { fechasDeViaje, obtenerViajes, type Viaje } from "./viajes";
 import { AvisoColector, AvisoResumenListo, RelacionesSalud, ResumenSemanal, VistaViajes } from "./SemanaViajesRelaciones";
@@ -41,7 +42,7 @@ const PERIODOS = [
   { dias: 90, texto: "90 días" },
 ] as const;
 
-type Pestana = "hoy" | "semana" | "sueno-noche" | "sueno" | "corazon" | "temperatura" | "actividad" | "relaciones" | "viajes";
+type Pestana = "hoy" | "semana" | "sueno-noche" | "sueno" | "corazon" | "temperatura" | "actividad" | "relaciones" | "viajes" | "colector";
 const PESTANAS: { id: Pestana; etiqueta: string }[] = [
   { id: "hoy", etiqueta: "Hoy" },
   { id: "semana", etiqueta: "Semana" },
@@ -52,6 +53,7 @@ const PESTANAS: { id: Pestana; etiqueta: string }[] = [
   { id: "actividad", etiqueta: "Actividad" },
   { id: "relaciones", etiqueta: "Relaciones" },
   { id: "viajes", etiqueta: "Viajes" },
+  { id: "colector", etiqueta: "Colector" },
 ];
 const CLAVE_PESTANA = "salud:pestana";
 function pestanaGuardada(): Pestana {
@@ -220,7 +222,7 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
               <Segmentado opciones={PESTANAS} valor={pestana} onCambiar={cambiarPestana} />
             </div>
 
-            {pestana !== "hoy" && pestana !== "sueno-noche" && pestana !== "semana" && pestana !== "relaciones" && pestana !== "viajes" && (
+            {pestana !== "hoy" && pestana !== "sueno-noche" && pestana !== "semana" && pestana !== "relaciones" && pestana !== "viajes" && pestana !== "colector" && (
               <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Periodo de las tendencias">
                 <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
                   Tendencias:
@@ -263,6 +265,8 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
             )}
 
             {pestana === "relaciones" && <RelacionesSalud dias={dias} estres={estres} diasViaje={diasViaje} />}
+
+            {pestana === "colector" && <PanelColector dias={dias} bateria={bateria} hoy={hoy} />}
 
             {pestana === "viajes" && (
               <Panel titulo="Vista de viaje" nota="Marca tus viajes para ver cómo te afectan el cambio de horario y el viaje: antes, durante y al regresar.">

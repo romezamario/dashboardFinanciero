@@ -213,6 +213,19 @@ caminata) until there are `MINIMO_EJEMPLOS` = 3 confirmed sessions in the loaded
 incl. `no_ejercicio`, which removes the session from the summary tiles and chart (`sinDescartadas`). Per day: "Confirmar las N
 sugerencias" and "Todo el día como…"; per session: "Sí, <tipo>" / "Otra…". No collector change. Checked in Playwright with mocked Supabase (390 dark).
 
+**Salud "Colector" tab (2026-11-19, Mario: panel with the laptop collector's health)**: last tab of Salud. Since oura collector v5
+EVERY hourly run (also failed ones) inserts an `oura_sincronizaciones` row with `resultado` ok|sin_anillo|conexion_cortada|error,
+`codigo`, `mensaje`, `eventos_nuevos`, `ultimo_evento_unix`, `duracion_s` (migration `20261119030000_bitacora_colector.sql`; old rows
+have `resultado` null = ok), and each day of `resumen_diario` carries `eventos_horas` (24 event counts per local hour).
+`obtenerUltimaSubida` now counts only good runs (`resultado` null or ok). Logic in `lecturas.ts` (tested, `lecturas.test.ts`):
+status (bien < 2 h since the last good reading, atrasado < 6 h, sin_lecturas; the sentence says whether the laptop didn't run at all,
+can't find the ring, Bluetooth cut, or the collector errors with its message), recent failures grouped when consecutive and equal,
+a 7-day day×hour grid of runs (best result per hour, in the laptop's zone; dashed = laptop didn't run) and a 14-day day×hour grid of
+ring data (puesto = events + skin temp, quitado = events without skin temp, apagado = ≥ 30 min of an apagón, dashed = no events =
+gap, pendiente = after `ultimo_evento_unix`, sin_info = day uploaded by a pre-v5 collector) with gaps ≥ 2 h listed.
+Drawing in `PanelColector.tsx` (+ battery card). `VERSION_COLECTOR_ESPERADA` = 5. Checked in Playwright with mocked Supabase
+(1200 light / 390 dark, no overflow).
+
 **Subprojects publish as espacios (2026-11-08, Mario: Trading automatizado, OURA and Viajes "son otros proyectos que
 estarán trabajándose en paralelo, pero publicarán en la misma página")**: each subproject owns ONE folder,
 `frontend/src/espacios/<id>/`, and nothing else in the shell has to change to add it. Contract:
