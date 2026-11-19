@@ -432,7 +432,7 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
     sus transacciones, y un buscador para asignar (o quitar) un evento a varias transacciones. La
     gráfica por evento apila sobre la barra de gastos, en otro color, lo que ya avisó el correo y aún no llega en un estado
     de cuenta («Por correo, sin estado de cuenta» y el gasto «al día»), sin contar dos veces lo ya
-    emparejado.
+    emparejado. Los eventos van del más reciente al más antiguo (por su último cargo), 8 por página.
   - **Shophunters** — aparece solo si hay movimientos con un evento cuyo nombre contiene
     "Shophunters" (p. ej. "2026-09 Shophunters"; los meses nuevos entran solos). Es la vista del
     Resumen con solo esos movimientos, sin tasa de ahorro ni tarjetas de indicadores (es el gasto de

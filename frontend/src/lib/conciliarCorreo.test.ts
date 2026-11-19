@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   avisosPendientes,
   cargosPorAviso,
+  ordenarPorUltimoCargo,
+  ultimoCargoPorEvento,
   ultimoDiaTarjetas,
   conciliarConCorreo,
   conPendientesPorEvento,
@@ -208,5 +210,30 @@ describe("cargosPorAviso", () => {
       ])
     ).toBe("2026-10-01");
     expect(ultimoDiaTarjetas([])).toBeNull();
+  });
+});
+
+describe("orden por último cargo", () => {
+  it("usa el cargo más reciente (estado de cuenta o aviso pendiente) y abonos solo si no hay cargos", () => {
+    const tx = [
+      transaccion({ fecha: "2026-06-05", evento: "Madrid" }),
+      transaccion({ fecha: "2026-11-05", evento: "Italia" }),
+      transaccion({ fecha: "2026-11-20", evento: "Italia", tipo: "abono" }),
+      transaccion({ fecha: "2026-09-01", evento: "Reembolsos", tipo: "abono" }),
+    ];
+    const ultimas = ultimoCargoPorEvento(tx, [aviso({ fecha: "2026-11-15", evento: "Japón" })]);
+    expect(Object.fromEntries(ultimas)).toEqual({
+      Madrid: "2026-06-05",
+      Italia: "2026-11-05",
+      Japón: "2026-11-15",
+      Reembolsos: "2026-09-01",
+    });
+    const puntos = ["Madrid", "Italia", "Japón", "Reembolsos"].map((nombre) => ({ nombre, ingresos: 0, gastos: 1 }));
+    expect(ordenarPorUltimoCargo(puntos, ultimas).map((p) => p.nombre)).toEqual([
+      "Japón",
+      "Italia",
+      "Reembolsos",
+      "Madrid",
+    ]);
   });
 });

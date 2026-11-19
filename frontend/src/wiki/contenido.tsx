@@ -893,7 +893,9 @@ export const SECCIONES: SeccionWiki[] = [
           tablero (pestaña Eventos, editor en lote o "Gastos recientes"). La pestaña muestra cuánto
           gastaste en cada evento, en qué categorías y comercios, y tiene un buscador por fechas,
           cuenta, tarjeta y texto para asignar o quitar un evento a varias transacciones; no lista
-          nada hasta que eliges al menos un filtro.
+          nada hasta que eliges al menos un filtro. La gráfica por evento va del más reciente al más
+          antiguo según la fecha de su último cargo (incluidos los avisos por correo pendientes) y
+          muestra 8 por página ("Más recientes" / "Más antiguos").
         </P>
         <P>
           La gráfica por evento apila al final de la barra de gastos, en otro color, <B>"Por correo, sin

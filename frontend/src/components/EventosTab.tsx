@@ -17,7 +17,12 @@ import { IngresosGastosPorDimensionChart } from "./IngresosGastosPorDimensionCha
 import { MENSAJE_SIN_COMERCIO } from "../lib/texto";
 import { TransaccionesTabla } from "./TransaccionesTabla";
 import { monedaConCentavos as formateadorMoneda, fechaCorta, moneda } from "../lib/formato";
-import { avisosPendientes, conPendientesPorEvento } from "../lib/conciliarCorreo";
+import {
+  avisosPendientes,
+  conPendientesPorEvento,
+  ordenarPorUltimoCargo,
+  ultimoCargoPorEvento,
+} from "../lib/conciliarCorreo";
 import type { GastoCorreo } from "../lib/gastosCorreo";
 
 const TOPE_RESULTADOS = 100;
@@ -128,9 +133,15 @@ export function EventosTab({ transacciones, onActualizado, gastosCorreo = null }
       ),
     [pendientesCorreo, filtrosEvento.categoria, filtrosEvento.comercio]
   );
+  // Del evento más reciente al más antiguo, por la fecha de su último cargo (incluidos los
+  // avisos pendientes); la gráfica pagina de 8 en 8 para llegar a todos.
+  const ultimoCargo = useMemo(
+    () => ultimoCargoPorEvento(transaccionesConEvento, pendientesCorreo?.pendientes ?? []),
+    [transaccionesConEvento, pendientesCorreo]
+  );
   const puntosPorEvento = useMemo(
-    () => conPendientesPorEvento(gastoPorEvento, pendientesFiltrados),
-    [gastoPorEvento, pendientesFiltrados]
+    () => ordenarPorUltimoCargo(conPendientesPorEvento(gastoPorEvento, pendientesFiltrados), ultimoCargo),
+    [gastoPorEvento, pendientesFiltrados, ultimoCargo]
   );
   const pendientesDelEvento = useMemo(
     () =>
@@ -276,7 +287,8 @@ export function EventosTab({ transacciones, onActualizado, gastosCorreo = null }
 
       <IngresosGastosPorDimensionChart
         dimension="evento"
-        ayudaClic="clic en un evento para ver su detalle"
+        ayudaClic="del más reciente al más antiguo por su último cargo · clic en un evento para ver su detalle"
+        paginar
         mensajeVacio="Ninguna transacción tiene un evento asignado todavía -- selecciona transacciones abajo y asígnales uno."
         datos={puntosPorEvento}
         seleccionado={filtrosEvento.evento}

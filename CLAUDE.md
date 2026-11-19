@@ -757,7 +757,9 @@ whose last movement is > `DIAS_TARJETA_INACTIVA` = 90 days behind the newest are
 another amount — FX, tip — so adding them would double count). Matched notices whose cargo has NO event are only counted as `porHeredar` (a note
 points to "Heredar eventos"). `conPendientesPorEvento` adds `porCorreo` to the evento chart's points (an event with only notices appears too);
 `IngresosGastosPorDimensionChart` `conPorCorreo` draws it in `--series-3` STACKED at the end of the orange gastos bar (Mario, same day: "que sea como columna apilada en la barra naranja"), one label "$gastos + $X = $total al día" (or "$X por correo"); category/comercio
-click-filters apply to notices by their own names. `EventosTab` gets `gastosCorreo` from `Dashboard` (`useGastosCorreo` rows resolved with
+click-filters apply to notices by their own names. The evento chart is ordered most recent → oldest by each event's LAST CARGO
+(`ultimoCargoPorEvento`: statement cargos and pending notices; abonos only when there's no cargo; `ordenarPorUltimoCargo`) and pages 8 at a
+time (`paginar` prop: "‹ Más recientes · 1–8 de N · Más antiguos ›"; Mario, same day: "paginación para ver todos los eventos"). `EventosTab` gets `gastosCorreo` from `Dashboard` (`useGastosCorreo` rows resolved with
 `filaAGastoCorreo`) and lists the pending notices in a collapsible table. Reverse: `GastosCorreoTab` gets `transacciones`/`onActualizado`;
 `cargosPorAviso` inverts the matching, the detail table has an "Estado de cuenta" column (✓ cuenta / Pendiente), the day header says
 "N de M en estado de cuenta", and a row click opens `CargoFlotante` (CoincidenciaFlotante.tsx: the matched cargo, offering to pass the notice's

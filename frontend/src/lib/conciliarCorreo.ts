@@ -213,3 +213,35 @@ export function ultimoDiaTarjetas(transacciones: Transaccion[]): string | null {
     .filter((u) => !u.esDebito)
     .reduce<string | null>((max, u) => (max === null || u.fecha > max ? u.fecha : max), null);
 }
+
+/** Fecha del último CARGO de cada evento: el del estado de cuenta o el de un aviso pendiente
+ * por correo, el más reciente. Un evento sin cargos (solo abonos) usa su último movimiento. */
+export function ultimoCargoPorEvento(
+  transacciones: Transaccion[],
+  pendientes: GastoCorreo[]
+): Map<string, string> {
+  const cargos = new Map<string, string>();
+  const cualquiera = new Map<string, string>();
+  const anotar = (mapa: Map<string, string>, evento: string, fecha: string) => {
+    const actual = mapa.get(evento);
+    if (!actual || fecha > actual) mapa.set(evento, fecha);
+  };
+  for (const t of transacciones) {
+    const evento = t.eventos?.nombre;
+    if (!evento) continue;
+    anotar(cualquiera, evento, t.fecha);
+    if (t.tipo === "cargo") anotar(cargos, evento, t.fecha);
+  }
+  for (const g of pendientes) if (g.evento) anotar(cargos, g.evento, g.fecha);
+  for (const [evento, fecha] of cualquiera) if (!cargos.has(evento)) cargos.set(evento, fecha);
+  return cargos;
+}
+
+/** Del más reciente al más antiguo según `ultimoCargoPorEvento`; empates por nombre. */
+export function ordenarPorUltimoCargo(puntos: PuntoDimension[], ultimas: Map<string, string>): PuntoDimension[] {
+  return [...puntos].sort(
+    (a, b) =>
+      (ultimas.get(b.nombre) ?? "").localeCompare(ultimas.get(a.nombre) ?? "") ||
+      a.nombre.localeCompare(b.nombre, "es")
+  );
+}

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   Bar,
   BarChart,
@@ -40,6 +40,8 @@ interface IngresosGastosPorDimensionChartProps {
    * correo que todavía no llegan en un estado de cuenta (solo Eventos), apilada al final de
    * la de gastos; su etiqueta dice gastos + por correo = gasto al día. */
   conPorCorreo?: boolean;
+  /** Pagina de 8 en 8 en vez de cortar en el top 8 (Eventos: todos, en el orden recibido). */
+  paginar?: boolean;
   /** Texto bajo la gráfica (notas de la serie por correo). */
   nota?: ReactNode;
 }
@@ -59,8 +61,12 @@ export function IngresosGastosPorDimensionChart({
   plegarResto = false,
   conPorCorreo = false,
   nota,
+  paginar = false,
 }: IngresosGastosPorDimensionChartProps) {
-  const visibles = datos.slice(0, TOPE);
+  const paginas = paginar ? Math.max(1, Math.ceil(datos.length / TOPE)) : 1;
+  const [paginaElegida, setPagina] = useState(0);
+  const pagina = Math.min(paginaElegida, paginas - 1);
+  const visibles = datos.slice(pagina * TOPE, pagina * TOPE + TOPE);
   let datosFinales = visibles;
   if (plegarResto) {
     const resto = datos.slice(TOPE);
@@ -198,6 +204,31 @@ export function IngresosGastosPorDimensionChart({
               )}
             </BarChart>
           </ResponsiveContainer>
+        </div>
+      )}
+      {paginas > 1 && (
+        <div className="mt-1 flex items-center justify-center gap-3 text-xs" style={{ color: "var(--text-secondary)" }}>
+          <button
+            type="button"
+            onClick={() => setPagina(pagina - 1)}
+            disabled={pagina === 0}
+            className="rounded-md px-3 py-1.5 disabled:opacity-40 sm:py-1"
+            style={{ border: "1px solid var(--border)" }}
+          >
+            ‹ Más recientes
+          </button>
+          <span className="tabular-nums">
+            {pagina * TOPE + 1}–{Math.min(datos.length, (pagina + 1) * TOPE)} de {datos.length}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPagina(pagina + 1)}
+            disabled={pagina === paginas - 1}
+            className="rounded-md px-3 py-1.5 disabled:opacity-40 sm:py-1"
+            style={{ border: "1px solid var(--border)" }}
+          >
+            Más antiguos ›
+          </button>
         </div>
       )}
       {nota}
