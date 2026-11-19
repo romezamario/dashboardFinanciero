@@ -30,6 +30,8 @@ import {
 } from "./GraficasSalud";
 import { BloquesSueno, ConstanciaHorario, EstresDelDia, TemperaturaDelDia } from "./IndicadoresSalud";
 import { HistorialPuntuaciones, PuntuacionesHoy } from "./PuntuacionesSalud";
+import { PuntajesOuraApp } from "./PuntajesOuraApp";
+import { diasConPuntajesOura } from "./puntajesOura";
 import { estresDiurno } from "./indicadores";
 import { EjercicioSalud } from "./EjercicioSalud";
 import { PanelColector } from "./PanelColector";
@@ -265,6 +267,14 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
                 <Panel titulo="Tus puntuaciones de los últimos 30 días">
                   <HistorialPuntuaciones dias={dias} />
                 </Panel>
+                {diasConPuntajesOura(dias).length > 0 && (
+                  <Panel
+                    titulo="Puntajes de la app de Oura"
+                    nota="Los calculó la app de Oura (historial importado, hasta el 8 nov 2026); desde entonces el anillo se lee por Bluetooth y solo hay tus puntuaciones propias."
+                  >
+                    <PuntajesOuraApp dias={dias} />
+                  </Panel>
+                )}
                 <TarjetasHoy dias={dias} />
                 <Panel titulo="Batería del anillo">
                   <TarjetaBateria ultima={bateria} />
