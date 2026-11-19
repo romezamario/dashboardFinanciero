@@ -896,8 +896,8 @@ export const SECCIONES: SeccionWiki[] = [
           nada hasta que eliges al menos un filtro.
         </P>
         <P>
-          La gráfica por evento suma en una tercera barra, de otro color, <B>"Por correo, sin estado
-          de cuenta"</B>: los avisos de "Gastos recientes" con evento cuyo cargo todavía no llega en
+          La gráfica por evento apila al final de la barra de gastos, en otro color, <B>"Por correo, sin
+          estado de cuenta"</B>: los avisos de "Gastos recientes" con evento cuyo cargo todavía no llega en
           un estado de cuenta (la etiqueta dice también el gasto <B>al día</B> = gastos + por correo).
           Un aviso que ya se emparejó con su cargo (mismo monto, ±1 día) no se suma: ya cuenta por el
           cargo. Tampoco se suman los avisos sin pareja de fechas que todos los estados de cuenta de

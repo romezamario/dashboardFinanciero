@@ -37,8 +37,8 @@ interface IngresosGastosPorDimensionChartProps {
    * muestra). */
   plegarResto?: boolean;
   /** Dibuja una tercera barra (`porCorreo`, otro color): gastos vistos en los avisos de
-   * correo que todavía no llegan en un estado de cuenta (solo Eventos). Su etiqueta dice
-   * también el gasto al día (gastos + por correo). */
+   * correo que todavía no llegan en un estado de cuenta (solo Eventos), apilada al final de
+   * la de gastos; su etiqueta dice gastos + por correo = gasto al día. */
   conPorCorreo?: boolean;
   /** Texto bajo la gráfica (notas de la serie por correo). */
   nota?: ReactNode;
@@ -69,13 +69,13 @@ export function IngresosGastosPorDimensionChart({
     if (ingresos + gastos > 0) datosFinales = [...visibles, { nombre: OTROS, ingresos, gastos }];
   }
 
-  const alturaFila = conPorCorreo ? 60 : 44;
+  const alturaFila = 44;
   const esMovil = useEsMovil();
   // El eje Y (nombres) y el margen derecho (etiquetas de monto) son props
   // numéricos de Recharts, no clases de Tailwind -- en un teléfono se
   // encogen a mano para dejarle más ancho real a las barras.
   const anchoEjeY = esMovil ? 84 : 140;
-  const margenDerecho = esMovil ? 8 : 48;
+  const margenDerecho = esMovil ? 8 : conPorCorreo ? 240 : 48;
 
   // "Otros" agrupa varios nombres reales -- no hay uno solo que filtrar.
   const esOtros = (nombre: string) => plegarResto && nombre === OTROS;
@@ -92,13 +92,16 @@ export function IngresosGastosPorDimensionChart({
     dataKey: "ingresos" | "gastos" | "porCorreo",
     name: string,
     color: string,
-    etiqueta: (d: PuntoDimension) => string = (d) => (d[dataKey] ? moneda.format(d[dataKey]) : "")
+    etiqueta: (d: PuntoDimension) => string = (d) => (d[dataKey] ? moneda.format(d[dataKey]) : ""),
+    apilada?: { radio: [number, number, number, number] }
   ) => (
     <Bar
       dataKey={dataKey}
       name={name}
       fill={color}
-      radius={[0, 4, 4, 0]}
+      // "Por correo" se apila al final de la barra de gastos: juntas son el gasto al día.
+      stackId={apilada ? "gasto" : undefined}
+      radius={apilada?.radio ?? [0, 4, 4, 0]}
       maxBarSize={16}
       onClick={alClic}
       cursor={onClickElemento ? "pointer" : undefined}
@@ -167,13 +170,32 @@ export function IngresosGastosPorDimensionChart({
                 )}
               />
               {barra("ingresos", "Ingresos", "var(--series-1)")}
-              {barra("gastos", "Gastos", "var(--series-2)")}
-              {conPorCorreo &&
-                barra("porCorreo", "Por correo, sin estado de cuenta", "var(--series-3)", (d) =>
-                  d.porCorreo
-                    ? `${moneda.format(d.porCorreo)} · al día ${moneda.format(d.gastos + d.porCorreo)}`
-                    : ""
-                )}
+              {conPorCorreo ? (
+                <>
+                  {/* Apiladas: la etiqueta va una sola vez, al final de la parte que exista. */}
+                  {barra(
+                    "gastos",
+                    "Gastos",
+                    "var(--series-2)",
+                    (d) => (d.gastos && !d.porCorreo ? moneda.format(d.gastos) : ""),
+                    { radio: [0, 0, 0, 0] }
+                  )}
+                  {barra(
+                    "porCorreo",
+                    "Por correo, sin estado de cuenta",
+                    "var(--series-3)",
+                    (d) =>
+                      !d.porCorreo
+                        ? ""
+                        : d.gastos
+                          ? `${moneda.format(d.gastos)} + ${moneda.format(d.porCorreo)} = ${moneda.format(d.gastos + d.porCorreo)} al día`
+                          : `${moneda.format(d.porCorreo)} por correo`,
+                    { radio: [0, 4, 4, 0] }
+                  )}
+                </>
+              ) : (
+                barra("gastos", "Gastos", "var(--series-2)")
+              )}
             </BarChart>
           </ResponsiveContainer>
         </div>

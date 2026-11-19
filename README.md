@@ -430,7 +430,7 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
     usas cada una (gasto por categoría y tarjeta). "Gasto" son solo cargos; los pagos van aparte.
   - **Eventos** — viajes, fiestas, etc.: cuánto gastaste en cada uno, en qué categorías y comercios,
     sus transacciones, y un buscador para asignar (o quitar) un evento a varias transacciones. La
-    gráfica por evento agrega, en otro color, lo que ya avisó el correo y aún no llega en un estado
+    gráfica por evento apila sobre la barra de gastos, en otro color, lo que ya avisó el correo y aún no llega en un estado
     de cuenta («Por correo, sin estado de cuenta» y el gasto «al día»), sin contar dos veces lo ya
     emparejado.
   - **Shophunters** — aparece solo si hay movimientos con un evento cuyo nombre contiene

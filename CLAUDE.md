@@ -756,7 +756,7 @@ WITH an event and no matched cargo is pending, unless its date is ≤ `corte` = 
 whose last movement is > `DIAS_TARJETA_INACTIVA` = 90 days behind the newest are ignored): those are `descartados` (the cargo most likely came with
 another amount — FX, tip — so adding them would double count). Matched notices whose cargo has NO event are only counted as `porHeredar` (a note
 points to "Heredar eventos"). `conPendientesPorEvento` adds `porCorreo` to the evento chart's points (an event with only notices appears too);
-`IngresosGastosPorDimensionChart` `conPorCorreo` draws it as a third bar in `--series-3`, labeled "$X · al día $gastos+X"; category/comercio
+`IngresosGastosPorDimensionChart` `conPorCorreo` draws it in `--series-3` STACKED at the end of the orange gastos bar (Mario, same day: "que sea como columna apilada en la barra naranja"), one label "$gastos + $X = $total al día" (or "$X por correo"); category/comercio
 click-filters apply to notices by their own names. `EventosTab` gets `gastosCorreo` from `Dashboard` (`useGastosCorreo` rows resolved with
 `filaAGastoCorreo`) and lists the pending notices in a collapsible table. Reverse: `GastosCorreoTab` gets `transacciones`/`onActualizado`;
 `cargosPorAviso` inverts the matching, the detail table has an "Estado de cuenta" column (✓ cuenta / Pendiente), the day header says
