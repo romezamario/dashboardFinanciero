@@ -88,8 +88,6 @@ Tres pipelines de GitHub Actions, cada uno disparado solo por los archivos que l
   al proyecto remoto. El esquema de la base de datos se versiona como código: todo cambio es un
   archivo de migración nuevo, nunca un `ALTER TABLE` manual en el dashboard de Supabase.
 - **`deploy.yml`** — cuando cambia algo en `frontend/`, compila y publica el sitio a Cloudflare Pages.
-- **`reporte-salud.yml`** — cada lunes 8:00 (Ciudad de México) envía el reporte semanal de Salud por
-  correo (ver "Qué muestra Salud").
 
 Cada uno solo corre cuando le toca: un cambio en el pipeline local solo dispara `ci.yml`.
 
@@ -359,16 +357,9 @@ Cada gráfica sin datos todavía dice qué le falta, no se oculta. La laptop lee
 - **Semana**: cada domingo se cierra la semana (lunes a domingo) y se compara contra la anterior:
   sueño, hora de dormir, HRV, FC en reposo, recuperación y estrés de día, con lo que mejoró y lo que
   empeoró. Los domingos y lunes, "Hoy" tiene un botón "Ver resumen".
-- **Reporte semanal por correo**: cada lunes a las 8:00 (hora de Ciudad de México) llega un correo con
-  la semana pasada contra la anterior: lo mismo que la pestaña Semana más pasos y calorías activas por
-  día y el ejercicio de la semana (sesiones y minutos contra los 150 de la OMS; las sesiones marcadas
-  "no fue ejercicio" no cuentan). Lo envía `reporte-salud.yml` (GitHub Actions). Para encenderlo, una
-  sola vez: en la cuenta de Gmail que enviará, activa la verificación en dos pasos y crea una
-  [contraseña de aplicación](https://myaccount.google.com/apppasswords); en GitHub → Settings →
-  Secrets and variables → Actions agrega `SALUD_SMTP_USUARIO` (ese correo) y `SALUD_SMTP_CONTRASENA`
-  (la contraseña de aplicación, 16 letras). Opcionales: `SALUD_CORREO_REPORTE` (otro destinatario) y
-  `URL_DASHBOARD` (la dirección del dashboard, para el botón del correo). Para probarlo sin esperar al
-  lunes: Actions → "Reporte semanal de salud" → Run workflow.
+- **Reporte semanal (en la pestaña Semana)**: además de sueño, recuperación y estrés, compara pasos y
+  calorías activas por día y el ejercicio de la semana (sesiones y minutos contra los 150 de la OMS; las
+  sesiones marcadas "no fue ejercicio" no cuentan). Se calcula al abrir la pestaña; no se envía por correo.
 - **Relaciones**: cada punto es un día; estrés del día contra el sueño y la HRV de esa noche, hora de
   dormir contra HRV y sueño contra el estrés del día siguiente, con la tendencia y una frase (son
   asociaciones, no causas). Se pueden quitar los días de viaje.

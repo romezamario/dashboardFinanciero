@@ -2,8 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../../lib/supabase", () => ({ supabase: {} }));
 
-import { armarMensaje } from "./reporte/correo";
-import { armarReporte, asuntoReporte, frasesReporte, htmlReporte, textoReporte } from "./reporteSemanal";
+import { armarReporte, frasesReporte } from "./reporteSemanal";
 import type { DiaSalud, Noche, SesionEjercicio } from "./salud";
 
 const fecha = (i: number) => new Date(Date.UTC(2026, 10, 2 + i)).toISOString().slice(0, 10); // 0 = lunes 2 nov
@@ -33,7 +32,7 @@ const dias = [
 ];
 
 describe("reporte semanal", () => {
-  const r = armarReporte(dias, [], fecha(7));
+  const r = armarReporte(dias, [], [], fecha(7));
   const fila = (nombre: string) => r.filas.find((f) => f.nombre.startsWith(nombre))!;
 
   it("compara sueño, actividad y ejercicio contra la semana anterior", () => {
@@ -51,36 +50,20 @@ describe("reporte semanal", () => {
 
   it("las sesiones marcadas como 'no fue ejercicio' no cuentan", () => {
     const s = dias[7].ejercicio![0];
-    const sin = armarReporte(dias, [{ inicio: s.inicio, fin: s.fin, fecha: fecha(7), tipo: "no_ejercicio", estado: "confirmada" }], fecha(7));
+    const sin = armarReporte(dias, [], [{ inicio: s.inicio, fin: s.fin, fecha: fecha(7), tipo: "no_ejercicio", estado: "confirmada" }], fecha(7));
     expect(sin.ejercicio.sesiones).toBe(1);
   });
 
-  it("frases, asunto y cuerpo", () => {
+  it("frases de la semana", () => {
     const frases = frasesReporte(r);
     expect(frases[0]).toMatch(/^Mejoró: .*Pasos/);
     expect(frases.some((f) => /^Empeoró: Sueño/.test(f))).toBe(true);
     expect(frases.some((f) => /te faltaron 30 min/.test(f))).toBe(true);
-    expect(asuntoReporte(r)).toMatch(/^Tu semana de salud: 09\/11 al 15\/11 · \d mejor/);
-    const html = htmlReporte(r, "https://ejemplo.dev/#salud");
-    expect(html).toContain("Semana del 09/11 al 15/11");
-    expect(html).toContain('href="https://ejemplo.dev/#salud"');
-    expect(textoReporte(r)).toContain("EJERCICIO");
   });
 
   it("sin datos lo dice", () => {
-    const vacio = armarReporte([], [], fecha(7));
+    const vacio = armarReporte([], [], [], fecha(7));
     expect(frasesReporte(vacio)[0]).toMatch(/No llegaron datos/);
     expect(vacio.filas.every((f) => f.veredicto === "sin-dato")).toBe(true);
-  });
-});
-
-describe("mensaje del correo", () => {
-  it("lleva texto y HTML en base64 con asunto UTF-8", () => {
-    const m = armarMensaje({ de: "a@x.dev", para: "b@x.dev", asunto: "Tu semana: sueño", texto: ".\nhola", html: "<p>á</p>" }, new Date(0), "F");
-    expect(m).toContain("Subject: =?UTF-8?B?" + Buffer.from("Tu semana: sueño").toString("base64") + "?=");
-    expect(m).toContain('multipart/alternative; boundary="F"');
-    expect(m).toContain(Buffer.from("<p>á</p>").toString("base64"));
-    expect(m.split("\r\n").some((l) => l.startsWith("."))).toBe(false);
-    expect(m.endsWith("--F--\r\n")).toBe(true);
   });
 });

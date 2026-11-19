@@ -1,7 +1,7 @@
 // Dibujo del aviso del colector, el resumen semanal, las relaciones entre
 // datos y la vista de viaje (Mario, 2026-11-14). Cálculos en colector.ts,
 // semanal.ts, relaciones.ts y viajes.ts (probados en semanal.test.ts).
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bar,
   CartesianGrid,
@@ -22,7 +22,9 @@ import { avisoColector, textoZona, type EstadoColector } from "./colector";
 import type { DiaEstres } from "./indicadores";
 import { fraseRelacion, MINIMO_PARES, paresDe, relacion, RELACIONES, type DefRelacion } from "./relaciones";
 import { minutosDormido, num, relojDesde18, restarDias, type DiaSalud } from "./salud";
-import { diferencia, formato, resumenSemanal, semanaParaResumir, semanasConDatos, type CambioSemana } from "./semanal";
+import { diferencia, formato, semanaParaResumir, semanasConDatos } from "./semanal";
+import { armarReporte, frasesReporte, ORDEN_GRUPOS, type FilaReporte } from "./reporteSemanal";
+import { obtenerEtiquetasEjercicio, type EtiquetaEjercicio } from "./ejercicio";
 import {
   DIAS_ANTES_VIAJE,
   DIAS_REGRESO,
@@ -85,12 +87,25 @@ export function ResumenSemanal({ dias, estres, hoy }: { dias: readonly DiaSalud[
   const semanas = useMemo(() => semanasConDatos(dias), [dias]);
   const porDefecto = semanaParaResumir(hoy);
   const [lunes, setLunes] = useState(() => (semanas.includes(porDefecto) ? porDefecto : (semanas.filter((s) => s <= porDefecto).at(-1) ?? semanas.at(-1) ?? porDefecto)));
-  const r = useMemo(() => resumenSemanal(dias, estres, lunes), [dias, estres, lunes]);
+  // Las sesiones que marcaste como "no fue ejercicio" no cuentan (si no cargan, cuentan todas).
+  const [etiquetas, setEtiquetas] = useState<EtiquetaEjercicio[]>([]);
+  useEffect(() => {
+    let vivo = true;
+    obtenerEtiquetasEjercicio()
+      .then((e) => vivo && setEtiquetas(e))
+      .catch(() => {});
+    return () => {
+      vivo = false;
+    };
+  }, []);
+  const r = useMemo(() => armarReporte(dias, estres, etiquetas, lunes), [dias, estres, etiquetas, lunes]);
   const i = semanas.indexOf(lunes);
   const esDomingo = new Date(`${hoy}T00:00:00Z`).getUTCDay() === 0;
   const enCurso = r.domingo >= hoy;
-  const mejoro = r.cambios.filter((c) => c.veredicto === "mejor");
-  const empeoro = r.cambios.filter((c) => c.veredicto === "peor");
+  const mejoro = r.filas.filter((f) => f.veredicto === "mejor");
+  const empeoro = r.filas.filter((f) => f.veredicto === "peor");
+  // Solo la frase del ejercicio (o la de "no llegaron datos"): lo demás ya está arriba.
+  const notas = frasesReporte(r).filter((f) => !/^(Mejoró|Empeoró|Una semana pareja|Todavía no hay)|noches con datos/.test(f));
   const boton = "rounded-full px-3 py-1 text-xs font-medium disabled:opacity-40";
   return (
     <div className="space-y-4">
@@ -118,16 +133,21 @@ export function ResumenSemanal({ dias, estres, hoy }: { dias: readonly DiaSalud[
 
       {mejoro.length + empeoro.length > 0 ? (
         <div className="grid gap-3 sm:grid-cols-2">
-          <ListaCambios titulo="Lo que mejoró" cambios={mejoro} vacio="Nada mejoró de forma clara." />
-          <ListaCambios titulo="Lo que empeoró" cambios={empeoro} vacio="Nada empeoró de forma clara." />
+          <ListaCambios titulo="Lo que mejoró" filas={mejoro} vacio="Nada mejoró de forma clara." />
+          <ListaCambios titulo="Lo que empeoró" filas={empeoro} vacio="Nada empeoró de forma clara." />
         </div>
       ) : (
         <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-          {r.cambios.some((c) => c.veredicto === "igual")
+          {r.filas.some((f) => f.veredicto === "igual")
             ? "Una semana pareja: nada cambió lo suficiente contra la anterior."
             : "Todavía no hay dos semanas con al menos 3 días de datos para comparar."}
         </p>
       )}
+      {notas.map((n) => (
+        <p key={n} className="text-sm" style={{ color: "var(--text-secondary)" }}>
+          {n}
+        </p>
+      ))}
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[30rem] text-xs" style={{ color: "var(--text-secondary)" }}>
@@ -141,23 +161,23 @@ export function ResumenSemanal({ dias, estres, hoy }: { dias: readonly DiaSalud[
             </tr>
           </thead>
           <tbody>
-            {(["Sueño", "Recuperación", "Estrés"] as const).flatMap((g) =>
-              r.cambios
-                .filter((c) => c.grupo === g)
-                .map((c, k) => (
-                  <tr key={c.clave} style={{ borderTop: "1px solid var(--border)" }}>
+            {ORDEN_GRUPOS.flatMap((g) =>
+              r.filas
+                .filter((f) => f.grupo === g)
+                .map((f, k) => (
+                  <tr key={`${g}-${f.nombre}`} style={{ borderTop: "1px solid var(--border)" }}>
                     <td className="py-1.5">
                       {k === 0 && <span className="mr-1 font-medium" style={{ color: "var(--text-primary)" }}>{g} ·</span>}
-                      {c.nombre}
+                      {f.nombre}
                     </td>
                     <td className="py-1.5 text-right" style={{ color: "var(--text-primary)" }}>
-                      {formato(c.clave, c.actual.valor)}
-                      <span style={{ color: "var(--text-muted)" }}> ({c.actual.n} d)</span>
+                      {f.actual}
+                      {f.diasActual !== null && <span style={{ color: "var(--text-muted)" }}> ({f.diasActual} d)</span>}
                     </td>
-                    <td className="py-1.5 text-right">{formato(c.clave, c.anterior.valor)}</td>
-                    <td className="py-1.5 text-right">{diferencia(c.clave, c.anterior.valor, c.actual.valor) ?? "—"}</td>
+                    <td className="py-1.5 text-right">{f.anterior}</td>
+                    <td className="py-1.5 text-right">{f.cambio ?? "—"}</td>
                     <td className="py-1.5 pl-3">
-                      <Etiqueta v={c.veredicto} />
+                      <Etiqueta v={f.veredicto} />
                     </td>
                   </tr>
                 )),
@@ -167,25 +187,26 @@ export function ResumenSemanal({ dias, estres, hoy }: { dias: readonly DiaSalud[
       </div>
       <p className="text-xs" style={{ color: "var(--text-muted)" }}>
         Promedios por día de lunes a domingo; una métrica se compara con al menos 3 días en cada semana. "Igual" = cambió menos de
-        15 min de sueño, 3 ms de HRV, 2 lpm, 5 puntos de recuperación o 5 puntos de % de estrés. La hora de dormir no se califica, solo se
-        muestra cuánto se movió.
+        15 min de sueño, 3 ms de HRV, 2 lpm, 5 puntos de recuperación, 5 puntos de % de estrés, 1,000 pasos o 50 kcal. El ejercicio es
+        la suma de la semana (igual si cambió menos de 20 min o 1 sesión); para los 150 min de la OMS un minuto vigoroso cuenta doble.
+        La hora de dormir no se califica, solo se muestra cuánto se movió.
       </p>
     </div>
   );
 }
 
-function ListaCambios({ titulo, cambios, vacio }: { titulo: string; cambios: CambioSemana[]; vacio: string }) {
+function ListaCambios({ titulo, filas, vacio }: { titulo: string; filas: FilaReporte[]; vacio: string }) {
   return (
     <div className="rounded-lg p-3" style={{ border: "1px solid var(--border)" }}>
       <h4 className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
         {titulo}
       </h4>
-      {cambios.length ? (
+      {filas.length ? (
         <ul className="mt-2 space-y-1 text-sm" style={{ color: "var(--text-primary)" }}>
-          {cambios.map((c) => (
-            <li key={c.clave}>
-              <Etiqueta v={c.veredicto} /> {c.nombre.replace(/ \(.*\)$/, "")}: {formato(c.clave, c.anterior.valor)} → {formato(c.clave, c.actual.valor)}{" "}
-              <span style={{ color: "var(--text-muted)" }}>({diferencia(c.clave, c.anterior.valor, c.actual.valor)})</span>
+          {filas.map((f) => (
+            <li key={`${f.grupo}-${f.nombre}`}>
+              <Etiqueta v={f.veredicto} /> {f.nombre.replace(/ \(.*\)$/, "")}: {f.anterior} → {f.actual}{" "}
+              {f.cambio && <span style={{ color: "var(--text-muted)" }}>({f.cambio})</span>}
             </li>
           ))}
         </ul>

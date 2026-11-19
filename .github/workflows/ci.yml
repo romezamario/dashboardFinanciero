@@ -54,9 +54,6 @@ jobs:
         run: npm run lint
       - name: Pruebas
         run: npm test
-      # El reporte semanal de salud (reporte-salud.yml) se empaqueta aparte para Node.
-      - name: Empaquetar el reporte semanal de salud
-        run: npx vite build --config scripts/vite.reporte-salud.ts
       # Las Edge Functions de cobro corren en Deno (supabase/functions/).
       - name: Typecheck de las Edge Functions
         working-directory: supabase/functions
