@@ -76,7 +76,7 @@ describe("recuperacion", () => {
     expect(r.fecha).toBe("2026-11-12");
     expect(r.nivel).toBe("listo");
     expect(r.nochesBase).toBe(3);
-    expect(r.factores.map((f) => f.clave).sort()).toEqual(["hrv", "resp", "rhr", "sueno", "temp"]);
+    expect(r.factores.map((f) => f.clave).sort()).toEqual(["balance", "hrv", "resp", "rhr", "sueno", "temp"]);
   });
 
   it("HRV baja, FC alta, fiebre y poco sueño: descansa", () => {

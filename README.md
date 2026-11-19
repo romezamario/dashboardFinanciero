@@ -367,9 +367,13 @@ Cada gráfica sin datos todavía dice qué le falta, no se oculta. La laptop lee
 - **Batería del anillo**: el último % con la hora de lectura ("hace 20 min") y si estaba cargando,
   aviso "Batería baja" (amarillo, < 25%) o "Batería crítica" (rojo, < 10%), dibujada como una pila
   que se vacía. Bajo 25% y bajo 10% la laptop además muestra una notificación de Windows.
-- **Recuperación de hoy**: semáforo propio (Listo / Moderado / Descansa, 0–100) que compara la HRV, la
-  FC en reposo, la temperatura y la respiración de la última noche contra tu promedio de los 30 días
-  anteriores (desde 3 noches) y lo que dormiste contra 8 h; muestra cada factor y el puntaje de sueño.
+- **Tus puntuaciones de hoy** (pestaña Hoy): tres puntuaciones propias de 0 a 100 — **Sueño** (duración vs. 8 h,
+  eficiencia, profundo, REM, latencia, interrupciones y hora de dormir vs. tu mediana de 14 noches),
+  **Recuperación** (HRV, FC en reposo, temperatura y respiración vs. tu promedio de 30 días, más la puntuación
+  de sueño, el balance de 7 noches y la actividad de ayer; Listo / Moderado / Descansa) y **Actividad**
+  (pasos vs. 8,000, calorías activas vs. tu mediana de 30 días, días con ejercicio y minutos vs. los 150 de la
+  OMS en 7 días). Cada una muestra sus componentes; "¿Cómo se calculan?" abre la fórmula completa. Debajo, las
+  tres en los últimos 30 días. No son las puntuaciones de Oura.
 - **Leer anillo desde este dispositivo** (prueba con Bluefy en iPhone): se conecta, se autentica con
   la clave del anillo (guardada solo en ese navegador) y lee batería, firmware y si el HR diurno y el
   SpO2 están encendidos.

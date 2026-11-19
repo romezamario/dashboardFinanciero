@@ -213,6 +213,18 @@ caminata) until there are `MINIMO_EJEMPLOS` = 3 confirmed sessions in the loaded
 incl. `no_ejercicio`, which removes the session from the summary tiles and chart (`sinDescartadas`). Per day: "Confirmar las N
 sugerencias" and "Todo el día como…"; per session: "Sí, <tipo>" / "Otra…". No collector change. Checked in Playwright with mocked Supabase (390 dark).
 
+**Own scores 0–100 (2026-11-19, Mario: idea 3 "puntuaciones propias de sueño, recuperación y actividad")**: `puntuaciones.ts`
+(tested, `puntuaciones.test.ts`) computes in the browser, no collector change: `puntuacionSueno` (duration vs `META_SUENO_MIN` 480 30%,
+efficiency 15%, deep vs 90 min 12.5%, REM vs 100 min 12.5% — minutes = in-bed × pct —, latency `sol_min` 7.5%, WASO 7.5%, bedtime vs
+YOUR median of the previous 14 nights 15%) and `puntuacionActividad` (steps vs `META_PASOS` 8,000 30%, active kcal vs your 30-day median
+20%, days with `ejercicio` in 7 days 25%, moderate + 2×vigorous minutes in 7 days vs 150 25%; exercise parts only when the collector
+sends `ejercicio`). `recuperacion` (indicadores.ts) now weights HRV .25, RHR .20, sleep score .15, temp .12, sleep balance (7-night
+average vs 8 h) .12, breathing .08, yesterday's active kcal vs 14-day median .08 (replaced the old "slept vs 8 h" factor; still needs
+a vital sign). Missing components drop out and their weight is redistributed; levels ≥ 70 / 50–69 / < 50. The weights/rules shown in
+"¿Cómo se calculan?" are `FORMULA_SUENO`/`FORMULA_ACTIVIDAD`/`FORMULA_RECUPERACION`: change them together with the code. UI:
+`PuntuacionesSalud.tsx` (Hoy tab, replaced `TarjetaRecuperacion`; 30-day line chart series-1/2/3 with a dashed 70). Labels from kcal-based
+exercise ignore `ejercicio_etiquetas` (a `no_ejercicio` session still counts). Checked in Playwright with mocked Supabase (1280 light / 390 dark).
+
 **Subprojects publish as espacios (2026-11-08, Mario: Trading automatizado, OURA and Viajes "son otros proyectos que
 estarán trabajándose en paralelo, pero publicarán en la misma página")**: each subproject owns ONE folder,
 `frontend/src/espacios/<id>/`, and nothing else in the shell has to change to add it. Contract:

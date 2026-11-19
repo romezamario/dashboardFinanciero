@@ -12,6 +12,7 @@ import {
   type PeriodoSueno,
   type VentanaEstres,
 } from "./salud";
+import { META_SUENO_MIN, puntuacionSueno } from "./puntuaciones";
 
 // ------------------------------------------------ noches sin datos
 
@@ -57,7 +58,7 @@ export function minutosPeriodo(p: PeriodoSueno): number | null {
 // ------------------------------------------- semáforo de recuperación
 
 export type NivelRecuperacion = "listo" | "moderado" | "descansa";
-export type ClaveFactor = "hrv" | "rhr" | "sueno" | "temp" | "resp";
+export type ClaveFactor = "hrv" | "rhr" | "sueno" | "temp" | "resp" | "balance" | "carga";
 
 export interface Factor {
   clave: ClaveFactor;
@@ -102,7 +103,7 @@ const FACTORES: readonly DefFactor[] = [
   {
     clave: "hrv",
     nombre: "HRV",
-    peso: 0.3,
+    peso: 0.25,
     leer: (d) => num(d.noche?.hrv_ms),
     sdMinima: 3,
     orientar: (z) => z,
@@ -120,7 +121,7 @@ const FACTORES: readonly DefFactor[] = [
   {
     clave: "temp",
     nombre: "Temperatura",
-    peso: 0.15,
+    peso: 0.12,
     leer: (d) => num(d.noche?.skin_temp),
     sdMinima: 0.15,
     // Cualquier desviación (arriba o abajo) cuenta en contra.
@@ -130,7 +131,7 @@ const FACTORES: readonly DefFactor[] = [
   {
     clave: "resp",
     nombre: "Respiración",
-    peso: 0.1,
+    peso: 0.08,
     leer: (d) => num(d.noche?.breath_rate),
     sdMinima: 0.5,
     // Respirar más rápido de noche es la señal temprana; más lento no resta.
@@ -139,12 +140,34 @@ const FACTORES: readonly DefFactor[] = [
   },
 ];
 
+const PESO_SUENO = 0.15;
+const PESO_BALANCE = 0.12;
+const PESO_CARGA = 0.08;
+
+const medianaDe = (v: readonly number[]) => {
+  const o = [...v].sort((a, b) => a - b);
+  const m = Math.floor(o.length / 2);
+  return o.length % 2 ? o[m] : (o[m - 1] + o[m]) / 2;
+};
+
+/** Para el panel "¿Cómo se calcula?". */
+export const FORMULA_RECUPERACION: readonly { nombre: string; peso: number; regla: string }[] = [
+  { nombre: "HRV", peso: 25, regla: "Vs. TU promedio de los 30 días anteriores: igual = 75, una desviación arriba = 100, una abajo = 50, tres abajo = 0." },
+  { nombre: "FC en reposo", peso: 20, regla: "Igual que la HRV, pero al revés: más baja que tu normal suma." },
+  { nombre: "Sueño de anoche", peso: 15, regla: "Tu puntuación de sueño de esa noche." },
+  { nombre: "Temperatura", peso: 12, regla: "Cualquier desviación de tu normal (arriba o abajo) resta, como la HRV." },
+  { nombre: "Balance de sueño", peso: 12, regla: "Promedio dormido en las últimas 7 noches: 8 h = 100, cada hora que falta resta 25." },
+  { nombre: "Respiración", peso: 8, regla: "Solo resta si respiras más rápido que tu normal (señal temprana de enfermedad)." },
+  { nombre: "Actividad de ayer", peso: 8, regla: "Calorías activas de ayer vs. tu mediana de 14 días: hasta 1.3 veces no resta; el doble = 51." },
+];
+
 /** z orientado → puntos: 0 (tu normal) = 75, +1 = 100, −1 = 50, −3 = 0. */
 const puntosDeZ = (z: number) => Math.round(Math.min(100, Math.max(0, 75 + 25 * z)));
 
 /** Semáforo de recuperación de la noche más reciente (o de `fecha`): cada señal
- * contra TU promedio de los 30 días anteriores (≥ 3 noches), más cuánto
- * dormiste contra 8 h. Es un cálculo propio, no el "Readiness" de Oura. */
+ * contra TU promedio de los 30 días anteriores (≥ 3 noches), más la puntuación
+ * de sueño de esa noche, el balance de 7 noches y la actividad de ayer
+ * (2026-11-19, FORMULA_RECUPERACION). Cálculo propio, no el "Readiness" de Oura. */
 export function recuperacion(dias: readonly DiaSalud[], fecha?: string): Recuperacion | null {
   const conNoche = dias.filter((d) => d.noche);
   const hoy = fecha ? conNoche.find((d) => d.fecha === fecha) : conNoche.at(-1);
@@ -161,20 +184,48 @@ export function recuperacion(dias: readonly DiaSalud[], fecha?: string): Recuper
     factores.push({ clave: f.clave, nombre: f.nombre, peso: f.peso, puntos: puntosDeZ(f.orientar((valor - media) / sd)), texto: f.texto(valor - media) });
     nochesBase = Math.min(nochesBase, base.length);
   }
-  const dormido = minutosDormido(hoy.noche);
-  if (dormido !== null) {
+  const sueno = puntuacionSueno(conNoche, hoy.fecha);
+  if (sueno) {
+    factores.push({ clave: "sueno", nombre: "Sueño de anoche", peso: PESO_SUENO, puntos: sueno.puntaje, texto: `Puntuación de sueño ${sueno.puntaje}` });
+  }
+  // Balance: lo dormido en promedio en las 7 noches que terminan hoy (≥ 3).
+  const semana = conNoche
+    .filter((d) => d.fecha > restarDias(hoy.fecha, 7) && d.fecha <= hoy.fecha)
+    .map((d) => minutosDormido(d.noche))
+    .filter((v): v is number => v !== null);
+  if (semana.length >= 3) {
+    const media = promedio(semana) as number;
     factores.push({
-      clave: "sueno",
-      nombre: "Sueño",
-      peso: 0.25,
-      // 8 h = 100; 6 h = 75; 4 h = 50.
-      puntos: Math.round(Math.min(100, Math.max(0, (dormido / 480) * 100))),
-      texto: `${Math.floor(dormido / 60)} h ${String(Math.round(dormido % 60)).padStart(2, "0")} min de 8 h`,
+      clave: "balance",
+      nombre: "Balance de sueño",
+      peso: PESO_BALANCE,
+      // 8 h = 100; cada hora que falta en promedio resta 25 (7 h = 75, 6 h = 50).
+      puntos: Math.round(Math.min(100, Math.max(0, 100 - (Math.max(0, META_SUENO_MIN - media) / 60) * 25))),
+      texto: `${Math.floor(Math.round(media) / 60)} h ${String(Math.round(media) % 60).padStart(2, "0")} min promedio en ${semana.length} noches`,
     });
   }
-  // Sin ninguna señal comparada contra tu normal no hay semáforo (solo sueño
-  // sería un dato, no una recuperación).
-  if (!factores.some((f) => f.clave !== "sueno")) return null;
+  // Carga de ayer: calorías activas del día anterior vs. tu mediana de los 14 días previos (≥ 5).
+  const ayer = restarDias(hoy.fecha, 1);
+  const kcalAyer = num(dias.find((d) => d.fecha === ayer)?.actividad?.active_kcal);
+  const kcalBase = dias
+    .filter((d) => d.fecha < ayer && d.fecha >= restarDias(ayer, 14))
+    .map((d) => num(d.actividad?.active_kcal))
+    .filter((v): v is number => v !== null && v > 0);
+  if (kcalAyer !== null && kcalBase.length >= 5) {
+    const normal = medianaDe(kcalBase);
+    const razon = kcalAyer / normal;
+    factores.push({
+      clave: "carga",
+      nombre: "Actividad de ayer",
+      peso: PESO_CARGA,
+      // Hasta 1.3 × tu normal no resta; 2 × = 51; 2.5 × = 16.
+      puntos: Math.round(Math.min(100, Math.max(0, 100 - Math.max(0, razon - 1.3) * 70))),
+      texto: `${Math.round(kcalAyer)} kcal activas (tu normal ${Math.round(normal)})`,
+    });
+  }
+  // Sin ninguna señal del cuerpo comparada contra tu normal no hay semáforo
+  // (solo sueño y actividad serían datos, no una recuperación).
+  if (!factores.some((f) => FACTORES.some((x) => x.clave === f.clave))) return null;
   const pesoTotal = factores.reduce((a, f) => a + f.peso, 0);
   const puntaje = Math.round(factores.reduce((a, f) => a + f.puntos * f.peso, 0) / pesoTotal);
   return {
