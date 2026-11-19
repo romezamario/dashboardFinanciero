@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../../lib/supabase", () => ({ supabase: {} }));
 
-import { avisoColector, fechaLocal, VERSION_COLECTOR_ESPERADA, zonaPorDia, textoZona, type EstadoColector } from "./colector";
+import { avisoColector, conZonasDeLaApp, fechaLocal, VERSION_COLECTOR_ESPERADA, zonaPorDia, textoZona, type EstadoColector } from "./colector";
 import type { DiaEstres } from "./indicadores";
 import { fraseRelacion, MINIMO_PARES, paresDe, pearson, relacion, RELACIONES } from "./relaciones";
 import type { DiaSalud, Noche } from "./salud";
@@ -141,5 +141,20 @@ describe("relaciones", () => {
     expect(paresDe("estres-sueno", dias, estres, new Set(["2026-11-12"]))).toHaveLength(1);
     expect(paresDe("sueno-estres", dias, estres)[0]).toEqual({ fecha: "2026-11-10", x: 450, y: 50 });
     expect(paresDe("dormir-hrv", dias, estres)[0]).toEqual({ fecha: "2026-11-10", x: 300, y: 50 });
+  });
+});
+
+describe("zonas del historial de la app de Oura", () => {
+  it("añade la zona de los días de la app sin pisar la de la laptop", () => {
+    const laptop = new Map([["2026-11-10", -480]]);
+    const z = conZonasDeLaApp(laptop, [
+      { fecha: "2025-02-01", origen: "app", utcOffset: 60 },
+      { fecha: "2026-11-10", origen: "ambos", utcOffset: -360 },
+      { fecha: "2026-11-11", origen: "anillo", utcOffset: -480 },
+    ]);
+    expect([...z]).toEqual([
+      ["2025-02-01", 60],
+      ["2026-11-10", -480],
+    ]);
   });
 });

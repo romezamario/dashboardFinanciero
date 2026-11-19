@@ -135,7 +135,34 @@ export interface SesionEjercicio {
   lpm_mediana?: number;
   lpm_max?: number;
   latidos?: number;
+  /** Solo en el historial de la app de Oura (`origen` 'oura_app'): el tipo que
+   * ya registró la app (ids de ejercicio.ts) y el suyo tal cual. */
+  tipo?: string;
+  tipo_oura?: string;
+  origen?: string;
+  distancia_m?: number;
 }
+
+/** Lo que solo calcula la nube de Oura (historial de la app, hasta el
+ * 2026-11-08). Se guarda para consultarlo; las gráficas usan lo del anillo. */
+export interface ExtrasOuraApp {
+  puntaje_sueno?: number;
+  preparacion?: number;
+  desviacion_temp?: number;
+  spo2?: number;
+  estres_dia?: string;
+  estres_alto_min?: number;
+  recuperacion_alta_min?: number;
+  resiliencia?: string;
+  vo2max?: number;
+  edad_cardiovascular?: number;
+  puntaje_actividad?: number;
+}
+
+/** De dónde salió el día: el colector del anillo por Bluetooth, el historial
+ * de la app de Oura (CSV importado, fuente 'oura_app') o ambos. */
+export type OrigenDia = "anillo" | "app" | "ambos";
+export const FUENTES_SALUD = ["oura", "oura_app"] as const;
 
 export interface DiaSalud {
   fecha: string;
@@ -148,10 +175,15 @@ export interface DiaSalud {
   apagones?: Apagon[];
   estresVentanas?: VentanaEstres[];
   ejercicio?: SesionEjercicio[];
+  /** Eventos que guardó el anillo en cada hora local (24 números; colector v6).
+   * 0 fuera de un apagón = hueco de datos (panel "Colector"). */
+  eventosHoras?: number[];
   /** Minutos vs. UTC en que estabas ese día (lo anota el colector v3; CDMX =
    * -360). Las horas unix de ese día se muestran con esta zona, no con la
    * del navegador. Sin dato: la del navegador. */
   utcOffset?: number;
+  origen?: OrigenDia;
+  ouraApp?: ExtrasOuraApp;
   /** true = llegó de `resumen_ligero`: sin `noche.stages` ni `noche.series_t`
    * (ver obtenerDiaCompleto). */
   ligero?: boolean;
@@ -159,8 +191,9 @@ export interface DiaSalud {
 
 // --------------------------------------------------------------- lectura
 
-interface FilaResumen {
+export interface FilaResumen {
   fecha: string;
+  fuente?: string;
   datos: {
     noche?: Noche;
     deuda_sueno?: DeudaSueno;
@@ -171,11 +204,40 @@ interface FilaResumen {
     apagones?: Apagon[];
     estres_ventanas?: VentanaEstres[];
     ejercicio?: SesionEjercicio[];
+    eventos_horas?: number[];
     utc_offset_min?: number;
+    oura_app?: ExtrasOuraApp;
   } | null;
 }
 
-export function filaADia({ fecha, datos }: FilaResumen): DiaSalud {
+/** Une las filas de las dos fuentes de cada fecha (vienen ordenadas por
+ * fecha): el anillo ('oura') gana campo por campo; lo que solo trae la app
+ * ('oura_app') rellena. Fechas con una sola fuente pasan tal cual. */
+export function unirFuentes(filas: readonly FilaResumen[]): FilaResumen[] {
+  const porFecha = new Map<string, { anillo?: FilaResumen; app?: FilaResumen }>();
+  for (const f of filas) {
+    const par = porFecha.get(f.fecha) ?? {};
+    if (f.fuente === "oura_app") par.app = f;
+    else par.anillo = f;
+    porFecha.set(f.fecha, par);
+  }
+  return [...porFecha.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([fecha, { anillo, app }]) => {
+      if (!anillo || !app) return (anillo ?? app)!;
+      const datos = { ...(app.datos ?? {}) } as Record<string, unknown>;
+      for (const [k, v] of Object.entries(anillo.datos ?? {})) {
+        if (v !== null && v !== undefined && !(Array.isArray(v) && v.length === 0)) datos[k] = v;
+      }
+      return { fecha, fuente: "ambos", datos: datos as FilaResumen["datos"] };
+    });
+}
+
+function origenDe(fuente?: string): OrigenDia {
+  return fuente === "oura_app" ? "app" : fuente === "ambos" ? "ambos" : "anillo";
+}
+
+export function filaADia({ fecha, fuente, datos }: FilaResumen): DiaSalud {
   const d = datos ?? {};
   return {
     fecha,
@@ -188,7 +250,10 @@ export function filaADia({ fecha, datos }: FilaResumen): DiaSalud {
     apagones: d.apagones,
     estresVentanas: d.estres_ventanas,
     ejercicio: Array.isArray(d.ejercicio) ? d.ejercicio : undefined,
+    eventosHoras: Array.isArray(d.eventos_horas) && d.eventos_horas.length === 24 ? d.eventos_horas : undefined,
     utcOffset: num(d.utc_offset_min) ?? undefined,
+    origen: origenDe(fuente),
+    ouraApp: d.oura_app,
   };
 }
 
@@ -198,21 +263,23 @@ export function filaADia({ fecha, datos }: FilaResumen): DiaSalud {
 export const DIAS_COMPLETOS = 120;
 
 function leerResumen(vista: "resumen_diario" | "resumen_ligero", lado: "antes" | "desde", fecha: string) {
-  // Paginado (PostgREST corta en 1,000 filas, auditoría M1); fecha es llave
-  // total con la fuente fija (RLS deja solo las filas propias).
+  // Paginado (PostgREST corta en 1,000 filas, auditoría M1); (fecha, fuente)
+  // es llave total (RLS deja solo las filas propias). Las dos fuentes: el
+  // anillo y el historial de la app de Oura; unirFuentes las junta por día.
   return obtenerTodasLasPaginas<FilaResumen>((desde, hasta, contar) => {
     const q = supabase
       .schema("salud")
       .from(vista)
-      .select("fecha, datos", contar ? { count: "estimated" } : undefined)
-      .eq("fuente", "oura");
+      .select("fecha, fuente, datos", contar ? { count: "estimated" } : undefined)
+      .in("fuente", [...FUENTES_SALUD]);
     return (lado === "antes" ? q.lt("fecha", fecha) : q.gte("fecha", fecha))
       .order("fecha", { ascending: true })
+      .order("fuente", { ascending: true })
       .range(desde, hasta);
-  });
+  }).then(unirFuentes);
 }
 
-/** Todos los días (fuente 'oura'), del más antiguo al más reciente: los
+/** Todos los días (anillo + historial de la app de Oura), del más antiguo al más reciente: los
  * últimos DIAS_COMPLETOS completos y los anteriores ligeros. Si la vista
  * ligera aún no existe (su migración no ha corrido), todo completo. */
 export async function obtenerDiasSalud(hoy = hoyIso()): Promise<DiaSalud[]> {
@@ -231,23 +298,24 @@ export async function obtenerDiaCompleto(fecha: string): Promise<DiaSalud | null
   const { data, error } = await supabase
     .schema("salud")
     .from("resumen_diario")
-    .select("fecha, datos")
-    .eq("fuente", "oura")
-    .eq("fecha", fecha)
-    .limit(1);
+    .select("fecha, fuente, datos")
+    .in("fuente", [...FUENTES_SALUD])
+    .eq("fecha", fecha);
   if (error) throw error;
-  const fila = (data?.[0] ?? null) as FilaResumen | null;
+  const fila = unirFuentes((data ?? []) as FilaResumen[])[0] ?? null;
   return fila ? filaADia(fila) : null;
 }
 
+/** La última lectura BUENA de la laptop. Desde el colector v6 también se
+ * anotan las corridas que fallan (`resultado` ≠ 'ok'); las filas viejas no
+ * tienen `resultado` y todas fueron buenas. Sin esa columna aún, sin filtro. */
 export async function obtenerUltimaSubida(): Promise<string | null> {
-  const { data, error } = await supabase
-    .schema("salud")
-    .from("oura_sincronizaciones")
-    .select("subida_en")
-    .eq("origen", "laptop")
-    .order("subida_en", { ascending: false })
-    .limit(1);
+  const consulta = (soloBuenas: boolean) => {
+    const q = supabase.schema("salud").from("oura_sincronizaciones").select("subida_en").eq("origen", "laptop");
+    return (soloBuenas ? q.or("resultado.is.null,resultado.eq.ok") : q).order("subida_en", { ascending: false }).limit(1);
+  };
+  let { data, error } = await consulta(true);
+  if (error) ({ data, error } = await consulta(false));
   if (error) throw error;
   return (data?.[0] as { subida_en?: string } | undefined)?.subida_en ?? null;
 }
@@ -596,4 +664,17 @@ export function celdasHR(dias: readonly DiaSalud[]): CeldaHR[] {
       .filter((h) => num(h.mediana) !== null && num(h.hora) !== null)
       .map((h) => ({ fecha: d.fecha, hora: h.hora, mediana: h.mediana }))
   );
+}
+
+// ------------------------------------------ historial de la app de Oura
+
+const MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+const fechaLarga = (iso: string) => `${Number(iso.slice(8, 10))} ${MESES_CORTOS[Number(iso.slice(5, 7)) - 1]} ${iso.slice(0, 4)}`;
+
+/** "Historial desde 31 ene 2025 · app de Oura hasta 8 nov 2026, luego el
+ * anillo" cuando hay días importados de la app; null si todo es del anillo. */
+export function textoHistorial(dias: readonly DiaSalud[]): string | null {
+  const deApp = dias.filter((d) => d.origen === "app" || d.origen === "ambos");
+  if (!deApp.length || !dias.length) return null;
+  return `Historial desde ${fechaLarga(dias[0].fecha)} · app de Oura hasta ${fechaLarga(deApp.at(-1)!.fecha)}, luego el anillo`;
 }

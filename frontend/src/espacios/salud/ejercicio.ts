@@ -200,14 +200,23 @@ export function sugerirTipo(s: SesionEjercicio, ejemplos: readonly Ejemplo[] = [
  * enseña: una sesión parecida tampoco lo será). */
 export function ejemplosConfirmados(dias: readonly DiaSalud[], etiquetas: readonly EtiquetaEjercicio[]): Ejemplo[] {
   const confirmadas = etiquetas.filter((e) => e.estado === "confirmada");
-  if (!confirmadas.length) return [];
   return dias.flatMap((d) =>
     (d.ejercicio ?? []).flatMap((s) => {
       const e = etiquetaDeSesion(s, confirmadas);
-      return e ? [{ sesion: s, tipo: e.tipo }] : [];
+      if (e) return [{ sesion: s, tipo: e.tipo }];
+      // Historial de la app de Oura: ya trae el tipo (menos "otro", que no enseña nada).
+      const t = tipoDeLaApp(s);
+      return t && t !== "otro" ? [{ sesion: s, tipo: t }] : [];
     }),
   );
 }
+
+/** El tipo que registró la app de Oura (solo sesiones del historial importado). */
+export function tipoDeLaApp(s: SesionEjercicio): string | null {
+  return s.origen === "oura_app" && s.tipo ? s.tipo : null;
+}
+
+export const MOTIVO_APP_OURA = "registrada en la app de Oura";
 
 export interface SesionEtiquetada extends SesionConFecha {
   tipo: string;
@@ -242,6 +251,8 @@ export function diasConEjercicio(
         .map((s) => {
           const e = etiquetaDeSesion(s, etiquetas);
           if (e?.estado === "confirmada") return { ...s, fecha: d.fecha, tipo: e.tipo, confirmada: true, etiqueta: e };
+          const app = tipoDeLaApp(s);
+          if (app) return { ...s, fecha: d.fecha, tipo: app, confirmada: true, motivo: MOTIVO_APP_OURA, etiqueta: e };
           const sug = e ? { tipo: e.tipo, motivo: "propuesta por el colector" } : sugerirTipo(s, ejemplos);
           return { ...s, fecha: d.fecha, tipo: sug.tipo, confirmada: false, motivo: sug.motivo, etiqueta: e };
         });

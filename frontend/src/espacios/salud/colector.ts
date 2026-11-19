@@ -9,7 +9,7 @@ import { num } from "./salud";
  * VERSION_COLECTOR de colector/subir_oura.py cuando una gráfica nueva dependa
  * de un dato nuevo del colector: si la laptop quedó atrás, Salud lo avisa
  * (así se habría visto el primer día que el panel de estrés quedó vacío). */
-export const VERSION_COLECTOR_ESPERADA = 5;
+export const VERSION_COLECTOR_ESPERADA = 6;
 
 /** Ciudad de México: UTC−6 todo el año (sin horario de verano desde 2022). */
 export const UTC_OFFSET_CASA = -360;
@@ -136,4 +136,18 @@ export function zonaPorDia(lecturas: readonly LecturaZona[]): Map<string, number
 export function textoZona(offset: number): string {
   const h = Math.abs(offset) / 60;
   return `UTC${offset < 0 ? "−" : "+"}${Number.isInteger(h) ? h : h.toFixed(1)}`;
+}
+
+/** Añade la zona de los días del historial de la app de Oura (antes de que
+ * la laptop leyera el anillo), así los viajes viejos también se ofrecen como
+ * "¿Fue un viaje?". La de la laptop gana si hay de las dos. */
+export function conZonasDeLaApp(
+  porDia: ReadonlyMap<string, number>,
+  dias: readonly { fecha: string; origen?: string; utcOffset?: number }[],
+): Map<string, number> {
+  const salida = new Map(porDia);
+  for (const d of dias) {
+    if (d.origen !== "anillo" && typeof d.utcOffset === "number" && !salida.has(d.fecha)) salida.set(d.fecha, d.utcOffset);
+  }
+  return new Map([...salida].sort(([a], [b]) => a.localeCompare(b)));
 }

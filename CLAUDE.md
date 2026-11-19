@@ -240,6 +240,31 @@ kcal per day (`UMBRAL_REPORTE` 1000 / 50) + the week's exercise totals (sessions
 Actividad · Ejercicio; it loads `ejercicio_etiquetas` itself (failure = every session counts). Computed on open; "Hoy" still offers
 "Ver resumen" on Sundays and Mondays.
 
+**Salud "Colector" tab (2026-11-19, Mario: panel with the laptop collector's health)**: last tab of Salud. Since oura collector v6
+EVERY hourly run (also failed ones) inserts an `oura_sincronizaciones` row with `resultado` ok|sin_anillo|conexion_cortada|error,
+`codigo`, `mensaje`, `eventos_nuevos`, `ultimo_evento_unix`, `duracion_s` (migration `20261119030000_bitacora_colector.sql`; old rows
+have `resultado` null = ok), and each day of `resumen_diario` carries `eventos_horas` (24 event counts per local hour).
+`obtenerUltimaSubida` now counts only good runs (`resultado` null or ok). Logic in `lecturas.ts` (tested, `lecturas.test.ts`):
+status (bien < 2 h since the last good reading, atrasado < 6 h, sin_lecturas; the sentence says whether the laptop didn't run at all,
+can't find the ring, Bluetooth cut, or the collector errors with its message), recent failures grouped when consecutive and equal,
+a 7-day day×hour grid of runs (best result per hour, in the laptop's zone; dashed = laptop didn't run) and a 14-day day×hour grid of
+ring data (puesto = events + skin temp, quitado = events without skin temp, apagado = ≥ 30 min of an apagón, dashed = no events =
+gap, pendiente = after `ultimo_evento_unix`, sin_info = day uploaded by a pre-v6 collector) with gaps ≥ 2 h listed.
+Drawing in `PanelColector.tsx` (+ battery card). `VERSION_COLECTOR_ESPERADA` = 6. Checked in Playwright with mocked Supabase
+(1200 light / 390 dark, no overflow).
+
+**Oura app history (2026-11-19, Mario: "la data para el 4 está en la carpeta de dataoura")**: the oura repo's
+`colector/importar_oura_app.py` turns the Oura app's CSV export (2025-01-31 → 2026-11-08, before the ring was read by
+Bluetooth) into `resumen_diario` rows with **`fuente = 'oura_app'`**, same `datos` shape as the collector plus
+`datos.oura_app` (Oura's own sleep/readiness scores, day stress, resilience, VO2 max, cardiovascular age; stored, not drawn
+yet). `obtenerDiasSalud`/`obtenerDiaCompleto` read both `FUENTES_SALUD` ordered by (fecha, fuente) and `unirFuentes` merges
+a date's two rows field by field, the ring (`'oura'`) winning (empty lists don't override); `DiaSalud.origen` =
+anillo|app|ambos. Trend selector adds "1 año" and "Todo" plus a muted "Historial desde … · app de Oura hasta …" line
+(`textoHistorial`). Workouts from the app carry `tipo`/`tipo_oura`/`origen 'oura_app'`: `diasConEjercicio` shows them as
+confirmed ("registrada en la app de Oura", a saved label still wins) and `ejemplosConfirmados` uses them (except "otro") to
+train the suggestions. `conZonasDeLaApp` (colector.ts) adds the app days' zones so old trips show as "¿Fue un viaje?". No
+migration: same table, new fuente value. Tests in `salud.test.ts`, `ejercicio.test.ts`, `semanal.test.ts`.
+
 **Subprojects publish as espacios (2026-11-08, Mario: Trading automatizado, OURA and Viajes "son otros proyectos que
 estarán trabajándose en paralelo, pero publicarán en la misma página")**: each subproject owns ONE folder,
 `frontend/src/espacios/<id>/`, and nothing else in the shell has to change to add it. Contract:

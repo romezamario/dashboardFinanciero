@@ -171,3 +171,26 @@ describe("entreno vs. caminata (datos reales del 11 y 14 nov)", () => {
     expect(resumenEjercicio(dias, corregida)!.entrenos).toBe(0);
   });
 });
+
+describe("ejercicio del historial de la app de Oura", () => {
+  const app = (inicio: number, tipo: string): SesionEjercicio => ({ ...sesion(inicio, 30, 0), tipo, tipo_oura: tipo, origen: "oura_app" });
+  const historia: DiaSalud[] = [
+    { fecha: "2026-05-01", ejercicio: [app(100, "correr"), app(9000, "otro")] },
+    { fecha: "2026-11-15", ejercicio: [sesion(20000, 30, 0)] },
+  ];
+
+  it("el tipo de la app cuenta como confirmado, salvo una etiqueta tuya", () => {
+    const [nuevo, viejo] = diasConEjercicio(historia, [
+      { inicio: 9000, fin: 10800, fecha: "2026-05-01", tipo: "caminata", estado: "confirmada" },
+    ]);
+    expect(viejo.sesiones.map((s) => [s.tipo, s.confirmada, s.motivo])).toEqual([
+      ["correr", true, "registrada en la app de Oura"],
+      ["caminata", true, undefined],
+    ]);
+    expect(nuevo.sesiones[0].confirmada).toBe(false);
+  });
+
+  it("las sesiones de la app enseñan a la sugerencia (menos 'otro')", () => {
+    expect(ejemplosConfirmados(historia, []).map((e) => e.tipo)).toEqual(["correr"]);
+  });
+});
