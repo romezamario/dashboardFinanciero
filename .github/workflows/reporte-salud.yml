@@ -1,0 +1,85 @@
+name: Reporte semanal de salud
+
+# Mario, 2026-11-18: reporte semanal automático cada lunes con sueño,
+# recuperación, estrés, actividad y ejercicio de la semana contra la anterior.
+# Código: frontend/src/espacios/salud/reporte/ (empaquetado por
+# frontend/scripts/vite.reporte-salud.ts). Lee el esquema `salud` con la API de
+# administración (mismo token que las migraciones) y envía por SMTP (Gmail con
+# contraseña de aplicación).
+#
+# El repo es público: el script no imprime datos de salud ni correos, y este
+# workflow tampoco debe hacerlo.
+#
+# Secrets: SALUD_SMTP_USUARIO (la cuenta de Gmail que envía),
+# SALUD_SMTP_CONTRASENA (contraseña de aplicación de esa cuenta). Opcionales:
+# SALUD_CORREO_REPORTE (a quién; por omisión la misma cuenta), URL_DASHBOARD
+# (para el botón "Ver la semana en el dashboard"). Sin los dos primeros se
+# salta con un aviso.
+on:
+  schedule:
+    # Lunes 14:00 UTC = 8:00 en Ciudad de México (sin horario de verano).
+    - cron: "0 14 * * 1"
+  workflow_dispatch:
+    inputs:
+      lunes:
+        description: "Lunes de la semana a enviar (AAAA-MM-DD). Vacío = la semana pasada."
+        required: false
+        default: ""
+
+concurrency:
+  group: reporte-salud
+  cancel-in-progress: false
+
+jobs:
+  enviar:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: ¿Hay con qué enviar?
+        id: config
+        env:
+          USUARIO: ${{ secrets.SALUD_SMTP_USUARIO }}
+          CONTRASENA: ${{ secrets.SALUD_SMTP_CONTRASENA }}
+        run: |
+          if [ -z "$USUARIO" ] || [ -z "$CONTRASENA" ]; then
+            echo "::notice::Faltan los secrets SALUD_SMTP_USUARIO / SALUD_SMTP_CONTRASENA: no se envía el reporte."
+            echo "listo=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "listo=si" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v5
+        if: steps.config.outputs.listo == 'si'
+
+      - uses: actions/setup-node@v5
+        if: steps.config.outputs.listo == 'si'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Empaquetar el reporte
+        if: steps.config.outputs.listo == 'si'
+        working-directory: frontend
+        run: |
+          npm ci
+          npx vite build --config scripts/vite.reporte-salud.ts
+
+      - name: Enviar
+        if: steps.config.outputs.listo == 'si'
+        working-directory: frontend
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+          SMTP_USUARIO: ${{ secrets.SALUD_SMTP_USUARIO }}
+          SMTP_CONTRASENA: ${{ secrets.SALUD_SMTP_CONTRASENA }}
+          CORREO_REPORTE: ${{ secrets.SALUD_CORREO_REPORTE }}
+          URL_DASHBOARD: ${{ secrets.URL_DASHBOARD }}
+          LUNES: ${{ github.event.inputs.lunes }}
+        run: |
+          if [ -n "$LUNES" ]; then
+            node dist-reporte/reporte.mjs "--lunes=$LUNES"
+          else
+            node dist-reporte/reporte.mjs
+          fi
