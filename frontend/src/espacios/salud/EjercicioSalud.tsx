@@ -95,6 +95,7 @@ function FilaSesion({ s, onTipo, ocupado }: { s: SesionEtiquetada; onTipo: (s: S
     `MET ${s.met_prom.toLocaleString("es-MX", { maximumFractionDigits: 1 })}`,
     typeof s.lpm_mediana === "number" ? `FC ${s.lpm_mediana} lpm${typeof s.lpm_max === "number" ? ` (pico ${s.lpm_max})` : ""}` : "sin FC",
     typeof s.kcal === "number" ? `${s.kcal} kcal` : null,
+    typeof s.distancia_m === "number" ? `${(s.distancia_m / 1000).toLocaleString("es-MX", { maximumFractionDigits: 1 })} km` : null,
   ].filter(Boolean);
   return (
     <li className="py-2 text-sm" style={{ borderTop: "1px solid var(--border)" }}>
@@ -117,7 +118,7 @@ function FilaSesion({ s, onTipo, ocupado }: { s: SesionEtiquetada; onTipo: (s: S
       </div>
       <p className="mt-0.5 text-xs" style={{ color: "var(--text-muted)" }}>
         {detalles.join(" · ")}
-        {!s.confirmada && s.motivo ? ` · sugerida por ${s.motivo}` : ""}
+        {s.motivo ? (s.confirmada ? ` · ${s.motivo}` : ` · sugerida por ${s.motivo}`) : ""}
       </p>
     </li>
   );

@@ -21,7 +21,9 @@ import {
   serieNoche,
   tarjetasHoy,
   tendencia,
+  textoHistorial,
   ultimosDias,
+  unirFuentes,
   type DiaSalud,
 } from "./salud";
 
@@ -54,6 +56,7 @@ describe("filaADia", () => {
       deuda: { shortfall_min: 411 },
       actividad: { steps: 300 },
       hrHoras: [],
+      origen: "anillo",
     });
     expect(filaADia({ fecha: "2026-11-09", datos: null }).noche).toBeUndefined();
   });
@@ -206,5 +209,32 @@ describe("celdasHR y cruce", () => {
     expect(celdasHR([dia("2026-11-08", {}, { hrHoras: [{ hora: 16, mediana: 87 }] })])).toEqual([
       { fecha: "2026-11-08", hora: 16, mediana: 87 },
     ]);
+  });
+});
+
+describe("historial de la app de Oura (fuente oura_app)", () => {
+  it("une las dos fuentes por fecha: el anillo gana campo por campo", () => {
+    const filas = unirFuentes([
+      { fecha: "2026-11-07", fuente: "oura_app", datos: { actividad: { steps: 9000 } } },
+      { fecha: "2026-11-08", fuente: "oura", datos: { noche: { rhr: 50 }, hr_horas: [] } },
+      { fecha: "2026-11-08", fuente: "oura_app", datos: { noche: { rhr: 55 }, hr_horas: [{ hora: 1, mediana: 60 }], oura_app: { preparacion: 80 } } },
+      { fecha: "2026-11-09", fuente: "oura", datos: { noche: { rhr: 52 } } },
+    ]);
+    const dias = filas.map(filaADia);
+    expect(dias.map((d) => [d.fecha, d.origen])).toEqual([
+      ["2026-11-07", "app"],
+      ["2026-11-08", "ambos"],
+      ["2026-11-09", "anillo"],
+    ]);
+    expect(dias[1].noche?.rhr).toBe(50);
+    // Una lista vacía del anillo no tapa la de la app.
+    expect(dias[1].hrHoras).toEqual([{ hora: 1, mediana: 60 }]);
+    expect(dias[1].ouraApp?.preparacion).toBe(80);
+  });
+  it("texto del historial solo si hay días de la app", () => {
+    expect(textoHistorial([dia("2026-11-09", {}, { origen: "anillo" })])).toBeNull();
+    expect(
+      textoHistorial([dia("2025-01-31", {}, { origen: "app" }), dia("2026-11-08", {}, { origen: "ambos" }), dia("2026-11-09", {}, { origen: "anillo" })]),
+    ).toBe("Historial desde 31 ene 2025 · app de Oura hasta 8 nov 2026, luego el anillo");
   });
 });

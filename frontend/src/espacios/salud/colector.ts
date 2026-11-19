@@ -137,3 +137,17 @@ export function textoZona(offset: number): string {
   const h = Math.abs(offset) / 60;
   return `UTC${offset < 0 ? "−" : "+"}${Number.isInteger(h) ? h : h.toFixed(1)}`;
 }
+
+/** Añade la zona de los días del historial de la app de Oura (antes de que
+ * la laptop leyera el anillo), así los viajes viejos también se ofrecen como
+ * "¿Fue un viaje?". La de la laptop gana si hay de las dos. */
+export function conZonasDeLaApp(
+  porDia: ReadonlyMap<string, number>,
+  dias: readonly { fecha: string; origen?: string; utcOffset?: number }[],
+): Map<string, number> {
+  const salida = new Map(porDia);
+  for (const d of dias) {
+    if (d.origen !== "anillo" && typeof d.utcOffset === "number" && !salida.has(d.fecha)) salida.set(d.fecha, d.utcOffset);
+  }
+  return new Map([...salida].sort(([a], [b]) => a.localeCompare(b)));
+}

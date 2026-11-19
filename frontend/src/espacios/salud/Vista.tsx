@@ -5,6 +5,7 @@ import {
   obtenerDiasSalud,
   obtenerBateria,
   obtenerUltimaSubida,
+  textoHistorial,
   ultimosDias,
   type DiaSalud,
   type LecturaBateria,
@@ -32,7 +33,7 @@ import { HistorialPuntuaciones, PuntuacionesHoy } from "./PuntuacionesSalud";
 import { estresDiurno } from "./indicadores";
 import { EjercicioSalud } from "./EjercicioSalud";
 import { PanelColector } from "./PanelColector";
-import { obtenerEstadoColector, obtenerZonas, zonaPorDia, type EstadoColector, type LecturaZona } from "./colector";
+import { conZonasDeLaApp, obtenerEstadoColector, obtenerZonas, zonaPorDia, type EstadoColector, type LecturaZona } from "./colector";
 import { fechasDeViaje, obtenerViajes, type Viaje } from "./viajes";
 import { AvisoColector, AvisoResumenListo, RelacionesSalud, ResumenSemanal, VistaViajes } from "./SemanaViajesRelaciones";
 import { hoyIso } from "../../lib/fechas";
@@ -41,6 +42,9 @@ const PERIODOS = [
   { dias: 7, texto: "7 días" },
   { dias: 30, texto: "30 días" },
   { dias: 90, texto: "90 días" },
+  { dias: 365, texto: "1 año" },
+  // Todo el historial (con el de la app de Oura, desde enero de 2025).
+  { dias: 100000, texto: "Todo" },
 ] as const;
 
 type Pestana = "hoy" | "semana" | "sueno-noche" | "sueno" | "corazon" | "temperatura" | "actividad" | "relaciones" | "viajes" | "colector";
@@ -151,9 +155,10 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
   }, [intentoViajes]);
 
   const estres = useMemo(() => (dias ? estresDiurno(dias) : []), [dias]);
-  const zonasDia = useMemo(() => zonaPorDia(zonas), [zonas]);
+  const zonasDia = useMemo(() => conZonasDeLaApp(zonaPorDia(zonas), dias ?? []), [zonas, dias]);
   const diasViaje = useMemo(() => fechasDeViaje(viajes ?? [], hoy), [viajes, hoy]);
 
+  const historial = useMemo(() => textoHistorial(dias ?? []), [dias]);
   const enPeriodo = useMemo(() => (dias ? ultimosDias(dias, periodo) : []), [dias, periodo]);
   const conNoche = useMemo(() => (dias ?? []).filter((d) => d.noche), [dias]);
   const nocheLigera = conNoche.find((d) => d.fecha === noche) ?? conNoche.at(-1);
@@ -243,6 +248,11 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
                     {p.texto}
                   </button>
                 ))}
+                {historial && (
+                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    {historial}
+                  </span>
+                )}
               </div>
             )}
 

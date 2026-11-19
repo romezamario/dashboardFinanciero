@@ -258,6 +258,18 @@ gap, pendiente = after `ultimo_evento_unix`, sin_info = day uploaded by a pre-v6
 Drawing in `PanelColector.tsx` (+ battery card). `VERSION_COLECTOR_ESPERADA` = 6. Checked in Playwright with mocked Supabase
 (1200 light / 390 dark, no overflow).
 
+**Oura app history (2026-11-19, Mario: "la data para el 4 está en la carpeta de dataoura")**: the oura repo's
+`colector/importar_oura_app.py` turns the Oura app's CSV export (2025-01-31 → 2026-11-08, before the ring was read by
+Bluetooth) into `resumen_diario` rows with **`fuente = 'oura_app'`**, same `datos` shape as the collector plus
+`datos.oura_app` (Oura's own sleep/readiness scores, day stress, resilience, VO2 max, cardiovascular age; stored, not drawn
+yet). `obtenerDiasSalud`/`obtenerDiaCompleto` read both `FUENTES_SALUD` ordered by (fecha, fuente) and `unirFuentes` merges
+a date's two rows field by field, the ring (`'oura'`) winning (empty lists don't override); `DiaSalud.origen` =
+anillo|app|ambos. Trend selector adds "1 año" and "Todo" plus a muted "Historial desde … · app de Oura hasta …" line
+(`textoHistorial`). Workouts from the app carry `tipo`/`tipo_oura`/`origen 'oura_app'`: `diasConEjercicio` shows them as
+confirmed ("registrada en la app de Oura", a saved label still wins) and `ejemplosConfirmados` uses them (except "otro") to
+train the suggestions. `conZonasDeLaApp` (colector.ts) adds the app days' zones so old trips show as "¿Fue un viaje?". No
+migration: same table, new fuente value. Tests in `salud.test.ts`, `ejercicio.test.ts`, `semanal.test.ts`.
+
 **Subprojects publish as espacios (2026-11-08, Mario: Trading automatizado, OURA and Viajes "son otros proyectos que
 estarán trabajándose en paralelo, pero publicarán en la misma página")**: each subproject owns ONE folder,
 `frontend/src/espacios/<id>/`, and nothing else in the shell has to change to add it. Contract:
