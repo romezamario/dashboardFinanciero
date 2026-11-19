@@ -22,7 +22,7 @@ import { avisoColector, textoZona, type EstadoColector } from "./colector";
 import type { DiaEstres } from "./indicadores";
 import { fraseRelacion, MINIMO_PARES, paresDe, relacion, RELACIONES, type DefRelacion } from "./relaciones";
 import { minutosDormido, num, relojDesde18, restarDias, type DiaSalud } from "./salud";
-import { resumenSemanal, semanaParaResumir, semanasConDatos, type CambioSemana } from "./semanal";
+import { diferencia, formato, resumenSemanal, semanaParaResumir, semanasConDatos, type CambioSemana } from "./semanal";
 import {
   DIAS_ANTES_VIAJE,
   DIAS_REGRESO,
@@ -33,7 +33,6 @@ import {
   tramosFueraDeCasa,
   tramosSinMarcar,
   veredicto,
-  type ClaveEfecto,
   type FilaEfecto,
   type TramoFuera,
   type ValorTramo,
@@ -62,28 +61,6 @@ export function AvisoColector({ estado }: { estado: EstadoColector | null }) {
 }
 
 // ---------------------------------------------------- valores y veredictos
-
-function formato(clave: ClaveEfecto, v: number | null): string {
-  if (v === null) return "—";
-  if (clave === "sueno") return horasMin(v);
-  if (clave === "dormir") return relojDesde18(Math.round(v) % 1440);
-  if (clave === "estres") return `${Math.round(v)}%`;
-  return `${Math.round(v)}`;
-}
-
-function diferencia(clave: ClaveEfecto, antes: number | null, ahora: number | null): string | null {
-  if (antes === null || ahora === null) return null;
-  const d = ahora - antes;
-  if (clave === "dormir") {
-    const m = Math.round(Math.abs(d));
-    const texto = m < 60 ? `${m} min` : horasMin(m).replace(" 00 min", "");
-    return m < 5 ? "a la misma hora" : `${texto} ${d > 0 ? "más tarde" : "más temprano"}`;
-  }
-  const signo = d > 0 ? "+" : d < 0 ? "−" : "±";
-  if (clave === "sueno") return `${signo}${Math.round(Math.abs(d))} min`;
-  if (clave === "estres") return `${signo}${Math.round(Math.abs(d))} pts`;
-  return `${signo}${Math.round(Math.abs(d))}`;
-}
 
 const VEREDICTO: Record<Veredicto, { texto: string; icono: string; color: string }> = {
   mejor: { texto: "Mejoró", icono: "▲", color: "var(--status-good)" },

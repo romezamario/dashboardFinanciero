@@ -13,6 +13,7 @@ import {
   sesionesRecientes,
   sinDescartadas,
   sugerirTipo,
+  esEntreno,
   type EtiquetaEjercicio,
 } from "./ejercicio";
 import type { DiaSalud, SesionEjercicio } from "./salud";
@@ -146,5 +147,27 @@ describe("tipo de actividad", () => {
     const [d] = diasConEjercicio([{ fecha: "2026-11-15", ejercicio: [caminata] }], [vieja]);
     const nueva = { ...etiqueta(10_000, 11_800, "correr"), id: 2 };
     expect(aplicarGuardadas([vieja, etiqueta(1, 2, "otro")], [nueva], d.sesiones)).toEqual([etiqueta(1, 2, "otro"), nueva]);
+  });
+});
+
+describe("entreno vs. caminata (datos reales del 11 y 14 nov)", () => {
+  const carrera: SesionEjercicio = { inicio: 1, fin: 3361, duracion_min: 56, met_prom: 7.2, min_moderados: 9, min_vigorosos: 43, intensidad: "vigorosa" };
+  const caminata: SesionEjercicio = { inicio: 5000, fin: 9440, duracion_min: 74, met_prom: 4.0, min_moderados: 48, min_vigorosos: 12, intensidad: "moderada" };
+
+  it("la carrera es entreno y la caminata larga no", () => {
+    expect(esEntreno(carrera)).toBe(true);
+    expect(esEntreno(caminata)).toBe(false);
+    expect(esEntreno({ ...caminata, clase: "entreno" })).toBe(true);
+    expect(sugerirTipo(caminata).tipo).toBe("caminata");
+    expect(sugerirTipo(carrera).tipo).toBe("correr");
+  });
+
+  it("el resumen cuenta entrenos aparte, y respeta lo confirmado", () => {
+    const dias: DiaSalud[] = [{ fecha: "2026-11-11", ejercicio: [carrera] }, { fecha: "2026-11-14", ejercicio: [caminata] }];
+    expect(resumenEjercicio(dias)!.entrenos).toBe(1);
+    const etiquetas: EtiquetaEjercicio[] = [{ inicio: 5000, fin: 9440, fecha: "2026-11-14", tipo: "gimnasio", estado: "confirmada" }];
+    expect(resumenEjercicio(dias, etiquetas)!.entrenos).toBe(2);
+    const corregida: EtiquetaEjercicio[] = [{ inicio: 1, fin: 3361, fecha: "2026-11-11", tipo: "caminata", estado: "confirmada" }];
+    expect(resumenEjercicio(dias, corregida)!.entrenos).toBe(0);
   });
 });

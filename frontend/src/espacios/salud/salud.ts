@@ -129,6 +129,8 @@ export interface SesionEjercicio {
   min_moderados: number;
   min_vigorosos: number;
   intensidad: "moderada" | "vigorosa";
+  /** Colector v5: "entreno" (esfuerzo vigoroso sostenido) o "actividad" (p. ej. caminar mucho). */
+  clase?: "entreno" | "actividad";
   kcal?: number;
   lpm_mediana?: number;
   lpm_max?: number;
@@ -146,7 +148,7 @@ export interface DiaSalud {
   apagones?: Apagon[];
   estresVentanas?: VentanaEstres[];
   ejercicio?: SesionEjercicio[];
-  /** Eventos que guardó el anillo en cada hora local (24 números; colector v5).
+  /** Eventos que guardó el anillo en cada hora local (24 números; colector v6).
    * 0 fuera de un apagón = hueco de datos (panel "Colector"). */
   eventosHoras?: number[];
   /** Minutos vs. UTC en que estabas ese día (lo anota el colector v3; CDMX =
@@ -243,7 +245,7 @@ export async function obtenerDiaCompleto(fecha: string): Promise<DiaSalud | null
   return fila ? filaADia(fila) : null;
 }
 
-/** La última lectura BUENA de la laptop. Desde el colector v5 también se
+/** La última lectura BUENA de la laptop. Desde el colector v6 también se
  * anotan las corridas que fallan (`resultado` ≠ 'ok'); las filas viejas no
  * tienen `resultado` y todas fueron buenas. Sin esa columna aún, sin filtro. */
 export async function obtenerUltimaSubida(): Promise<string | null> {

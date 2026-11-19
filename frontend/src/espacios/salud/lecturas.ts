@@ -1,5 +1,5 @@
 // Panel "Colector" (Mario, 2026-11-19): ¿la laptop está leyendo el anillo?
-// Desde el colector v5 (repo romezamario/oura, colector/subir_oura.py) cada
+// Desde el colector v6 (repo romezamario/oura, colector/subir_oura.py) cada
 // corrida horaria deja una fila en `oura_sincronizaciones`, también las que
 // fallan (resultado, código, mensaje, eventos nuevos, hasta dónde hay datos),
 // y cada día de `resumen_diario` trae `eventos_horas` (eventos por hora local).
@@ -69,7 +69,7 @@ const RESULTADOS: readonly Resultado[] = ["ok", "sin_anillo", "conexion_cortada"
 export function filaACorrida(f: FilaCorrida): Corrida {
   return {
     en: f.subida_en,
-    // Antes del colector v5 solo se anotaban las corridas buenas.
+    // Antes del colector v6 solo se anotaban las corridas buenas.
     resultado: RESULTADOS.includes(f.resultado as Resultado) ? (f.resultado as Resultado) : "ok",
     codigo: num(f.codigo),
     mensaje: f.mensaje ?? null,
@@ -134,7 +134,7 @@ export interface ResumenLecturas {
   datosHasta: number | null;
   /** Corridas de las últimas 24 h por resultado. */
   ultimas24: Record<Resultado, number>;
-  /** ¿Hay alguna corrida del colector v5 (que anota también las fallas)? */
+  /** ¿Hay alguna corrida del colector v6 (que anota también las fallas)? */
   conBitacora: boolean;
 }
 
@@ -271,7 +271,7 @@ export function rejillaCorridas(
  * - apagado: el anillo estuvo apagado (sin batería) casi toda la hora;
  * - sin_datos: no hay ningún evento de esa hora (hueco);
  * - pendiente: después del último dato que tiene la laptop (aún no se lee);
- * - sin_info: día subido por un colector anterior al v5 (sin conteo por hora);
+ * - sin_info: día subido por un colector anterior al v6 (sin conteo por hora);
  * - futuro. */
 export type CeldaDatos = "puesto" | "quitado" | "apagado" | "sin_datos" | "pendiente" | "sin_info" | "futuro";
 

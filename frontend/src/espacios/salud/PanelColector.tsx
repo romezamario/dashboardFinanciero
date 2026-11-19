@@ -220,7 +220,7 @@ export function PanelColector({ dias, bateria, hoy }: { dias: DiaSalud[]; bateri
           <Dato
             titulo="Datos del anillo hasta"
             valor={resumen.datosHasta ? haceCuanto(new Date(resumen.datosHasta * 1000).toISOString(), ahora) : "—"}
-            detalle={resumen.datosHasta ? fechaHora(new Date(resumen.datosHasta * 1000).toISOString()) : "Lo anota el colector v5"}
+            detalle={resumen.datosHasta ? fechaHora(new Date(resumen.datosHasta * 1000).toISOString()) : "Lo anota el colector v6"}
           />
           <Dato
             titulo="Versión del colector"
@@ -238,7 +238,7 @@ export function PanelColector({ dias, bateria, hoy }: { dias: DiaSalud[]; bateri
         </div>
         <p className="mt-3 text-xs" style={{ color: "var(--text-secondary)" }}>
           Últimas 24 h: {partes24.length ? partes24.join(" · ") : "ninguna corrida"}.
-          {!resumen.conBitacora && " Las corridas que fallan se verán aquí cuando la laptop tenga el colector v5 (se actualiza solo en la siguiente lectura)."}
+          {!resumen.conBitacora && " Las corridas que fallan se verán aquí cuando la laptop tenga el colector v6 (se actualiza solo en la siguiente lectura)."}
           {lectura.sinBitacora && " Falta aplicar la migración de la bitácora en Supabase."}
         </p>
         <div className="mt-3">
@@ -277,7 +277,7 @@ export function PanelColector({ dias, bateria, hoy }: { dias: DiaSalud[]; bateri
             ))}
           </ul>
         ) : (
-          <Vacio>{resumen.conBitacora ? "Ninguna falla en estos días." : "Aún no hay fallas anotadas (llegan con el colector v5)."}</Vacio>
+          <Vacio>{resumen.conBitacora ? "Ninguna falla en estos días." : "Aún no hay fallas anotadas (llegan con el colector v6)."}</Vacio>
         )}
       </Panel>
 
@@ -291,7 +291,7 @@ export function PanelColector({ dias, bateria, hoy }: { dias: DiaSalud[]; bateri
       >
         {!conConteo && (
           <p className="mb-1 text-xs" style={{ color: "var(--text-muted)" }}>
-            El conteo por hora llega con el colector v5; mientras, solo se ven las horas con temperatura de piel y los apagones.
+            El conteo por hora llega con el colector v6; mientras, solo se ven las horas con temperatura de piel y los apagones.
           </p>
         )}
         <Rejilla filas={rejDatos} estilo={DATOS} vacias={["sin_datos"]} />

@@ -213,7 +213,39 @@ caminata) until there are `MINIMO_EJEMPLOS` = 3 confirmed sessions in the loaded
 incl. `no_ejercicio`, which removes the session from the summary tiles and chart (`sinDescartadas`). Per day: "Confirmar las N
 sugerencias" and "Todo el día como…"; per session: "Sí, <tipo>" / "Otra…". No collector change. Checked in Playwright with mocked Supabase (390 dark).
 
-**Salud "Colector" tab (2026-11-19, Mario: panel with the laptop collector's health)**: last tab of Salud. Since oura collector v5
+**Entreno vs. caminata (2026-11-19, validated with Mario's real data: a ~30-min run on Nov 11 morning, lots of walking Nov 12/14)**:
+collector v5 joins pauses ≤ 10 min (the run had a 4-min pause and came out split; walks came out in 6–8 pieces) and sends
+`clase` "entreno" | "actividad" per session (≥ 10 vigorous minutes that are ≥ 30 % of the active ones). `esEntreno` (ejercicio.ts,
+same rule as fallback for older rows) feeds `sugerirTipo` (entreno → correr) and `resumenEjercicio(dias, etiquetas)`.entrenos: a
+confirmed type wins (caminata/no_ejercicio = not entreno). The first tile is "Entrenos" with "+ N de caminata o actividad";
+walks still count toward the WHO minutes. `VERSION_COLECTOR_ESPERADA` = 5. (2026-11-19, Mario: idea 3 "puntuaciones propias de sueño, recuperación y actividad")**: `puntuaciones.ts`
+(tested, `puntuaciones.test.ts`) computes in the browser, no collector change: `puntuacionSueno` (duration vs `META_SUENO_MIN` 480 30%,
+efficiency 15%, deep vs 90 min 12.5%, REM vs 100 min 12.5% — minutes = in-bed × pct —, latency `sol_min` 7.5%, WASO 7.5%, bedtime vs
+YOUR median of the previous 14 nights 15%) and `puntuacionActividad` (steps vs `META_PASOS` 8,000 30%, active kcal vs your 30-day median
+20%, days with `ejercicio` in 7 days 25%, moderate + 2×vigorous minutes in 7 days vs 150 25%; exercise parts only when the collector
+sends `ejercicio`). `recuperacion` (indicadores.ts) now weights HRV .25, RHR .20, sleep score .15, temp .12, sleep balance (7-night
+average vs 8 h) .12, breathing .08, yesterday's active kcal vs 14-day median .08 (replaced the old "slept vs 8 h" factor; still needs
+a vital sign). Missing components drop out and their weight is redistributed; levels ≥ 70 / 50–69 / < 50. The weights/rules shown in
+"¿Cómo se calculan?" are `FORMULA_SUENO`/`FORMULA_ACTIVIDAD`/`FORMULA_RECUPERACION`: change them together with the code. UI:
+`PuntuacionesSalud.tsx` (Hoy tab, replaced `TarjetaRecuperacion`; 30-day line chart series-1/2/3 with a dashed 70). Labels from kcal-based
+exercise ignore `ejercicio_etiquetas` (a `no_ejercicio` session still counts). Checked in Playwright with mocked Supabase (1280 light / 390 dark).
+
+**Weekly email report (2026-11-18, Mario: "reporte semanal automático cada lunes")**: `.github/workflows/reporte-salud.yml`
+(cron Monday 14:00 UTC = 8:00 CDMX, + `workflow_dispatch` with optional `lunes`) builds `src/espacios/salud/reporte/enviar.ts`
+into one Node file with `scripts/vite.reporte-salud.ts` (`dist-reporte/reporte.mjs`, gitignored; CI's frontend job builds it too)
+and runs it. It reads `salud.resumen_ligero` (last 45 days before that Monday, minus hr/temp hours) and `salud.ejercicio_etiquetas`
+through the Management API SQL endpoint with the existing `SUPABASE_ACCESS_TOKEN`/`SUPABASE_PROJECT_ID` (owner = `SALUD_USER_ID`
+or the user with most days), so no user password is stored. Content = `reporteSemanal.ts` (pure, tested in `reporteSemanal.test.ts`):
+the Semana tab's `resumenSemanal` (its `formato`/`diferencia` moved from `SemanaViajesRelaciones.tsx` to `semanal.ts`) + steps and
+active kcal per day (`UMBRAL_REPORTE` 1000 / 50) + the week's exercise totals (sessions, OMS minutes = moderate + 2×vigorous vs 150,
+`sinDescartadas` applied), as an inline-styled HTML table (3 columns, fits 390 px) + plain text. Sent by `reporte/correo.ts`, a
+dependency-free SMTP client over implicit TLS (default smtp.gmail.com:465, AUTH LOGIN) with secrets `SALUD_SMTP_USUARIO` /
+`SALUD_SMTP_CONTRASENA` (Gmail app password); optional `SALUD_CORREO_REPORTE`, `URL_DASHBOARD` (button → `#salud`). Without the two
+SMTP secrets the job skips with a notice. **The repo is public: the script and workflow must never print health data or email
+addresses** (SMTP errors report only the code). Checked end to end with a mocked Management API + a local TLS SMTP server, and the
+HTML in Playwright at 700/390 px. `--vista-previa=archivo.html` writes the HTML without sending.
+
+**Salud "Colector" tab (2026-11-19, Mario: panel with the laptop collector's health)**: last tab of Salud. Since oura collector v6
 EVERY hourly run (also failed ones) inserts an `oura_sincronizaciones` row with `resultado` ok|sin_anillo|conexion_cortada|error,
 `codigo`, `mensaje`, `eventos_nuevos`, `ultimo_evento_unix`, `duracion_s` (migration `20261119030000_bitacora_colector.sql`; old rows
 have `resultado` null = ok), and each day of `resumen_diario` carries `eventos_horas` (24 event counts per local hour).
@@ -222,8 +254,8 @@ status (bien < 2 h since the last good reading, atrasado < 6 h, sin_lecturas; th
 can't find the ring, Bluetooth cut, or the collector errors with its message), recent failures grouped when consecutive and equal,
 a 7-day day×hour grid of runs (best result per hour, in the laptop's zone; dashed = laptop didn't run) and a 14-day day×hour grid of
 ring data (puesto = events + skin temp, quitado = events without skin temp, apagado = ≥ 30 min of an apagón, dashed = no events =
-gap, pendiente = after `ultimo_evento_unix`, sin_info = day uploaded by a pre-v5 collector) with gaps ≥ 2 h listed.
-Drawing in `PanelColector.tsx` (+ battery card). `VERSION_COLECTOR_ESPERADA` = 5. Checked in Playwright with mocked Supabase
+gap, pendiente = after `ultimo_evento_unix`, sin_info = day uploaded by a pre-v6 collector) with gaps ≥ 2 h listed.
+Drawing in `PanelColector.tsx` (+ battery card). `VERSION_COLECTOR_ESPERADA` = 6. Checked in Playwright with mocked Supabase
 (1200 light / 390 dark, no overflow).
 
 **Subprojects publish as espacios (2026-11-08, Mario: Trading automatizado, OURA and Viajes "son otros proyectos que
@@ -1642,6 +1674,7 @@ commits:
   Supabase for both (migrations still apply on push) — a separate test database is not set up.
 - `.github/workflows/mantener-activo.yml` (2026-11-01; reworked 2026-11-14) — keeps both Supabase projects from free-plan pausing. One anon read a day was NOT enough: a second "will be paused" email came on 2026-11-08 while the daily run kept succeeding (Supabase's guide: "a few user requests to the database each day"). Now every 4 h: four PostgREST reads (planes, bancos, categorias, transacciones) with each instance's anon key + one SQL query through the Management API (`/v1/projects/{ref}/database/query`, access token). Fails only if every call fails.
 - `.github/workflows/verificar-instancia-clientes.yml` (2026-11-14) — manual only, read-only: checks the customer Supabase project (token/organization, RLS, migrations, Edge Functions + secrets, Auth config, public API, which project the live sites point to; optional table-by-table comparison with a previous project). Runs `scripts/migracion-clientes/verificar.mjs` (pure parts tested in CI with `node --test`). Never print data or customer counts there: the repo and its Actions logs are public. Part of the plan to move the customer project to the company account tecnologia@ordenatulana.com, [docs/migracion-supabase-clientes.md](docs/migracion-supabase-clientes.md) (DONE 2026-11-14: the customer project was transferred — no data copy — to the org "Ordena tu Lana" owned by tecnologia@ordenatulana.com; Mario's personal account left it. `PRODUCTO_SUPABASE_ACCESS_TOKEN` is now that account's token, `PRODUCTO_SUPABASE_ORGANIZACION` its org id; the personal project stays in Mario's personal org with `SUPABASE_ACCESS_TOKEN`).
+- `.github/workflows/reporte-salud.yml` (2026-11-18) — Mondays 14:00 UTC: weekly Salud email (see "Weekly email report").
 - `.github/workflows/deploy.yml` — triggers on `frontend/**`. Builds the frontend and deploys to
   Cloudflare Pages via `wrangler pages deploy`, using secrets `CLOUDFLARE_API_TOKEN`,
   `CLOUDFLARE_ACCOUNT_ID`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`. Assumes the

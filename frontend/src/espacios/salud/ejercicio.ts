@@ -35,8 +35,26 @@ export function minutosPorDia(dias: readonly DiaSalud[]): MinutosDia[] {
   }));
 }
 
+/** Mismo criterio que el colector v5 (oura_local.clase_de_sesion), para sesiones
+ * subidas antes de que trajeran `clase`: ≥ 10 min vigorosos y ≥ 30 % de los
+ * minutos activos. Caminar mucho (MET 3–5) es actividad, no entreno. */
+export const MINIMO_VIGOROSOS_ENTRENO = 10;
+export const FRACCION_VIGOROSA_ENTRENO = 0.3;
+
+export function esEntreno(s: SesionEjercicio): boolean {
+  if (s.clase) return s.clase === "entreno";
+  const activos = s.min_moderados + s.min_vigorosos;
+  return s.min_vigorosos >= MINIMO_VIGOROSOS_ENTRENO && s.min_vigorosos >= FRACCION_VIGOROSA_ENTRENO * activos;
+}
+
+/** Tipos confirmados que NO son entreno. */
+const TIPOS_NO_ENTRENO = new Set(["caminata", "no_ejercicio"]);
+
 export interface ResumenEjercicio {
   sesiones: number;
+  /** Sesiones que fueron entreno: tipo confirmado que no es caminata, o sin
+   * confirmar y `esEntreno`. Las demás son caminatas/actividad. */
+  entrenos: number;
   minutos: number;
   kcal: number | null;
   /** Minutos "equivalentes" por semana: moderados + 2 × vigorosos. */
@@ -48,15 +66,21 @@ const DIA_MS = 86400000;
 
 /** Resumen del periodo. Las semanas se cuentan entre el primer y el último
  * día CON DATOS del periodo (≥ 1), para no dividir entre días que no existen. */
-export function resumenEjercicio(dias: readonly DiaSalud[]): ResumenEjercicio | null {
+export function resumenEjercicio(dias: readonly DiaSalud[], etiquetas: readonly EtiquetaEjercicio[] = []): ResumenEjercicio | null {
   if (!dias.length) return null;
   const sesiones = dias.flatMap((d) => d.ejercicio ?? []);
   const dur = Date.parse(dias.at(-1)!.fecha) - Date.parse(dias[0].fecha);
   const semanas = Math.max(1, (dur / DIA_MS + 1) / 7);
   const equivalentes = sesiones.reduce((t, s) => t + s.min_moderados + 2 * s.min_vigorosos, 0);
   const conKcal = sesiones.filter((s) => typeof s.kcal === "number");
+  const confirmadas = etiquetas.filter((e) => e.estado === "confirmada");
+  const entrenos = sesiones.filter((s) => {
+    const e = confirmadas.length ? etiquetaDeSesion(s, confirmadas) : null;
+    return e ? !TIPOS_NO_ENTRENO.has(e.tipo) : esEntreno(s);
+  }).length;
   return {
     sesiones: sesiones.length,
+    entrenos,
     minutos: sesiones.reduce((t, s) => t + s.duracion_min, 0),
     kcal: conKcal.length ? conKcal.reduce((t, s) => t + (s.kcal as number), 0) : null,
     equivalentesPorSemana: Math.round(equivalentes / semanas),
@@ -128,8 +152,8 @@ export function etiquetaDeSesion(s: SesionEjercicio, etiquetas: readonly Etiquet
   return mejor;
 }
 
-/** Reglas mientras no haya ejemplos confirmados: correr = MET promedio ≥ 6, o
- * FC ≥ 135 lpm con MET ≥ 4.5; lo demás, caminata. Primera aproximación. */
+/** Reglas mientras no haya ejemplos confirmados: correr = entreno (`esEntreno`),
+ * MET promedio ≥ 6, o FC ≥ 135 lpm con MET ≥ 4.5; lo demás, caminata. */
 export const MET_CORRER = 6;
 export const LPM_CORRER = 135;
 export const MET_CORRER_CON_FC = 4.5;
@@ -167,8 +191,9 @@ export function sugerirTipo(s: SesionEjercicio, ejemplos: readonly Ejemplo[] = [
     return { tipo, motivo: "parecida a las que ya confirmaste" };
   }
   const correr =
+    esEntreno(s) ||
     s.met_prom >= MET_CORRER || (typeof s.lpm_mediana === "number" && s.lpm_mediana >= LPM_CORRER && s.met_prom >= MET_CORRER_CON_FC);
-  return { tipo: correr ? "correr" : "caminata", motivo: correr ? "MET o FC altos" : "MET y FC moderados" };
+  return { tipo: correr ? "correr" : "caminata", motivo: correr ? "esfuerzo vigoroso sostenido" : "MET moderado: caminar, no entrenar" };
 }
 
 /** Sesiones confirmadas que sirven de ejemplo ("no fue ejercicio" también

@@ -27,7 +27,8 @@ import {
   Tendencia,
   Vacio,
 } from "./GraficasSalud";
-import { BloquesSueno, ConstanciaHorario, EstresDelDia, TarjetaRecuperacion, TemperaturaDelDia } from "./IndicadoresSalud";
+import { BloquesSueno, ConstanciaHorario, EstresDelDia, TemperaturaDelDia } from "./IndicadoresSalud";
+import { HistorialPuntuaciones, PuntuacionesHoy } from "./PuntuacionesSalud";
 import { estresDiurno } from "./indicadores";
 import { EjercicioSalud } from "./EjercicioSalud";
 import { PanelColector } from "./PanelColector";
@@ -248,8 +249,11 @@ export default function Salud({ onIrAInicio }: PropsEspacio) {
             {pestana === "hoy" && (
               <>
                 <AvisoResumenListo hoy={hoy} onVer={() => cambiarPestana("semana")} />
-                <Panel titulo="Recuperación de hoy">
-                  <TarjetaRecuperacion dias={dias} />
+                <Panel titulo="Tus puntuaciones de hoy" nota="De 0 a 100, calculadas con tus datos del anillo y tus líneas base (no son las de Oura).">
+                  <PuntuacionesHoy dias={dias} hoy={hoy} />
+                </Panel>
+                <Panel titulo="Tus puntuaciones de los últimos 30 días">
+                  <HistorialPuntuaciones dias={dias} />
                 </Panel>
                 <TarjetasHoy dias={dias} />
                 <Panel titulo="Batería del anillo">

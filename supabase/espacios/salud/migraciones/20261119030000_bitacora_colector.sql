@@ -1,5 +1,5 @@
 -- Salud (2026-11-19, Mario: panel con el estado del colector de la laptop).
--- Desde el colector v5 (repo oura, colector/subir_oura.py) TODA corrida horaria
+-- Desde el colector v6 (repo oura, colector/subir_oura.py) TODA corrida horaria
 -- deja una fila en oura_sincronizaciones, también las que fallan, con:
 --   resultado          ok | sin_anillo | conexion_cortada | error
 --   codigo             código de salida del colector (0, 2, 3, otro)

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Caja, Leyenda, Vacio } from "./GraficasSalud";
-import { AMARILLO_AVISO, EJE, fechaCorta, horaDe, horaDecimal, horasMin } from "./formatoSalud";
+import { EJE, fechaCorta, horaDe, horaDecimal, horasMin } from "./formatoSalud";
 import {
   constanciaHorario,
   diasConTemperatura,
@@ -14,91 +14,11 @@ import {
   type EstadoVentana,
   horaFueraDeLoNormal,
   minutosPeriodo,
-  nocheSinSenales,
   periodosDelDia,
-  puntajeSueno,
-  recuperacion,
   temperaturaDelDia,
   type NivelConstancia,
-  type NivelRecuperacion,
 } from "./indicadores";
 import { relojDesde18, type DiaSalud } from "./salud";
-
-// --------------------------------------------- semáforo de recuperación
-
-const SEMAFORO: Record<NivelRecuperacion, { texto: string; fondo: string; tinta: string; consejo: string }> = {
-  listo: { texto: "Listo", fondo: "var(--status-good)", tinta: "#fff", consejo: "Tu cuerpo se recuperó: buen día para exigirte." },
-  moderado: { texto: "Moderado", fondo: AMARILLO_AVISO, tinta: "#0b0b0b", consejo: "Recuperación a medias: ve con calma." },
-  descansa: { texto: "Descansa", fondo: "var(--status-critical)", tinta: "#fff", consejo: "Señales de cansancio o de que algo se está incubando: prioriza dormir." },
-};
-
-const colorPuntos = (p: number) => (p >= 70 ? "var(--status-good)" : p >= 50 ? AMARILLO_AVISO : "var(--status-critical)");
-
-export function TarjetaRecuperacion({ dias }: { dias: readonly DiaSalud[] }) {
-  const r = useMemo(() => recuperacion(dias), [dias]);
-  const ultima = dias.filter((d) => d.noche).at(-1);
-  const sueno = puntajeSueno(ultima);
-  if (!r && nocheSinSenales(ultima))
-    return (
-      <Vacio>
-        Tu última noche ({fechaCorta(ultima!.fecha)}) no trae HRV, FC en reposo ni temperatura, así que no hay con qué armar el
-        semáforo. Aparecerá con la próxima noche que sí los tenga.
-      </Vacio>
-    );
-  if (!r)
-    return (
-      <Vacio>
-        El semáforo compara tu noche con tu normal: aparece cuando hay al menos 3 noches anteriores con HRV, FC en reposo o
-        temperatura.
-      </Vacio>
-    );
-  const s = SEMAFORO[r.nivel];
-  return (
-    <div className="flex flex-wrap items-start gap-5">
-      <div className="flex items-center gap-3">
-        <span
-          className="flex h-16 w-16 items-center justify-center rounded-full text-2xl font-semibold tabular-nums"
-          style={{ background: s.fondo, color: s.tinta }}
-          aria-label={`Recuperación ${r.puntaje} de 100`}
-        >
-          {r.puntaje}
-        </span>
-        <div>
-          <p className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
-            {s.texto}
-          </p>
-          <p className="max-w-56 text-xs" style={{ color: "var(--text-secondary)" }}>
-            {s.consejo}
-          </p>
-          <p className="mt-0.5 text-xs" style={{ color: "var(--text-muted)" }}>
-            Noche que terminó el {fechaCorta(r.fecha)}
-            {sueno !== null && ` · Puntaje de sueño ${Math.round(sueno)}`}
-          </p>
-        </div>
-      </div>
-      <ul className="min-w-56 flex-1 space-y-1.5">
-        {r.factores.map((f) => (
-          <li key={f.clave} className="flex items-center gap-2 text-xs">
-            <span className="w-24 shrink-0" style={{ color: "var(--text-secondary)" }}>
-              {f.nombre}
-            </span>
-            <span className="relative h-2 w-24 shrink-0 overflow-hidden rounded-full" style={{ background: "var(--page-plane)" }}>
-              <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${f.puntos}%`, background: colorPuntos(f.puntos) }} />
-            </span>
-            <span className="tabular-nums" style={{ color: "var(--text-primary)" }}>
-              {f.texto}
-            </span>
-          </li>
-        ))}
-      </ul>
-      <p className="w-full text-xs" style={{ color: "var(--text-muted)" }}>
-        Cálculo propio: cada señal contra tu promedio de los 30 días anteriores ({r.nochesBase} noches de base
-        {r.nochesBase < 7 ? "; con pocas noches es todavía aproximado" : ""}) y lo que dormiste contra 8 h. No es el
-        «Readiness» de Oura.
-      </p>
-    </div>
-  );
-}
 
 // ------------------------------------------------ bloques de sueño del día
 
