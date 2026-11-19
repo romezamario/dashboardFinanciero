@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { conciliarConCorreo, eventosHeredables, primeraFechaCorreo } from "./conciliarCorreo";
+import {
+  avisosPendientes,
+  cargosPorAviso,
+  ultimoDiaTarjetas,
+  conciliarConCorreo,
+  conPendientesPorEvento,
+  eventosHeredables,
+  primeraFechaCorreo,
+} from "./conciliarCorreo";
 import { filaAGastoCorreo, type GastoCorreo } from "./gastosCorreo";
 import { aMovimiento } from "./gastosEstadoCuenta";
 import { transaccion } from "../test/fabrica";
@@ -120,5 +128,85 @@ describe("filaAGastoCorreo", () => {
     expect("evento_id" in sin).toBe(false);
     // Un id que aún no está en el catálogo (recién creado) queda sin nombre, no truena.
     expect(filaAGastoCorreo({ ...base, evento_id: "nuevo" }, catalogo).evento).toBeNull();
+  });
+});
+
+describe("avisosPendientes", () => {
+  it("solo avisos con evento y sin cargo emparejado; los emparejados no se cuentan dos veces", () => {
+    const cargo = transaccion({ fecha: "2026-11-10", monto: 500, evento: "Italia" });
+    const yaLlego = aviso({ fecha: "2026-11-10", monto: 500, evento: "Italia" });
+    const pendiente = aviso({ fecha: "2026-11-15", monto: 800, evento: "Italia" });
+    const sinEvento = aviso({ fecha: "2026-11-16", monto: 90 });
+    const r = avisosPendientes([cargo], [yaLlego, pendiente, sinEvento]);
+    expect(r.pendientes.map((g) => g.id)).toEqual([pendiente.id]);
+    expect(r.porHeredar).toBe(0);
+  });
+
+  it("cuenta los cargos que pueden heredar el evento de su aviso", () => {
+    const cargo = transaccion({ fecha: "2026-11-10", monto: 500 });
+    const r = avisosPendientes([cargo], [aviso({ fecha: "2026-11-10", monto: 500, evento: "Italia" })]);
+    expect(r.pendientes).toEqual([]);
+    expect(r.porHeredar).toBe(1);
+  });
+
+  it("sin pareja pero en fechas que todas las TDC ya cubren -> se descarta (otro monto)", () => {
+    const beyond = transaccion({ fecha: "2026-11-05", cuenta: "TDC Beyond" });
+    const invex = transaccion({ fecha: "2026-11-12", cuenta: "Invex TDC", banco: "Invex TDC" });
+    const viejo = aviso({ fecha: "2026-11-04", monto: 123, evento: "Italia" });
+    const entreCortes = aviso({ fecha: "2026-11-08", monto: 456, evento: "Italia" });
+    const r = avisosPendientes([beyond, invex], [viejo, entreCortes]);
+    expect(r.corte).toBe("2026-11-05");
+    expect(r.descartados).toBe(1);
+    expect(r.pendientes.map((g) => g.id)).toEqual([entreCortes.id]);
+  });
+
+  it("una TDC que ya no se usa (90+ días atrás) y la cuenta de cheques no frenan el corte", () => {
+    const vieja = transaccion({ fecha: "2026-01-31", cuenta: "TDC Vieja" });
+    const actual = transaccion({ fecha: "2026-11-05", cuenta: "TDC Beyond" });
+    const cheques = transaccion({ fecha: "2026-10-01", cuenta: "Priority", banco: "Banamex" });
+    const r = avisosPendientes([vieja, actual, cheques], [aviso({ fecha: "2026-11-01", monto: 7, evento: "X" })]);
+    expect(r.corte).toBe("2026-11-05");
+    expect(r.descartados).toBe(1);
+  });
+});
+
+describe("conPendientesPorEvento", () => {
+  it("suma por evento, agrega eventos solo de correo y reordena", () => {
+    const puntos = [
+      { nombre: "Madrid", ingresos: 0, gastos: 1000 },
+      { nombre: "Italia", ingresos: 0, gastos: 900 },
+    ];
+    const r = conPendientesPorEvento(puntos, [
+      aviso({ monto: 200, evento: "Italia" }),
+      aviso({ monto: 50, evento: "Italia" }),
+      aviso({ monto: 30, evento: "Nuevo viaje" }),
+    ]);
+    expect(r).toEqual([
+      { nombre: "Italia", ingresos: 0, gastos: 900, porCorreo: 250 },
+      { nombre: "Madrid", ingresos: 0, gastos: 1000 },
+      { nombre: "Nuevo viaje", ingresos: 0, gastos: 0, porCorreo: 30 },
+    ]);
+    expect(puntos[1]).toEqual({ nombre: "Italia", ingresos: 0, gastos: 900 });
+  });
+});
+
+describe("cargosPorAviso", () => {
+  it("invierte la conciliación: cada aviso con su cargo", () => {
+    const m = mov({ fecha: "2026-08-14", monto: 250 });
+    const g = aviso({ fecha: "2026-08-15", monto: 250 });
+    const sin = aviso({ monto: 999 });
+    const r = cargosPorAviso([m], conciliarConCorreo([m], [g, sin]));
+    expect(r.get(g.id)).toEqual({ mov: m, diasDeDiferencia: 1 });
+    expect(r.has(sin.id)).toBe(false);
+  });
+
+  it("ultimoDiaTarjetas ignora la cuenta de cheques", () => {
+    expect(
+      ultimoDiaTarjetas([
+        transaccion({ fecha: "2026-10-01" }),
+        transaccion({ fecha: "2026-11-01", cuenta: "Priority", banco: "Banamex" }),
+      ])
+    ).toBe("2026-10-01");
+    expect(ultimoDiaTarjetas([])).toBeNull();
   });
 });

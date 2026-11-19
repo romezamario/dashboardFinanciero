@@ -750,6 +750,18 @@ movements WITHOUT an event whose matched notice HAS one; `HerenciaDeEventos` (Ga
 inline confirmation, the match card (`CoincidenciaFlotante`) offers it per movement, and event cells show a muted "↳ evento" hint. Events are hidden by default in this view,
 so inherited cargos stop adding to the day until the event is re-shown (the success message says so). The match is still only a hint (amount + ±1 day), hence the confirmation.
 Covered by `conciliarCorreo.test.ts` (`eventosHeredables`, `filaAGastoCorreo`); the UI was confirmed working by the user in the real dashboard (2026-10-11).
+**Correo notices in Eventos + reverse match in "Por correo" (2026-11-19, Mario: "agrega con otro color los gastos … por correo que aún no tienen su confirmación con los gastos por estado de cuenta" and "en … por correo, también haz la validación de si ya fue aceptado el gasto en por estado de cuenta")**:
+`avisosPendientes(transacciones, gastos)` (conciliarCorreo.ts, tested) runs the same one-to-one `conciliarConCorreo` over ALL transactions; a notice
+WITH an event and no matched cargo is pending, unless its date is ≤ `corte` = the oldest last-movement date of the TDC accounts in use (cards
+whose last movement is > `DIAS_TARJETA_INACTIVA` = 90 days behind the newest are ignored): those are `descartados` (the cargo most likely came with
+another amount — FX, tip — so adding them would double count). Matched notices whose cargo has NO event are only counted as `porHeredar` (a note
+points to "Heredar eventos"). `conPendientesPorEvento` adds `porCorreo` to the evento chart's points (an event with only notices appears too);
+`IngresosGastosPorDimensionChart` `conPorCorreo` draws it as a third bar in `--series-3`, labeled "$X · al día $gastos+X"; category/comercio
+click-filters apply to notices by their own names. `EventosTab` gets `gastosCorreo` from `Dashboard` (`useGastosCorreo` rows resolved with
+`filaAGastoCorreo`) and lists the pending notices in a collapsible table. Reverse: `GastosCorreoTab` gets `transacciones`/`onActualizado`;
+`cargosPorAviso` inverts the matching, the detail table has an "Estado de cuenta" column (✓ cuenta / Pendiente), the day header says
+"N de M en estado de cuenta", and a row click opens `CargoFlotante` (CoincidenciaFlotante.tsx: the matched cargo, offering to pass the notice's
+event to it; or why there is none, using `ultimoDiaTarjetas`). Checked in Playwright with synthetic data (1100 dark / 390 light, no overflow).
 **Same bulk "Asignar evento" in "Por estado de cuenta" (2026-10-10, user's request)**: the block is the shared `AsignarEventoDia.tsx` (props: ids of the day, selection, count already
 with event, existing events, `onAsignarEvento(ids, evento|null)`, `idLista`, `nota`), placed at the END of the day panel (below the detail and "No suman" tables, as in "Por correo").
 Checkboxes (`CeldaSeleccion`, click doesn't open the match card) are in both tables; "Seleccionar todo el día" covers summed and non-summed movements. It saves with

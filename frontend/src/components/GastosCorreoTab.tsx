@@ -1,4 +1,9 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { cargosPorAviso, conciliarConCorreo, ultimoDiaTarjetas, type CargoEmparejado } from "../lib/conciliarCorreo";
+import { aMovimiento } from "../lib/gastosEstadoCuenta";
+import { actualizarCategoriaComercioYEvento } from "../lib/queries";
+import type { Transaccion } from "../lib/types";
+import { CargoFlotante } from "./CoincidenciaFlotante";
 import { AsignarEventoDia } from "./AsignarEventoDia";
 import { descargarDiaExcel } from "../lib/exportarGastosDia";
 import {
@@ -35,7 +40,12 @@ export function GastosCorreoTab({
   onAsignarEvento,
   vista,
   onCambiarVista,
+  transacciones,
+  onActualizado,
 }: {
+  /** Los estados de cuenta: con ellos se marca qué avisos ya tienen su cargo. */
+  transacciones: Transaccion[];
+  onActualizado: (ids?: string[]) => void | Promise<void>;
   /** null = todavía cargando (los carga `GastosRecientesTab`, una sola vez, para
    * que volver a esta vista desde "Por estado de cuenta" no vuelva a consultar). */
   gastos: GastoCorreo[] | null;
@@ -59,6 +69,21 @@ export function GastosCorreoTab({
     [dias]
   );
   const porFecha = useMemo(() => new Map(dias.map((d) => [d.fecha, d])), [dias]);
+  // La misma conciliación que "Por estado de cuenta" (uno a uno, monto exacto y ±1 día,
+  // sobre TODAS las transacciones), vista desde el aviso.
+  const movimientos = useMemo(() => transacciones.flatMap((t) => aMovimiento(t) ?? []), [transacciones]);
+  const cargos = useMemo(
+    () => (gastos ? cargosPorAviso(movimientos, conciliarConCorreo(movimientos, gastos)) : new Map<string, CargoEmparejado>()),
+    [movimientos, gastos]
+  );
+  const ultimoDiaEstados = useMemo(() => ultimoDiaTarjetas(transacciones), [transacciones]);
+  const heredar = useCallback(
+    async (movId: string, evento: string) => {
+      await actualizarCategoriaComercioYEvento([movId], { evento });
+      await onActualizado([movId]);
+    },
+    [onActualizado]
+  );
 
   if (error) {
     return (
@@ -87,8 +112,9 @@ export function GastosCorreoTab({
     <div className="space-y-4">
       <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
         Cargos de los avisos de compra de Banamex (todo lo que se ha cargado). Elige un día
-        para ver su detalle. Horas en CDMX, montos en MXN. Aparte de tus estados de cuenta: los
-        cargos de aquí aún no se concilian con ellos. Puedes asignarles un evento
+        para ver su detalle. Horas en CDMX, montos en MXN. La columna "Estado de cuenta" marca con ✓ los avisos
+        cuyo cargo ya llegó en un estado de cuenta (mismo monto, ±1 día; clic en el renglón para
+        verlo). Puedes asignarles un evento
         desde su día para categorizarlos sin esperar al estado de cuenta: cuando llegue, el cargo
         emparejado puede heredarlo.
       </p>
@@ -109,6 +135,9 @@ export function GastosCorreoTab({
               dia={dia}
               eventosExistentes={eventosExistentes}
               onAsignarEvento={onAsignarEvento}
+              cargos={cargos}
+              ultimoDiaEstados={ultimoDiaEstados}
+              onHeredar={heredar}
             />
           ) : null;
         }}
@@ -124,11 +153,19 @@ function PanelDia({
   dia,
   eventosExistentes,
   onAsignarEvento,
+  cargos,
+  ultimoDiaEstados,
+  onHeredar,
 }: {
   dia: DiaGastos;
   eventosExistentes: string[];
   onAsignarEvento: (ids: string[], evento: string | null) => Promise<void>;
+  cargos: Map<string, CargoEmparejado>;
+  ultimoDiaEstados: string | null;
+  onHeredar: (movId: string, evento: string) => Promise<void>;
 }) {
+  const [flotante, setFlotante] = useState<{ gasto: GastoCorreo; x: number; y: number } | null>(null);
+  const conCargo = dia.gastos.filter((g) => cargos.has(g.id)).length;
   const { descargando, errorExcel, descargar } = useDescargaExcel(() => descargarDiaExcel(dia));
   // Gastos marcados para asignarles evento (ids de `gastos_correo`).
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
@@ -152,7 +189,10 @@ function PanelDia({
         </h3>
         <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
           {dia.gastos.length} {dia.gastos.length === 1 ? "movimiento" : "movimientos"} ·{" "}
-          {dia.tarjetas.length} {dia.tarjetas.length === 1 ? "tarjeta" : "tarjetas"}
+          {dia.tarjetas.length} {dia.tarjetas.length === 1 ? "tarjeta" : "tarjetas"} ·{" "}
+          {conCargo === dia.gastos.length
+            ? "todos en estado de cuenta"
+            : `${conCargo} de ${dia.gastos.length} en estado de cuenta`}
         </span>
         <span
           className="ml-auto text-sm font-semibold tabular-nums"
@@ -177,7 +217,13 @@ function PanelDia({
       )}
       <div className="space-y-5 px-4 pb-4 pt-1">
         <TablaResumen dia={dia} />
-        <TablaDetalle dia={dia} seleccion={seleccion} onAlternar={alternar} />
+        <TablaDetalle
+          dia={dia}
+          seleccion={seleccion}
+          onAlternar={alternar}
+          cargos={cargos}
+          onAbrir={(e, gasto) => setFlotante({ gasto, x: e.clientX, y: e.clientY })}
+        />
         <AsignarEventoDia
           idsDelDia={dia.gastos.map((g) => g.id)}
           seleccion={seleccion}
@@ -189,6 +235,15 @@ function PanelDia({
           nota="Cuando llegue el estado de cuenta, el cargo que se empareje con el aviso podrá heredarlo."
         />
       </div>
+      {flotante && (
+        <CargoFlotante
+          {...flotante}
+          cargo={cargos.get(flotante.gasto.id)}
+          ultimoDiaEstados={ultimoDiaEstados}
+          onHeredar={onHeredar}
+          onCerrar={() => setFlotante(null)}
+        />
+      )}
     </section>
   );
 }
@@ -222,10 +277,14 @@ function TablaDetalle({
   dia,
   seleccion,
   onAlternar,
+  cargos,
+  onAbrir,
 }: {
   dia: DiaGastos;
   seleccion: Set<string>;
   onAlternar: (id: string) => void;
+  cargos: Map<string, CargoEmparejado>;
+  onAbrir: (evento: React.MouseEvent, gasto: GastoCorreo) => void;
 }) {
   return (
     <SeccionTabla titulo="Detalle por transacción">
@@ -237,6 +296,7 @@ function TablaDetalle({
           <th className="px-3 py-2 text-left font-semibold">Ciudad</th>
           <th className="px-3 py-2 text-left font-semibold">Hora</th>
           <th className="px-3 py-2 text-left font-semibold">Evento</th>
+          <th className="px-3 py-2 text-left font-semibold">Estado de cuenta</th>
           <CabeceraColumnas columnas={dia.tarjetas} nombre={nombreTarjeta} />
         </tr>
       </thead>
@@ -245,8 +305,14 @@ function TablaDetalle({
           if (fila.tipo === "gasto") {
             const g = fila.gasto;
             return (
-              <tr key={g.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                <td className="px-3 py-1.5">
+              <tr
+                key={g.id}
+                onClick={(e) => onAbrir(e, g)}
+                className="cursor-pointer"
+                title="Clic para ver su cargo en el estado de cuenta"
+                style={{ borderBottom: "1px solid var(--border)" }}
+              >
+                <td className="px-3 py-1.5" onClick={(e) => e.stopPropagation()}>
                   <input
                     type="checkbox"
                     checked={seleccion.has(g.id)}
@@ -269,6 +335,7 @@ function TablaDetalle({
                 <td className="whitespace-nowrap px-3 py-1.5" style={{ color: "var(--text-secondary)" }}>
                   {g.evento ?? ""}
                 </td>
+                <CeldaEstadoCuenta cargo={cargos.get(g.id)} />
                 <CeldasSumas sumas={sumarUno(g, dia.tarjetas)} columnas={dia.tarjetas} />
               </tr>
             );
@@ -279,6 +346,7 @@ function TablaDetalle({
                 <td />
                 <td />
                 <td className="whitespace-nowrap px-3 py-1.5">Subtotal {fila.comercio}</td>
+                <td />
                 <td />
                 <td />
                 <td />
@@ -294,6 +362,7 @@ function TablaDetalle({
               <td />
               <td />
               <td />
+              <td />
               <CeldasSumas sumas={fila.sumas} columnas={dia.tarjetas} />
             </tr>
           );
@@ -305,9 +374,25 @@ function TablaDetalle({
           <td />
           <td />
           <td />
+          <td />
           <CeldasSumas sumas={dia.total} columnas={dia.tarjetas} />
         </tr>
       </tbody>
     </SeccionTabla>
+  );
+}
+
+/** ✓ si el aviso ya tiene su cargo en un estado de cuenta; "Pendiente" si no. Nunca solo color. */
+function CeldaEstadoCuenta({ cargo }: { cargo: CargoEmparejado | undefined }) {
+  return (
+    <td className="whitespace-nowrap px-3 py-1.5">
+      {cargo ? (
+        <span style={{ color: "var(--status-good)" }} title={`${cargo.mov.cuenta}: ${cargo.mov.descripcion}`}>
+          ✓ {cargo.mov.cuenta}
+        </span>
+      ) : (
+        <span style={{ color: "var(--text-muted)" }}>Pendiente</span>
+      )}
+    </td>
   );
 }

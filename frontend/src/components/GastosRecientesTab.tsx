@@ -95,6 +95,8 @@ export function GastosRecientesTab(props: GastosRecientesTabProps) {
           onAsignarEvento={asignarEvento}
           vista={vista}
           onCambiarVista={cambiarVista}
+          transacciones={props.transacciones}
+          onActualizado={props.onActualizado}
         />
       ) : (
         <GastosEstadoCuentaTab

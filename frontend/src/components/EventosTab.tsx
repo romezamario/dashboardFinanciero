@@ -16,7 +16,9 @@ import { useEsMovil } from "../hooks/useEsMovil";
 import { IngresosGastosPorDimensionChart } from "./IngresosGastosPorDimensionChart";
 import { MENSAJE_SIN_COMERCIO } from "../lib/texto";
 import { TransaccionesTabla } from "./TransaccionesTabla";
-import { monedaConCentavos as formateadorMoneda, fechaCorta } from "../lib/formato";
+import { monedaConCentavos as formateadorMoneda, fechaCorta, moneda } from "../lib/formato";
+import { avisosPendientes, conPendientesPorEvento } from "../lib/conciliarCorreo";
+import type { GastoCorreo } from "../lib/gastosCorreo";
 
 const TOPE_RESULTADOS = 100;
 
@@ -29,6 +31,9 @@ const ETIQUETAS_FILTRO_EVENTO = {
 interface EventosTabProps {
   transacciones: Transaccion[];
   onActualizado: (ids?: string[]) => void | Promise<void>;
+  /** Avisos de "Gastos recientes" por correo (null = aún cargando o edición sin correo):
+   * los que tienen evento y no han llegado en un estado de cuenta se suman aparte. */
+  gastosCorreo?: GastoCorreo[] | null;
 }
 
 /**
@@ -44,7 +49,7 @@ interface EventosTabProps {
  * de texto libre en otras pestañas, no se muestra nada hasta que al menos un
  * filtro esté activo (evitar listar todo por accidente).
  */
-export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
+export function EventosTab({ transacciones, onActualizado, gastosCorreo = null }: EventosTabProps) {
   const [busqueda, setBusqueda] = useState("");
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
@@ -107,6 +112,34 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
     () => agruparPor(aplicarFiltros(transaccionesConEvento, filtrosEvento, "evento"), eventoDe),
     [transaccionesConEvento, filtrosEvento]
   );
+  // Avisos de correo con evento cuyo cargo aún no llega en un estado de cuenta (los ya
+  // emparejados se cuentan por su cargo: nunca dos veces). Mismo filtro de
+  // categoría/comercio que la gráfica, por nombre (el aviso trae los suyos).
+  const pendientesCorreo = useMemo(
+    () => (gastosCorreo ? avisosPendientes(transacciones, gastosCorreo) : null),
+    [transacciones, gastosCorreo]
+  );
+  const pendientesFiltrados = useMemo(
+    () =>
+      (pendientesCorreo?.pendientes ?? []).filter(
+        (g) =>
+          (!filtrosEvento.categoria || g.categoria === filtrosEvento.categoria) &&
+          (!filtrosEvento.comercio || g.comercio === filtrosEvento.comercio)
+      ),
+    [pendientesCorreo, filtrosEvento.categoria, filtrosEvento.comercio]
+  );
+  const puntosPorEvento = useMemo(
+    () => conPendientesPorEvento(gastoPorEvento, pendientesFiltrados),
+    [gastoPorEvento, pendientesFiltrados]
+  );
+  const pendientesDelEvento = useMemo(
+    () =>
+      filtrosEvento.evento
+        ? pendientesFiltrados.filter((g) => g.evento === filtrosEvento.evento)
+        : pendientesFiltrados,
+    [pendientesFiltrados, filtrosEvento.evento]
+  );
+
   const gastoPorCategoriaDelEvento = useMemo(
     () =>
       agruparPor(aplicarFiltros(transaccionesConEvento, filtrosEvento, "categoria"), categoriaDe),
@@ -245,10 +278,19 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
         dimension="evento"
         ayudaClic="clic en un evento para ver su detalle"
         mensajeVacio="Ninguna transacción tiene un evento asignado todavía -- selecciona transacciones abajo y asígnales uno."
-        datos={gastoPorEvento}
+        datos={puntosPorEvento}
         seleccionado={filtrosEvento.evento}
         onClickElemento={(evento) => alternarFiltroEvento("evento", evento)}
+        conPorCorreo={pendientesFiltrados.length > 0}
+        nota={pendientesCorreo && <NotaPorCorreo {...pendientesCorreo} />}
       />
+
+      {pendientesDelEvento.length > 0 && (
+        <AvisosPendientesTabla
+          avisos={pendientesDelEvento}
+          evento={filtrosEvento.evento ?? null}
+        />
+      )}
 
       {transaccionesConEvento.length > 0 && (
         <>
@@ -622,5 +664,82 @@ export function EventosTab({ transacciones, onActualizado }: EventosTabProps) {
         )}
       </div>
     </div>
+  );
+}
+
+/** Explica la serie "Por correo" y lo que deliberadamente no suma. */
+function NotaPorCorreo({
+  pendientes,
+  porHeredar,
+  descartados,
+  corte,
+}: ReturnType<typeof avisosPendientes>) {
+  if (pendientes.length === 0 && porHeredar === 0 && descartados === 0) return null;
+  return (
+    <div className="mt-2 space-y-1 text-xs" style={{ color: "var(--text-muted)" }}>
+      {pendientes.length > 0 && (
+        <p>
+          <span style={{ color: "var(--series-3)" }}>■</span> Por correo: {pendientes.length} aviso(s) de
+          Gastos recientes con evento cuyo cargo todavía no llega en un estado de cuenta. "Al día" = gastos +
+          por correo. Cuando llegue el estado de cuenta, el aviso se empareja (mismo monto, ±1 día) y deja de
+          sumarse aquí.
+        </p>
+      )}
+      {porHeredar > 0 && (
+        <p>
+          {porHeredar} cargo(s) del estado de cuenta tienen un aviso con evento pero ellos no: no se suman a
+          ningún evento hasta que uses "Heredar eventos" en Gastos recientes → Por estado de cuenta.
+        </p>
+      )}
+      {descartados > 0 && corte && (
+        <p>
+          {descartados} aviso(s) con evento hasta el {fechaCorta(corte)} (ya cubierto por todos los estados de
+          cuenta) no tienen pareja exacta: probablemente el cargo llegó con otro monto, así que no se suman para
+          no contarlos dos veces.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function AvisosPendientesTabla({ avisos, evento }: { avisos: GastoCorreo[]; evento: string | null }) {
+  const total = avisos.reduce((suma, g) => suma + g.monto, 0);
+  return (
+    <details className="tarjeta rounded-lg p-4">
+      <summary className="cursor-pointer text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+        Por correo, aún sin estado de cuenta{evento ? ` · ${evento}` : ""}: {avisos.length} aviso(s) por{" "}
+        {moneda.format(total)}
+      </summary>
+      <div className="mt-2 max-h-80 overflow-auto">
+        <table className="w-full text-xs" style={{ borderCollapse: "collapse" }}>
+          <tbody>
+            {avisos.map((g) => (
+              <tr key={g.id} style={{ borderBottom: "1px solid var(--gridline)" }}>
+                <td className="py-1.5 pr-2 whitespace-nowrap" style={{ color: "var(--text-secondary)" }}>
+                  {fechaCorta(g.fecha)} {g.hora}
+                </td>
+                <td className="py-1.5 pr-2" style={{ color: "var(--text-primary)" }}>
+                  {g.comercio || g.establecimiento}
+                  <span className="ml-1" style={{ color: "var(--text-muted)" }}>
+                    · {g.categoria} · tarjeta …{g.tarjeta}
+                  </span>
+                </td>
+                {!evento && (
+                  <td className="py-1.5 pr-2" style={{ color: "var(--text-secondary)" }}>
+                    {g.evento}
+                  </td>
+                )}
+                <td
+                  className="py-1.5 text-right whitespace-nowrap"
+                  style={{ color: "var(--text-secondary)", fontVariantNumeric: "tabular-nums" }}
+                >
+                  {formateadorMoneda.format(g.monto)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </details>
   );
 }

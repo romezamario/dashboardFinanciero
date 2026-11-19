@@ -29,6 +29,7 @@ import { LimiteDeError } from "./LimiteDeError";
 import { Segmentado } from "./Segmentado";
 import { ProveedorMetaDiaria } from "./MetaDiaria";
 import { useGastosCorreo } from "../hooks/useGastosCorreo";
+import { filaAGastoCorreo } from "../lib/gastosCorreo";
 import { cargarConRecarga } from "../lib/cargarConRecarga";
 
 // Cada pestaña que no es la de inicio se baja al abrirla por primera vez:
@@ -295,6 +296,15 @@ export function Dashboard({
   const transacciones = useMemo<Transaccion[]>(
     () => (datos ? armarTransacciones(datos.filas, datos.catalogos) : []),
     [datos]
+  );
+  // Eventos suma aparte los avisos con evento que aún no llegan en un estado de cuenta.
+  const catalogoEventos = datos?.catalogos.eventos;
+  const gastosCorreoEventos = useMemo(
+    () =>
+      avisosCorreo.filas && catalogoEventos
+        ? avisosCorreo.filas.map((f) => filaAGastoCorreo(f, catalogoEventos))
+        : null,
+    [avisosCorreo.filas, catalogoEventos]
   );
 
   // Las tarjetas de crédito comparten UNA pestaña de comparación
@@ -730,7 +740,11 @@ export function Dashboard({
             </p>
           )
         ) : vistaActiva === PESTANA_EVENTOS ? (
-          <EventosTab transacciones={transacciones} onActualizado={recargarTransacciones} />
+          <EventosTab
+            transacciones={transacciones}
+            onActualizado={recargarTransacciones}
+            gastosCorreo={gastosCorreoEventos}
+          />
         ) : vistaActiva === PESTANA_TARJETAS_CREDITO ? (
           <TarjetasCreditoTab
             transacciones={transaccionesTarjetas}

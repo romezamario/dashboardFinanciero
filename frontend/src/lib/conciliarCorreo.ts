@@ -1,5 +1,7 @@
 import type { GastoCorreo } from "./gastosCorreo";
-import { diasEntre, type MovimientoDia } from "./gastosEstadoCuenta";
+import { aMovimiento, diasEntre, ultimaFechaPorCuenta, type MovimientoDia } from "./gastosEstadoCuenta";
+import type { PuntoDimension } from "./queries";
+import type { Transaccion } from "./types";
 
 // Posible coincidencia entre un cargo de estado de cuenta y un aviso de compra
 // del correo (vista "Por estado de cuenta" -> clic en el movimiento). No hay un
@@ -110,4 +112,104 @@ export function eventosHeredables(
     else porEvento.set(evento, [m.id]);
   }
   return porEvento;
+}
+
+/** Una TDC cuyo último movimiento quedó más de estos días antes que el de la TDC más al
+ * día se toma como tarjeta que ya no se usa: no frena el corte de `avisosPendientes`. */
+export const DIAS_TARJETA_INACTIVA = 90;
+
+export interface AvisosPendientes {
+  /** Avisos CON evento que todavía no tienen su cargo en un estado de cuenta: el gasto que
+   * ya ocurrió pero aún no llega en un PDF. */
+  pendientes: GastoCorreo[];
+  /** Avisos con evento cuyo cargo YA llegó, pero sin evento: no se suman aquí (no son
+   * pendientes); se arreglan con "Heredar eventos" en Gastos recientes. */
+  porHeredar: number;
+  /** Avisos con evento sin pareja de días que todas las TDC ya cubren (en o antes de
+   * `corte`): casi seguro el cargo sí llegó con otro monto (tipo de cambio, propina), así
+   * que NO se suman, para no contarlos dos veces. */
+  descartados: number;
+  /** Último día que cubren TODOS los estados de cuenta de TDC en uso (null = no hay TDC). */
+  corte: string | null;
+}
+
+/**
+ * Avisos de correo con evento que aún no están en el estado de cuenta (Eventos -> serie
+ * "Por correo"). Se usa el mismo emparejamiento uno a uno que "Gastos recientes"
+ * (`conciliarConCorreo`, monto exacto y ±1 día) sobre TODAS las transacciones: un aviso
+ * emparejado ya está contado por su cargo y no se vuelve a sumar.
+ */
+export function avisosPendientes(transacciones: Transaccion[], gastos: GastoCorreo[]): AvisosPendientes {
+  const movimientos = transacciones.flatMap((t) => aMovimiento(t) ?? []);
+  const coincidencias = conciliarConCorreo(movimientos, gastos);
+  const emparejados = new Set(Array.from(coincidencias.values(), (c) => c.gasto.id));
+  let porHeredar = 0;
+  for (const m of movimientos) if (!m.evento && coincidencias.get(m.id)?.gasto.evento) porHeredar += 1;
+
+  const ultimas = ultimaFechaPorCuenta(transacciones).filter((u) => !u.esDebito).map((u) => u.fecha);
+  const masReciente = ultimas.reduce<string | null>((max, f) => (max === null || f > max ? f : max), null);
+  const corte = masReciente
+    ? ultimas
+        .filter((f) => diasEntre(masReciente, f) <= DIAS_TARJETA_INACTIVA)
+        .reduce((min, f) => (f < min ? f : min), masReciente)
+    : null;
+
+  const pendientes: GastoCorreo[] = [];
+  let descartados = 0;
+  for (const g of gastos) {
+    if (!g.evento || emparejados.has(g.id) || centavos(g.monto) <= 0) continue;
+    if (g.moneda && g.moneda !== "MXN") continue;
+    if (corte && g.fecha <= corte) descartados += 1;
+    else pendientes.push(g);
+  }
+  pendientes.sort((a, b) => -porFechaHora(a, b));
+  return { pendientes, porHeredar, descartados, corte };
+}
+
+/** Agrega a los puntos por evento (de `agruparPor`) la serie `porCorreo` con los avisos
+ * pendientes; un evento que solo tiene avisos (un viaje en curso) entra también. Reordena
+ * por ingresos + gastos + por correo, igual que `agruparPor`. */
+export function conPendientesPorEvento(puntos: PuntoDimension[], pendientes: GastoCorreo[]): PuntoDimension[] {
+  const porEvento = new Map(puntos.map((p) => [p.nombre, { ...p }]));
+  for (const g of pendientes) {
+    if (!g.evento) continue;
+    let punto = porEvento.get(g.evento);
+    if (!punto) {
+      punto = { nombre: g.evento, ingresos: 0, gastos: 0 };
+      porEvento.set(g.evento, punto);
+    }
+    punto.porCorreo = (punto.porCorreo ?? 0) + g.monto;
+  }
+  const total = (p: PuntoDimension) => p.ingresos + p.gastos + (p.porCorreo ?? 0);
+  return Array.from(porEvento.values()).sort((a, b) => total(b) - total(a));
+}
+
+/** El cargo del estado de cuenta emparejado con un aviso (vista "Por correo"). */
+export interface CargoEmparejado {
+  mov: MovimientoDia;
+  /** 0 = el mismo día; 1 = un día antes o después. */
+  diasDeDiferencia: number;
+}
+
+/** La misma conciliación vista desde el correo: `Map<id del aviso, cargo>`. Como el
+ * emparejamiento es uno a uno, cada aviso tiene a lo más un cargo. */
+export function cargosPorAviso(
+  movimientos: MovimientoDia[],
+  coincidencias: Map<string, Coincidencia>
+): Map<string, CargoEmparejado> {
+  const porId = new Map(movimientos.map((m) => [m.id, m]));
+  const resultado = new Map<string, CargoEmparejado>();
+  for (const [id, c] of coincidencias) {
+    const mov = porId.get(id);
+    if (mov) resultado.set(c.gasto.id, { mov, diasDeDiferencia: c.diasDeDiferencia });
+  }
+  return resultado;
+}
+
+/** Último día con movimientos de alguna TDC (null = no hay): un aviso posterior
+ * todavía no puede estar en un estado de cuenta. */
+export function ultimoDiaTarjetas(transacciones: Transaccion[]): string | null {
+  return ultimaFechaPorCuenta(transacciones)
+    .filter((u) => !u.esDebito)
+    .reduce<string | null>((max, u) => (max === null || u.fecha > max ? u.fecha : max), null);
 }

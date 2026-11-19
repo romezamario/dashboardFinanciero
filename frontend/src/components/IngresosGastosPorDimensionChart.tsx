@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import {
   Bar,
   BarChart,
@@ -35,6 +36,12 @@ interface IngresosGastosPorDimensionChartProps {
    * categoría: comercio y evento son opcionales, el resto simplemente no se
    * muestra). */
   plegarResto?: boolean;
+  /** Dibuja una tercera barra (`porCorreo`, otro color): gastos vistos en los avisos de
+   * correo que todavía no llegan en un estado de cuenta (solo Eventos). Su etiqueta dice
+   * también el gasto al día (gastos + por correo). */
+  conPorCorreo?: boolean;
+  /** Texto bajo la gráfica (notas de la serie por correo). */
+  nota?: ReactNode;
 }
 
 /**
@@ -50,6 +57,8 @@ export function IngresosGastosPorDimensionChart({
   ayudaClic,
   mensajeVacio,
   plegarResto = false,
+  conPorCorreo = false,
+  nota,
 }: IngresosGastosPorDimensionChartProps) {
   const visibles = datos.slice(0, TOPE);
   let datosFinales = visibles;
@@ -60,7 +69,7 @@ export function IngresosGastosPorDimensionChart({
     if (ingresos + gastos > 0) datosFinales = [...visibles, { nombre: OTROS, ingresos, gastos }];
   }
 
-  const alturaFila = 44;
+  const alturaFila = conPorCorreo ? 60 : 44;
   const esMovil = useEsMovil();
   // El eje Y (nombres) y el margen derecho (etiquetas de monto) son props
   // numéricos de Recharts, no clases de Tailwind -- en un teléfono se
@@ -79,7 +88,12 @@ export function IngresosGastosPorDimensionChart({
       }
     : undefined;
 
-  const barra = (dataKey: "ingresos" | "gastos", name: string, color: string) => (
+  const barra = (
+    dataKey: "ingresos" | "gastos" | "porCorreo",
+    name: string,
+    color: string,
+    etiqueta: (d: PuntoDimension) => string = (d) => (d[dataKey] ? moneda.format(d[dataKey]) : "")
+  ) => (
     <Bar
       dataKey={dataKey}
       name={name}
@@ -96,9 +110,12 @@ export function IngresosGastosPorDimensionChart({
           tocar la barra para verlo en el tooltip. */}
       {!esMovil && (
         <LabelList
-          dataKey={dataKey}
+          dataKey="nombre"
           position="right"
-          formatter={(v: unknown) => moneda.format(Number(v))}
+          formatter={(nombre: unknown) => {
+            const d = datosFinales.find((p) => p.nombre === nombre);
+            return d ? etiqueta(d) : "";
+          }}
           style={{ fill: "var(--text-secondary)", fontSize: 12 }}
         />
       )}
@@ -151,10 +168,17 @@ export function IngresosGastosPorDimensionChart({
               />
               {barra("ingresos", "Ingresos", "var(--series-1)")}
               {barra("gastos", "Gastos", "var(--series-2)")}
+              {conPorCorreo &&
+                barra("porCorreo", "Por correo, sin estado de cuenta", "var(--series-3)", (d) =>
+                  d.porCorreo
+                    ? `${moneda.format(d.porCorreo)} · al día ${moneda.format(d.gastos + d.porCorreo)}`
+                    : ""
+                )}
             </BarChart>
           </ResponsiveContainer>
         </div>
       )}
+      {nota}
     </div>
   );
 }

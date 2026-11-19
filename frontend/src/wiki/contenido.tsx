@@ -14,7 +14,7 @@ export interface SeccionWiki {
   cuerpo: ReactNode;
 }
 
-export const ULTIMA_REVISION = "29 de octubre de 2026";
+export const ULTIMA_REVISION = "19 de noviembre de 2026";
 
 export const SECCIONES: SeccionWiki[] = [
   // ------------------------------------------------------------ inicio
@@ -895,6 +895,15 @@ export const SECCIONES: SeccionWiki[] = [
           cuenta, tarjeta y texto para asignar o quitar un evento a varias transacciones; no lista
           nada hasta que eliges al menos un filtro.
         </P>
+        <P>
+          La gráfica por evento suma en una tercera barra, de otro color, <B>"Por correo, sin estado
+          de cuenta"</B>: los avisos de "Gastos recientes" con evento cuyo cargo todavía no llega en
+          un estado de cuenta (la etiqueta dice también el gasto <B>al día</B> = gastos + por correo).
+          Un aviso que ya se emparejó con su cargo (mismo monto, ±1 día) no se suma: ya cuenta por el
+          cargo. Tampoco se suman los avisos sin pareja de fechas que todos los estados de cuenta de
+          tarjeta ya cubren (casi seguro el cargo llegó con otro monto), y si el cargo emparejado no
+          tiene el evento hay que heredarlo para que cuente.
+        </P>
         <Sub>Shophunters</Sub>
         <P>
           Aparece solo si hay transacciones con un evento cuyo nombre contiene "shophunters"
@@ -1061,6 +1070,11 @@ export const SECCIONES: SeccionWiki[] = [
           cuenta, los movimientos que se emparejan con un aviso con evento pueden{" "}
           <B>heredarlo</B> ("Heredar eventos", siempre con confirmación y sin pisar un evento ya
           asignado).
+        </P>
+        <P>
+          Al revés también: en la vista por correo, la columna <B>"Estado de cuenta"</B> marca con ✓
+          (y la cuenta) los avisos cuyo cargo ya llegó, o "Pendiente"; clic en el renglón muestra ese
+          cargo o por qué no hay ninguno, y permite pasarle el evento del aviso.
         </P>
         <P>
           La línea "Datos hasta" dice la última fecha de cada cuenta (⚠ si pasaron más de 45 días): un

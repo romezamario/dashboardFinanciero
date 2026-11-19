@@ -383,6 +383,8 @@ export interface PuntoDimension {
   nombre: string;
   ingresos: number;
   gastos: number;
+  /** Solo Eventos: avisos de correo que aún no llegan en un estado de cuenta. */
+  porCorreo?: number;
 }
 
 /**

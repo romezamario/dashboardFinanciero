@@ -1,6 +1,6 @@
 import { useState } from "react";
-import type { Coincidencia } from "../lib/conciliarCorreo";
-import { nombreTarjeta } from "../lib/gastosCorreo";
+import type { CargoEmparejado, Coincidencia } from "../lib/conciliarCorreo";
+import { nombreTarjeta, type GastoCorreo } from "../lib/gastosCorreo";
 import type { MovimientoDia } from "../lib/gastosEstadoCuenta";
 import { formatoMoneda } from "../lib/gastosUI";
 import { TarjetaFlotante } from "./TarjetaFlotante";
@@ -189,5 +189,75 @@ function HerenciaEvento({
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * La conciliación al revés (vista "Por correo"): clic en un aviso -> el cargo del estado
+ * de cuenta con el que se emparejó (mismo monto, ±1 día), o por qué no hay ninguno.
+ */
+export function CargoFlotante({
+  gasto,
+  x,
+  y,
+  cargo,
+  ultimoDiaEstados,
+  onHeredar,
+  onCerrar,
+}: {
+  gasto: GastoCorreo;
+  x: number;
+  y: number;
+  cargo: CargoEmparejado | undefined;
+  /** Último día con movimientos de alguna TDC (null = no hay estados de cuenta). */
+  ultimoDiaEstados: string | null;
+  /** Asigna al cargo emparejado el evento del aviso. */
+  onHeredar: (movId: string, evento: string) => Promise<void>;
+  onCerrar: () => void;
+}) {
+  return (
+    <TarjetaFlotante x={x} y={y} etiqueta="Cargo en el estado de cuenta" onCerrar={onCerrar}>
+      <p className="pr-5 font-semibold">Cargo en el estado de cuenta</p>
+      <p className="mt-1 truncate" style={{ color: "var(--text-secondary)" }}>
+        Correo: {gasto.comercio} · {formatoMoneda.format(gasto.monto)} · {fechaLarga(gasto.fecha)}, {gasto.hora}
+      </p>
+      <div className="mt-2 border-t pt-2" style={{ borderColor: "var(--border)" }}>
+        {cargo ? (
+          <>
+            <p className="font-medium" style={{ color: "var(--status-good)" }}>
+              ✓ Ya está en el estado de cuenta (
+              {cargo.diasDeDiferencia === 0 ? "mismo monto y mismo día" : "mismo monto, a un día de diferencia"})
+            </p>
+            <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+              <Dato etiqueta="Fecha" valor={fechaLarga(cargo.mov.fecha)} />
+              <Dato etiqueta="Descripción" valor={cargo.mov.descripcion} fuerte />
+              <Dato etiqueta="Cuenta" valor={cargo.mov.cuenta} />
+              {cargo.mov.tarjeta && <Dato etiqueta="Tarjeta" valor={cargo.mov.tarjeta} />}
+              <Dato etiqueta="Categoría" valor={cargo.mov.categoria} />
+              <Dato etiqueta="Monto" valor={formatoMoneda.format(cargo.mov.centavos / 100)} fuerte />
+              {cargo.mov.evento && <Dato etiqueta="Evento" valor={cargo.mov.evento} fuerte />}
+            </dl>
+            {gasto.evento && (
+              <HerenciaEvento
+                mov={cargo.mov}
+                evento={gasto.evento}
+                onHeredar={(evento) => onHeredar(cargo.mov.id, evento)}
+              />
+            )}
+            <p className="mt-2" style={{ color: "var(--text-muted)" }}>
+              Se empareja por monto y fecha: es una pista, no una confirmación del banco.
+            </p>
+          </>
+        ) : (
+          <p style={{ color: "var(--text-secondary)" }}>
+            {ultimoDiaEstados === null
+              ? "Todavía no hay estados de cuenta de tarjeta de crédito cargados."
+              : gasto.fecha > ultimoDiaEstados
+                ? `Pendiente: los estados de cuenta cargados llegan hasta el ${fechaLarga(ultimoDiaEstados)}; este cargo saldrá en el siguiente.`
+                : `Sin cargo en el estado de cuenta por ${formatoMoneda.format(gasto.monto)} el ${fechaLarga(gasto.fecha)} ni un día antes o después. Puede haber llegado con otro monto (tipo de cambio, propina) o en un estado de cuenta que aún no se carga.`}
+          </p>
+        )}
+      </div>
+    </TarjetaFlotante>
   );
 }

@@ -429,7 +429,10 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
     periodo anterior, pagos y abonos, categoría principal), gasto mensual por tarjeta y para qué
     usas cada una (gasto por categoría y tarjeta). "Gasto" son solo cargos; los pagos van aparte.
   - **Eventos** — viajes, fiestas, etc.: cuánto gastaste en cada uno, en qué categorías y comercios,
-    sus transacciones, y un buscador para asignar (o quitar) un evento a varias transacciones.
+    sus transacciones, y un buscador para asignar (o quitar) un evento a varias transacciones. La
+    gráfica por evento agrega, en otro color, lo que ya avisó el correo y aún no llega en un estado
+    de cuenta («Por correo, sin estado de cuenta» y el gasto «al día»), sin contar dos veces lo ya
+    emparejado.
   - **Shophunters** — aparece solo si hay movimientos con un evento cuyo nombre contiene
     "Shophunters" (p. ej. "2026-09 Shophunters"; los meses nuevos entran solos). Es la vista del
     Resumen con solo esos movimientos, sin tasa de ahorro ni tarjetas de indicadores (es el gasto de
@@ -448,6 +451,8 @@ una a otra. Botón de modo claro/oscuro arriba a la derecha.
   **asignar un evento** a los gastos del día (casillas + «Asignar evento») sin esperar al estado de
   cuenta; cuando llega, el cargo que se empareja con ese aviso puede **heredar el evento** (botón
   «Heredar eventos» o desde la tarjeta del movimiento; nunca pisa un evento ya asignado). En la
+  vista por correo, la columna «Estado de cuenta» marca con ✓ los avisos cuyo cargo ya llegó (clic
+  en el renglón para ver cuál) o «Pendiente». En la
   vista por estado de cuenta también puedes marcar varios movimientos del día y asignarles (o
   quitarles) un evento de una vez, con el bloque «Asignar evento» al final de las tablas.
   - **Meta de gasto diario (por defecto $1,000; se cambia con «Cambiar» y se queda guardada)**: arriba del calendario, el promedio por día del mes, y debajo
