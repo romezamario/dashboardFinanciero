@@ -4,8 +4,10 @@ luego sube `sync/gastos_correo.py` a la tabla `gastos_correo` de Supabase.
 
 Todo corre en tu computadora: Gmail se lee con OAuth de solo lectura
 (`gmail.readonly`) y las categorías salen de tu `transform/reglas_categorizacion.json`
-con el mismo `categorizador` que usa la app de escritorio. Nada de esto pasa
-por la nube.
+con el mismo `categorizador` que usa la app de escritorio. Desde 2026-11-20 la
+misma lectura corre también en la nube (Edge Function `revisar-gmail`, port en
+supabase/functions/revisar-gmail/avisos.ts: si cambias el formato del aviso
+aquí, cámbialo también allá; ver sync/gmail_nube.py).
 
 Uso: desde la app de escritorio (pestaña "Gastos recientes (Gmail)", que llama a
 `revisar_gmail()`), o desde la raíz del proyecto:
@@ -675,6 +677,8 @@ class ResultadoRevision:
     sin_reglas: bool = False
     # None = no se pidió subir.
     subidas: list[ResultadoGastosCorreo] | None = None
+    # Si falló subir reglas/permiso para la revisión en la nube (sync/gmail_nube.py).
+    error_nube: str | None = None
 
     @property
     def gastos_subidos(self) -> int:
@@ -824,6 +828,15 @@ def revisar_gmail(
             resultado.subidas = subir_todos(cliente_supabase, carpeta)
         except ValueError as error:  # sin sesión
             raise FaltaConfiguracionSupabase(str(error)) from error
+        # La revisión en la nube (dashboard web) usa las mismas reglas y el
+        # mismo permiso de Gmail: se mantienen al día desde aquí. Si falla no
+        # se pierde nada de lo de arriba, solo se avisa.
+        try:
+            from sync.gmail_nube import sincronizar_nube
+
+            sincronizar_nube(cliente_supabase)
+        except Exception as error:  # noqa: BLE001
+            resultado.error_nube = str(error)
     return resultado
 
 
@@ -845,6 +858,8 @@ def avisos_para_mostrar(r: ResultadoRevision) -> list[str]:
     lineas: list[str] = []
     for sub in r.subidas_fallidas:
         lineas.append(f"Error al subir {sub.archivo} a Supabase: {sub.error}")
+    if r.error_nube:
+        lineas.append(f"No se pudieron subir las reglas o el permiso de Gmail para el dashboard web: {r.error_nube}")
     if r.ilegibles:
         lineas.append(
             f"{len(r.ilegibles)} correo(s) no se pudieron leer como cargo exitoso "

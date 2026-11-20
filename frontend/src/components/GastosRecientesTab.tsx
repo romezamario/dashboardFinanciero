@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { filaAGastoCorreo, type FilaGastoCorreo } from "../lib/gastosCorreo";
+import { filaAGastoCorreo, obtenerGastosCorreo, type FilaGastoCorreo } from "../lib/gastosCorreo";
 import { asignarEventoAGastosCorreo, eventoDe, type Catalogos } from "../lib/queries";
 import type { Transaccion } from "../lib/types";
 import { GastosCorreoTab } from "./GastosCorreoTab";
@@ -97,6 +97,10 @@ export function GastosRecientesTab(props: GastosRecientesTabProps) {
           onCambiarVista={cambiarVista}
           transacciones={props.transacciones}
           onActualizado={props.onActualizado}
+          onRecargarCorreo={async () => {
+            const filas = await obtenerGastosCorreo();
+            onCambiarFilasCorreo(() => filas);
+          }}
         />
       ) : (
         <GastosEstadoCuentaTab

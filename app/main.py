@@ -997,7 +997,16 @@ class App(tk.Tk):
                 client = crear_cliente_autenticado()
             except Exception as error:  # noqa: BLE001 — se distingue en _al_fallar_sincronizacion
                 raise _ErrorDeSesion(error) from error
-            return sincronizar_todos(client)
+            resultados = sincronizar_todos(client)
+            # Las reglas también las usa la revisión de Gmail en la nube
+            # (sync/gmail_nube.py); si esto falla, los estados ya subieron.
+            try:
+                from sync.gmail_nube import sincronizar_nube
+
+                sincronizar_nube(client)
+            except Exception:  # noqa: BLE001
+                pass
+            return resultados
 
         resumen_anterior = self.etiqueta_resumen.cget("text")
         self._marcar_ocupado(True, "Sincronizando con Supabase…")
