@@ -9,22 +9,23 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from sync.gmail_nube import conectar_gmail_web, subir_reglas
+from sync.gmail_nube import SIN_TOKEN, SUBIDO, YA_CONECTADO, conectar_gmail_web, subir_reglas
 from transform.categorizador import Regla
 
 
 class _Consulta:
-    def __init__(self, registro: list, nombre: str, datos) -> None:
-        self.registro, self.nombre, self.datos = registro, nombre, datos
+    def __init__(self, registro: list, nombre: str, datos, respuesta=None) -> None:
+        self.registro, self.nombre, self.datos, self.respuesta = registro, nombre, datos, respuesta
 
     def execute(self):
         self.registro.append((self.nombre, self.datos))
-        return SimpleNamespace(data=None)
+        return SimpleNamespace(data=self.respuesta)
 
 
 class ClienteFalso:
-    def __init__(self) -> None:
+    def __init__(self, respuesta_rpc=None) -> None:
         self.llamadas: list = []
+        self.respuesta_rpc = respuesta_rpc
         self.auth = SimpleNamespace(get_session=lambda: SimpleNamespace(user=SimpleNamespace(id="u1")))
 
     def table(self, nombre: str):
@@ -37,7 +38,7 @@ class ClienteFalso:
         return _Tabla()
 
     def rpc(self, nombre: str, parametros: dict):
-        return _Consulta(self.llamadas, f"rpc:{nombre}", parametros)
+        return _Consulta(self.llamadas, f"rpc:{nombre}", parametros, self.respuesta_rpc)
 
 
 class SubirReglasTest(unittest.TestCase):
@@ -61,8 +62,8 @@ class ConectarGmailTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             ruta = Path(tmp) / "token.json"
             ruta.write_text(json.dumps({"client_id": "id", "client_secret": "s", "refresh_token": "r", "token": "x"}))
-            c = ClienteFalso()
-            self.assertTrue(conectar_gmail_web(c, ruta))
+            c = ClienteFalso(respuesta_rpc=True)
+            self.assertEqual(conectar_gmail_web(c, ruta), SUBIDO)
             self.assertEqual(
                 c.llamadas,
                 [("rpc:conectar_gmail", {"p_client_id": "id", "p_client_secret": "s", "p_refresh_token": "r", "p_correo": None})],
@@ -72,10 +73,16 @@ class ConectarGmailTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             ruta = Path(tmp) / "token.json"
             c = ClienteFalso()
-            self.assertFalse(conectar_gmail_web(c, ruta))
+            self.assertEqual(conectar_gmail_web(c, ruta), SIN_TOKEN)
             ruta.write_text(json.dumps({"client_id": "id", "client_secret": "s"}))
-            self.assertFalse(conectar_gmail_web(c, ruta))
+            self.assertEqual(conectar_gmail_web(c, ruta), SIN_TOKEN)
             self.assertEqual(c.llamadas, [])
+
+    def test_no_pisa_una_conexion_que_funciona(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            ruta = Path(tmp) / "token.json"
+            ruta.write_text(json.dumps({"client_id": "id", "client_secret": "s", "refresh_token": "viejo"}))
+            self.assertEqual(conectar_gmail_web(ClienteFalso(respuesta_rpc=False), ruta), YA_CONECTADO)
 
 
 if __name__ == "__main__":

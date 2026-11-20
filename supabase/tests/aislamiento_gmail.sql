@@ -74,6 +74,59 @@ begin
 end $$;
 reset role;
 
+-- Autorización desde el dashboard (20261120050000_gmail_autorizacion_web.sql).
+set role service_role;
+select from guardar_estado_oauth_gmail(repeat('e', 40), '9a9a9a9a-0000-0000-0000-000000000001', 'https://sitio.test/');
+do $$
+begin
+  if (select count(*) from tomar_estado_oauth_gmail(repeat('e', 40))) <> 1 then raise exception 'FALLO: el state no se lee'; end if;
+  if (select count(*) from tomar_estado_oauth_gmail(repeat('e', 40))) <> 0 then raise exception 'FALLO: el state se usa dos veces'; end if;
+end $$;
+select from guardar_conexion_gmail_web('9a9a9a9a-0000-0000-0000-000000000001', 'web-id', 'web-secreto', 'refresh-web', null);
+reset role;
+
+set role authenticated;
+set request.jwt.claim.sub = '9a9a9a9a-0000-0000-0000-000000000001';
+do $$
+begin
+  if (select origen from estado_conexion_gmail()) <> 'dashboard' then raise exception 'FALLO: no quedó la conexión del dashboard'; end if;
+  if (select correo from estado_conexion_gmail()) <> 'a@gmail.com' then raise exception 'FALLO: se perdió el correo'; end if;
+  -- El escritorio no pisa una conexión válida con otro permiso.
+  if conectar_gmail('cliente-a', 'secreto-a', 'refresh-viejo', null) then raise exception 'FALLO: el escritorio pisó una conexión válida'; end if;
+  if (select origen from estado_conexion_gmail()) <> 'dashboard' then raise exception 'FALLO: cambió la conexión'; end if;
+  begin
+    perform guardar_conexion_gmail_web('9a9a9a9a-0000-0000-0000-000000000001', 'x', 'y', 'z', null);
+    raise exception 'FALLO: un usuario guarda una conexión web';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform tomar_estado_oauth_gmail('x');
+    raise exception 'FALLO: un usuario lee states';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform marcar_gmail_invalido('9a9a9a9a-0000-0000-0000-000000000001', true);
+    raise exception 'FALLO: un usuario marca conexiones';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+
+set role service_role;
+select from marcar_gmail_invalido('9a9a9a9a-0000-0000-0000-000000000001', true);
+reset role;
+set role authenticated;
+do $$
+begin
+  if not (select invalida from estado_conexion_gmail()) then raise exception 'FALLO: no quedó inválida'; end if;
+  -- Inválida: el permiso del escritorio sí la reemplaza.
+  if not conectar_gmail('cliente-a', 'secreto-a', 'refresh-nuevo', null) then raise exception 'FALLO: no reemplazó una conexión inválida'; end if;
+  if (select origen from estado_conexion_gmail()) <> 'escritorio' or (select invalida from estado_conexion_gmail()) then
+    raise exception 'FALLO: la conexión del escritorio no quedó válida';
+  end if;
+end $$;
+reset role;
+
 -- Borrar al usuario borra su conexión.
 delete from auth.users where id = '9a9a9a9a-0000-0000-0000-000000000001';
 do $$

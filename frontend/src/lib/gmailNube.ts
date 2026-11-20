@@ -16,9 +16,18 @@ export interface RevisionGmail {
   codigos_sin_confirmar: string[];
 }
 
+export interface ConexionGmail {
+  correo: string | null;
+  actualizado_en: string;
+  /** Google rechazó el permiso (venció o se revocó): hay que reconectar. */
+  invalida?: boolean;
+  /** Dónde se autorizó: la app de escritorio o el botón del dashboard. */
+  origen?: "escritorio" | "dashboard";
+}
+
 export interface EstadoGmail {
-  /** null = el Gmail no está conectado a la nube (la app de escritorio lo conecta). */
-  conexion: { correo: string | null; actualizado_en: string } | null;
+  /** null = el Gmail no está conectado a la nube (se conecta desde aquí o desde la app de escritorio). */
+  conexion: ConexionGmail | null;
   ultima: RevisionGmail | null;
   /** La última que terminó bien (para "datos al día hasta…"). */
   ultimaBien: RevisionGmail | null;
@@ -41,7 +50,7 @@ export async function obtenerEstadoGmail(): Promise<EstadoGmail> {
   ]);
   const error = conexion.error ?? ultima.error ?? ultimaBien.error;
   if (error) throw new Error(error.message);
-  const filas = (conexion.data ?? []) as { correo: string | null; actualizado_en: string }[];
+  const filas = (conexion.data ?? []) as ConexionGmail[];
   return {
     conexion: filas[0] ?? null,
     ultima: (ultima.data as RevisionGmail | null) ?? null,
@@ -49,16 +58,67 @@ export async function obtenerEstadoGmail(): Promise<EstadoGmail> {
   };
 }
 
-/** Pide una revisión ya (la misma que corre cada 15 min) y devuelve su resultado. */
-export async function revisarGmailAhora(): Promise<RevisionGmail> {
-  const { data, error } = await supabase.functions.invoke("revisar-gmail", { body: {} });
+async function invocar<T>(funcion: string, body: unknown): Promise<T> {
+  const { data, error } = await supabase.functions.invoke(funcion, { body });
   if (error) {
     // El cuerpo del error trae el mensaje en español de la función.
     const contexto = (error as { context?: Response }).context;
     const cuerpo = contexto && typeof contexto.json === "function" ? await contexto.json().catch(() => null) : null;
     throw new Error(cuerpo?.error ?? error.message);
   }
-  return data as RevisionGmail;
+  return data as T;
+}
+
+/** Pide una revisión ya (la misma que corre cada 15 min) y devuelve su resultado. */
+export function revisarGmailAhora(): Promise<RevisionGmail> {
+  return invocar<RevisionGmail>("revisar-gmail", {});
+}
+
+/** Empieza la autorización de Gmail desde el dashboard: la Edge Function
+ * `gmail-oauth` devuelve la página de Google; al terminar, Google regresa a
+ * la función y ella al dashboard con `?gmail=…` (ver `leerResultadoOauth`). */
+export async function conectarGmail(): Promise<void> {
+  const { url } = await invocar<{ url: string }>("gmail-oauth", { origen: window.location.origin });
+  window.location.assign(url);
+}
+
+export type ResultadoOauth = "conectado" | "cancelado" | "sin_permiso" | "error";
+
+/** Lee `?gmail=…&gmail_detalle=…` del regreso de `gmail-oauth`. */
+export function leerResultadoOauth(search: string): { resultado: ResultadoOauth; detalle: string | null } | null {
+  const q = new URLSearchParams(search);
+  const resultado = q.get("gmail");
+  if (resultado !== "conectado" && resultado !== "cancelado" && resultado !== "sin_permiso" && resultado !== "error") return null;
+  return { resultado, detalle: q.get("gmail_detalle") };
+}
+
+/** La misma URL sin los parámetros del regreso (para `history.replaceState`). */
+export function sinResultadoOauth(url: string): string {
+  const u = new URL(url);
+  u.searchParams.delete("gmail");
+  u.searchParams.delete("gmail_detalle");
+  return u.toString();
+}
+
+export function textoResultadoOauth(r: { resultado: ResultadoOauth; detalle: string | null }): { texto: string; error: boolean } {
+  switch (r.resultado) {
+    case "conectado":
+      return { texto: "Gmail conectado. Revisando tus avisos…", error: false };
+    case "cancelado":
+      return { texto: "Cancelaste la autorización de Gmail; no cambió nada.", error: true };
+    case "sin_permiso":
+      return {
+        texto: "Google no dio permiso de leer tu correo (la casilla de Gmail quedó sin marcar). Vuelve a conectar y márcala.",
+        error: true,
+      };
+    default:
+      return { texto: `No se pudo conectar Gmail${r.detalle ? `: ${r.detalle}` : "."}`, error: true };
+  }
+}
+
+/** ¿Hay que (re)conectar? Sin conexión, marcada inválida o la última revisión rechazó el permiso. */
+export function necesitaConectar(estado: EstadoGmail): boolean {
+  return !estado.conexion || !!estado.conexion.invalida || estado.ultima?.resultado === "permiso_invalido";
 }
 
 /** Revisiones programadas cada 15 min: más de una hora sin una buena = algo pasa. */
@@ -80,10 +140,12 @@ export function textoEstadoGmail(estado: EstadoGmail, ahora: Date = new Date()):
   const { conexion, ultima, ultimaBien } = estado;
   if (!conexion) {
     return {
-      texto:
-        "Gmail todavía no está conectado al dashboard: abre la app de escritorio y usa \"Revisar Gmail\" una vez (sube tu permiso y tus reglas).",
+      texto: "Gmail todavía no está conectado al dashboard: usa \"Conectar Gmail\" para autorizar la lectura de tus avisos.",
       problema: true,
     };
+  }
+  if (conexion.invalida && ultima?.resultado !== "permiso_invalido") {
+    return { texto: "El permiso de Gmail venció o fue revocado: usa \"Reconectar Gmail\".", problema: true };
   }
   if (!ultima) return { texto: "Gmail conectado. La primera revisión corre en los próximos 15 minutos.", problema: false };
   if (ultima.resultado !== "ok" && ultima.resultado !== "sin_reglas") {

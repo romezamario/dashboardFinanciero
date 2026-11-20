@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { haceCuanto, textoEstadoGmail, type RevisionGmail } from "./gmailNube";
+import {
+  haceCuanto,
+  leerResultadoOauth,
+  necesitaConectar,
+  sinResultadoOauth,
+  textoEstadoGmail,
+  textoResultadoOauth,
+  type RevisionGmail,
+} from "./gmailNube";
 
 const ahora = new Date("2026-11-20T12:00:00Z");
 const revision = (cambios: Partial<RevisionGmail> = {}): RevisionGmail => ({
@@ -28,10 +36,16 @@ describe("haceCuanto", () => {
 });
 
 describe("textoEstadoGmail", () => {
-  it("sin conexión pide usar la app de escritorio", () => {
+  it("sin conexión pide conectar Gmail", () => {
     const r = textoEstadoGmail({ conexion: null, ultima: null, ultimaBien: null }, ahora);
     expect(r.problema).toBe(true);
-    expect(r.texto).toMatch(/app de escritorio/);
+    expect(r.texto).toMatch(/Conectar Gmail/);
+  });
+
+  it("una conexión inválida pide reconectar", () => {
+    const r = textoEstadoGmail({ conexion: { ...conexion, invalida: true }, ultima: revision(), ultimaBien: revision() }, ahora);
+    expect(r.problema).toBe(true);
+    expect(r.texto).toMatch(/Reconectar Gmail/);
   });
 
   it("revisión reciente con avisos nuevos", () => {
@@ -51,5 +65,32 @@ describe("textoEstadoGmail", () => {
   it("más de una hora sin revisar bien es un problema", () => {
     const vieja = revision({ empezo_en: "2026-11-20T10:30:00Z" });
     expect(textoEstadoGmail({ conexion, ultima: vieja, ultimaBien: vieja }, ahora).problema).toBe(true);
+  });
+});
+
+describe("autorización desde el dashboard", () => {
+  it("lee el resultado del regreso y lo quita de la URL", () => {
+    expect(leerResultadoOauth("?gmail=conectado")).toEqual({ resultado: "conectado", detalle: null });
+    expect(leerResultadoOauth("?gmail=error&gmail_detalle=Google%20respondi%C3%B3%20400")).toEqual({
+      resultado: "error",
+      detalle: "Google respondió 400",
+    });
+    expect(leerResultadoOauth("?gmail=otra")).toBeNull();
+    expect(leerResultadoOauth("")).toBeNull();
+    expect(sinResultadoOauth("https://sitio.test/?gmail=error&gmail_detalle=x&otro=1#finanzas")).toBe("https://sitio.test/?otro=1#finanzas");
+    expect(sinResultadoOauth("https://sitio.test/?gmail=conectado#finanzas")).toBe("https://sitio.test/#finanzas");
+  });
+
+  it("textos del resultado", () => {
+    expect(textoResultadoOauth({ resultado: "conectado", detalle: null }).error).toBe(false);
+    expect(textoResultadoOauth({ resultado: "error", detalle: "x" }).texto).toBe("No se pudo conectar Gmail: x");
+    expect(textoResultadoOauth({ resultado: "sin_permiso", detalle: null }).error).toBe(true);
+  });
+
+  it("cuándo hay que (re)conectar", () => {
+    expect(necesitaConectar({ conexion: null, ultima: null, ultimaBien: null })).toBe(true);
+    expect(necesitaConectar({ conexion, ultima: revision(), ultimaBien: revision() })).toBe(false);
+    expect(necesitaConectar({ conexion: { ...conexion, invalida: true }, ultima: revision(), ultimaBien: revision() })).toBe(true);
+    expect(necesitaConectar({ conexion, ultima: revision({ resultado: "permiso_invalido" }), ultimaBien: null })).toBe(true);
   });
 });

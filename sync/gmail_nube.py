@@ -49,17 +49,27 @@ def subir_reglas(client: Any, reglas: list[Regla], ciudades: dict[str, str]) -> 
     client.table("preferencias").upsert(filas, on_conflict="user_id,clave").execute()
 
 
-def conectar_gmail_web(client: Any, ruta_token: Path) -> bool:
-    """Guarda en Supabase el permiso de Gmail de `token.json`. False si no hay
-    permiso guardado (todavía no se autoriza Gmail en la app)."""
+SUBIDO = "subido"
+SIN_TOKEN = "sin_token"
+YA_CONECTADO = "ya_conectado"
+
+
+def conectar_gmail_web(client: Any, ruta_token: Path) -> str:
+    """Guarda en Supabase el permiso de Gmail de `token.json`.
+
+    Devuelve SUBIDO, SIN_TOKEN (todavía no se autoriza Gmail en la app) o
+    YA_CONECTADO: la nube ya tiene otro permiso que funciona (p. ej. el que se
+    autorizó desde el dashboard) y `conectar_gmail` no lo reemplaza; solo lo
+    hace si no hay conexión o Google la rechazó (migración
+    20261120050000_gmail_autorizacion_web.sql)."""
     try:
         token = json.loads(ruta_token.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return False
+        return SIN_TOKEN
     datos = {k: token.get(k) for k in ("client_id", "client_secret", "refresh_token")}
     if not all(isinstance(v, str) and v for v in datos.values()):
-        return False
-    client.rpc(
+        return SIN_TOKEN
+    respuesta = client.rpc(
         "conectar_gmail",
         {
             "p_client_id": datos["client_id"],
@@ -68,11 +78,13 @@ def conectar_gmail_web(client: Any, ruta_token: Path) -> bool:
             "p_correo": token.get("account") or None,
         },
     ).execute()
-    return True
+    # La RPC devuelve false cuando no reemplazó (versiones anteriores: null).
+    return YA_CONECTADO if getattr(respuesta, "data", None) is False else SUBIDO
 
 
-def sincronizar_nube(client: Any) -> bool:
-    """Reglas + ciudades + permiso de Gmail. Devuelve si el permiso se subió."""
+def sincronizar_nube(client: Any) -> str:
+    """Reglas + ciudades + permiso de Gmail. Devuelve el resultado de
+    `conectar_gmail_web`."""
     from sync.gmail_gastos import _rutas_gmail, cargar_ciudades_extra
     from transform.categorizador import cargar_reglas
 
@@ -126,9 +138,13 @@ def main() -> None:
     args = ap.parse_args()
 
     client = crear_cliente()
-    conectado = sincronizar_nube(client)
+    conexion = sincronizar_nube(client)
     print("Reglas y ciudades subidas.")
-    print("Permiso de Gmail guardado en la nube." if conectado else "No hay permiso de Gmail (data/gmail/token.json).")
+    print({
+        SUBIDO: "Permiso de Gmail guardado en la nube.",
+        YA_CONECTADO: "La nube ya tiene un permiso de Gmail que funciona (p. ej. el del dashboard); no se reemplazó.",
+        SIN_TOKEN: "No hay permiso de Gmail (data/gmail/token.json).",
+    }[conexion])
     if args.revisar:
         r = _invocar(client, {})
         print(f"Revisión: {r.get('resultado')} · {r.get('avisos')} avisos en la ventana, {r.get('nuevos')} nuevos, "

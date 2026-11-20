@@ -52,8 +52,7 @@ class ErrorGmail extends Error {
 }
 
 const MENSAJE_PERMISO =
-  "El permiso de Gmail venció o fue revocado. En la app de escritorio, pestaña \"Gastos recientes (Gmail)\", " +
-  "usa \"Reautorizar Gmail\" y luego \"Revisar Gmail\": eso vuelve a conectar el dashboard.";
+  "El permiso de Gmail venció o fue revocado. Usa \"Reconectar Gmail\" aquí mismo (o \"Reautorizar Gmail\" en la app de escritorio).";
 const MENSAJE_LIMITE =
   "Gmail limitó las consultas por minuto; lo leído ya quedó guardado y la siguiente revisión sigue donde se quedó.";
 
@@ -63,6 +62,7 @@ interface Conexion {
   client_id: string;
   client_secret: string;
   refresh_token: string;
+  invalida: boolean;
 }
 
 async function tokenDeAcceso(c: Conexion): Promise<string> {
@@ -243,6 +243,7 @@ async function revisar(admin: SupabaseClient, c: Conexion, origen: "programada" 
     }
 
     const token = await tokenDeAcceso(c);
+    if (c.invalida) await admin.rpc("marcar_gmail_invalido", { p_user_id: c.user_id, p_invalida: false });
     const ids = await listarIds(token, dias);
     const conocidos = new Set<string>();
     for (let i = 0; i < ids.length; i += 100) {
@@ -285,6 +286,7 @@ async function revisar(admin: SupabaseClient, c: Conexion, origen: "programada" 
   } catch (e) {
     registro.resultado = e instanceof ErrorGmail ? e.tipo : "error";
     registro.mensaje = (e as Error).message;
+    if (registro.resultado === "permiso_invalido") await admin.rpc("marcar_gmail_invalido", { p_user_id: c.user_id, p_invalida: true });
     console.error("revisar-gmail", c.user_id, registro.resultado, registro.mensaje);
   }
   const duracion_ms = Date.now() - inicio;
@@ -353,7 +355,9 @@ Deno.serve(async (req) => {
     const { data: valido } = await admin.rpc("validar_cron_gmail", { p_secreto: secreto });
     if (!valido) return responder(401, { error: "No autorizado" });
     const resultados = [];
-    for (const c of conexiones) resultados.push(await revisar(admin, c, "programada", DIAS_POR_DEFECTO));
+    // Una conexión marcada inválida no se reintenta cada 15 min: espera a que
+    // se reconecte (dashboard o escritorio) o a un "Revisar ahora".
+    for (const c of conexiones.filter((c) => !c.invalida)) resultados.push(await revisar(admin, c, "programada", DIAS_POR_DEFECTO));
     return responder(200, { resultados: resultados.map(({ user_id: _u, ...r }) => r) });
   }
 

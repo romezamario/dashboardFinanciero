@@ -660,7 +660,21 @@ privado definer + public invoker wrappers, `conexiones_gmail`/`validar_cron_gmai
 live in `preferencias` (`reglas_categorizacion`, `ciudades_correo`), uploaded with the token by `sync/gmail_nube.py`, which the desktop
 calls after every Gmail check with upload and every "Sincronizar a Supabase..." (best effort). Front: `EstadoGmail.tsx` at the top of
 "Por correo" (`lib/gmailNube.ts`, tested): last check, failures (expired permission → reauthorize in the desktop app), pending
-uncategorized/city codes, "Revisar ahora". The OAuth client is still the desktop one (no web OAuth flow): reconnecting = desktop app.
+uncategorized/city codes, "Revisar ahora".
+**Reconnect Gmail from the dashboard (2026-11-20, Mario: "no quiero que la autorización sea en desktop, también quiero que sea a través
+del dashboard si es que expira")**: Edge Function `supabase/functions/gmail-oauth/` (pure helpers in `oauth.ts`, tested;
+`verify_jwt = false` because Google comes back with a GET). POST with the user's JWT + `origen` → a one-use 15-min `state` in
+`privado.gmail_oauth_estados` and Google's consent URL (gmail.readonly, offline, prompt=consent); GET ?code&state → exchanges it with a
+**Google "Web application" OAuth client** (function secrets `GMAIL_WEB_CLIENT_ID`/`_SECRET`, set by `funciones.yml` from GitHub secrets;
+missing → 503; redirect URI = the function URL, registered in Google Cloud) and saves the connection with origen 'dashboard', then
+redirects to the dashboard `?gmail=conectado|cancelado|sin_permiso|error#finanzas`. Return origins are allowlisted (`sitioPermitido`:
+the two Pages projects + their deploy subdomains + localhost; `GMAIL_SITIOS_PERMITIDOS` adds more). Migration
+`20261120050000_gmail_autorizacion_web.sql`: `gmail_conexiones.invalida` (set by revisar-gmail on `permiso_invalido`, cleared on a
+successful token or reconnect; the cron skips invalid ones) and `.origen`; `conectar_gmail` (desktop) now returns boolean and does NOT
+replace a valid connection with another refresh token (the desktop uploads on every sync and could overwrite the dashboard's with a stale
+one); `sync/gmail_nube.conectar_gmail_web` returns `ya_conectado`. Front: `EstadoGmail` shows "Conectar/Reconectar Gmail" (`necesitaConectar`) and reads
+the `?gmail=` return once (`leerResultadoOauth`, then `replaceState`; on success it runs a revisión). Google's consent screen must be "In
+production": in "Testing" refresh tokens expire after 7 days. Tested in `aislamiento_gmail.sql`, `oauth.test.ts`, `gmailNube.test.ts`.
 
 **Debit notices are not expenses (2026-10-06, user's decision)**: "Retiro/Compra con cuenta
 Banamex" notices from a debit account (`"Cheques M.N. ***123"`, `"CTA PRIORITY BNM M.N. ***123"`)

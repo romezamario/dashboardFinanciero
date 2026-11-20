@@ -414,3 +414,9 @@ verify_jwt = false
 # encabezado x-cron-secreto) o el dashboard (con sesión); la función valida.
 [functions.revisar-gmail]
 verify_jwt = false
+
+# Autorizar Gmail desde el dashboard: Google regresa aquí con un GET sin sesión
+# (el state de un solo uso dice de quién es); el POST que la inicia valida la
+# sesión dentro de la función.
+[functions.gmail-oauth]
+verify_jwt = false

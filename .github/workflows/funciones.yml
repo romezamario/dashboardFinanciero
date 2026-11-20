@@ -1,15 +1,18 @@
 name: Edge Functions (Supabase personal)
 
-# Publica las Edge Functions del dashboard personal. Hoy: revisar-gmail, la que
-# lee los avisos de compra de Gmail cada 15 minutos (ver
-# supabase/migrations/20261120030000_gmail_en_la_nube.sql). La llave
-# service_role la pone Supabase dentro de la función: aquí no hay secretos de
-# más que el token de la Management API.
+# Publica las Edge Functions del dashboard personal: revisar-gmail, la que lee
+# los avisos de compra de Gmail cada 15 minutos (ver
+# supabase/migrations/20261120030000_gmail_en_la_nube.sql), y gmail-oauth, la
+# que autoriza Gmail desde el dashboard (20261120050000_gmail_autorizacion_web.sql).
+# La llave service_role la pone Supabase dentro de la función. El cliente web
+# de Google (secretos GMAIL_WEB_CLIENT_ID / GMAIL_WEB_CLIENT_SECRET) se copia
+# como secreto de la función cuando existe; sin él, gmail-oauth responde 503.
 on:
   push:
     branches: [main]
     paths:
       - "supabase/functions/revisar-gmail/**"
+      - "supabase/functions/gmail-oauth/**"
       - "supabase/config.toml"
       - ".github/workflows/funciones.yml"
   workflow_dispatch: {}
@@ -28,3 +31,20 @@ jobs:
         run: supabase functions deploy revisar-gmail --project-ref "${{ secrets.SUPABASE_PROJECT_ID }}" --no-verify-jwt --use-api
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Publicar gmail-oauth
+        run: supabase functions deploy gmail-oauth --project-ref "${{ secrets.SUPABASE_PROJECT_ID }}" --no-verify-jwt --use-api
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Cliente web de Google para gmail-oauth
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          GMAIL_WEB_CLIENT_ID: ${{ secrets.GMAIL_WEB_CLIENT_ID }}
+          GMAIL_WEB_CLIENT_SECRET: ${{ secrets.GMAIL_WEB_CLIENT_SECRET }}
+        run: |
+          if [ -z "$GMAIL_WEB_CLIENT_ID" ] || [ -z "$GMAIL_WEB_CLIENT_SECRET" ]; then
+            echo "::notice::Faltan los secretos GMAIL_WEB_CLIENT_ID / GMAIL_WEB_CLIENT_SECRET: \"Conectar Gmail\" del dashboard responderá que falta configurarlo."
+            exit 0
+          fi
+          supabase secrets set --project-ref "${{ secrets.SUPABASE_PROJECT_ID }}" GMAIL_WEB_CLIENT_ID="$GMAIL_WEB_CLIENT_ID" GMAIL_WEB_CLIENT_SECRET="$GMAIL_WEB_CLIENT_SECRET"

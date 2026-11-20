@@ -762,9 +762,28 @@ mismo permiso de solo lectura y las mismas reglas que la app de escritorio, y lo
 escritorio la mantiene al día sola: cada **Revisar Gmail y subir** (y cada "Sincronizar a
 Supabase...") sube tus reglas y códigos de ciudad a `preferencias` y tu permiso de Gmail
 (`data/gmail/token.json`) al esquema `privado`, que la API no expone
-(`python -m sync.gmail_nube [--revisar] [--comparar 30]` hace lo mismo a mano). Si el permiso
-vence, el dashboard lo dice: **Reautorizar Gmail...** y luego **Revisar Gmail y subir** en la app lo
-reconectan. Migración `20261120030000_gmail_en_la_nube.sql`, workflow `funciones.yml`.
+(`python -m sync.gmail_nube [--revisar] [--comparar 30]` hace lo mismo a mano). Migración
+`20261120030000_gmail_en_la_nube.sql`, workflow `funciones.yml`.
+
+**Si el permiso vence, se reconecta desde el dashboard** (2026-11-20): en "Por correo", **Conectar
+Gmail** / **Reconectar Gmail** te lleva a Google, autorizas la lectura y vuelves al dashboard, que
+revisa en ese momento. Lo hace la Edge Function `gmail-oauth` (migración
+`20261120050000_gmail_autorizacion_web.sql`). La app de escritorio ya no pisa una conexión que
+funciona: solo sube su permiso si la nube no tiene uno o Google rechazó el que tiene. Preparación,
+una sola vez:
+
+1. En [Google Cloud Console](https://console.cloud.google.com/), mismo proyecto del cliente de
+   escritorio → **APIs y servicios → Credenciales → Crear credenciales → ID de cliente de OAuth**,
+   tipo **Aplicación web**. En **URI de redireccionamiento autorizados** agrega
+   `https://<id-del-proyecto>.supabase.co/functions/v1/gmail-oauth` (el mismo dominio de
+   `SUPABASE_URL`). Guarda el ID y el secreto del cliente.
+2. En GitHub → Settings → Secrets and variables → Actions, crea `GMAIL_WEB_CLIENT_ID` y
+   `GMAIL_WEB_CLIENT_SECRET`, y corre el workflow **Edge Functions (Supabase personal)**
+   (`funciones.yml`): publica `gmail-oauth` y le pasa esos secretos.
+3. **Pantalla de consentimiento de OAuth → Publicar app** (de "Testing" a "In production"). En
+   "Testing", Google vence el permiso a los 7 días; en producción dura hasta que lo revoques. Para
+   uso personal no hace falta la verificación de Google: al autorizar sale "Google no verificó esta
+   app" → **Configuración avanzada → Ir a … (no seguro)**.
 
 La app de escritorio sigue funcionando igual, pestaña **Gastos recientes (Gmail)**:
 

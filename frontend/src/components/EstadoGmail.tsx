@@ -1,16 +1,29 @@
-import { useEffect, useState } from "react";
-import { obtenerEstadoGmail, revisarGmailAhora, textoEstadoGmail, type EstadoGmail as Estado } from "../lib/gmailNube";
+import { useEffect, useRef, useState } from "react";
+import {
+  conectarGmail,
+  leerResultadoOauth,
+  necesitaConectar,
+  obtenerEstadoGmail,
+  revisarGmailAhora,
+  sinResultadoOauth,
+  textoEstadoGmail,
+  textoResultadoOauth,
+  type EstadoGmail as Estado,
+} from "../lib/gmailNube";
 
 /**
  * Encabezado de "Por correo": cuándo se revisó Gmail por última vez en la nube (la
  * Edge Function `revisar-gmail`, cada 15 min) y el botón "Revisar ahora". Si la
  * revisión trajo avisos nuevos o recategorizó, `onRecargar` vuelve a pedir los avisos.
+ * "Conectar / Reconectar Gmail" autoriza la lectura desde aquí (Edge Function
+ * `gmail-oauth`), sin la app de escritorio; al volver de Google lee `?gmail=…`.
  */
 export function EstadoGmail({ onRecargar }: { onRecargar: () => Promise<void> }) {
   const [estado, setEstado] = useState<Estado | null>(null);
   const [errorEstado, setErrorEstado] = useState<string | null>(null);
   const [revisando, setRevisando] = useState(false);
   const [aviso, setAviso] = useState<{ texto: string; error: boolean } | null>(null);
+  const [conectando, setConectando] = useState(false);
 
   // Sube tras cada "Revisar ahora" para volver a leer el estado.
   const [lectura, setLectura] = useState(0);
@@ -28,6 +41,35 @@ export function EstadoGmail({ onRecargar }: { onRecargar: () => Promise<void> })
       vigente = false;
     };
   }, [lectura]);
+
+  // Regreso de Google: se lee una vez, se quita de la URL y, si quedó
+  // conectado, se revisa de inmediato.
+  const regresoLeido = useRef(false);
+  useEffect(() => {
+    if (regresoLeido.current) return;
+    regresoLeido.current = true;
+    const regreso = leerResultadoOauth(window.location.search);
+    if (!regreso) return;
+    try {
+      window.history.replaceState(window.history.state, "", sinResultadoOauth(window.location.href));
+    } catch {
+      // sin history (muy raro): el aviso se muestra igual
+    }
+    setAviso(textoResultadoOauth(regreso));
+    if (regreso.resultado === "conectado") void revisar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function conectar() {
+    setConectando(true);
+    setAviso(null);
+    try {
+      await conectarGmail(); // el navegador se va a Google
+    } catch (e) {
+      setAviso({ texto: e instanceof Error ? e.message : String(e), error: true });
+      setConectando(false);
+    }
+  }
 
   async function revisar() {
     setRevisando(true);
@@ -62,6 +104,8 @@ export function EstadoGmail({ onRecargar }: { onRecargar: () => Promise<void> })
   }
   if (!estado) return null;
   const { texto, problema } = textoEstadoGmail(estado);
+  const conectarPrimero = necesitaConectar(estado);
+  const textoConectar = conectando ? "Abriendo Google…" : estado.conexion ? "Reconectar Gmail" : "Conectar Gmail";
   const ultimaBien = estado.ultimaBien;
   const pendientes = (ultimaBien?.sin_categoria.length ?? 0) + (ultimaBien?.codigos_sin_confirmar.length ?? 0);
   return (
@@ -71,6 +115,17 @@ export function EstadoGmail({ onRecargar }: { onRecargar: () => Promise<void> })
           {problema ? "⚠ " : ""}
           {texto}
         </p>
+        {conectarPrimero && (
+          <button
+            type="button"
+            onClick={conectar}
+            disabled={conectando}
+            className="rounded-md px-3 py-2 sm:py-1 font-medium text-white disabled:opacity-60"
+            style={{ background: "var(--marca)" }}
+          >
+            {textoConectar}
+          </button>
+        )}
         {estado.conexion && (
           <button
             type="button"
@@ -80,6 +135,18 @@ export function EstadoGmail({ onRecargar }: { onRecargar: () => Promise<void> })
             style={{ borderColor: "var(--marca)", color: "var(--marca)" }}
           >
             {revisando ? "Revisando…" : "Revisar ahora"}
+          </button>
+        )}
+        {estado.conexion && !conectarPrimero && (
+          <button
+            type="button"
+            onClick={conectar}
+            disabled={conectando}
+            className="underline underline-offset-2 py-2 sm:py-0 disabled:opacity-60"
+            style={{ color: "var(--text-secondary)" }}
+            title="Vuelve a autorizar la lectura de Gmail (por ejemplo, con otra cuenta)"
+          >
+            {textoConectar}
           </button>
         )}
       </div>
