@@ -80,10 +80,38 @@ def sincronizar_nube(client: Any) -> bool:
     return conectar_gmail_web(client, _rutas_gmail()[1])
 
 
+SEGUNDOS_ESPERA_FUNCION = 300
+
+
 def _invocar(client: Any, cuerpo: dict[str, Any]) -> Any:
-    respuesta = client.functions.invoke("revisar-gmail", invoke_options={"body": cuerpo})
-    texto = respuesta.decode("utf-8") if isinstance(respuesta, bytes) else respuesta
-    return json.loads(texto) if isinstance(texto, str) else texto
+    """POST a la Edge Function con tu sesión. Directo con urllib y no con
+    `client.functions.invoke`: ese cliente corta a los pocos segundos y una
+    revisión o comparación de varios días tarda más (2026-11-20)."""
+    import os
+    import urllib.error
+    import urllib.request
+
+    url = os.environ["SUPABASE_URL"].rstrip("/") + "/functions/v1/revisar-gmail"
+    sesion = client.auth.get_session()
+    peticion = urllib.request.Request(
+        url,
+        data=json.dumps(cuerpo).encode("utf-8"),
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "apikey": os.environ["SUPABASE_KEY"],
+            "Authorization": f"Bearer {sesion.access_token}",
+        },
+    )
+    try:
+        with urllib.request.urlopen(peticion, timeout=SEGUNDOS_ESPERA_FUNCION) as r:
+            return json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        texto = e.read().decode("utf-8", "replace")
+        try:
+            return json.loads(texto)
+        except ValueError:
+            return {"error": f"HTTP {e.code}: {texto[:200]}"}
 
 
 def main() -> None:

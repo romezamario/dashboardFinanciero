@@ -29,6 +29,11 @@ const DIAS_POR_DEFECTO = 3;
 const DIAS_MAXIMO = 60;
 const MAXIMO_POR_LLAMADA = 500;
 const DESCARGAS_EN_PARALELO = 4;
+// Gmail cobra 5 unidades por mensaje y corta a 250 unidades/s por usuario; sin
+// pausa la función bajaba >50 mensajes/s y una ventana de 14-30 días chocaba
+// con el límite (2026-11-20). Cada tanda de 4 tarda al menos esto: ~16/s.
+const MS_MINIMOS_POR_TANDA = 250;
+const REINTENTOS_GMAIL = 6;
 const DIAS_BITACORA = 30;
 const GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me";
 
@@ -88,8 +93,11 @@ async function gmail<T>(token: string, ruta: string): Promise<T> {
     if (r.ok) return (await r.json()) as T;
     const texto = await r.text();
     const cuota = r.status === 429 || (r.status === 403 && /ratelimit|quota/i.test(texto));
-    if ((cuota || r.status >= 500) && intento < 4) {
-      await esperar(2 ** intento * 1000 + Math.random() * 500);
+    if ((cuota || r.status >= 500) && intento < REINTENTOS_GMAIL) {
+      // Retry-After si Gmail lo manda; si no, 1, 2, 4, 8, 16, 30 s.
+      const pedido = Number(r.headers.get("retry-after"));
+      const ms = pedido > 0 ? pedido * 1000 : Math.min(2 ** intento * 1000, 30_000);
+      await esperar(ms + Math.random() * 500);
       continue;
     }
     if (r.status === 401) throw new ErrorGmail("permiso_invalido", MENSAJE_PERMISO);
@@ -118,6 +126,7 @@ async function leer(token: string, ids: string[]): Promise<{ leidos: Leido[]; er
   const leidos: Leido[] = [];
   for (let i = 0; i < ids.length; i += DESCARGAS_EN_PARALELO) {
     const tanda = ids.slice(i, i + DESCARGAS_EN_PARALELO);
+    const inicio = Date.now();
     try {
       const mensajes = await Promise.all(tanda.map((id) => gmail<{ payload?: never }>(token, `/messages/${id}?format=full`)));
       mensajes.forEach((m, j) => {
@@ -127,6 +136,8 @@ async function leer(token: string, ids: string[]): Promise<{ leidos: Leido[]; er
         if (aviso) leidos.push({ id, tipo: "aviso", aviso });
         else leidos.push({ id, tipo: html && esDebito(html) ? "debito" : "ilegible" });
       });
+      const resta = MS_MINIMOS_POR_TANDA - (Date.now() - inicio);
+      if (resta > 0 && i + DESCARGAS_EN_PARALELO < ids.length) await esperar(resta);
     } catch (e) {
       return { leidos, error: e instanceof ErrorGmail ? e : new ErrorGmail("error", (e as Error).message) };
     }
