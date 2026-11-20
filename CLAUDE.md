@@ -918,6 +918,15 @@ parser or writing a new one):
   `parsers/glifos.py` (bitmap fingerprint → character, no OCR; an unknown glyph leaves the warning —
   label its `_huella()` to add it); `descartar_ya_capturadas_a_mano` keeps a previously typed manual
   row over the newly decoded duplicate.
+- **`bbva_debito.py` (BBVA debit, e.g. Tarjeta Nómina; 2026-11-20, Mario sent an anonymized dump, no real PDF tested
+  yet)**: rows `DD/MES DD/MES DESCRIPCION monto [saldo_oper saldo_liq]` + 0..N detail lines (reference, tracking key,
+  CLABE, beneficiary) appended to the description until the next row; page headers/footers ("La GAT", "BBVA MEXICO,",
+  "Av. ", "No. de Cuenta"…) skipped, "Total de Movimientos" ends the table. Year per row from "Periodo DEL … AL …"
+  (handles Dec→Jan). Sign = delta of the operation saldo from "Saldo Anterior"; rows without saldo are grouped until
+  the next one and the unique sign combination that explains the delta wins (else a keyword hint + warning). Checked
+  against "TOTAL IMPORTE CARGOS/ABONOS" (warning if off). Detection = "BBVA" + "DESCRIPCION REFERENCIA CARGOS ABONOS";
+  alias "BBVA Nómina"/"BBVA Débito", last 4 from "No. de Cuenta". Desktop only (the browser lector lives in the
+  ordenatulana repo). Tests: `tests/test_bbva_debito.py`.
 - **`invex_tdc.py`**: two formats for the same product, tried per line. V1 `DD-Mon-AAAA DD-Mon-AAAA
   CONCEPTO CIUDAD ±$MONTO` (`+` = cargo); V2 `DD/MM/AAAA CONCEPTO $MONTO[ CR]` — **a trailing "CR"
   = abono, no marker = cargo** (easy to invert). V2 `$0.00` echo lines are kept. Card sections: V1

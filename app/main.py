@@ -38,6 +38,7 @@ from parsers.ejemplo import EjemploParser
 from parsers.banamex import BanamexParser
 from parsers.banamex_tdc import BanamexTdcParser
 from parsers.invex_tdc import InvexTdcParser
+from parsers.bbva_debito import BbvaDebitoParser
 from app.pestana_gmail import PestanaGastosGmail
 from app.sugerencias import sugerir_reglas_con_ia
 from app.ventanas import (
@@ -60,6 +61,7 @@ PARSERS: dict[str, type[BaseParser]] = {
     "Banamex": BanamexParser,
     "Banamex TDC": BanamexTdcParser,
     "Invex TDC": InvexTdcParser,
+    "BBVA": BbvaDebitoParser,
 }
 
 # Colores de apoyo de la interfaz (el resto lo pone el tema nativo de Windows).
