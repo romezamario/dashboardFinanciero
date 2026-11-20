@@ -58,7 +58,7 @@ export async function obtenerEstadoGmail(): Promise<EstadoGmail> {
   };
 }
 
-async function invocar<T>(funcion: string, body: unknown): Promise<T> {
+async function invocar<T>(funcion: string, body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke(funcion, { body });
   if (error) {
     // El cuerpo del error trae el mensaje en español de la función.
