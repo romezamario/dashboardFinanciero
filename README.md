@@ -754,8 +754,19 @@ el estado de cuenta semanas después, y mezclarlos duplicaría cargos. Cada avis
 evento (`gastos_correo.evento_id`, migración `20261010120000_gastos_correo_evento.sql`), el mismo
 catálogo `eventos` de las transacciones.
 
-Todo el flujo corre en tu computadora (la nube nunca ve tu Gmail ni tus reglas). Se usa desde la
-app de escritorio, pestaña **Gastos recientes (Gmail)**:
+**Desde el 2026-11-20 también se revisa en la nube, sin la laptop**: la Edge Function
+`revisar-gmail` de Supabase lee los avisos de los últimos 3 días cada 15 minutos (pg_cron) con el
+mismo permiso de solo lectura y las mismas reglas que la app de escritorio, y los guarda igual en
+`gastos_correo`. En el dashboard, "Gastos recientes → Por correo" muestra cuándo se revisó por
+última vez, lo pendiente (sin categoría, códigos de ciudad) y el botón **Revisar ahora**. La app de
+escritorio la mantiene al día sola: cada **Revisar Gmail y subir** (y cada "Sincronizar a
+Supabase...") sube tus reglas y códigos de ciudad a `preferencias` y tu permiso de Gmail
+(`data/gmail/token.json`) al esquema `privado`, que la API no expone
+(`python -m sync.gmail_nube [--revisar] [--comparar 30]` hace lo mismo a mano). Si el permiso
+vence, el dashboard lo dice: **Reautorizar Gmail...** y luego **Revisar Gmail y subir** en la app lo
+reconectan. Migración `20261120030000_gmail_en_la_nube.sql`, workflow `funciones.yml`.
+
+La app de escritorio sigue funcionando igual, pestaña **Gastos recientes (Gmail)**:
 
 - **Revisar Gmail y subir** lee los avisos de los últimos N días (campo "Días hacia atrás", 3 por
   defecto), los guarda en `data/gastos_correo/` y los sube a Supabase. Corre en segundo plano con

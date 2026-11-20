@@ -1,0 +1,30 @@
+name: Edge Functions (Supabase personal)
+
+# Publica las Edge Functions del dashboard personal. Hoy: revisar-gmail, la que
+# lee los avisos de compra de Gmail cada 15 minutos (ver
+# supabase/migrations/20261120030000_gmail_en_la_nube.sql). La llave
+# service_role la pone Supabase dentro de la función: aquí no hay secretos de
+# más que el token de la Management API.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/functions/revisar-gmail/**"
+      - "supabase/config.toml"
+      - ".github/workflows/funciones.yml"
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.122.1
+
+      - name: Publicar revisar-gmail
+        run: supabase functions deploy revisar-gmail --project-ref "${{ secrets.SUPABASE_PROJECT_ID }}" --no-verify-jwt --use-api
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

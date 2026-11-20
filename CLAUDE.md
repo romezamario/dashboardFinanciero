@@ -643,6 +643,25 @@ grouped into calls of up to `MAXIMO_POR_LLAMADA` = 500 rows without splitting a 
 failed (retried next time), an invalid day fails alone without being sent, and a `mensaje_id`
 repeated in one call is sent once (Postgres rejects the whole call otherwise, error 21000). The dashboard's `obtenerGastosCorreo` no longer limits to 60 days: it pages
 1,000 rows at a time ordered by fecha, hora **and id** (PostgREST's per-query cap).
+**Gmail read in the cloud too (2026-11-20, Mario: "desarrollar la conexión con gmail para que haga la extracción de correos que hace la
+herramienta de escritorio")**: Supabase Edge Function `supabase/functions/revisar-gmail/` (deployed by `funciones.yml` to the PERSONAL
+project, `--no-verify-jwt`; the service_role key is injected by Supabase). `avisos.ts` is a faithful TS port of `parsear_aviso` /
+`parsear_debito` / `a_gasto` / `ciudad_de` / `categorizar` (tested in `avisos.test.ts` with the same synthetic HTML as the Python tests;
+**change both when the notice format or a rule changes**). `index.ts` = `revisar_gmail(3, subir=True)`: refresh token → list
+`newer_than:3d` → download only ids not in `gastos_correo`/`gmail_omitidos` (debit notices: id only) → upsert on (user_id, mensaje_id)
+without `evento_id` → log a row in `gmail_revisiones` (30 days kept). When the rules hash changes it recategorizes every saved row
+(like `recategorizar_guardados`). `comparar: true` re-reads the window and diffs it field by field without saving (verification).
+Callers: pg_cron every 15 min (`privado.disparar_revision_gmail` → pg_net with `x-cron-secreto`, secret generated in the migration,
+URL written by `db-migrate.yml` because it carries the project ref; the CI Postgres has no pg_cron, the migration skips it there) or a
+user JWT (only that user's connection). Data: migration `20261120030000_gmail_en_la_nube.sql` — `privado.gmail_conexiones` (client
+id/secret + refresh token, never readable through the API; RPCs `conectar_gmail`/`desconectar_gmail`/`estado_conexion_gmail` with
+privado definer + public invoker wrappers, `conexiones_gmail`/`validar_cron_gmail` service_role only), `gmail_revisiones` (select
+`usuario_efectivo()`), `gmail_omitidos` (service_role only); tested in `supabase/tests/aislamiento_gmail.sql`. Rules and city codes
+live in `preferencias` (`reglas_categorizacion`, `ciudades_correo`), uploaded with the token by `sync/gmail_nube.py`, which the desktop
+calls after every Gmail check with upload and every "Sincronizar a Supabase..." (best effort). Front: `EstadoGmail.tsx` at the top of
+"Por correo" (`lib/gmailNube.ts`, tested): last check, failures (expired permission → reauthorize in the desktop app), pending
+uncategorized/city codes, "Revisar ahora". The OAuth client is still the desktop one (no web OAuth flow): reconnecting = desktop app.
+
 **Debit notices are not expenses (2026-10-06, user's decision)**: "Retiro/Compra con cuenta
 Banamex" notices from a debit account (`"Cheques M.N. ***123"`, `"CTA PRIORITY BNM M.N. ***123"`)
 have amount/date but **no Establecimiento** — not even whether it was an ATM withdrawal or a purchase.

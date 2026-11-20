@@ -65,6 +65,20 @@ jobs:
       # cada uno en su propio esquema, con sus migraciones en
       # supabase/espacios/<espacio>/migraciones. Solo la instancia personal:
       # migrate-producto no las ve, así nunca llegan a Ordena tu Lana.
+      # Gmail en la nube (20261120030000_gmail_en_la_nube.sql): pg_cron llama a
+      # la Edge Function revisar-gmail; su URL lleva el id del proyecto, que
+      # vive en un secreto, así que se escribe aquí y no en la migración.
+      - name: URL de la revisión de Gmail
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROYECTO: ${{ secrets.SUPABASE_PROJECT_ID }}
+        run: |
+          consulta="update privado.gmail_cron set url = 'https://$PROYECTO.supabase.co/functions/v1/revisar-gmail';"
+          codigo=$(jq -n --arg q "$consulta" '{query: $q}' | curl -sS -o /dev/null -w '%{http_code}' -X POST \
+            "https://api.supabase.com/v1/projects/$PROYECTO/database/query" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" --data @-)
+          if [ "${codigo:0:1}" != "2" ]; then echo "::error::No se pudo guardar la URL (HTTP $codigo)."; exit 1; fi
+
       - name: Migraciones de espacios (solo personal)
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}

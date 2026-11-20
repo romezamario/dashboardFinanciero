@@ -17,6 +17,7 @@ import {
 import { type VistaCalendario, formatoMoneda, useDescargaExcel, ESTILO_CABECERA, ESTILO_SUBTOTAL_CATEGORIA, ESTILO_SUBTOTAL_COMERCIO, ESTILO_TOTAL } from "../lib/gastosUI";
 import { hoyIso } from "../lib/fechas";
 import { CalendarioMensual, type ResumenDia } from "./CalendarioMensual";
+import { EstadoGmail } from "./EstadoGmail";
 import {
   CabeceraColumnas,
   CeldasSumas,
@@ -42,7 +43,10 @@ export function GastosCorreoTab({
   onCambiarVista,
   transacciones,
   onActualizado,
+  onRecargarCorreo,
 }: {
+  /** Vuelve a pedir los avisos (tras "Revisar ahora" con avisos nuevos). */
+  onRecargarCorreo: () => Promise<void>;
   /** Los estados de cuenta: con ellos se marca qué avisos ya tienen su cargo. */
   transacciones: Transaccion[];
   onActualizado: (ids?: string[]) => void | Promise<void>;
@@ -101,15 +105,18 @@ export function GastosCorreoTab({
   }
   if (dias.length === 0) {
     return (
-      <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-        Todavía no hay gastos de correo. Se cargan cada mañana a partir de los avisos de compra de
-        Banamex.
-      </p>
+      <div className="space-y-4">
+        <EstadoGmail onRecargar={onRecargarCorreo} />
+        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+          Todavía no hay gastos de correo. Se cargan de los avisos de compra de Banamex en Gmail.
+        </p>
+      </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      <EstadoGmail onRecargar={onRecargarCorreo} />
       <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
         Cargos de los avisos de compra de Banamex (todo lo que se ha cargado). Elige un día
         para ver su detalle. Horas en CDMX, montos en MXN. La columna "Estado de cuenta" marca con ✓ los avisos

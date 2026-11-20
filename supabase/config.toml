@@ -409,3 +409,8 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 # sesión de Supabase: el webhook se valida con la firma x-signature.
 [functions.webhook-mercadopago]
 verify_jwt = false
+
+# Gastos por correo desde la nube: la llama pg_cron (sin sesión, con el
+# encabezado x-cron-secreto) o el dashboard (con sesión); la función valida.
+[functions.revisar-gmail]
+verify_jwt = false
