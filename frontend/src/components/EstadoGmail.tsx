@@ -145,8 +145,20 @@ export function EstadoGmail({ onRecargar }: { onRecargar: () => Promise<void> })
             style={{ borderColor: "var(--status-good)", color: "var(--status-good)" }}
             title={estado.conexion.origen === "dashboard" ? "Autorizado desde el dashboard" : "Autorizado desde la app de escritorio"}
           >
-            ✓ Gmail conectado{estado.conexion.correo ? `: ${estado.conexion.correo}` : ""}
+            ✓ {estado.conexion.correo ? `Conectado como ${estado.conexion.correo}` : "Gmail conectado"}
           </span>
+        )}
+        {estado.conexion && !conectarPrimero && (
+          <button
+            type="button"
+            onClick={conectar}
+            disabled={conectando}
+            className="underline underline-offset-2 py-2 sm:py-0 disabled:opacity-60"
+            style={{ color: "var(--text-muted)" }}
+            title="Vuelve a autorizar la lectura de Gmail (por ejemplo, con otra cuenta)"
+          >
+            {conectando ? "Abriendo Google…" : "Cambiar"}
+          </button>
         )}
       </div>
       {aviso && <p style={{ color: aviso.error ? "var(--status-critical)" : "var(--text-secondary)" }}>{aviso.texto}</p>}
