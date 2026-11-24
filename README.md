@@ -344,17 +344,11 @@ guardan datos usan su propio esquema de Supabase (`salud`, …), con sus migraci
 espacio, "← Inicio" regresa (el botón Atrás del navegador también). Los invitados del acceso
 compartido no ven Trading ni Viajes. Solo en la edición personal; la de clientes entra directo al tablero.
 
-**Viajes** — resumen de solo lectura de la [Bitácora de viajes](https://gestion-viajes-7wo.pages.dev)
-(repo `romezamario/GestionViajes`, donde se capturan y editan los viajes): días para el próximo viaje,
-viajes y días de viaje del año; si estás de viaje, lo que toca hoy (lugares y tickets por hora), dónde
-duermes esta noche y qué sigue mañana; cada viaje próximo con su cuenta regresiva, días, lugares,
-alojamientos, tickets, gasto previsto (en la moneda del viaje), avisos de noches sin alojamiento y
-pendientes de la lista, y los próximos traslados; ideas sin fechas y viajes anteriores. "Abrir" abre
-ese viaje en la bitácora, que se usa completa dentro de este mismo sitio en `/viajes/` (misma pestaña y
-mismo Cloudflare Access; la sirve `functions/viajes/[[ruta]].ts` desde su propio proyecto, sin copiar su código). Los datos los lee `/api/viajes` (Pages Function): directo del KV `viajes` de la
-bitácora cuando este proyecto tiene el binding `TRIPS` (lo agrega el workflow de GestionViajes), o si no,
-pidiendo `/api/trips` a la bitácora (si ésta queda detrás de Cloudflare Access, hace falta un service
-token en `VIAJES_ACCESS_CLIENT_ID`/`VIAJES_ACCESS_CLIENT_SECRET`).
+**Viajes** — la tarjeta abre directo la [Bitácora de viajes](https://gestion-viajes-7wo.pages.dev)
+(repo `romezamario/GestionViajes`, donde se capturan y editan los viajes), completa, dentro de este mismo
+sitio en `/viajes/` (misma pestaña y mismo Cloudflare Access; la sirve `functions/viajes/[[ruta]].ts` desde
+su propio proyecto, sin copiar su código; si la bitácora queda detrás de Cloudflare Access, hace falta un
+service token en `VIAJES_ACCESS_CLIENT_ID`/`VIAJES_ACCESS_CLIENT_SECRET`).
 
 **Qué muestra Salud** — lo que sube la laptop con `py colector\subir_oura.py` (repo `romezamario/oura`).
 Cada gráfica sin datos todavía dice qué le falta, no se oculta. La laptop lee el anillo cada hora

@@ -10,9 +10,8 @@
 // bitácora usa rutas relativas ("api/trips") para que funcione en los dos lados.
 //
 // Si la bitácora queda detrás de Cloudflare Access, hace falta un service token
-// en VIAJES_ACCESS_CLIENT_ID / VIAJES_ACCESS_CLIENT_SECRET (igual que /api/viajes).
+// en VIAJES_ACCESS_CLIENT_ID / VIAJES_ACCESS_CLIENT_SECRET.
 
-// Igual que en functions/api/viajes/index.ts.
 const VIAJES_URL_POR_DEFECTO = "https://gestion-viajes-7wo.pages.dev";
 
 interface Entorno {
