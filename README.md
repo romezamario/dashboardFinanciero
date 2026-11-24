@@ -336,13 +336,24 @@ abierto, la página se recarga sola una vez.
 
 **Página de inicio** — al entrar se ve "Mi dashboard", con una tarjeta por espacio: **Finanzas**
 (todo lo que se describe abajo), **Trading** (la antigua pestaña Trading: QQQ/TQQQ, Macro EE.UU. y el
-agente), **Salud** (datos del anillo Oura, ver abajo), y en "Próximamente"
-**Viajes** y **Pendientes**. Trading, Salud y Viajes son subproyectos que se trabajan aparte y publican
+agente), **Salud** (datos del anillo Oura, ver abajo), **Viajes** (ver abajo) y en "Próximamente"
+**Pendientes**. Trading, Salud y Viajes son subproyectos que se trabajan aparte y publican
 aquí: cada uno vive en `frontend/src/espacios/<espacio>/` (ver "Subproyectos" en CLAUDE.md). Los que
 guardan datos usan su propio esquema de Supabase (`salud`, …), con sus migraciones en
 `supabase/espacios/<espacio>/migraciones/`; solo se aplican a la instancia personal. Dentro de cada
 espacio, "← Inicio" regresa (el botón Atrás del navegador también). Los invitados del acceso
-compartido no ven Trading. Solo en la edición personal; la de clientes entra directo al tablero.
+compartido no ven Trading ni Viajes. Solo en la edición personal; la de clientes entra directo al tablero.
+
+**Viajes** — resumen de solo lectura de la [Bitácora de viajes](https://gestion-viajes-7wo.pages.dev)
+(repo `romezamario/GestionViajes`, donde se capturan y editan los viajes): días para el próximo viaje,
+viajes y días de viaje del año; si estás de viaje, lo que toca hoy (lugares y tickets por hora), dónde
+duermes esta noche y qué sigue mañana; cada viaje próximo con su cuenta regresiva, días, lugares,
+alojamientos, tickets, gasto previsto (en la moneda del viaje), avisos de noches sin alojamiento y
+pendientes de la lista, y los próximos traslados; ideas sin fechas y viajes anteriores. "Abrir ↗" abre
+ese viaje en la bitácora. Los datos los lee `/api/viajes` (Pages Function): directo del KV `viajes` de la
+bitácora cuando este proyecto tiene el binding `TRIPS` (lo agrega el workflow de GestionViajes), o si no,
+pidiendo `/api/trips` a la bitácora (si ésta queda detrás de Cloudflare Access, hace falta un service
+token en `VIAJES_ACCESS_CLIENT_ID`/`VIAJES_ACCESS_CLIENT_SECRET`).
 
 **Qué muestra Salud** — lo que sube la laptop con `py colector\subir_oura.py` (repo `romezamario/oura`).
 Cada gráfica sin datos todavía dice qué le falta, no se oculta. La laptop lee el anillo cada hora

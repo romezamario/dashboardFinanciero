@@ -291,7 +291,21 @@ estarán trabajándose en paralelo, pero publicarán en la misma página")**: ea
 Current state: `trading/` (Vista = `MarcoEspacio` + the existing `components/AnalisisTecnicoTab.tsx`, `soloDueno`; the Trading
 tab was REMOVED from Finanzas when `onIrAInicio` is set — i.e. always in personal; its components/lib files still live in
 `components/`/`lib/` and can move into the folder later), `salud/` (everything in the folder: `Vista.tsx`, `salud.ts`, charts and indicators),
-`viajes/` and `pendientes/` (placeholders). Tested in `lib/espacios.test.ts` (ordering, invalid ids, every folder registers, hash rules).
+`viajes/` (below) and `pendientes/` (placeholder). Tested in `lib/espacios.test.ts` (ordering, invalid ids, every folder registers, hash rules).
+
+**Viajes espacio (2026-11-24, Mario: "conéctalo a mi Dashboard personal")**: the trips live in the separate app
+`romezamario/GestionViajes` ("Bitácora de viajes", static page + Pages Functions, Pages project `gestion-viajes`,
+https://gestion-viajes-7wo.pages.dev), stored in Workers KV namespace `viajes` as `trip:<id>` JSON (English field names:
+name, destination, start/end, currency, lodging[], tickets[], days{date:{title, places[]}}, checklist[]). The dashboard is
+READ-ONLY: `functions/api/viajes/index.ts` returns `{viajes, fuente: "kv"|"api", bitacora}` reading the KV binding `TRIPS` when
+the Pages project has it (GestionViajes' deploy workflow PATCHes `kv_namespaces.TRIPS` into `dashboard-personal` and
+`dashboard-financiero`; it takes effect on this repo's next deploy), else fetching `<VIAJES_URL>/api/trips` (default the
+bitácora URL; `VIAJES_ACCESS_CLIENT_ID/SECRET` = Access service token if that site goes behind Access). Logic in
+`espacios/viajes/viajes.ts` (tested, `viajes.test.ts`), drawing in `Vista.tsx`: next-trip countdown + year tiles, the trip in
+progress (today's places/tickets by time, tonight's lodging, tomorrow), upcoming trip cards (days, places, lodging·tickets,
+planned spend in the trip's currency, nights without lodging, pending checklist, next tickets), ideas without dates, past trips.
+"Abrir ↗" links `<bitácora>/#viaje=<id>` (the bitácora reads that hash). `soloDueno` (and /api is owner-only). Edit trips in
+the bitácora, never here. Checked in Playwright with a mocked /api/viajes (1200 light / 390 dark, no overflow).
 
 **Shared access, personal edition (2026-10-17, user's request: a second user "con las mismas funcionalidades, con excepción de trading y wiki")**:
 the guest signs in with their OWN Supabase Auth user and works on the OWNER's data (read + write). Migration
