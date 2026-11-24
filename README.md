@@ -349,8 +349,9 @@ compartido no ven Trading ni Viajes. Solo en la edición personal; la de cliente
 viajes y días de viaje del año; si estás de viaje, lo que toca hoy (lugares y tickets por hora), dónde
 duermes esta noche y qué sigue mañana; cada viaje próximo con su cuenta regresiva, días, lugares,
 alojamientos, tickets, gasto previsto (en la moneda del viaje), avisos de noches sin alojamiento y
-pendientes de la lista, y los próximos traslados; ideas sin fechas y viajes anteriores. "Abrir ↗" abre
-ese viaje en la bitácora. Los datos los lee `/api/viajes` (Pages Function): directo del KV `viajes` de la
+pendientes de la lista, y los próximos traslados; ideas sin fechas y viajes anteriores. "Abrir" abre
+ese viaje en la bitácora, que se usa completa dentro de este mismo sitio en `/viajes/` (misma pestaña y
+mismo Cloudflare Access; la sirve `functions/viajes/[[ruta]].ts` desde su propio proyecto, sin copiar su código). Los datos los lee `/api/viajes` (Pages Function): directo del KV `viajes` de la
 bitácora cuando este proyecto tiene el binding `TRIPS` (lo agrega el workflow de GestionViajes), o si no,
 pidiendo `/api/trips` a la bitácora (si ésta queda detrás de Cloudflare Access, hace falta un service
 token en `VIAJES_ACCESS_CLIENT_ID`/`VIAJES_ACCESS_CLIENT_SECRET`).

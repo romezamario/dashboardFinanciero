@@ -304,8 +304,12 @@ bitácora URL; `VIAJES_ACCESS_CLIENT_ID/SECRET` = Access service token if that s
 `espacios/viajes/viajes.ts` (tested, `viajes.test.ts`), drawing in `Vista.tsx`: next-trip countdown + year tiles, the trip in
 progress (today's places/tickets by time, tonight's lodging, tomorrow), upcoming trip cards (days, places, lodging·tickets,
 planned spend in the trip's currency, nights without lodging, pending checklist, next tickets), ideas without dates, past trips.
-"Abrir ↗" links `<bitácora>/#viaje=<id>` (the bitácora reads that hash). `soloDueno` (and /api is owner-only). Edit trips in
-the bitácora, never here. Checked in Playwright with a mocked /api/viajes (1200 light / 390 dark, no overflow).
+**One address (2026-11-24, Mario: "no quiero tener 2 direcciones. Todo queda en Dashboard personal")**: the full bitácora is
+used INSIDE this site at `/viajes/` — `functions/viajes/[[ruta]].ts` proxies every `/viajes/<ruta>` request (page, `api/trips`
+GET/PUT/DELETE, `api/maps/resolve`) to `<VIAJES_URL>/<ruta>` without copying its code (same optional Access service token), so it sits
+behind this site's Cloudflare Access. The bitácora uses RELATIVE API paths (`api/trips`) for this to work, and shows "← Dashboard"
+(`/#viajes`) when its path starts with `/viajes`. The espacio's links open `/viajes/#viaje=<id>` in the same tab. `soloDueno` (and
+/api is owner-only; `/viajes/` is not under that middleware). Edit trips in the bitácora (repo GestionViajes), never here. Checked in Playwright with a mocked /api/viajes (1200 light / 390 dark, no overflow).
 
 **Shared access, personal edition (2026-10-17, user's request: a second user "con las mismas funcionalidades, con excepción de trading y wiki")**:
 the guest signs in with their OWN Supabase Auth user and works on the OWNER's data (read + write). Migration

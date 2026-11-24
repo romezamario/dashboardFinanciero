@@ -23,7 +23,10 @@ import {
   type Viaje,
 } from "./viajes";
 
-const BITACORA_POR_DEFECTO = "https://gestion-viajes-7wo.pages.dev";
+// La bitácora (repo GestionViajes) se usa dentro de este mismo sitio, en /viajes/:
+// functions/viajes/[[ruta]].ts la sirve desde su proyecto de Pages. Misma pestaña,
+// misma dirección y el mismo Cloudflare Access.
+const BITACORA = "/viajes";
 
 type Carga =
   | { estado: "cargando" }
@@ -35,14 +38,14 @@ async function obtenerViajes(): Promise<Carga> {
     const r = await fetch("/api/viajes", { headers: { accept: "application/json" } });
     const tipo = r.headers.get("content-type") ?? "";
     if (!tipo.includes("application/json")) {
-      return { estado: "error", mensaje: `El servidor respondió ${r.status} sin datos.`, bitacora: BITACORA_POR_DEFECTO };
+      return { estado: "error", mensaje: `El servidor respondió ${r.status} sin datos.`, bitacora: BITACORA };
     }
     const datos = (await r.json()) as { viajes?: Record<string, unknown>; error?: string; bitacora?: string };
-    const bitacora = datos.bitacora || BITACORA_POR_DEFECTO;
+    const bitacora = BITACORA;
     if (!r.ok) return { estado: "error", mensaje: datos.error || `Error ${r.status}.`, bitacora };
     return { estado: "listo", viajes: normalizarViajes(datos.viajes), bitacora };
   } catch (e) {
-    return { estado: "error", mensaje: (e as Error).message, bitacora: BITACORA_POR_DEFECTO };
+    return { estado: "error", mensaje: (e as Error).message, bitacora: BITACORA };
   }
 }
 
@@ -60,7 +63,7 @@ function Titulo({ children }: { children: ReactNode }) {
 
 function Enlace({ href, children }: { href: string; children: ReactNode }) {
   return (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="text-xs font-medium whitespace-nowrap" style={{ color: "var(--marca)" }}>
+    <a href={href} className="text-xs font-medium whitespace-nowrap" style={{ color: "var(--marca)" }}>
       {children}
     </a>
   );
@@ -129,7 +132,7 @@ function ViajeEnCurso({ v, hoy, bitacora }: { v: Viaje; hoy: string; bitacora: s
             {[v.destination, rangoFechas(v)].filter(Boolean).join(" · ")}
           </p>
         </div>
-        <Enlace href={enlaceBitacora(bitacora, v.id)}>Abrir en la bitácora ↗</Enlace>
+        <Enlace href={enlaceBitacora(bitacora, v.id)}>Abrir en la bitácora</Enlace>
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -206,7 +209,7 @@ function TarjetaViaje({ v, hoy, bitacora }: { v: Viaje; hoy: string; bitacora: s
             {[v.destination, rangoFechas(v), v.travelers].filter(Boolean).join(" · ")}
           </p>
         </div>
-        <Enlace href={enlaceBitacora(bitacora, v.id)}>Abrir ↗</Enlace>
+        <Enlace href={enlaceBitacora(bitacora, v.id)}>Abrir</Enlace>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -256,7 +259,7 @@ export default function VistaViajes({ onIrAInicio }: PropsEspacio) {
     };
   }, [intento]);
 
-  const bitacora = carga.estado === "cargando" ? BITACORA_POR_DEFECTO : carga.bitacora;
+  const bitacora = carga.estado === "cargando" ? BITACORA : carga.bitacora;
   const viajes = useMemo(() => (carga.estado === "listo" ? carga.viajes : []), [carga]);
   const grupos = useMemo(() => clasificarViajes(viajes, hoy), [viajes, hoy]);
   const anio = Number(hoy.slice(0, 4));
@@ -265,13 +268,11 @@ export default function VistaViajes({ onIrAInicio }: PropsEspacio) {
   const acciones = (
     <a
       href={enlaceBitacora(bitacora)}
-      target="_blank"
-      rel="noopener noreferrer"
       className="h-9 whitespace-nowrap rounded-full px-3 text-xs font-medium leading-9 sm:h-auto sm:py-1 sm:leading-normal"
       style={{ background: "var(--marca)", color: "white" }}
     >
-      <span className="sm:hidden">Bitácora ↗</span>
-      <span className="hidden sm:inline">Abrir bitácora ↗</span>
+      <span className="sm:hidden">Bitácora</span>
+      <span className="hidden sm:inline">Abrir bitácora</span>
     </a>
   );
 
@@ -293,7 +294,7 @@ export default function VistaViajes({ onIrAInicio }: PropsEspacio) {
             <button className="text-xs font-medium" style={{ color: "var(--marca)" }} onClick={() => { setCarga({ estado: "cargando" }); setIntento((n) => n + 1); }}>
               Reintentar
             </button>
-            <Enlace href={enlaceBitacora(bitacora)}>Abrir la bitácora ↗</Enlace>
+            <Enlace href={enlaceBitacora(bitacora)}>Abrir la bitácora</Enlace>
           </div>
         </Tarjeta>
       ) : viajes.length === 0 ? (
@@ -305,7 +306,7 @@ export default function VistaViajes({ onIrAInicio }: PropsEspacio) {
             Crea uno en la bitácora (fechas, alojamientos, lugares por día y tickets) y aparecerá aquí.
           </p>
           <div className="mt-3">
-            <Enlace href={enlaceBitacora(bitacora)}>Abrir la bitácora ↗</Enlace>
+            <Enlace href={enlaceBitacora(bitacora)}>Abrir la bitácora</Enlace>
           </div>
         </Tarjeta>
       ) : (
@@ -342,7 +343,7 @@ export default function VistaViajes({ onIrAInicio }: PropsEspacio) {
               <Titulo>Ideas sin fechas</Titulo>
               <div className="flex flex-wrap gap-2">
                 {grupos.sinFechas.map((v) => (
-                  <a key={v.id} href={enlaceBitacora(bitacora, v.id)} target="_blank" rel="noopener noreferrer">
+                  <a key={v.id} href={enlaceBitacora(bitacora, v.id)}>
                     <Pildora>{v.name}</Pildora>
                   </a>
                 ))}
@@ -367,7 +368,7 @@ export default function VistaViajes({ onIrAInicio }: PropsEspacio) {
                         <span className="tabular-nums" style={{ color: "var(--text-secondary)" }}>
                           {gastoPrevisto(v) ? formatoMonto(gastoPrevisto(v), v.currency) : ""}
                         </span>
-                        <Enlace href={enlaceBitacora(bitacora, v.id)}>Abrir ↗</Enlace>
+                        <Enlace href={enlaceBitacora(bitacora, v.id)}>Abrir</Enlace>
                       </span>
                     </li>
                   ))}
