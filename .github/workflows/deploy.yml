@@ -102,6 +102,37 @@ jobs:
             fi
           done
 
+      # Bitácora de viajes (repo privado romezamario/GestionViajes) servida aquí
+      # mismo en /viajes/, sin pasar por gestion-viajes-7wo. Necesita el secreto
+      # TOKEN_VIAJES (token de GitHub con lectura de GestionViajes). Sin él, o si
+      # algo falla, /viajes/ sigue con el proxy a 7wo.
+      - name: ¿Hay TOKEN_VIAJES?
+        id: hay_token_viajes
+        env:
+          TOKEN_VIAJES: ${{ secrets.TOKEN_VIAJES }}
+        run: |
+          if [ -n "$TOKEN_VIAJES" ]; then echo "si=1" >> "$GITHUB_OUTPUT"; else echo "::notice::Sin el secreto TOKEN_VIAJES: /viajes/ sigue con el proxy a gestion-viajes."; fi
+
+      - name: Traer GestionViajes
+        id: repo_viajes
+        if: steps.personal.outcome == 'success' && steps.hay_token_viajes.outputs.si == '1'
+        continue-on-error: true
+        uses: actions/checkout@v5
+        with:
+          repository: romezamario/gestionviajes
+          token: ${{ secrets.TOKEN_VIAJES }}
+          path: _viajes
+          persist-credentials: false
+
+      - name: Incluir Viajes en dashboard-personal
+        if: steps.repo_viajes.outcome == 'success'
+        continue-on-error: true
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_CUENTA: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          VIAJES_DIR: _viajes
+        run: bash .github/scripts/incluir-viajes.sh
+
       - name: Deploy a dashboard-personal
         if: steps.personal.outcome == 'success'
         uses: cloudflare/wrangler-action@v4

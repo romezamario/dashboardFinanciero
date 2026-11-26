@@ -303,6 +303,14 @@ to work, and shows "← Dashboard" (`/`) when its path starts with `/viajes`. Th
 `location.replace("/viajes/")`, so the home card opens the bitácora directly. A read-only summary screen + `/api/viajes` existed
 the same day and were REMOVED (Mario: "¿por qué existe esta pantalla?" — it duplicated the bitácora's own "Hoy"); don't bring it
 back. `soloDueno`. Edit trips in the bitácora (repo GestionViajes), never here.
+**Served from this project (2026-11-26, Mario: "Ok muévelo a Dashboard entonces" — to retire gestion-viajes-7wo)**: like Trading, the
+code stays in its own repo, but `deploy.yml` now checks out `romezamario/gestionviajes` (private; secret `TOKEN_VIAJES`) right before
+"Deploy a dashboard-personal" and `.github/scripts/incluir-viajes.sh` copies `public/` → `dist/viajes/`, `functions/` →
+`functions/viajes/` (replacing the proxy for that deploy only), `lib/` → `frontend/viajes-lib/` (imports rewritten), downloads the ATAC
+maps and binds the same KV namespace as `TRIPS` to dashboard-personal (read from the gestion-viajes project; no data moved). Any failure
+(or no token) leaves the proxy `[[ruta]].ts` in place, so 7wo must exist until this is verified. GestionViajes' own workflow
+dispatches this deploy after each push (same token, Actions write) and puts `FLIGHTS_KEY` on dashboard-personal. Never edit the copied
+files here.
 
 **Shared access, personal edition (2026-10-17, user's request: a second user "con las mismas funcionalidades, con excepción de trading y wiki")**:
 the guest signs in with their OWN Supabase Auth user and works on the OWNER's data (read + write). Migration
