@@ -1,6 +1,6 @@
 // La tarjeta Viajes abre directo la Bitácora de viajes, que se usa dentro de
-// este sitio en /viajes/ (functions/viajes/[[ruta]].ts la reenvía al proyecto
-// de GestionViajes). `replace` para que «Atrás» desde la bitácora vuelva al
+// este sitio en /viajes/ (la publica el deploy desde el repo GestionViajes; ver
+// .github/scripts/incluir-viajes.sh). `replace` para que «Atrás» desde la bitácora vuelva al
 // inicio del dashboard y no rebote aquí.
 import { useEffect } from "react";
 

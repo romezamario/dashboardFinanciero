@@ -1,6 +1,6 @@
 // Subproyecto "Viajes" (repo romezamario/GestionViajes, la "Bitácora de
-// viajes"). La tarjeta abre la bitácora completa en /viajes/ (proxy en
-// functions/viajes/[[ruta]].ts). Ver "Subproyectos" en CLAUDE.md.
+// viajes"). La tarjeta abre la bitácora completa en /viajes/ (la copia el
+// deploy, .github/scripts/incluir-viajes.sh). Ver "Subproyectos" en CLAUDE.md.
 import type { ManifiestoEspacio } from "../../lib/espacios";
 
 const espacio: ManifiestoEspacio = {

@@ -307,8 +307,10 @@ back. `soloDueno`. Edit trips in the bitácora (repo GestionViajes), never here.
 code stays in its own repo, but `deploy.yml` now checks out `romezamario/gestionviajes` (private; secret `TOKEN_VIAJES`) right before
 "Deploy a dashboard-personal" and `.github/scripts/incluir-viajes.sh` copies `public/` → `dist/viajes/`, `functions/` →
 `functions/viajes/` (replacing the proxy for that deploy only), `lib/` → `frontend/viajes-lib/` (imports rewritten), downloads the ATAC
-maps and binds the same KV namespace as `TRIPS` to dashboard-personal (read from the gestion-viajes project; no data moved). Any failure
-(or no token) leaves the proxy `[[ruta]].ts` in place, so 7wo must exist until this is verified. GestionViajes' own workflow
+maps and binds the same KV namespace as `TRIPS` to dashboard-personal (read from the gestion-viajes project; no data moved).  Verified by Mario
+2026-11-26 ("sale mi viaje de roma"); then the proxy `[[ruta]].ts` was REMOVED and the Pages project `gestion-viajes` (7wo) DELETED
+(the KV namespace `viajes` was kept: it is the TRIPS bound here). Now a missing token, missing TRIPS binding or any copy failure
+fails the job BEFORE "Deploy a dashboard-personal", so the previous deployment (with Viajes) stays live. GestionViajes' own workflow
 dispatches this deploy after each push (same token, Actions write) and puts `FLIGHTS_KEY` on dashboard-personal. Never edit the copied
 files here.
 

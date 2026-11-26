@@ -344,11 +344,11 @@ guardan datos usan su propio esquema de Supabase (`salud`, …), con sus migraci
 espacio, "← Inicio" regresa (el botón Atrás del navegador también). Los invitados del acceso
 compartido no ven Trading ni Viajes. Solo en la edición personal; la de clientes entra directo al tablero.
 
-**Viajes** — la tarjeta abre directo la [Bitácora de viajes](https://gestion-viajes-7wo.pages.dev)
-(repo `romezamario/GestionViajes`, donde se capturan y editan los viajes), completa, dentro de este mismo
-sitio en `/viajes/` (misma pestaña y mismo Cloudflare Access; la sirve `functions/viajes/[[ruta]].ts` desde
-su propio proyecto, sin copiar su código; si la bitácora queda detrás de Cloudflare Access, hace falta un
-service token en `VIAJES_ACCESS_CLIENT_ID`/`VIAJES_ACCESS_CLIENT_SECRET`).
+**Viajes** — la tarjeta abre directo la Bitácora de viajes en `/viajes/` (repo `romezamario/GestionViajes`,
+donde se capturan y editan los viajes). Como Trading, el código vive en su propio repo y este sitio lo publica:
+en cada despliegue `deploy.yml` trae GestionViajes (secreto `TOKEN_VIAJES`) y `.github/scripts/incluir-viajes.sh`
+lo copia a `/viajes/` con sus Functions y el KV `TRIPS`. Cada push a GestionViajes vuelve a desplegar este sitio.
+La dirección suelta gestion-viajes-7wo.pages.dev se retiró el 2026-11-26.
 
 **Qué muestra Salud** — lo que sube la laptop con `py colector\subir_oura.py` (repo `romezamario/oura`).
 Cada gráfica sin datos todavía dice qué le falta, no se oculta. La laptop lee el anillo cada hora

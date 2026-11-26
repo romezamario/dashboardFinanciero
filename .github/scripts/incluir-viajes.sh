@@ -8,17 +8,15 @@
 #   functions/  → frontend/functions/viajes/   (api/trips, api/files, api/maps…)
 #   lib/        → frontend/viajes-lib/         (los imports a lib/ y public/ se reescriben)
 # y el KV de los viajes (binding TRIPS, el mismo namespace que usaba
-# gestion-viajes, sin mover datos) se vincula a dashboard-personal.
-# Así /viajes/ ya no pasa por gestion-viajes-7wo.pages.dev.
-#
-# Si algo falla, se deja todo como estaba: el proxy functions/viajes/[[ruta]].ts
-# sigue reenviando a 7wo, y el resto del dashboard se publica igual.
+# gestion-viajes, sin mover datos) tiene que estar vinculado a dashboard-personal.
+# gestion-viajes-7wo.pages.dev se retiró (2026-11-26): ya no hay proxy de respaldo,
+# así que si algo falla el script termina con error y el workflow NO publica
+# dashboard-personal (sigue en línea el despliegue anterior).
 #
 # Necesita CF_TOKEN, CF_CUENTA y VIAJES_DIR.
 set -euo pipefail
 
 PROYECTO="dashboard-personal"
-PROYECTO_VIAJES="gestion-viajes"
 API="https://api.cloudflare.com/client/v4/accounts/${CF_CUENTA}"
 FRONT="frontend"
 
@@ -33,31 +31,16 @@ cf() { # cf MÉTODO RUTA [JSON]
 }
 resumen() { echo "$*"; echo "$*" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"; }
 
-deshacer() {
-  rm -rf "${FRONT}/dist/viajes" "${FRONT}/viajes-lib" "${FRONT}/functions/viajes"
-  git checkout -- "${FRONT}/functions/viajes"
-  resumen "::warning::Viajes sigue por el proxy a gestion-viajes (no se pudo incluir aquí)."
-}
-trap 'deshacer' ERR
+[[ -f "${VIAJES_DIR}/public/index.html" && -d "${VIAJES_DIR}/functions" ]] || { echo "::error::No está el repo de viajes en ${VIAJES_DIR}"; exit 1; }
 
-[[ -f "${VIAJES_DIR}/public/index.html" && -d "${VIAJES_DIR}/functions" ]] || { echo "No está el repo de viajes en ${VIAJES_DIR}"; false; }
-
-# 1. KV: el namespace que hoy usa gestion-viajes como TRIPS.
+# 1. KV: el binding TRIPS (namespace "viajes") debe seguir en dashboard-personal.
 actual=$(cf GET "/pages/projects/${PROYECTO}")
 kv=$(jq -r '.result.deployment_configs.production.kv_namespaces.TRIPS.namespace_id // empty' <<<"$actual")
-if [[ -z $kv ]]; then
-  viajes=$(cf GET "/pages/projects/${PROYECTO_VIAJES}")
-  kv=$(jq -r '.result.deployment_configs.production.kv_namespaces.TRIPS.namespace_id // empty' <<<"$viajes")
-  [[ -n $kv ]] || { echo "No encontré el KV TRIPS de ${PROYECTO_VIAJES}: $(jq -c '.errors' <<<"$viajes")"; false; }
-  r=$(cf PATCH "/pages/projects/${PROYECTO}" "{\"deployment_configs\":{\"production\":{\"kv_namespaces\":{\"TRIPS\":{\"namespace_id\":\"${kv}\"}}}}}")
-  [[ $(jq -r '.success' <<<"$r") == "true" ]] || { echo "No se pudo vincular el KV: $(jq -c '.errors' <<<"$r")"; false; }
-  resumen "Vinculé el KV de viajes (TRIPS) a ${PROYECTO}."
-else
-  echo "${PROYECTO} ya tiene el KV TRIPS."
-fi
+[[ -n $kv ]] || { echo "::error::${PROYECTO} no tiene el KV TRIPS vinculado: $(jq -c '.errors' <<<"$actual")"; exit 1; }
+echo "${PROYECTO} tiene el KV TRIPS."
 
 # 2. Código: página, Functions y su lib (imports ../../../lib/ → ../../../../viajes-lib/).
-rm -rf "${FRONT}/functions/viajes" "${FRONT}/dist/viajes" "${FRONT}/viajes-lib"
+rm -rf "${FRONT}/dist/viajes" "${FRONT}/viajes-lib"
 mkdir -p "${FRONT}/dist/viajes"
 cp -R "${VIAJES_DIR}/public/." "${FRONT}/dist/viajes/"
 cp -R "${VIAJES_DIR}/functions" "${FRONT}/functions/viajes"
@@ -66,7 +49,7 @@ cp -R "${VIAJES_DIR}/lib" "${FRONT}/viajes-lib"
 find "${FRONT}/functions/viajes" -name '*.js' -print0 | xargs -0 sed -i -E \
   -e 's#(from |import\()(["'"'"'])((\.\./)+)lib/#\1\2../\3viajes-lib/#g' \
   -e 's#(from |import\()(["'"'"'])((\.\./)+)public/#\1\2../\3dist/viajes/#g'
-if grep -rqE '(from |import\()["'"'"'](\.\./)+(lib|public)/' "${FRONT}/functions/viajes"; then echo "Quedó un import sin reescribir"; false; fi
+if grep -rqE '(from |import\()["'"'"'](\.\./)+(lib|public)/' "${FRONT}/functions/viajes"; then echo "::error::Quedó un import sin reescribir"; exit 1; fi
 
 # 3. Mapas oficiales del metro (ATAC Roma), como en el workflow de GestionViajes.
 mkdir -p "${FRONT}/dist/viajes/maps"
@@ -80,5 +63,4 @@ bajar() {
 bajar roma-metro-ferrovie.pdf "https://www.atac.roma.it/docs/default-source/mappe-tpl/mappa-metro-e-ferrovie-metropolitane.pdf"
 bajar roma-metro-esquema.pdf "https://www.atac.roma.it/docs/default-source/mappe-tpl/sinottici-metro-a-b-c-e-rm-gd.pdf"
 
-trap - ERR
 resumen "✓ Viajes incluido en ${PROYECTO} (GestionViajes $(git -C "${VIAJES_DIR}" rev-parse --short HEAD))."
