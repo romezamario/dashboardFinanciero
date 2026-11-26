@@ -6,7 +6,7 @@
 # $VIAJES_DIR por el workflow) y aquí no se edita: en cada despliegue se copia
 #   public/     → frontend/dist/viajes/        (página, íconos, sw.js, pdfjs)
 #   functions/  → frontend/functions/viajes/   (api/trips, api/files, api/maps…)
-#   lib/        → frontend/viajes-lib/         (los imports se reescriben)
+#   lib/        → frontend/viajes-lib/         (los imports a lib/ y public/ se reescriben)
 # y el KV de los viajes (binding TRIPS, el mismo namespace que usaba
 # gestion-viajes, sin mover datos) se vincula a dashboard-personal.
 # Así /viajes/ ya no pasa por gestion-viajes-7wo.pages.dev.
@@ -62,8 +62,11 @@ mkdir -p "${FRONT}/dist/viajes"
 cp -R "${VIAJES_DIR}/public/." "${FRONT}/dist/viajes/"
 cp -R "${VIAJES_DIR}/functions" "${FRONT}/functions/viajes"
 cp -R "${VIAJES_DIR}/lib" "${FRONT}/viajes-lib"
-find "${FRONT}/functions/viajes" -name '*.js' -print0 | xargs -0 sed -i -E 's#from "((\.\./)+)lib/#from "../\1viajes-lib/#'
-if grep -rqE 'from "(\.\./)+lib/' "${FRONT}/functions/viajes"; then echo "Quedó un import sin reescribir"; false; fi
+# Imports que salen de functions/: lib/ → viajes-lib/ y public/ → dist/viajes/ (un nivel más abajo).
+find "${FRONT}/functions/viajes" -name '*.js' -print0 | xargs -0 sed -i -E \
+  -e 's#(from |import\()(["'"'"'])((\.\./)+)lib/#\1\2../\3viajes-lib/#g' \
+  -e 's#(from |import\()(["'"'"'])((\.\./)+)public/#\1\2../\3dist/viajes/#g'
+if grep -rqE '(from |import\()["'"'"'](\.\./)+(lib|public)/' "${FRONT}/functions/viajes"; then echo "Quedó un import sin reescribir"; false; fi
 
 # 3. Mapas oficiales del metro (ATAC Roma), como en el workflow de GestionViajes.
 mkdir -p "${FRONT}/dist/viajes/maps"
