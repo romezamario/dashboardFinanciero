@@ -1,0 +1,65 @@
+name: Arreglar redirección a la liga vieja (un solo uso)
+
+# 2026-11-26, Mario: "Dashboard personal ahora me manda a Dashboard financiero".
+# Quita dashboard-financiero-c5z de Cloudflare Access y de Supabase Auth (Site URL
+# y Redirect URLs) y deja dashboard-personal-8uu como dominio principal.
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/arreglar-redireccion.yml"]
+  workflow_dispatch:
+
+jobs:
+  arreglar:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      NUEVO: dashboard-personal-8uu.pages.dev
+      VIEJO: dashboard-financiero-c5z.pages.dev
+    steps:
+      - name: Cloudflare Access
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_CUENTA: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          API="https://api.cloudflare.com/client/v4/accounts/${CF_CUENTA}"
+          apps=$(curl -sS "$API/access/apps" -H "Authorization: Bearer $CF_TOKEN")
+          jq -r '.result[] | "\(.name) | domain=\(.domain) | hosts=\((.self_hosted_domains // []) | join(",")) | launcher=\(.app_launcher_visible) | allowed_idps=\((.allowed_idps // []) | length)"' <<<"$apps"
+          app=$(jq -c --arg n "$NUEVO" '[.result[] | select(([.domain // "", ((.self_hosted_domains // [])[])] | join(" ")) | contains($n))][0]' <<<"$apps")
+          [[ $app != null ]] || { echo "::error::No encontré la app de Access de $NUEVO"; exit 1; }
+          id=$(jq -r .id <<<"$app")
+          cuerpo=$(jq -c --arg n "$NUEVO" --arg v "$VIEJO" '
+            def limpio: map(select(contains($v) | not));
+            {name, type, session_duration, allowed_idps, auto_redirect_to_identity, app_launcher_visible,
+             policies: [(.policies // [])[] | {id, precedence}],
+             domain: $n,
+             self_hosted_domains: (([$n, "*." + $n] + ((.self_hosted_domains // []) | limpio)) | unique),
+             destinations: (([{type:"public",uri:$n},{type:"public",uri:("*." + $n)}] + ((.destinations // []) | map(select((.uri // "") | contains($v) | not)))) | unique)}
+            | with_entries(select(.value != null))' <<<"$app")
+          r=$(curl -sS -X PUT "$API/access/apps/$id" -H "Authorization: Bearer $CF_TOKEN" -H "Content-Type: application/json" --data "$cuerpo")
+          echo "PUT: $(jq -c '{success, errors}' <<<"$r")"
+          jq -r '.result | "Ahora: domain=\(.domain) hosts=\((.self_hosted_domains // []) | join(","))"' <<<"$r"
+          [[ $(jq -r .success <<<"$r") == true ]]
+
+      - name: Supabase Auth (Site URL y Redirect URLs)
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          PROYECTO: ${{ secrets.SUPABASE_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          URL="https://api.supabase.com/v1/projects/$PROYECTO/config/auth"
+          c=$(curl -sS "$URL" -H "Authorization: Bearer $TOKEN")
+          echo "Antes: site_url=$(jq -r .site_url <<<"$c") | uri_allow_list=$(jq -r .uri_allow_list <<<"$c")"
+          lista=$(jq -r --arg n "https://$NUEVO" --arg v "$VIEJO" '
+            ((.uri_allow_list // "") | split(",") | map(select(length > 0 and (contains($v) | not)))) + [$n, $n + "/**"] | unique | join(",")' <<<"$c")
+          cuerpo=$(jq -nc --arg s "https://$NUEVO" --arg l "$lista" '{site_url: $s, uri_allow_list: $l}')
+          r=$(curl -sS -X PATCH "$URL" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" --data "$cuerpo")
+          echo "Después: site_url=$(jq -r .site_url <<<"$r") | uri_allow_list=$(jq -r .uri_allow_list <<<"$r")"
+          [[ $(jq -r .site_url <<<"$r") == "https://$NUEVO" ]]
+
+      - name: Comprobar
+        run: |
+          sleep 15
+          curl -sS -o /dev/null -w 'nuevo -> %{http_code} %{redirect_url}\n' "https://$NUEVO/" || true
