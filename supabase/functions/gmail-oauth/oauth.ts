@@ -7,7 +7,7 @@ export const MINUTOS_STATE = 15;
 /** Sitios a los que se puede volver después de autorizar: el dashboard
  * personal (y las ligas de cada deploy, `<hash>.<proyecto>.pages.dev`) y el
  * servidor de desarrollo. GMAIL_SITIOS_PERMITIDOS agrega orígenes exactos. */
-const PROYECTOS_PAGES = ["dashboard-personal-8uu.pages.dev", "dashboard-financiero-c5z.pages.dev"];
+const PROYECTOS_PAGES = ["dashboard-personal-8uu.pages.dev"];
 
 export function sitioPermitido(origen: string, extra: string[] = []): boolean {
   let url: URL;

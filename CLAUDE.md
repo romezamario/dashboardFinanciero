@@ -1763,22 +1763,14 @@ commits:
 - `.github/workflows/mantener-activo.yml` (2026-11-01; reworked 2026-11-14) — keeps both Supabase projects from free-plan pausing. One anon read a day was NOT enough: a second "will be paused" email came on 2026-11-08 while the daily run kept succeeding (Supabase's guide: "a few user requests to the database each day"). Now every 4 h: four PostgREST reads (planes, bancos, categorias, transacciones) with each instance's anon key + one SQL query through the Management API (`/v1/projects/{ref}/database/query`, access token). Fails only if every call fails.
 - `.github/workflows/verificar-instancia-clientes.yml` (2026-11-14) — manual only, read-only: checks the customer Supabase project (token/organization, RLS, migrations, Edge Functions + secrets, Auth config, public API, which project the live sites point to; optional table-by-table comparison with a previous project). Runs `scripts/migracion-clientes/verificar.mjs` (pure parts tested in CI with `node --test`). Never print data or customer counts there: the repo and its Actions logs are public. Part of the plan to move the customer project to the company account tecnologia@ordenatulana.com, [docs/migracion-supabase-clientes.md](docs/migracion-supabase-clientes.md) (DONE 2026-11-14: the customer project was transferred — no data copy — to the org "Ordena tu Lana" owned by tecnologia@ordenatulana.com; Mario's personal account left it. `PRODUCTO_SUPABASE_ACCESS_TOKEN` is now that account's token, `PRODUCTO_SUPABASE_ORGANIZACION` its org id; the personal project stays in Mario's personal org with `SUPABASE_ACCESS_TOKEN`).
 - `.github/workflows/deploy.yml` — triggers on `frontend/**`. Builds the frontend and deploys to
-  Cloudflare Pages via `wrangler pages deploy`, using secrets `CLOUDFLARE_API_TOKEN`,
-  `CLOUDFLARE_ACCOUNT_ID`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`. Assumes the
-  `dashboard-financiero` Pages project already exists (it does, in production) — current Wrangler
-  doesn't auto-create it on first deploy the way older versions did (a hard error: "The Pages
-  project ... does not exist"). Two things were tried and reverted here, worth knowing before
-  re-attempting either: a bare `pages project create` step failed outright once the project
-  existed (no `continue-on-error`, so it blocked the real deploy step every run); a variant that
-  first grep'd `wrangler pages project list --json` to skip creation when already present also
-  failed in CI — the grep didn't reliably match the real API response shape, and by the time
-  that surfaces the project already exists in production, so it's not worth re-diagnosing without
-  live credentials to test against. If the project is ever deleted and needs recreating, run
-  `npx wrangler pages project create dashboard-financiero --production-branch=main` locally by
-  hand (with `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` in the environment) before pushing —
-  don't put creation logic back in the workflow without a way to verify it against a real account.
-  User confirmed the workflow now runs clean end to end (straight from Build to the real Deploy
-  step, no failing step in between) after this was removed.
+  the Cloudflare Pages project `dashboard-personal` (https://dashboard-personal-8uu.pages.dev) via
+  `wrangler pages deploy`, using secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`,
+  `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`. `.github/scripts/preparar-dashboard-personal.sh`
+  runs first: creates the project if missing and refuses to deploy unless its domain (+ `*.`) is in
+  the Access application and redirects to the Access login. **The old project `dashboard-financiero`
+  (dashboard-financiero-c5z.pages.dev) was DELETED on 2026-11-26** (Mario: "ya no quiero que siga
+  activo el dominio dashboard financiero"); nothing deploys or points to it anymore (also removed
+  from the Gmail OAuth return allowlist). Don't bring it back.
 
 All workflows pin action versions that run natively on Node 24 (`actions/checkout@v5`,
 `actions/setup-node@v5`, `actions/setup-python@v6`, `supabase/setup-cli@v3`,

@@ -5,11 +5,11 @@ describe("sitioPermitido", () => {
   it("acepta el dashboard, sus ligas de deploy y localhost", () => {
     expect(sitioPermitido("https://dashboard-personal-8uu.pages.dev")).toBe(true);
     expect(sitioPermitido("https://abc123.dashboard-personal-8uu.pages.dev")).toBe(true);
-    expect(sitioPermitido("https://dashboard-financiero-c5z.pages.dev")).toBe(true);
     expect(sitioPermitido("http://localhost:5173")).toBe(true);
   });
   it("rechaza otros sitios, http fuera de localhost y rutas", () => {
     expect(sitioPermitido("https://malo.test")).toBe(false);
+    expect(sitioPermitido("https://dashboard-financiero-c5z.pages.dev")).toBe(false);
     expect(sitioPermitido("https://dashboard-personal-8uu.pages.dev.malo.test")).toBe(false);
     expect(sitioPermitido("https://xdashboard-personal-8uu.pages.dev")).toBe(false);
     expect(sitioPermitido("http://dashboard-personal-8uu.pages.dev")).toBe(false);

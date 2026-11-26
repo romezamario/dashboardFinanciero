@@ -55,24 +55,13 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
-      - name: Deploy a Cloudflare Pages
-        uses: cloudflare/wrangler-action@v4
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          # Desde frontend/ para que wrangler encuentre functions/ (la Pages
-          # Function de /api/cotizaciones) junto a dist/.
-          workingDirectory: frontend
-          command: pages deploy dist --project-name=dashboard-financiero
-
-      # Liga nueva del dashboard personal (Mario, 2026-11-08: "que ya no sea
-      # dashboard financiero"). Pages no permite renombrar un proyecto, así que
-      # se crea `dashboard-personal` y se despliega en los dos mientras tanto.
+      # La liga vieja (proyecto `dashboard-financiero`, dashboard-financiero-c5z)
+      # se dio de baja el 2026-11-26 (Mario: "ya no quiero que siga activo el
+      # dominio dashboard financiero"): solo se publica `dashboard-personal`.
       # Este paso NUNCA publica sin Cloudflare Access: crea el proyecto (si no
-      # existe), agrega su dominio a la aplicación de Access del dashboard,
-      # copia las variables de texto del proyecto viejo y comprueba que el
-      # dominio nuevo ya redirige al login de Access. Si algo falla, el deploy
-      # al proyecto nuevo se salta (el viejo ya quedó publicado arriba).
+      # existe), se asegura de que su dominio esté en la aplicación de Access del
+      # dashboard y comprueba que ya redirige al login de Access. Si algo falla,
+      # el deploy se salta y sigue en línea el despliegue anterior.
       - name: Preparar proyecto dashboard-personal (Access primero)
         id: personal
         continue-on-error: true
@@ -81,8 +70,7 @@ jobs:
           CF_CUENTA: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bash .github/scripts/preparar-dashboard-personal.sh
 
-      # Los secretos de Trading no se pueden leer del proyecto viejo por la API:
-      # si están como secretos de GitHub (mismo nombre), se cargan al nuevo.
+      # Secretos de Trading: si están como secretos de GitHub, se cargan al proyecto.
       - name: Secretos de Trading en dashboard-personal
         if: steps.personal.outcome == 'success'
         continue-on-error: true

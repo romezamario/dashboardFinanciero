@@ -561,14 +561,10 @@ pero los pasos de cuenta hay que dejarlos listos antes:
 2. En el dashboard → **Workers & Pages**, copia tu **Account ID** (aparece en la barra lateral derecha).
 3. Ve a **My Profile → API Tokens → Create Token** → "Create Custom Token" con el permiso
    `Account · Cloudflare Pages · Edit`. Copia el token (solo se muestra una vez).
-4. El proyecto Pages (`dashboard-financiero`) ya está creado en la cuenta. Si alguna vez lo
-   borras y necesitas recrearlo: `wrangler pages deploy` (el comando que usa el workflow) ya no
-   lo crea solo como en versiones viejas de Wrangler — hay que correr
-   `npx wrangler pages project create dashboard-financiero --production-branch=main` a mano una
-   vez (con `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID` en el entorno) antes de que el deploy
-   funcione de nuevo. El workflow ya no intenta crearlo automáticamente — un intento de crear un
-   proyecto que ya existe es un error duro de la API de Cloudflare, no algo que se pueda
-   distinguir de forma confiable en CI sin credenciales reales para probarlo primero.
+4. El proyecto Pages es `dashboard-personal` (https://dashboard-personal-8uu.pages.dev). El
+   workflow lo crea si no existe y no lo publica hasta que Cloudflare Access lo protege
+   (`.github/scripts/preparar-dashboard-personal.sh`). El proyecto viejo `dashboard-financiero`
+   (dashboard-financiero-c5z.pages.dev) se borró el 2026-11-26.
 
 ### 2. GitHub Secrets
 
@@ -589,7 +585,7 @@ Estos dos últimos son los mismos valores que `SUPABASE_URL`/`SUPABASE_KEY` de t
 Esto se configura fuera del código, en el dashboard de Cloudflare Zero Trust:
 
 1. **Zero Trust → Access → Applications → Add an application → Self-hosted**.
-2. Dominio: el que te asigne Cloudflare Pages (`dashboard-financiero.pages.dev` o tu dominio propio).
+2. Dominio: el que te asigne Cloudflare Pages (`dashboard-personal-8uu.pages.dev` y `*.dashboard-personal-8uu.pages.dev`, o tu dominio propio).
 3. En la política de acceso, restringe por tu email (o el método de login que prefieras: One-Time PIN, Google, etc.).
 4. Guarda. A partir de ahí, cualquier visita al sitio pide login de Cloudflare Access antes de llegar
    siquiera a la pantalla de login de Supabase Auth.
