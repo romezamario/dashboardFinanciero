@@ -1,7 +1,7 @@
 name: Arreglar redirección a la liga vieja (un solo uso)
 
 # 2026-11-26, Mario: "Dashboard personal ahora me manda a Dashboard financiero".
-# Quita dashboard-financiero-c5z de Cloudflare Access y de Supabase Auth (Site URL
+# (intento 2) Quita dashboard-financiero-c5z de Cloudflare Access y de Supabase Auth (Site URL
 # y Redirect URLs) y deja dashboard-personal-8uu como dominio principal.
 on:
   push:
@@ -27,12 +27,13 @@ jobs:
           API="https://api.cloudflare.com/client/v4/accounts/${CF_CUENTA}"
           apps=$(curl -sS "$API/access/apps" -H "Authorization: Bearer $CF_TOKEN")
           jq -r '.result[] | "\(.name) | domain=\(.domain) | hosts=\((.self_hosted_domains // []) | join(",")) | launcher=\(.app_launcher_visible) | allowed_idps=\((.allowed_idps // []) | length)"' <<<"$apps"
-          app=$(jq -c --arg n "$NUEVO" '[.result[] | select(([.domain // "", ((.self_hosted_domains // [])[])] | join(" ")) | contains($n))][0]' <<<"$apps")
+          # La app principal (la de la liga vieja); se ignoran apps de una ruta (p. ej. /viajes/compartir).
+          app=$(jq -c --arg v "$VIEJO" '[.result[] | select((.domain // "") == $v)][0]' <<<"$apps")
           [[ $app != null ]] || { echo "::error::No encontré la app de Access de $NUEVO"; exit 1; }
           id=$(jq -r .id <<<"$app")
           cuerpo=$(jq -c --arg n "$NUEVO" --arg v "$VIEJO" '
             def limpio: map(select(contains($v) | not));
-            {name, type, session_duration, allowed_idps, auto_redirect_to_identity, app_launcher_visible,
+            {name: $n, type, session_duration, allowed_idps, auto_redirect_to_identity, app_launcher_visible,
              policies: [(.policies // [])[] | {id, precedence}],
              domain: $n,
              self_hosted_domains: (([$n, "*." + $n] + ((.self_hosted_domains // []) | limpio)) | unique),

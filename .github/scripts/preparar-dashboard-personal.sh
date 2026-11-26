@@ -41,7 +41,8 @@ apps=$(cf GET "/access/apps")
   || falla "El token no puede leer las aplicaciones de Access (necesita 'Access: Apps and Policies — Edit'): $(jq -c '.errors' <<<"$apps")"
 echo "Aplicaciones de Access visibles: $(jq -r '.result | length' <<<"$apps")"
 jq -r '.result[] | "  - \(.name) | \(.domain // "") | \([(.destinations // [])[] | .uri // empty] | join(","))"' <<<"$apps"
-app=$(jq -c --arg v "$dominio" '[.result[] | select(([.domain // "", .name // "", ((.self_hosted_domains // [])[]), ((.destinations // [])[] | .uri // "")] | join(" ")) | contains($v))][0]' <<<"$apps")
+# La app del sitio entero (dominio sin ruta); las de una ruta, como /viajes/compartir, son aparte.
+app=$(jq -c --arg v "$dominio" '[.result[] | select(((.domain // "") | contains("/") | not) and ([.domain // "", ((.self_hosted_domains // [])[])] | index($v)))][0]' <<<"$apps")
 if [[ $app == null ]]; then
   # El token no tiene permiso de Access (ve 0 aplicaciones): el dominio se
   # agrega a mano en Zero Trust y aquí solo se comprueba (paso 4).
