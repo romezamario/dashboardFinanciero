@@ -313,6 +313,11 @@ maps and binds the same KV namespace as `TRIPS` to dashboard-personal (read from
 fails the job BEFORE "Deploy a dashboard-personal", so the previous deployment (with Viajes) stays live. GestionViajes' own workflow
 dispatches this deploy after each push (same token, Actions write) and puts `FLIGHTS_KEY` on dashboard-personal. Never edit the copied
 files here.
+**Owner-only /viajes/* (2026-11-26 audit)**: Access also lets shared-access guests in, and `soloDueno` only hid the card, so a guest
+could open `/viajes/api/trips` (all trips, passport docs, tickets) directly. `incluir-viajes.sh` now copies
+`.github/scripts/viajes-middleware.ts` to `functions/viajes/_middleware.ts`: only `CORREOS_VIAJES` (else `CORREOS_TRADING`, else its
+default) pass; no Access header = 403 except on localhost; `/viajes/compartir/*` (public share link, Bypass in Access) is skipped.
+GestionViajes must not ship its own `functions/_middleware.*` (the script fails if it does).
 
 **Shared access, personal edition (2026-10-17, user's request: a second user "con las mismas funcionalidades, con excepción de trading y wiki")**:
 the guest signs in with their OWN Supabase Auth user and works on the OWNER's data (read + write). Migration

@@ -50,6 +50,9 @@ find "${FRONT}/functions/viajes" -name '*.js' -print0 | xargs -0 sed -i -E \
   -e 's#(from |import\()(["'"'"'])((\.\./)+)lib/#\1\2../\3viajes-lib/#g' \
   -e 's#(from |import\()(["'"'"'])((\.\./)+)public/#\1\2../\3dist/viajes/#g'
 if grep -rqE '(from |import\()["'"'"'](\.\./)+(lib|public)/' "${FRONT}/functions/viajes"; then echo "::error::Quedó un import sin reescribir"; exit 1; fi
+# Solo el dueño entra a /viajes/* (los invitados del dashboard no): ver viajes-middleware.ts.
+if ls "${FRONT}/functions/viajes/"_middleware.* >/dev/null 2>&1; then echo "::error::GestionViajes ya trae un _middleware en functions/: se pisaría el filtro del dueño"; exit 1; fi
+cp "$(dirname "$0")/viajes-middleware.ts" "${FRONT}/functions/viajes/_middleware.ts"
 
 # 3. Mapas oficiales del metro (ATAC Roma), como en el workflow de GestionViajes.
 mkdir -p "${FRONT}/dist/viajes/maps"
