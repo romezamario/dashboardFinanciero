@@ -1770,7 +1770,10 @@ commits:
   the Access application and redirects to the Access login. **The old project `dashboard-financiero`
   (dashboard-financiero-c5z.pages.dev) was DELETED on 2026-11-26** (Mario: "ya no quiero que siga
   activo el dominio dashboard financiero"); nothing deploys or points to it anymore (also removed
-  from the Gmail OAuth return allowlist). Don't bring it back.
+  from the Gmail OAuth return allowlist). Don't bring it back. The same day the Cloudflare Access app (whose PRIMARY domain was still
+  the old one, so after login Access sent Mario to the deleted site) was moved to `dashboard-personal-8uu.pages.dev` + `*.` only, and
+  Supabase Auth's Site URL/Redirect URLs set to it. A second Access app protects only `/viajes/compartir`; the prepare script
+  ignores apps whose domain has a path.
 
 All workflows pin action versions that run natively on Node 24 (`actions/checkout@v5`,
 `actions/setup-node@v5`, `actions/setup-python@v6`, `supabase/setup-cli@v3`,
