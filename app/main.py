@@ -39,7 +39,6 @@ from parsers.banamex import BanamexParser
 from parsers.banamex_tdc import BanamexTdcParser
 from parsers.invex_tdc import InvexTdcParser
 from parsers.bbva_debito import BbvaDebitoParser
-from app.pestana_gmail import PestanaGastosGmail
 from app.sugerencias import sugerir_reglas_con_ia
 from app.ventanas import (
     VentanaCategoriaManual,
@@ -112,8 +111,6 @@ class App(tk.Tk):
         self.descripciones_sin_categoria: list[str] = []
 
         self._construir_ui()
-        # Opcional (casilla en la pestaña de Gmail, apagada por defecto).
-        self.after(500, self.pestana_gmail.revisar_al_abrir)
 
     def _configurar_estilos(self) -> None:
         """Tipografía y estilos compartidos. Se queda con el tema nativo de
@@ -189,11 +186,6 @@ class App(tk.Tk):
             font=("Consolas", 9), relief="flat", borderwidth=1,
         )
         self.texto_sin_categorizar.pack(fill="both", expand=True, padx=8, pady=(0, 8))
-
-        # Avisos de compra de Banamex leídos de Gmail: independiente del PDF
-        # cargado (son otra fuente y otra tabla de Supabase, `gastos_correo`).
-        self.pestana_gmail = PestanaGastosGmail(self.notebook)
-        self.notebook.add(self.pestana_gmail, text="Gastos recientes (Gmail)")
 
     def _construir_encabezado(self) -> None:
         # Renglón 1: el flujo principal (banco -> cargar PDF) a la izquierda,

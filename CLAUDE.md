@@ -626,7 +626,7 @@ All the hooks are best-effort: on no match/exception they return the "unsupporte
 sentinel and the app silently falls back to whatever the user already has in the manual fields —
 never a hard failure, never a silently wrong guess presented as certain.
 
-**"Gastos recientes (Gmail)" tab (2026-10-04)**: `PestanaGastosGmail` in `app/pestana_gmail.py` drives
+**Desktop Gmail tab REMOVED (2026-11-27, Mario: Gmail is read in the cloud now, see "Gmail read in the cloud too")**: `app/pestana_gmail.py` and the "Gastos recientes (Gmail)" tab are gone; `sync/gmail_gastos.py` stays as a CLI (`python -m sync.gmail_gastos --dias 3 --subir`) and "Sincronizar a Supabase..." still uploads the rules/cities via `sync/gmail_nube.py`. The history below describes the old tab. **"Gastos recientes (Gmail)" tab (2026-10-04)**: `PestanaGastosGmail` in `app/pestana_gmail.py` drives
 `sync.gmail_gastos.revisar_gmail()` (the CLI `main()` is now a thin wrapper over it; expected
 problems are `ErrorGastosGmail` subclasses with Spanish messages). Its work runs in a background
 thread via `correr_en_hilo` (`app/hilos.py`): the worker never touches widgets, it posts
@@ -858,16 +858,13 @@ reorders the view; iids stay = index in `self.transacciones`), an empty-state la
 Colors live in the `COLOR_*` constants at the top of `app/main.py`; the native "vista" theme is kept.
 Compact sizing (2026-10-05, user's request): Segoe UI 9, row height 22. The "Estado de cuenta"
 (`origen`) column is no longer shown (still saved in the JSON and synced) — the user doesn't use it.
-Scripts that open `App()` for testing must patch `app.pestana_gmail.RUTA_PREFERENCIAS_GMAIL`/
-`CARPETA_GASTOS_CORREO` (they moved there from `app.main` on 2026-10-08), or the user's real
-"revisar al abrir" preference starts a real Gmail check.
 
 **`app/` layout (split 2026-10-08; `main.py` was 2,200 lines)**: `main.py` = `App` (main window,
 `PARSERS`, colors) + `main()`; `logica.py` = everything without widgets (`leer_estado_de_cuenta`,
 `detectar_banco`, `crear_parser`, manual-row/category recovery, `mover_a_procesados_junto_al_pdf`,
 `hash_pdf`, `PREFIJO_RENGLON_MANUAL`), tested in `tests/test_logica_app.py`; `ventanas.py` = the
 dialogs (`VentanaReglas`, `VentanaInspeccion`, `VentanaRenglonManual`, `VentanaCategoriaManual`);
-`pestana_gmail.py` = the Gmail tab and its preferences; `hilos.py` = `correr_en_hilo`;
+`hilos.py` = `correr_en_hilo`;
 `sugerencias.py` = "Sugerir reglas con Claude..." (flow + window, split out 2026-10-10). Checked
 by driving the real app under Xvfb (Python 3.12 + tkinter) with temp folders: a synthetic Invex PDF
 with an artificially slow extraction (the window kept processing events), save, reload recovering

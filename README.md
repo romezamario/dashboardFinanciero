@@ -102,7 +102,6 @@ app/        # app de escritorio (Tkinter) — carga PDF, revisa, categoriza, exp
   main.py            # ventana principal (App) y registro de bancos (PARSERS)
   logica.py          # lo que no toca la interfaz: leer un PDF, recuperar lo hecho a mano, mover archivos
   ventanas.py        # diálogos: reglas, inspeccionar PDF, renglón manual, categoría manual
-  pestana_gmail.py   # pestaña "Gastos recientes (Gmail)"
   hilos.py           # correr trabajo largo en segundo plano sin congelar la ventana
   icono.ico          # ícono del .exe (generado por generar_icono.py, versionado)
   generar_icono.py   # utilidad para regenerar/cambiar app/icono.ico
@@ -787,25 +786,10 @@ una sola vez:
    uso personal no hace falta la verificación de Google: al autorizar sale "Google no verificó esta
    app" → **Configuración avanzada → Ir a … (no seguro)**.
 
-La app de escritorio sigue funcionando igual, pestaña **Gastos recientes (Gmail)**:
-
-- **Revisar Gmail y subir** lee los avisos de los últimos N días (campo "Días hacia atrás", 3 por
-  defecto), los guarda en `data/gastos_correo/` y los sube a Supabase. Corre en segundo plano con
-  barra de progreso; al terminar dice cuántos avisos leyó, cuántos eran nuevos y cuántos gastos subió.
-- Los problemas quedan escritos en la pestaña (botón **Copiar avisos**): comercios "Sin categoría"
-  (con el texto completo del establecimiento, para escribir la regla), códigos de ciudad sin
-  confirmar, correos que no se pudieron leer y errores al subir. Si falta `data/gmail/credentials.json`
-  o alguna variable de Supabase del `.env`, si el usuario/contraseña de Supabase no sirve, o si faltan
-  las librerías de Google, lo dice en español.
-- **Reautorizar Gmail...** abre el navegador para dar de nuevo el permiso de solo lectura (cuando
-  vence o se revoca; la app también lo ofrece sola si detecta un permiso vencido).
-- La tabla muestra los 200 gastos más recientes de `data/gastos_correo/*.json` (fecha, hora, tarjeta,
-  comercio, ciudad, categoría, monto); en amarillo los que quedaron sin categoría.
-- **Revisar automáticamente al abrir la app** (apagada por defecto) hace la misma revisión al
-  arrancar, solo si ya autorizaste Gmail antes: nunca abre el navegador por su cuenta. Esta casilla
-  y el número de días se guardan en `data/gastos_correo/preferencias.json`.
-
-Equivale, desde la terminal, a:
+La app de escritorio ya no tiene pestaña de Gmail (se quitó el 2026-11-27: la revisión corre
+en la nube cada 15 minutos). "Sincronizar a Supabase..." sigue subiendo tus reglas de
+categorización para que la nube las use. Si alguna vez quieres leer los avisos desde la laptop,
+queda la terminal:
 
 ```
 python -m sync.gmail_gastos --dias 3 --subir
