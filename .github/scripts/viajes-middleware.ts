@@ -9,8 +9,11 @@
 // directo y ver o cambiar todos los viajes, los documentos (pasaporte) y los
 // boletos adjuntos. Ahora solo pasa el dueño.
 //
-// Correos permitidos: CORREOS_VIAJES (variable de Pages, separados por coma); si
-// no está, la misma lista de Trading (CORREOS_TRADING o su valor por defecto).
+// Correos permitidos: el dueño (la lista de Trading: CORREOS_TRADING o su valor
+// por defecto) MÁS los de CORREOS_VIAJES (secreto de Pages, separados por coma),
+// que ven y editan Viajes igual que el dueño (Mario 2026-11-27: un invitado
+// "también debe tener acceso a editar"). CORREOS_VIAJES viene del secreto de
+// GitHub del mismo nombre (deploy.yml); el repo es público: nunca correos aquí.
 // Sin el encabezado de Access solo se deja pasar en local: en Internet eso
 // significa que Access no está delante, y entonces no se sirve nada.
 // /viajes/compartir/* (enlace público de solo lectura, Bypass en Access) queda
@@ -41,7 +44,7 @@ export async function onRequest({
   if (COMPARTIR.test(url.pathname)) return next();
   const correo = request.headers.get("Cf-Access-Authenticated-User-Email");
   if (correo === null) return LOCAL.test(url.hostname) ? next() : prohibido("Sin acceso");
-  const lista = env?.CORREOS_VIAJES || env?.CORREOS_TRADING || CORREOS_TRADING_POR_DEFECTO;
+  const lista = [env?.CORREOS_TRADING || CORREOS_TRADING_POR_DEFECTO, env?.CORREOS_VIAJES || ""].join(",");
   if (!puedeUsarTrading(correo, lista)) return prohibido("Tu cuenta no tiene acceso a Viajes.");
   return next();
 }

@@ -315,8 +315,8 @@ dispatches this deploy after each push (same token, Actions write) and puts `FLI
 files here.
 **Owner-only /viajes/* (2026-11-26 audit)**: Access also lets shared-access guests in, and `soloDueno` only hid the card, so a guest
 could open `/viajes/api/trips` (all trips, passport docs, tickets) directly. `incluir-viajes.sh` now copies
-`.github/scripts/viajes-middleware.ts` to `functions/viajes/_middleware.ts`: only `CORREOS_VIAJES` (else `CORREOS_TRADING`, else its
-default) pass; no Access header = 403 except on localhost; `/viajes/compartir/*` (public share link, Bypass in Access) is skipped.
+`.github/scripts/viajes-middleware.ts` to `functions/viajes/_middleware.ts`: the owner list (`CORREOS_TRADING`, else its default) PLUS
+`CORREOS_VIAJES` (extra people who view AND edit Viajes; GitHub secret → Pages secret via deploy.yml's secrets loop; Mario 2026-11-27) pass; no Access header = 403 except on localhost; `/viajes/compartir/*` (public share link, Bypass in Access) is skipped.
 GestionViajes must not ship its own `functions/_middleware.*` (the script fails if it does).
 
 **Shared access, personal edition (2026-10-17, user's request: a second user "con las mismas funcionalidades, con excepción de trading y wiki")**:

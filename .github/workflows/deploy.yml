@@ -81,8 +81,10 @@ jobs:
           GITHUB_TOKEN_AGENTE: ${{ secrets.GITHUB_TOKEN_AGENTE }}
           ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
           ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
+          # Invitados que también entran a /viajes/ (ver y editar), separados por coma.
+          CORREOS_VIAJES: ${{ secrets.CORREOS_VIAJES }}
         run: |
-          for nombre in GITHUB_TOKEN_AGENTE ALPACA_API_KEY_ID ALPACA_API_SECRET_KEY; do
+          for nombre in GITHUB_TOKEN_AGENTE ALPACA_API_KEY_ID ALPACA_API_SECRET_KEY CORREOS_VIAJES; do
             if [ -n "${!nombre}" ]; then
               printf '%s' "${!nombre}" | npx --yes wrangler@4 pages secret put "$nombre" --project-name=dashboard-personal >/dev/null && echo "✓ $nombre"
             else
