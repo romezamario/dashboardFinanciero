@@ -270,7 +270,7 @@ class VentanaSugerenciasIA(tk.Toplevel):
         s.categoria = self.combo_categoria.get().strip() or None
         s.comercio = self.combo_comercio.get().strip() or None
         otros = {o.patron.upper() for j, o in enumerate(self.sugerencias) if j != i and j in self.marcadas}
-        s.problema = problema_de(s, {r.patron.upper() for r in self.master_app.reglas} | otros)
+        s.problema = problema_de(s, ia.patrones_ocupados(self.master_app.reglas, s.descripcion) | otros)
         s.tambien_aplica_a = tuple(
             o.descripcion for o in self.sugerencias
             if o is not s and s.patron and s.patron.upper() in o.descripcion.upper()
@@ -283,10 +283,7 @@ class VentanaSugerenciasIA(tk.Toplevel):
         self._cargar_edicion()
 
     def _agregar(self) -> None:
-        nuevas = [
-            Regla(s.patron, s.categoria, s.comercio)
-            for i, s in enumerate(self.sugerencias)
-            if i in self.marcadas and s.aceptable
-        ]
-        if self.master_app.agregar_reglas(nuevas, parent=self):
+        elegidas = [s for i, s in enumerate(self.sugerencias) if i in self.marcadas and s.aceptable]
+        nuevas = [Regla(s.patron, s.categoria, s.comercio) for s in elegidas]
+        if self.master_app.agregar_reglas(nuevas, parent=self, descripciones=[s.descripcion for s in elegidas]):
             self.destroy()

@@ -1045,9 +1045,15 @@ pattern/RFC, existing categories, bank movements comercio = categoría except Do
 confidence ≠ "baja"; `problema_de` greys out unknown merchant, pattern not literally in the
 description, < `MINIMO_CARACTERES_PATRON` = 4 chars, or duplicate pattern; each row can be edited
 below the table, which also shows the note and "también atraparía" (other pending descriptions the
-pattern matches). `App.agregar_reglas` re-reads the rules file from disk, **appends** the accepted
-rules (appending can only catch currently-uncategorized rows — earlier rules still win, so no
-regression check is needed), saves, recategorizes, enables "Guardar". Refuses while `VentanaReglas`
+pattern matches). `App.agregar_reglas` re-reads the rules file from disk, places each accepted
+rule **right before the rule that currently catches its description** (`insertar_reglas`; none →
+appended), saves, recategorizes, enables "Guardar". **Domiciliaciones without comercio count too
+(2026-11-27, Mario's report: "TELMEX DOMICILIACION 2 TME 840315KT6MX" was never suggested)**: the
+generic `DOMI` rule gives Domiciliación with comercio null, so those rows had a category, never reached
+the list, and a `TELMEX` rule appended at the end never won. `falta_comercio` (categoría null, or in
+`CATEGORIAS_QUE_PIDEN_COMERCIO` = {Domiciliación} without comercio) decides what goes to Claude; the
+"Sin categorizar" text list still shows only uncategorized ones. A same-pattern rule that is shadowed
+(`patrones_ocupados`) doesn't block a proposal: it is moved before the winner. Refuses while `VentanaReglas`
 is open (same reason as "Recargar reglas"). Not done: the Gmail tab's uncategorized merchants.
 **Setup is handled by the app (2026-10-09, user's request: "no que el usuario tenga que estar corriendo
 comandos")**: `_ejecutar_claude` raises `FaltaClaudeCode` (not found) or `FaltaIniciarSesion` (CLI

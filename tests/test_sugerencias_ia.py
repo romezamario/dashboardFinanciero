@@ -3,7 +3,7 @@ import unittest
 from unittest import mock
 
 from transform import sugerencias_ia
-from transform.categorizador import Regla
+from transform.categorizador import Regla, categorizar
 from transform.sugerencias_ia import (
     ErrorSugerenciasIA,
     FaltaClaudeCode,
@@ -150,6 +150,68 @@ class EjecutarClaudeTest(unittest.TestCase):
             with self.assertRaisesRegex(ErrorSugerenciasIA, "sin internet"):
                 sugerencias_ia.instalar_claude()
         self.assertIn("https://claude.ai/install.ps1", run.call_args.args[0][-1])
+
+class DomiciliacionSinComercioTest(unittest.TestCase):
+    """Caso real: "TELMEX DOMICILIACION ..." caía en la regla genérica "DOMI"
+    (Domiciliación sin comercio), no salía como sin categoría y una regla
+    "TELMEX" agregada al final nunca le ganaba."""
+
+    DESCRIPCION = "TELMEX DOMICILIACION 2 TME 840315KT6MX"
+    REGLAS = [
+        Regla("DOMINOS", "Restaurantes", "Domino's Pizza"),
+        Regla("DOMI", "Domiciliación", None),
+        Regla("IZZI", "Domiciliación", "Izzi"),
+        Regla("TELMEX", "Domiciliación", "Telmex"),
+    ]
+
+    def test_falta_comercio(self):
+        self.assertTrue(sugerencias_ia.falta_comercio(None, None))
+        self.assertTrue(sugerencias_ia.falta_comercio("Domiciliación", None))
+        self.assertFalse(sugerencias_ia.falta_comercio("Domiciliación", "Telmex"))
+        self.assertFalse(sugerencias_ia.falta_comercio("Restaurantes", None))
+
+    def test_la_regla_nueva_va_antes_de_la_generica(self):
+        reglas = self.REGLAS[:3]
+        nuevas, cambios = sugerencias_ia.insertar_reglas(
+            reglas, [(Regla("TELMEX", "Domiciliación", "Telmex"), self.DESCRIPCION)]
+        )
+        self.assertEqual(cambios, 1)
+        self.assertEqual([r.patron for r in nuevas], ["DOMINOS", "TELMEX", "DOMI", "IZZI"])
+        self.assertEqual(categorizar(self.DESCRIPCION, nuevas), ("Domiciliación", "Telmex"))
+
+    def test_una_regla_igual_a_la_sombra_se_mueve(self):
+        nuevas, cambios = sugerencias_ia.insertar_reglas(
+            self.REGLAS, [(Regla("TELMEX", "Domiciliación", "Telmex"), self.DESCRIPCION)]
+        )
+        self.assertEqual(cambios, 1)
+        self.assertEqual([r.patron for r in nuevas], ["DOMINOS", "TELMEX", "DOMI", "IZZI"])
+
+    def test_repetir_la_regla_que_ya_gana_no_cambia_nada(self):
+        reglas = [Regla("TELMEX", "Domiciliación", "Telmex"), Regla("DOMI", "Domiciliación", None)]
+        nuevas, cambios = sugerencias_ia.insertar_reglas(
+            reglas, [(Regla("TELMEX", "Domiciliación", "Telmex"), self.DESCRIPCION)]
+        )
+        self.assertEqual((cambios, nuevas), (0, reglas))
+
+    def test_sin_descripcion_se_agrega_al_final(self):
+        nuevas, _ = sugerencias_ia.insertar_reglas(self.REGLAS[:2], [(Regla("OXXO", "Tiendas", None), None)])
+        self.assertEqual(nuevas[-1].patron, "OXXO")
+
+    def test_propuesta_con_patron_a_la_sombra_es_aceptable(self):
+        texto = respuesta({
+            "descripcion": self.DESCRIPCION, "patron": "TELMEX", "categoria": "Domiciliación",
+            "comercio": "Telmex", "confianza": "alta", "nota": "Telmex",
+        })
+        [s] = pedir_sugerencias([self.DESCRIPCION], self.REGLAS, ejecutar=lambda _p: texto)
+        self.assertTrue(s.aceptable, s.problema)
+
+    def test_proponer_la_generica_no_es_aceptable(self):
+        texto = respuesta({
+            "descripcion": self.DESCRIPCION, "patron": "DOMI", "categoria": "Domiciliación",
+            "comercio": "Telmex", "confianza": "alta", "nota": "",
+        })
+        [s] = pedir_sugerencias([self.DESCRIPCION], self.REGLAS, ejecutar=lambda _p: texto)
+        self.assertEqual(s.problema, "ya existe una regla con ese patrón")
 
 
 if __name__ == "__main__":

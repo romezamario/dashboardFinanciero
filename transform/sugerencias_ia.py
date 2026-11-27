@@ -48,12 +48,16 @@ PATRON_NUMERO_LARGO = re.compile(r"\d{8,}")
 INSTRUCCIONES = """\
 Eres el asistente de categorización de gastos de un usuario en México. Te paso
 descripciones de movimientos de sus estados de cuenta (tarjetas Banamex e Invex)
-que ninguna regla categorizó. Para cada una propón una regla.
+que ninguna regla categorizó, o que solo tienen una categoría genérica
+("Domiciliación") sin saber quién cobró. Para cada una propón una regla.
 
 Cómo funcionan las reglas: si `patron` aparece dentro de la descripción (sin
 importar mayúsculas), se asignan `categoria` y `comercio`. Gana la primera que
-coincide; tus reglas se agregan al final, así que solo afectan movimientos que
-hoy no tienen categoría.
+coincide; cada regla tuya se coloca justo antes de la que hoy atrapa esa
+descripción (o al final si ninguna), así que gana sobre la genérica.
+- Para una domiciliación (p. ej. "TELMEX DOMICILIACION 2 TME 840315KT6MX"),
+  deja `categoria` = "Domiciliación" y pon en `comercio` quién cobra
+  ("Telmex"); el patrón es el nombre o RFC del comercio, nunca "DOMI".
 
 Criterios (los mismos que el usuario ya acordó):
 - `patron`: un fragmento que aparezca LITERALMENTE en la descripción y que
@@ -110,6 +114,67 @@ class Sugerencia:
         return not self.problema
 
 
+# Categorías que dicen CÓMO se cobró, no QUIÉN: un movimiento en ellas sin
+# comercio también se le pregunta a Claude. La regla genérica "DOMI" pone
+# Domiciliación sin comercio, así que "TELMEX DOMICILIACION ..." quedaba con
+# categoría (no salía en "Sin categorizar") y nunca se sugería su comercio.
+CATEGORIAS_QUE_PIDEN_COMERCIO = frozenset({"Domiciliación"})
+
+
+def falta_comercio(categoria: str | None, comercio: str | None) -> bool:
+    """True si el movimiento necesita una regla: sin categoría, o en una
+    categoría que no dice quién cobró y sin comercio."""
+    return categoria is None or (categoria in CATEGORIAS_QUE_PIDEN_COMERCIO and not comercio)
+
+
+def regla_ganadora(reglas: list[Regla], descripcion: str) -> int | None:
+    """Índice de la regla que hoy categoriza `descripcion` (la primera que
+    coincide, como `categorizar`), o None."""
+    texto = descripcion.upper()
+    return next((i for i, r in enumerate(reglas) if r.patron.upper() in texto), None)
+
+
+def patrones_ocupados(reglas: list[Regla], descripcion: str) -> set[str]:
+    """Patrones que una propuesta para `descripcion` no puede repetir. Una
+    regla que coincide con la descripción pero pierde ante una anterior (p. ej.
+    "TELMEX" detrás de "DOMI") no cuenta: al agregar la propuesta se mueve
+    antes de la que hoy gana (`insertar_reglas`)."""
+    ganadora = regla_ganadora(reglas, descripcion)
+    texto = descripcion.upper()
+    return {
+        r.patron.upper() for i, r in enumerate(reglas)
+        if i == ganadora or r.patron.upper() not in texto
+    }
+
+
+def insertar_reglas(
+    reglas: list[Regla], nuevas: list[tuple[Regla, str | None]]
+) -> tuple[list[Regla], int]:
+    """Agrega cada regla nueva justo ANTES de la que hoy gana para su
+    descripción (si la hay; si no, al final), para que de verdad aplique: al
+    final, "TELMEX" nunca le ganaría a "DOMI". Una regla existente con el mismo
+    patrón que hoy pierde se reemplaza (se quita de donde estaba); si es la que
+    gana, la nueva se descarta por repetida. Devuelve (reglas, cuántas se
+    agregaron o movieron)."""
+    resultado = list(reglas)
+    cambios = 0
+    for regla, descripcion in nuevas:
+        clave = regla.patron.upper()
+        igual = next((i for i, r in enumerate(resultado) if r.patron.upper() == clave), None)
+        ganadora = regla_ganadora(resultado, descripcion) if descripcion else None
+        if igual is not None:
+            if descripcion is None or igual == ganadora:
+                continue
+            del resultado[igual]
+            ganadora = regla_ganadora(resultado, descripcion)
+        if ganadora is None:
+            resultado.append(regla)
+        else:
+            resultado.insert(ganadora, regla)
+        cambios += 1
+    return resultado, cambios
+
+
 def enmascarar_numeros(texto: str) -> str:
     """'SPEI 012180001234567890 RENTA' -> 'SPEI ****7890 RENTA'."""
     return PATRON_NUMERO_LARGO.sub(lambda m: "****" + m.group()[-4:], texto)
@@ -127,7 +192,7 @@ def construir_prompt(descripciones: list[str], reglas: list[Regla]) -> str:
         f"## Categorías existentes\n{chr(10).join(categorias) or '(ninguna todavía)'}\n\n"
         f"## Reglas actuales (patrón → categoría | comercio), como ejemplo del estilo\n"
         f"{ejemplos or '(ninguna todavía)'}\n\n"
-        f"## Descripciones sin categoría\n{pendientes}\n"
+        f"## Descripciones sin categoría o sin comercio\n{pendientes}\n"
     )
 
 
@@ -285,7 +350,6 @@ def revisar_sugerencias(
         clave = _texto(d.get("descripcion"))
         if clave and clave.upper() not in por_descripcion:
             por_descripcion[clave.upper()] = d
-    patrones_existentes = {r.patron.upper() for r in reglas}
 
     sugerencias = []
     patrones_propuestos: set[str] = set()
@@ -300,7 +364,7 @@ def revisar_sugerencias(
             confianza=_texto(d.get("confianza")) or "",
             nota=_texto(d.get("nota")) or ("" if d else "Claude no la incluyó en su respuesta."),
         )
-        s.problema = problema_de(s, patrones_existentes | patrones_propuestos)
+        s.problema = problema_de(s, patrones_ocupados(reglas, descripcion) | patrones_propuestos)
         if s.aceptable:
             patrones_propuestos.add(patron.upper())
         s.tambien_aplica_a = tuple(
@@ -332,7 +396,7 @@ def pedir_sugerencias(
     reglas: list[Regla],
     ejecutar: Callable[[str], str] = _ejecutar_claude,
 ) -> list[Sugerencia]:
-    """Pregunta a Claude por `descripciones` (únicas, sin categoría). `ejecutar`
+    """Pregunta a Claude por `descripciones` (únicas, `falta_comercio`). `ejecutar`
     recibe el prompt y devuelve el texto de la respuesta (en pruebas, un falso)."""
     if not descripciones:
         return []

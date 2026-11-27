@@ -47,6 +47,7 @@ from app.ventanas import (
     VentanaReglas,
     VentanaRenglonManual,
 )
+from transform import sugerencias_ia as ia
 from transform.categorizador import Regla, cargar_reglas, categorizar, guardar_reglas
 from transform.transformador import TransaccionCanonica
 
@@ -670,11 +671,17 @@ class App(tk.Tk):
         # Únicas y en orden de primera aparición -- ver el porqué en el
         # comentario de la pestaña, junto a donde se crea self.texto_sin_categorizar.
         descripciones_unicas: list[str] = []
+        # Para "Sugerir reglas con Claude": además de las sin categoría, las
+        # domiciliaciones sin comercio (la regla genérica "DOMI" no dice quién cobró).
+        para_sugerir: list[str] = []
         vistas: set[str] = set()
         for t in self.transacciones:
-            if t.categoria is None and t.descripcion not in vistas:
+            if ia.falta_comercio(t.categoria, t.comercio) and t.descripcion not in vistas:
                 vistas.add(t.descripcion)
-                descripciones_unicas.append(t.descripcion)
+                para_sugerir.append(t.descripcion)
+                if t.categoria is None:
+                    descripciones_unicas.append(t.descripcion)
+        sin_comercio = len(para_sugerir) - len(descripciones_unicas)
 
         self.texto_sin_categorizar.config(state="normal")
         self.texto_sin_categorizar.delete("1.0", "end")
@@ -687,10 +694,12 @@ class App(tk.Tk):
             texto_etiqueta = f"{len(descripciones_unicas)} descripción(es) única(s) sin categoría."
         else:
             texto_etiqueta = "Todas las transacciones tienen categoría."
+        if sin_comercio:
+            texto_etiqueta += f" {sin_comercio} domiciliación(es) sin comercio (Claude también las revisa)."
         self.etiqueta_sin_categorizar.config(text=texto_etiqueta)
-        self.descripciones_sin_categoria = descripciones_unicas
+        self.descripciones_sin_categoria = para_sugerir
         if not self._pidiendo_sugerencias:
-            self.boton_sugerir_ia.config(state="normal" if descripciones_unicas else "disabled")
+            self.boton_sugerir_ia.config(state="normal" if para_sugerir else "disabled")
         self.notebook.tab(
             self.pestana_sin_categorizar,
             text=f"Sin categorizar ({len(descripciones_unicas)})" if descripciones_unicas else "Sin categorizar",
@@ -700,10 +709,17 @@ class App(tk.Tk):
         """Ver app/sugerencias.py."""
         sugerir_reglas_con_ia(self)
 
-    def agregar_reglas(self, nuevas: list[Regla], parent: tk.Misc | None = None) -> bool:
-        """Agrega `nuevas` al final de reglas_categorizacion.json (al final:
-        solo atrapan lo que hoy no tiene categoría, nunca cambian lo ya
-        categorizado) y recategoriza lo cargado. True si se guardaron."""
+    def agregar_reglas(
+        self,
+        nuevas: list[Regla],
+        parent: tk.Misc | None = None,
+        descripciones: list[str | None] | None = None,
+    ) -> bool:
+        """Agrega `nuevas` a reglas_categorizacion.json y recategoriza lo
+        cargado. `descripciones` (paralela a `nuevas`) es el movimiento que
+        cada regla debe atrapar: la regla se coloca justo antes de la que hoy
+        lo atrapa (p. ej. "TELMEX" antes de la genérica "DOMI"); sin
+        descripción, al final. True si se guardaron."""
         parent = parent or self
         if any(isinstance(w, VentanaReglas) for w in self.winfo_children()):
             messagebox.showwarning(
@@ -719,23 +735,23 @@ class App(tk.Tk):
         except (OSError, ValueError, KeyError, TypeError) as error:
             messagebox.showerror("No se pudieron leer las reglas", str(error), parent=parent)
             return False
-        existentes = {r.patron.upper() for r in reglas}
-        agregadas = [r for r in nuevas if r.patron.upper() not in existentes]
+        descripciones = descripciones or [None] * len(nuevas)
+        actualizadas, agregadas = ia.insertar_reglas(reglas, list(zip(nuevas, descripciones)))
         try:
-            guardar_reglas(reglas + agregadas)
+            guardar_reglas(actualizadas)
         except OSError as error:
             messagebox.showerror("No se pudieron guardar las reglas", str(error), parent=parent)
             return False
-        self.reglas = reglas + agregadas
-        sin_categoria_antes = sum(1 for t in self.transacciones if t.categoria is None)
+        self.reglas = actualizadas
+        pendientes_antes = sum(1 for t in self.transacciones if ia.falta_comercio(t.categoria, t.comercio))
         if self.transacciones:
             self.recategorizar()
             self.boton_guardar.config(state="normal")
-        sin_categoria = sum(1 for t in self.transacciones if t.categoria is None)
+        pendientes = sum(1 for t in self.transacciones if ia.falta_comercio(t.categoria, t.comercio))
         messagebox.showinfo(
             "Reglas agregadas",
-            f"{len(agregadas)} regla(s) nueva(s). Sin categoría: {sin_categoria_antes} → "
-            f"{sin_categoria}.\n\nGuarda el archivo procesado para conservar los cambios.",
+            f"{agregadas} regla(s) nueva(s). Sin categoría o sin comercio: {pendientes_antes} → "
+            f"{pendientes}.\n\nGuarda el archivo procesado para conservar los cambios.",
             parent=parent,
         )
         return True
