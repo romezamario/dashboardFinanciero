@@ -13,6 +13,7 @@
 # así que si algo falla el script termina con error y el workflow NO publica
 # dashboard-personal (sigue en línea el despliegue anterior).
 #
+# Contrato entre los dos repos: GestionViajes docs/integracion-dashboard.md.
 # Necesita CF_TOKEN, CF_CUENTA y VIAJES_DIR.
 set -euo pipefail
 

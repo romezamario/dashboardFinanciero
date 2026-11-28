@@ -348,6 +348,9 @@ donde se capturan y editan los viajes). Como Trading, el código vive en su prop
 en cada despliegue `deploy.yml` trae GestionViajes (secreto `TOKEN_VIAJES`) y `.github/scripts/incluir-viajes.sh`
 lo copia a `/viajes/` con sus Functions y el KV `TRIPS`. Cada push a GestionViajes vuelve a desplegar este sitio.
 La dirección suelta gestion-viajes-7wo.pages.dev se retiró el 2026-11-26.
+El contrato completo entre los dos repos (qué copia este sitio, el filtro del dueño `viajes-middleware.ts`,
+el KV `TRIPS`, secretos y el respaldo diario) está en `docs/integracion-dashboard.md` de GestionViajes:
+si cambias `incluir-viajes.sh`, `viajes-middleware.ts` o el binding `TRIPS`, revísalo allí.
 
 **Qué muestra Salud** — lo que sube la laptop con `py colector\subir_oura.py` (repo `romezamario/oura`).
 Cada gráfica sin datos todavía dice qué le falta, no se oculta. La laptop lee el anillo cada hora
